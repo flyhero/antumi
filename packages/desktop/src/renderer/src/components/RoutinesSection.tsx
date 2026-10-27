@@ -1,14 +1,17 @@
 import { localized, t, tr } from '../i18n'
 import { useEffect, useId, useState } from 'react'
 import { isScheduleOpen, type Routine, type ScheduledRun } from '@antumi/protocol'
-import { selectConversation, useCore } from '../core-store'
+import { selectConversation, setAwakeMode, useCore } from '../core-store'
 import { reasonText } from '../labels'
 import { deleteRoutine, fetchRoutineRuns, isUnread, markRoutineAllSeen, nextRunText, routineAgentLabel, runOutcomeText, runRoutineNow, scheduleText, updateRoutine } from '../routines'
-import { scheduleTime } from '../schedules'
+import { scheduleTime, UNATTENDED_LABEL } from '../schedules'
 import { useNow } from '../usage-format'
-import { ChevronRightIcon, ClockIcon, CloseIcon, PencilIcon, PlayIcon } from './icons'
+import { ChevronRightIcon, ClockIcon, MoreIcon, PauseIcon, PencilIcon, PlayIcon, PlusIcon, TrashIcon } from './icons'
 import type { ReactNode } from 'react'
+import { AgentsPageHeader } from './AgentsPageHeader'
+import { ContextMenu, MenuItem, type MenuPoint } from './ContextMenu'
 import { RoutineEditor } from './RoutineEditor'
+import { SettingsLink } from './SchedulePicker'
 import { Segmented } from './SettingsControls'
 import { ROUTINE_TEMPLATES, type RoutineTemplate } from '../routine-templates'
 import { BookIcon, BranchIcon, ChartIcon, DocumentIcon, FileChangesIcon, FolderIcon, PulseIcon, RefreshIcon } from './icons'
@@ -68,9 +71,12 @@ function History({ routine, now }: { routine: Routine; now: number }) {
   )
 }
 
+// A rule per row: what a run needs most (its results, running it, editing it) stays at hand, the
+// rest waits in its menu, so a page of rules is not a column of red links.
 function Row({ routine, now, onEdit }: { routine: Routine; now: number; onEdit: () => void }) {
   const [open, setOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [menu, setMenu] = useState<{ at: MenuPoint; trigger: HTMLElement } | null>(null)
   const failure = routine.lastRun && (routine.lastRun.status === 'failed' || routine.lastRun.outcome === 'failed') ? routine.lastRun.error : null
   return (
     <li className="routine-row" data-paused={!routine.enabled || undefined} data-open={open || undefined}>
@@ -89,24 +95,43 @@ function Row({ routine, now, onEdit }: { routine: Routine; now: number; onEdit: 
             {failure && <span className="routine-failure">{tr('RoutinesSection.last', { value1: reasonText(failure, failure) })}</span>}
           </span>
         </span>
-        <span className="schedule-actions">
+        <span className="schedule-actions routine-actions">
           {deleting ? (
             <>
               <span className="muted routine-confirm">{t('RoutinesSection.conversationsCreatedByThisRoutineReturnToThe')}</span>
-              <button type="button" className="link-button" onClick={() => void deleteRoutine(routine.id)}>{t('McpSettingsSection.confirmDeletion')}</button>
+              <button type="button" className="link-button routine-delete" onClick={() => void deleteRoutine(routine.id)}>{t('McpSettingsSection.confirmDeletion')}</button>
               <button type="button" className="link-button" onClick={() => setDeleting(false)}>{t('ChatCommandSettings.cancel')}</button>
             </>
           ) : (
             <>
               {routine.unread > 0 && <button type="button" className="link-button" onClick={() => markRoutineAllSeen(routine.id)}>{t('RoutinesSection.markAllAsRead')}</button>}
-              <button type="button" className="link-button" onClick={() => void updateRoutine(routine.id, { enabled: !routine.enabled })}>{routine.enabled ? t('DiscussionView.pause') : t('RoutinesSection.enable')}</button>
               <button type="button" className="tool-button" aria-label={t('OverviewView.runNow')} data-tooltip={t('RoutinesSection.runImmediatelyIgnoringTimeAndQuota')} onClick={() => void runRoutineNow(routine.id)}><PlayIcon /></button>
               <button type="button" className="tool-button" aria-label={t('chatTools.edit')} data-tooltip={t('chatTools.edit')} onClick={onEdit}><PencilIcon /></button>
-              <button type="button" className="tool-button" aria-label={t('ChatCommandSettings.delete')} data-tooltip={t('ChatCommandSettings.delete')} onClick={() => setDeleting(true)}><CloseIcon /></button>
+              <button
+                type="button"
+                className="tool-button"
+                aria-label={t('FileEditor.moreActions')}
+                data-tooltip={t('FileEditor.moreActions')}
+                aria-haspopup="menu"
+                aria-expanded={menu !== null}
+                onClick={(event) => {
+                  const trigger = event.currentTarget
+                  const box = trigger.getBoundingClientRect()
+                  setMenu(menu ? null : { at: { x: box.right, y: box.bottom + 4 }, trigger })
+                }}
+              >
+                <MoreIcon />
+              </button>
             </>
           )}
         </span>
       </div>
+      {menu && (
+        <ContextMenu at={menu.at} align="end" trigger={menu.trigger} label={t('FileEditor.moreActions')} onClose={() => setMenu(null)}>
+          <MenuItem label={routine.enabled ? t('DiscussionView.pause') : t('RoutinesSection.enable')} icon={routine.enabled ? <PauseIcon /> : <PlayIcon />} onSelect={() => { setMenu(null); void updateRoutine(routine.id, { enabled: !routine.enabled }) }} />
+          <MenuItem label={t('ChatCommandSettings.delete')} icon={<TrashIcon />} danger onSelect={() => { setMenu(null); setDeleting(true) }} />
+        </ContextMenu>
+      )}
       {open && <History routine={routine} now={now} />}
     </li>
   )
@@ -117,23 +142,25 @@ const TEMPLATE_ICON: Record<RoutineTemplate['icon'], ReactNode> = {
   folder: <FolderIcon />, document: <DocumentIcon />, book: <BookIcon />, chart: <ChartIcon />
 }
 
-// Common chores written out, to start a routine from: a row opens the editor filled in.
-function Templates({ onPick }: { onPick: (template: RoutineTemplate) => void }) {
+// Common chores written out, to start a routine from: picked like the agents' templates, as cards,
+// each opening the editor filled in; the last starts a blank one.
+function Templates({ onPick, onBlank }: { onPick: (template: RoutineTemplate) => void; onBlank: () => void }) {
   return (
-    <ul className="worktree-list routine-list" aria-label={t('RoutinesSection.templates')}>
+    <ul className="squad-cards" aria-label={t('RoutinesSection.templates')}>
       {ROUTINE_TEMPLATES.map((template) => (
-        <li key={template.id} className="routine-template">
-          <span className="routine-template-icon" aria-hidden="true">{TEMPLATE_ICON[template.icon]}</span>
-          <span className="routine-main">
-            <button type="button" className="schedule-title routine-title" onClick={() => onPick(template)}>{template.title}</button>
-            <span className="schedule-meta routine-template-description">{template.description}</span>
-          </span>
-          <span className="schedule-state routine-template-when"><ClockIcon />{scheduleText(template.schedule)}</span>
-          <span className="schedule-actions">
-            <button type="button" className="link-button" onClick={() => onPick(template)}>{t('RoutinesSection.useThis')}</button>
-          </span>
+        <li key={template.id}>
+          <button type="button" className="squad-card" onClick={() => onPick(template)}>
+            <span className="squad-card-top"><span className="squad-card-icon" aria-hidden="true">{TEMPLATE_ICON[template.icon]}</span><span className="squad-card-name">{template.title}</span></span>
+            <span className="squad-card-description">{template.description}</span>
+            <span className="squad-card-foot"><span className="routine-template-when"><ClockIcon />{scheduleText(template.schedule)}</span></span>
+          </button>
         </li>
       ))}
+      <li>
+        <button type="button" className="squad-card squad-card-new" onClick={onBlank}>
+          <span className="squad-card-plus"><PlusIcon /></span>{t('AgentTemplates.blank')}<span className="squad-card-new-hint">{t('RoutinesSection.blankHint')}</span>
+        </button>
+      </li>
     </ul>
   )
 }
@@ -142,28 +169,41 @@ type Editing = { routine: Routine | null; template: RoutineTemplate | null }
 type Tab = 'rules' | 'templates'
 const TABS: readonly { value: Tab; label: string }[] = localized(() => ([{ value: 'rules', label: t('RoutinesSection.mine') }, { value: 'templates', label: t('RoutinesSection.templates') }]))
 
-// The routines, each with when it next runs and what its runs did: the runs' conversations are
-// opened from here and nowhere else. Beside them, on their own tab, templates to start one from,
-// which is where a user without any lands first.
+// The routines' tab: a page head like the agents', then the routines, each with when it next runs
+// and what its runs did: the runs' conversations are opened from here and nowhere else. Beside
+// them, on their own tab, templates to start one from, which is where a user without any lands first.
 export function RoutinesSection() {
   const routines = useCore((s) => s.routines)
+  const mode = useCore((s) => s.chatSettings?.unattendedMode ?? 'acceptEdits')
+  const awake = useCore((s) => s.awake)
   const now = useNow(60_000)
   const tabsId = useId()
   const [tab, setTab] = useState<Tab>(() => (routines.length === 0 ? 'templates' : 'rules'))
   const [editing, setEditing] = useState<Editing | null>(null)
+  const create = () => setEditing({ routine: null, template: null })
+  const scheduled = routines.some((routine) => routine.enabled && routine.schedule.kind !== 'manual')
   return (
-    <section className="worktree-group routines-section" aria-label={t('RoutinesSection.routineList')}>
-      <div className="routines-tabs">
-        <Segmented labelId={tabsId} value={tab} options={TABS.map((each) => (each.value === 'rules' ? { ...each, label: t('RoutinesSection.mine_1485', { value1: routines.length }) } : each))} onChange={setTab} />
-        <span id={tabsId} className="visually-hidden">{t('RoutinesSection.show')}</span>
-        <button type="button" className="link-button routines-new" onClick={() => setEditing({ routine: null, template: null })}>{t('ConversationChat.new')}</button>
-      </div>
-      {tab === 'rules'
-        ? routines.length === 0
-          ? <p className="worktrees-empty muted">{t('RoutinesSection.noRoutinesYetClickNewToSetRecurring')}</p>
-          : <ul className="worktree-list routine-list">{routines.map((routine) => <Row key={routine.id} routine={routine} now={now} onEdit={() => setEditing({ routine, template: null })} />)}</ul>
-        : <Templates onPick={(template) => setEditing({ routine: null, template })} />}
-      {editing && <RoutineEditor routine={editing.routine} template={editing.template} onClose={() => setEditing(null)} />}
-    </section>
+    <>
+      <AgentsPageHeader
+        title={t('RoutinesEntry.scheduled')}
+        description={tr('RoutinesView.repeatingTasksEachRunOpensANewConversation', { value1: UNATTENDED_LABEL[mode], value2: <SettingsLink /> })}
+        actions={<button type="button" className="button primary" onClick={create}><PlusIcon />{t('RoutinesView.newRoutine')}</button>}
+      />
+      {awake && awake.mode !== 'on' && scheduled && (
+        <p className="routines-notice" role="note">{tr('RoutinesView.nothingRunsWhileTheComputerSleepsOnlyThe', { value1: <button type="button" className="link-button" onClick={() => void setAwakeMode('on')}>{t('RoutinesView.switchToAlwaysAwake')}</button> })}</p>
+      )}
+      <section className="routines-section" aria-label={t('RoutinesSection.routineList')}>
+        <div className="squads-tabs">
+          <span id={tabsId} className="visually-hidden">{t('RoutinesSection.show')}</span>
+          <Segmented labelId={tabsId} value={tab} options={TABS.map((each) => (each.value === 'rules' ? { ...each, label: t('RoutinesSection.mine_1485', { value1: routines.length }) } : each))} onChange={setTab} />
+        </div>
+        {tab === 'rules'
+          ? routines.length === 0
+            ? <p className="worktrees-empty muted">{t('RoutinesSection.noRoutinesYetClickNewToSetRecurring')}</p>
+            : <ul className="worktree-list routine-list">{routines.map((routine) => <Row key={routine.id} routine={routine} now={now} onEdit={() => setEditing({ routine, template: null })} />)}</ul>
+          : <Templates onPick={(template) => setEditing({ routine: null, template })} onBlank={create} />}
+        {editing && <RoutineEditor routine={editing.routine} template={editing.template} onClose={() => setEditing(null)} />}
+      </section>
+    </>
   )
 }

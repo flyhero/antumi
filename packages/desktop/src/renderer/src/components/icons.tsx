@@ -34,6 +34,15 @@ export function PlayIcon() {
   )
 }
 
+export function PauseIcon() {
+  return (
+    <svg {...stroked}>
+      <rect x="5.5" y="4.5" width="3" height="11" rx="0.8" />
+      <rect x="11.5" y="4.5" width="3" height="11" rx="0.8" />
+    </svg>
+  )
+}
+
 export function CheckIcon() {
   return (
     <svg {...stroked}>

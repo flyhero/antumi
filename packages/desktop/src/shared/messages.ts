@@ -6363,12 +6363,12 @@ export const MESSAGES = {
     "en": "Show"
   },
   "RoutinesSection.noRoutinesYetClickNewToSetRecurring": {
-    "zh": "还没有定时任务。点「新建」写下要重复做的事和什么时候做，或者从「模板」里挑一个。",
-    "en": "No routines yet. Click “New” to set recurring instructions and timing, or choose a template."
+    "zh": "还没有定时任务。点「新建定时」写下要重复做的事和什么时候做，或者从「模板」里挑一个。",
+    "en": "No routines yet. Click “New routine” to set recurring instructions and timing, or choose a template."
   },
   "RoutinesView.repeatingTasksEachRunOpensANewConversation": {
-    "zh": "按时间重复的任务：到点新开一个会话，把指令发给 agent，以「{value1}」无人值守地做完，{value2}。 做完的运行带未读标记，从规则下面的历史里打开看结果；它开的会话不进左侧的会话列表。",
-    "en": "Repeating tasks: each run opens a new conversation with your instructions and runs unattended in “{value1}” mode, {value2}. Completed runs are marked unread; open their history to see results. These conversations do not appear in the sidebar."
+    "zh": "到点新开一个会话，以「{value1}」无人值守地做完（{value2}）；结果在每条规则的历史里看，不进左侧会话列表。",
+    "en": "Each run opens a new conversation that works unattended in “{value1}” mode ({value2}); see results in each routine's history, not the sidebar."
   },
   "RoutinesView.nothingRunsWhileTheComputerSleepsOnlyThe": {
     "zh": "电脑睡着时到点不会运行，醒来后只补最近错过的一次。{value1}",
@@ -6381,6 +6381,14 @@ export const MESSAGES = {
   "RoutinesView.scheduledPageContent": {
     "zh": "定时页的内容",
     "en": "Routines page content"
+  },
+  "RoutinesView.newRoutine": {
+    "zh": "新建定时",
+    "en": "New routine"
+  },
+  "RoutinesSection.blankHint": {
+    "zh": "自己写要做的事和什么时候做",
+    "en": "Write what to do and when"
   },
   "SchedulePicker.waitsIfQuotaOrRunSlotsAreUnavailable": {
     "zh": "额度不足或运行位置已满时会等待；同一个 Agent 的预约一个接一个运行；电脑睡着时不会运行。",
@@ -6427,8 +6435,8 @@ export const MESSAGES = {
     "en": "Start now, ignoring time and quota"
   },
   "SchedulesPanel.runASpecifiedTaskOrConversationOnceStarts": {
-    "zh": "指定的任务或会话跑一次：到点、而且 agent 的额度够用时自动开始；同一个 agent 的预约按下面的顺序一个接一个运行。 你预约的以「{value1}」无人值守运行，{value2}；撞到额度后的续跑沿用会话原来的模式。",
-    "en": "Run a specified task or conversation once: starts when due and the Agent has enough quota. Schedules for the same Agent run sequentially in the order below. Your schedules run unattended in “{value1}” mode, {value2}; quota-limit resumes keep the conversation's original mode."
+    "zh": "任务或会话到点、额度够时跑一次，同一个 agent 的按下面的顺序一个接一个运行，以「{value1}」无人值守（{value2}）。",
+    "en": "A task or conversation runs once when due and its agent has quota, one agent's in the order below, unattended in “{value1}” mode ({value2})."
   },
   "SchedulesPanel.keepComputerAwakeIsOffSchedulesWillNot": {
     "zh": "「保持电脑唤醒」已关闭，电脑睡着时预约不会运行。{value1}",

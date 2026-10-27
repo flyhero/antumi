@@ -1146,10 +1146,8 @@ button.task-tag:hover {
 /* The sidebar's pages share one centred column (DESIGN.md, 页面宽度). */
 .inbox-page > *,
 .routines-page > * { width: 100%; max-width: var(--page-wide); margin-inline: auto; }
-.routines-page .worktrees-header { align-items: center; }
-/* Under the page's head, what the tab holds and how it runs. */
-.routines-intro { margin-bottom: 16px; }
-.routines-intro p { margin: 0 0 2px; font-size: 12px; line-height: 1.6; }
+/* Something about when routines can run that wants acting on, apart from what the page is for. */
+.routines-notice { margin: 0 0 16px; padding: 8px 12px; border-left: 3px solid var(--warning); border-radius: var(--radius-sm); background: color-mix(in srgb, var(--warning) 8%, transparent); font-size: 12px; line-height: 1.6; }
 .inbox-page > .restore-bar { margin-bottom: 12px; }
 
 .detail {
@@ -8650,7 +8648,6 @@ div.inspector-empty > p { margin: 0 0 8px; }
 .schedule-state { min-width: 0; font-size: 12px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .schedule-state[data-warn] { color: var(--warning); }
 .schedule-actions { display: flex; align-items: center; justify-content: flex-end; gap: 2px; }
-.schedule-warning { color: var(--warning); }
 @container worktrees (max-width: 680px) {
   .schedule-row { grid-template-columns: 20px minmax(0, 1fr) auto; }
   .schedule-row[data-status] .schedule-actions { display: none; }
@@ -9247,6 +9244,10 @@ summary.agent-group-head:focus-visible { outline: 2px solid var(--focus); outlin
 .routine-unread { margin-left: 0; flex-shrink: 0; }
 .routine-failure { color: var(--warning); }
 .routine-confirm { font-size: 12px; }
+/* The row's own words stay quiet until pointed at: a page of rules is not a column of accent links. */
+.routine-actions .link-button { margin: 0 6px 0 0; color: var(--text-muted); font-size: 12px; }
+.routine-actions .link-button:hover { color: var(--accent); }
+.routine-actions .routine-delete, .routine-actions .routine-delete:hover { color: var(--danger); }
 .routine-history { margin: 0 0 4px 40px; padding: 0 12px 0 0; list-style: none; border-left: 1px solid var(--border); }
 .routine-history-empty { margin: 0 0 8px 40px; font-size: 12px; }
 .routine-history-more { margin: 0 0 8px 40px; font-size: 12px; }
@@ -9285,14 +9286,6 @@ summary.agent-group-head:focus-visible { outline: 2px solid var(--focus); outlin
 .routine-editor-quota { font-size: 11px; }
 /* Templates to start a routine from: rows of the same list the routines are, with what each does
    and when. The tabs above choose between the two lists. */
-.routines-tabs { display: flex; align-items: center; gap: 12px; margin: 0 0 8px; }
-.routines-tabs .segmented { align-self: flex-start; }
-.routines-new { margin-left: auto; font-size: 12px; }
-.routine-template { display: grid; grid-template-columns: 36px minmax(0, 1fr) minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 12px; font-size: 13px; }
-.routine-template + .routine-template { border-top: 1px solid var(--border); }
-.routine-template-icon { display: inline-grid; place-items: center; width: 36px; height: 36px; border-radius: var(--radius-sm); background: var(--fill-2); color: var(--text-muted); }
-.routine-template-icon svg { width: 18px; height: 18px; }
-.routine-template-description { white-space: normal; }
 .routine-template-when { display: inline-flex; align-items: center; gap: 4px; }
 .routine-template-when svg { width: 12px; height: 12px; flex-shrink: 0; }
 

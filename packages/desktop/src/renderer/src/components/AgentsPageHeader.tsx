@@ -5,7 +5,7 @@ import { ArrowLeftIcon, CloseIcon } from './icons'
 
 export function AgentsPageHeader({ title, description, back, actions }: {
   title: string
-  description?: string | null
+  description?: ReactNode
   back?: { label: string; onClick(): void }
   actions?: ReactNode
 }) {

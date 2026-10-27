@@ -5,6 +5,7 @@ import { selectConversation, selectTask, setAwakeMode, showView, useCore } from 
 import { agentLabel } from '../labels'
 import { cancelSchedule, clearSchedules, openQueueRuns, reorderSchedules, rescheduleRun, runAction, runScheduleNow, scheduleState, TARGET_LABEL, UNATTENDED_LABEL, waitingForRunDependencies } from '../schedules'
 import { AgentIcon, ArrowDownIcon, ArrowUpIcon, ClockIcon, CloseIcon, PlayIcon } from './icons'
+import { AgentsPageHeader } from './AgentsPageHeader'
 import { SchedulePicker, SettingsLink } from './SchedulePicker'
 
 // A task's chat is reached through its task, which the list of free conversations does not hold.
@@ -124,12 +125,10 @@ export function SchedulesPanel() {
   }
   return (
     <>
-      <div className="routines-intro">
-        <p className="muted">{tr('SchedulesPanel.runASpecifiedTaskOrConversationOnceStarts', { value1: UNATTENDED_LABEL[mode], value2: <SettingsLink /> })}</p>
-        {awake?.mode === 'off' && open.length > 0 && (
-          <p className="schedule-warning">{tr('SchedulesPanel.keepComputerAwakeIsOffSchedulesWillNot', { value1: <button type="button" className="link-button" onClick={() => void setAwakeMode('auto')}>{t('SchedulesPanel.keepAwakeWhenSchedulesArePending')}</button> })}</p>
-        )}
-      </div>
+      <AgentsPageHeader title={t('OverviewView.schedules')} description={tr('SchedulesPanel.runASpecifiedTaskOrConversationOnceStarts', { value1: UNATTENDED_LABEL[mode], value2: <SettingsLink /> })} />
+      {awake?.mode === 'off' && open.length > 0 && (
+        <p className="routines-notice" role="note">{tr('SchedulesPanel.keepComputerAwakeIsOffSchedulesWillNot', { value1: <button type="button" className="link-button" onClick={() => void setAwakeMode('auto')}>{t('SchedulesPanel.keepAwakeWhenSchedulesArePending')}</button> })}</p>
+      )}
       <section className="worktree-group" aria-label={t('SchedulesPanel.waiting')}>
         <h3 className="worktree-group-title">{tr('SchedulesPanel.waiting_1507', { value1: open.length })}</h3>
         {open.length === 0

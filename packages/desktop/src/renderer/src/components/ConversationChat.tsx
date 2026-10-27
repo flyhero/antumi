@@ -25,6 +25,8 @@ import { ChatDelegationCard } from './ChatDelegationCard'
 import { ProjectRunNotice } from './ProjectRunNotice'
 import { ChatImageStrip } from './ChatImages'
 import { ChatMarkdown, ChatRoots } from './ChatMarkdown'
+import { webLinkClasses } from '../markdown-links'
+import { textLinks } from '../text-links'
 import { ChatFilesContext, useChatContextMenu } from './ChatContextMenu'
 import { ChatCopyRegion } from './ChatCopyRegion'
 import { copyTextForItem } from '../message-copy'
@@ -210,6 +212,19 @@ function UserQuotes({ quotes }: { quotes: ReturnType<typeof parseQuotes>['quotes
   )
 }
 
+// What the user typed, as typed, with its web addresses made links: no Markdown, since `*` or `#` in
+// a message is rarely meant as formatting.
+function UserText({ text }: { text: string }) {
+  const parts = textLinks(text)
+  return parts.map((part, index) => {
+    if (part.kind === 'text') return <Fragment key={index}>{part.text}</Fragment>
+    const before = parts[index - 1]
+    const after = parts[index + 1]
+    const classes = webLinkClasses(before?.kind === 'text' ? before.text : null, after?.kind === 'text' ? after.text : null)
+    return <a key={index} href={part.href} title={part.href} className={classes.join(' ')} target="_blank" rel="noreferrer">{part.href}</a>
+  })
+}
+
 // A long message the user sent, such as a task's first prompt, shows its start until opened.
 function UserMessage({ item, pending = false }: { item: UserItem; pending?: boolean }) {
   const [open, setOpen] = useDisclosure(`message:${itemKey(item)}`)
@@ -232,7 +247,7 @@ function UserMessage({ item, pending = false }: { item: UserItem; pending?: bool
         {item.steer && <span className="chat-user-steer" title={t('ConversationChat.messageInsertedDuringTheTurn')}>{t('ConversationChat.additionalInstructions')}</span>}
         <ChatImageStrip images={item.images} />
         {quotes.length > 0 && <UserQuotes quotes={quotes} />}
-        {body}
+        <UserText text={body} />
       </div>
       {long && (
         <div className="chat-user-more">

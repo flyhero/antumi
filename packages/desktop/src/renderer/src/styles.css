@@ -6298,9 +6298,10 @@ div.inspector-empty > p { margin: 0 0 8px; }
 .chat-markdown td { padding: 6px 12px; text-align: left; vertical-align: top; }
 .chat-markdown th { background: var(--fill); font-weight: 600; }
 .chat-markdown td { border-top: 1px solid var(--border); }
-.chat-markdown a { color: var(--accent); }
-.chat-markdown .chat-web-link { text-decoration-thickness: from-font; text-underline-offset: 0.18em; text-decoration-color: color-mix(in srgb, var(--accent) 55%, transparent); }
-.chat-markdown .chat-web-link:hover { text-decoration-color: currentColor; }
+.chat-markdown a,
+.chat-user a { color: var(--accent); }
+:is(.chat-markdown, .chat-user) .chat-web-link { text-decoration-thickness: from-font; text-underline-offset: 0.18em; text-decoration-color: color-mix(in srgb, var(--accent) 55%, transparent); }
+:is(.chat-markdown, .chat-user) .chat-web-link:hover { text-decoration-color: currentColor; }
 .chat-link-space-before { margin-inline-start: 0.15em; }
 .chat-link-space-after { margin-inline-end: 0.15em; }
 .chat-markdown .chat-link-standalone { text-decoration: none; }

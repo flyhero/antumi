@@ -51,13 +51,15 @@ describe('composer drafts', () => {
 
     try {
       localStorage.setItem('antumi.composer-drafts', JSON.stringify({
-        'conversation:reloaded': { text: '窗口重开后还在', mentions: [] }
+        'conversation:reloaded': { text: '窗口重开后还在', mentions: [] },
+        'conversation:reference': { text: '看 鉴权方案', mentions: [{ start: 2, end: 6, target: { kind: 'conversation', id: 'aaaaaaaa-0000-4000-8000-000000000001', title: '鉴权方案' } }], images: [] }
       }))
       vi.resetModules()
       const reloaded = await import('./composer-drafts')
 
       // Kept before drafts held images.
       expect(reloaded.composerDraft('reloaded')).toEqual({ text: '窗口重开后还在', mentions: [], images: [] })
+      expect(reloaded.composerDraft('reference').mentions[0]?.target).toEqual({ kind: 'conversation', id: 'aaaaaaaa-0000-4000-8000-000000000001', title: '鉴权方案' })
       reloaded.saveComposerDraft('reloaded', EMPTY_DRAFT)
     } finally {
       vi.unstubAllGlobals()

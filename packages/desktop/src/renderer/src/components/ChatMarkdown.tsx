@@ -16,6 +16,8 @@ import { FILE_MANAGER, showChatFile, useFilePreviewSupported } from '../file-act
 import { useChatFiles } from './ChatContextMenu'
 import { ImageViewer, type ViewerImage } from './ImageViewer'
 import { ExternalIcon } from './icons'
+import { conversationReferenceId } from '@antumi/protocol'
+import { ConversationReferenceLink } from './ConversationReferenceLink'
 
 // The folders a conversation works in, the primary first: where a file a reply names is looked for.
 export const ChatRoots = createContext<readonly string[]>([])
@@ -111,6 +113,8 @@ function ImageLink({ image, children }: { image: LocalImage; children: ReactNode
 // Web links open in the browser, text files in the inspector, images in the viewer.
 function ChatLink({ href, title, className, children }: { href?: string; title?: string; className?: string; children: ReactNode }) {
   const roots = useContext(ChatRoots)
+  const conversationId = href ? conversationReferenceId(href) : null
+  if (conversationId) return <ConversationReferenceLink id={conversationId}>{children}</ConversationReferenceLink>
   const target = href ? linkTarget(href) : null
   const image = localImage(target, roots)
   if (image) return <ImageLink image={image}>{children}</ImageLink>
@@ -168,6 +172,7 @@ function LinkedImages({ node }: { node: HastElement | undefined }) {
 // react-markdown drops what it cannot tell is safe, a.ts:12 and file:// among it; a file is shown
 // by Antumi rather than followed, so its link is kept, as is a note's, which main opens in Obsidian.
 function urlTransform(url: string): string {
+  if (conversationReferenceId(url)) return url
   const kind = linkTarget(url)?.kind
   return kind === 'file' || kind === 'app' ? url : defaultUrlTransform(url)
 }

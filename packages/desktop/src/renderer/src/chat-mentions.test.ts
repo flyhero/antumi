@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { caretOutside, fileTarget, insertMention, markedRuns, matchProjects, mentionBeside, mentionLabel, mentionQuery, mentionText, placeMention, shiftMentions, writeMentions, type Mention, type MentionTarget } from './chat-mentions'
+import { caretOutside, fileTarget, insertMention, markedRuns, matchConversations, matchProjects, mentionBeside, mentionLabel, mentionQuery, mentionText, placeMention, shiftMentions, writeMentions, type Mention, type MentionTarget } from './chat-mentions'
+import { conversationReference, type Conversation } from '@antumi/protocol'
 
 describe('mentionQuery', () => {
   it('reads the @word the caret is in, at the start or after a space', () => {
@@ -38,6 +39,43 @@ describe('mentionText', () => {
     expect(mentionText(folder, 'codex')).toBe('src/lib/')
     expect(mentionText({ kind: 'file', path: '/repo/my notes.md', relative: 'my notes.md' }, 'codex')).toBe('`my notes.md`')
     expect(mentionText({ kind: 'project', path: '/work/api', relative: null }, 'claude')).toBe('/work/api')
+  })
+
+  it('gives every agent the same exact conversation reference, with its full title in the input', () => {
+    const target: MentionTarget = { kind: 'conversation', id: 'aaaaaaaa-0000-4000-8000-000000000001', title: '方案 / API' }
+    const placed = placeMention({ text: '参考 @方案', mentions: [] }, { start: 3, end: 6, query: '方案' }, target)
+    expect(placed.value.text).toBe('参考 方案 / API ')
+    expect(mentionLabel(target)).toBe('方案 / API')
+    for (const agent of ['claude', 'codex', 'pi'] as const) {
+      expect(writeMentions(placed.value, agent)).toBe(`参考 ${conversationReference(target.id, target.title)} `)
+    }
+    expect(shiftMentions(placed.value.mentions, placed.value.text, '参考 ', 3)).toEqual([])
+  })
+})
+
+describe('matchConversations', () => {
+  const base: Conversation = {
+    id: 'aaaaaaaa-0000-4000-8000-000000000001', title: '鉴权方案', titleLocked: false, agent: 'claude',
+    workspacePath: '/code/api', projectPaths: ['/code/api'], managedWorkspace: false, sessionId: null, createdAt: 1, updatedAt: 2
+  }
+  const older = { ...base, id: 'bbbbbbbb-0000-4000-8000-000000000002', agent: 'codex' as const, archivedAt: 3, updatedAt: 1 }
+
+  it('finds other agents and archived conversations by title, project, agent or id, newest first', () => {
+    const items = [older, base]
+    expect(matchConversations(items, '鉴权').map((c) => c.id)).toEqual([base.id, older.id])
+    expect(matchConversations(items, 'API')).toHaveLength(2)
+    expect(matchConversations(items, 'Codex')).toEqual([older])
+    expect(matchConversations(items, older.id.slice(0, 8))).toEqual([older])
+    expect(items[0]).toBe(older)
+  })
+
+  it('excludes the current conversation and private task, helper, group and delegation conversations', () => {
+    const children = [
+      { ...base, taskId: 'task' }, { ...base, discussionId: 'group' }, { ...base, squadRunId: 'team' },
+      { ...base, helperOf: 'parent' }, { ...base, parentConversationId: 'parent' }
+    ]
+    expect(matchConversations([base, older, ...children], '', base.id)).toEqual([older])
+    expect(matchConversations(children, '')).toEqual([])
   })
 })
 

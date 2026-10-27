@@ -6300,6 +6300,9 @@ div.inspector-empty > p { margin: 0 0 8px; }
 .chat-user a { color: var(--accent); }
 :is(.chat-markdown, .chat-user) .chat-web-link { text-decoration-thickness: from-font; text-underline-offset: 0.18em; text-decoration-color: color-mix(in srgb, var(--accent) 55%, transparent); }
 :is(.chat-markdown, .chat-user) .chat-web-link:hover { text-decoration-color: currentColor; }
+.chat-conversation-link { margin-inline: 0.15em; }
+.chat-conversation-link:disabled { color: var(--text-muted); cursor: default; text-decoration-style: dotted; }
+.chat-conversation-link:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--radius-xs); }
 .chat-link-space-before { margin-inline-start: 0.15em; }
 .chat-link-space-after { margin-inline-end: 0.15em; }
 .chat-markdown .chat-link-standalone { text-decoration: none; }

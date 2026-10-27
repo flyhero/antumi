@@ -59,6 +59,14 @@ describe('history tools', () => {
     expect(parseWhen('2026-10-05', true)).toBe(new Date(2026, 9, 6).getTime() - 1)
   })
 
+  it('reads an explicit conversation URL and refuses a deleted id without substituting a matching title', async () => {
+    expect((await tools.call('read', { id: `antumi://conversation/${CHAT}` })).text).toContain('修好了，是 z-index')
+    const gone = await tools.call('read', { id: 'antumi://conversation/ffffffff-0000-4000-8000-000000000001' })
+    expect(gone.isError).toBe(true)
+    expect(gone.text).toContain('可能已删除')
+    expect(gone.text).not.toContain('修好了')
+  })
+
   it('is offered only where the user allows it, planning included', async () => {
     const listed = async (history: boolean) => {
       const handle = createMcpHandler({ preview: async () => {}, planOnly: true, ...(history ? { history: tools } : {}) })
@@ -66,6 +74,7 @@ describe('history tools', () => {
       return JSON.stringify(response?.result)
     }
     expect(await listed(true)).toContain('history_read')
+    expect(await listed(true)).toContain('antumi://conversation/<id>')
     expect(await listed(false)).not.toContain('history_')
   })
 
@@ -80,5 +89,6 @@ describe('history tools', () => {
       expect(refused.isError).toBe(true)
       expect(refused.text).toContain('关闭了读取 Antumi 记录')
     }
+    expect((await history.call('read', { id: `antumi://conversation/${CHAT}` })).isError).toBe(true)
   })
 })

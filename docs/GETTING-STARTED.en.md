@@ -59,6 +59,12 @@ Look up these features when the relevant situation comes up.
 
 Out of quota, or want another agent to carry on? Click the agent's name at the bottom left of the input box, pick another, add a note and click **Hand off**. The new agent gets the chat history and keeps working in the same folder.
 
+### Cross-conversation references
+
+To build on an earlier discussion, type `@` in the composer, select **Conversations**, and find one by title, project, or agent. Select it and describe what to do. The current agent can read the referenced history as needed and keeps working in its current folder. Click a referenced title in a sent message to open the original conversation.
+
+The Conversations category requires **Let Agents read your Antumi records** in [Settings → Permissions](antumi:settings/permissions). Enabling provides the reading tools from the agent's next start; disabling blocks reads immediately. Handoff changes the agent working on the current conversation; a conversation reference adds source material.
+
 ### Scheduling: send when quota resets, or at a set time
 
 ![The Schedule message popover opened from the clock button](assets/guide/schedule.en.png)

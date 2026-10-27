@@ -7,11 +7,11 @@ import type { MentionedText } from './chat-mentions'
 // what the user has typed or attached; a successful send removes it. Images are kept by their ids
 // in core's attachment store, which holds them already once uploaded.
 
-const MentionTarget = z.object({
+const MentionTarget = z.union([z.object({
   kind: z.enum(['file', 'directory', 'project']),
   path: z.string(),
   relative: z.string().nullable()
-})
+}), z.object({ kind: z.literal('conversation'), id: z.string().uuid(), title: z.string() })])
 const Mention = z.object({
   start: z.number().int().nonnegative(),
   end: z.number().int().nonnegative(),

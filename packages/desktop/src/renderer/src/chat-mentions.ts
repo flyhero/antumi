@@ -1,4 +1,4 @@
-import { agentDescriptor, type AgentKind, type ProjectFileMatch } from '@antumi/protocol'
+import { agentDescriptor, conversationReference, type AgentKind, type Conversation, type ProjectFileMatch } from '@antumi/protocol'
 
 const MAX_PROJECTS = 8
 
@@ -18,6 +18,7 @@ export function mentionQuery(text: string, caret: number): MentionRange | null {
 // What a mention points at. `relative` is set only inside the agent's working folder, where the
 // shorter path reads the same to it.
 export type MentionTarget = { kind: 'file' | 'directory' | 'project'; path: string; relative: string | null }
+  | { kind: 'conversation'; id: string; title: string }
 
 export function fileTarget(match: ProjectFileMatch, cwd: string | null): MentionTarget {
   return { kind: match.kind, path: match.path, relative: match.root === cwd ? match.relative : null }
@@ -26,6 +27,7 @@ export function fileTarget(match: ProjectFileMatch, cwd: string | null): Mention
 // Claude Code reads `@path` itself, attaching the file (a folder's listing); Codex has no file
 // mentions, so it gets the path to read. A project is only named, for either.
 export function mentionText(target: MentionTarget, agent: AgentKind): string {
+  if (target.kind === 'conversation') return conversationReference(target.id, target.title)
   const shown = target.relative ?? target.path
   const written = target.kind === 'directory' ? `${shown}/` : shown
   const spaced = /\s/.test(written)
@@ -52,6 +54,7 @@ export type MentionedText = { text: string; mentions: readonly Mention[] }
 
 // The name a pick shows in the input: the file's, folder's or project's own, a folder's with a slash.
 export function mentionLabel(target: MentionTarget): string {
+  if (target.kind === 'conversation') return target.title.replace(/\s+/g, ' ').trim() || target.id
   const name = target.path.split(/[\\/]/).filter(Boolean).at(-1) ?? target.path
   return target.kind === 'directory' ? `${name}/` : name
 }
@@ -158,4 +161,14 @@ export function matchProjects(paths: readonly string[], query: string): string[]
     .sort((a, b) => a.rank - b.rank || a.index - b.index)
     .slice(0, MAX_PROJECTS)
     .map((each) => each.projectPath)
+}
+
+// Match only conversations history_read can resolve; private member chats belong to their owner.
+export function matchConversations(conversations: readonly Conversation[], query: string, self?: string): Conversation[] {
+  const needle = query.toLocaleLowerCase()
+  return conversations.filter((conversation) => conversation.id !== self && !conversation.taskId && !conversation.discussionId
+    && !conversation.squadRunId && !conversation.parentConversationId && !conversation.helperOf
+    && `${conversation.title} ${conversation.id} ${agentDescriptor(conversation.agent).label} ${conversation.projectPaths.join(' ')}`.toLocaleLowerCase().includes(needle))
+    .sort((a, b) => b.updatedAt - a.updatedAt || a.id.localeCompare(b.id))
+    .slice(0, 50)
 }

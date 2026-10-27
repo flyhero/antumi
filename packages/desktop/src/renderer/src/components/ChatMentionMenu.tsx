@@ -2,7 +2,7 @@ import { getLocale, t, tr } from '../i18n'
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode, type RefObject, type TextareaHTMLAttributes } from 'react'
 import type { AgentKind, ProjectFileMatch } from '@antumi/protocol'
 import { useCore, useFileMentionsSupported } from '../core-store'
-import { fileTarget, insertMention, matchProjects, mentionQuery, placeMention, type MentionedText, type MentionTarget } from '../chat-mentions'
+import { fileTarget, insertMention, matchConversations, matchProjects, mentionQuery, placeMention, type MentionedText, type MentionTarget } from '../chat-mentions'
 import type { SetText } from './ChatMentionField'
 import { projectName } from './ProjectPicker'
 import { AgentIcon, FolderIcon } from './icons'
@@ -19,7 +19,7 @@ type InputProps = Pick<TextareaHTMLAttributes<HTMLTextAreaElement>, 'onSelect' |
 }
 
 // `opens`: what Tab puts after the @ to look inside a folder, its path under its project.
-type MentionGroup = 'files' | 'projects' | 'profiles'
+type MentionGroup = 'files' | 'projects' | 'profiles' | 'conversations'
 type MentionEntry = { key: string; group: MentionGroup; target: MentionTarget | null; name: string; detail: string; opens: string | null; icon: ReactNode }
 const NO_FILES: readonly ProjectFileMatch[] = []
 
@@ -60,13 +60,13 @@ function MentionOption({ entry, id, active, onHover, onPick }: {
       onClick={onPick}
     >
       <span className="chat-mention-option-icon" aria-hidden="true">{entry.icon}</span>
-      <span className={`chat-mention-option-name${entry.group === 'profiles' ? '' : ' mono'}`}>{entry.name}{entry.target?.kind === 'directory' ? '/' : ''}</span>
+      <span className={`chat-mention-option-name${entry.group === 'files' || entry.group === 'projects' ? ' mono' : ''}`}>{entry.name}{entry.target?.kind === 'directory' ? '/' : ''}</span>
       {entry.detail && <span className="chat-mention-option-description">{entry.detail}</span>}
     </li>
   )
 }
 
-// Agents, files and projects matching an @word the caret is in, above the input. Enter puts the
+// Agents, files, projects and conversations matching the @word above the input. Enter puts the
 // one picked in as a mention, its name in colour, written out for the agent as the message goes
 // (see writeMentions); Tab on a folder opens it to pick inside, and elsewhere picks too; Esc puts
 // the list away until the text changes.
@@ -93,8 +93,12 @@ export function useChatMentionMenu({ value, setText, setValue, roots, cwd, agent
   const [highlight, setHighlight] = useState(0)
   const [closedAt, setClosedAt] = useState<string | null>(null)
   const [group, setGroup] = useState<MentionGroup | null>(null)
-  const supported = useFileMentionsSupported() && agent !== null
+  const fileMentions = useFileMentionsSupported()
   const rpc = useCore((s) => s.rpc)
+  const conversations = useCore((s) => s.conversations)
+  const readHistory = useCore((s) => s.chatSettings?.readHistory === true)
+  const references = Boolean(rpc?.features.includes('conversation-references') && readHistory)
+  const supported = (fileMentions || references) && agent !== null
   const profiles = useCore((s) => s.agentProfiles)
   const conversation = useCore((s) => conversationId ? s.conversations[conversationId] : null)
   const delegates = Boolean(rpc?.features.includes('agent-profiles') && conversation
@@ -106,7 +110,7 @@ export function useChatMentionMenu({ value, setText, setValue, roots, cwd, agent
   const rootsKey = roots.join('\0')
   const [fileResult, setFileResult] = useState<{ query: string; roots: string; matches: ProjectFileMatch[] } | null>(null)
   const files = fileResult?.query === query && fileResult.roots === rootsKey ? fileResult.matches : NO_FILES
-  const filesLoading = query !== null && Boolean(rpc && rootsKey) && (fileResult?.query !== query || fileResult.roots !== rootsKey)
+  const filesLoading = query !== null && fileMentions && Boolean(rpc && rootsKey) && (fileResult?.query !== query || fileResult.roots !== rootsKey)
   const [projects, setProjects] = useState<string[] | null>(null)
   const dark = useSyncExternalStore(onThemeChange, isDarkTheme, () => false)
 
@@ -118,7 +122,7 @@ export function useChatMentionMenu({ value, setText, setValue, roots, cwd, agent
   }, [text])
 
   useEffect(() => {
-    if (query === null || !rpc || !rootsKey) return
+    if (query === null || !rpc || !rootsKey || !fileMentions) return
     let current = true
     const timer = setTimeout(() => {
       // Not through perform: a failed search only offers nothing.
@@ -131,7 +135,7 @@ export function useChatMentionMenu({ value, setText, setValue, roots, cwd, agent
       current = false
       clearTimeout(timer)
     }
-  }, [query, rootsKey, rpc])
+  }, [query, rootsKey, rpc, fileMentions])
 
   const asking = query !== null
   useEffect(() => {
@@ -142,7 +146,7 @@ export function useChatMentionMenu({ value, setText, setValue, roots, cwd, agent
   }, [asking, rpc, projects])
 
   const entries = useMemo(() => {
-    if (query === null) return { profiles: [], files: [], projects: [] }
+    if (query === null) return { profiles: [], files: [], projects: [], conversations: [] }
     const fileRows = rootsKey ? files.map((match) => fileEntry(match, cwd, roots.length > 1, dark)) : []
     const projectRows = matchProjects(projects ?? [], query).map((projectPath): MentionEntry => ({
       key: `project:${projectPath}`,
@@ -157,12 +161,19 @@ export function useChatMentionMenu({ value, setText, setValue, roots, cwd, agent
       key: `profile:${profile.id}`, group: 'profiles', target: null, name: profile.name, detail: profile.description || agentLabel(profile.agent), opens: null,
       icon: <AgentIcon agent={profile.agent} />
     }))
-    return { profiles: profileRows, files: fileRows, projects: projectRows }
-  }, [query, files, projects, cwd, rootsKey, roots.length, profiles, conversation, delegates, dark, getLocale()])
+    const conversationRows = references ? matchConversations(Object.values(conversations), query, conversationId).map((entry): MentionEntry => ({
+      key: `conversation:${entry.id}`, group: 'conversations', target: { kind: 'conversation', id: entry.id, title: entry.title },
+      name: entry.title || entry.id.slice(0, 8),
+      detail: [agentLabel(entry.agent), ...entry.projectPaths.map(projectName), entry.archivedAt != null ? t('ConversationList.archived') : '', entry.id.slice(0, 8)].filter(Boolean).join(' · '),
+      opens: null, icon: <AgentIcon agent={entry.agent} />
+    })) : []
+    return { profiles: profileRows, files: fileRows, projects: projectRows, conversations: conversationRows }
+  }, [query, files, projects, cwd, rootsKey, roots.length, profiles, conversation, delegates, conversations, conversationId, references, dark, getLocale()])
   const tabs: { id: MentionGroup; label: string; loading: boolean }[] = [
     ...(delegates ? [{ id: 'profiles' as const, label: t('AgentProfiles.title'), loading: false }] : []),
     { id: 'files', label: t('ChatMentionMenu.files'), loading: filesLoading },
-    { id: 'projects', label: t('ChatMentionMenu.projects'), loading: projects === null }
+    { id: 'projects', label: t('ChatMentionMenu.projects'), loading: projects === null },
+    ...(references ? [{ id: 'conversations' as const, label: t('ChatMentionMenu.conversations'), loading: false }] : [])
   ]
   const selectedGroup = tabs.some((tab) => tab.id === group) && group !== null ? group : delegates && callable.length ? 'profiles' : rootsKey ? 'files' : 'projects'
   const shown = entries[selectedGroup]

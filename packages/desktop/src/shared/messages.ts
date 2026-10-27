@@ -1,5 +1,7 @@
 // Application-owned text. Values and external content are passed separately.
 export const MESSAGES = {
+  "AgentProfiles.roleDescription": { "zh": "保存角色、模型与工具配置，直接开始会话或接受其他智能体的委派。", "en": "Save roles, models and tools for direct conversations or delegated work." },
+  "AgentProfiles.createHint": { "zh": "配置角色、模型和工具", "en": "Configure a role, model and tools" },
   "AgentProfiles.pendingReturn": {"zh": "等待回传", "en": "Returning result"},
   "AgentProfiles.startingHint": {"zh": "正在准备独立会话，即将开始执行。", "en": "Preparing an independent conversation. Work will begin shortly."},
   "AgentProfiles.cardLabel": {"zh": "委派给 {name}", "en": "Delegated to {name}"},

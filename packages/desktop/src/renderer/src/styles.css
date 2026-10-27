@@ -9764,14 +9764,13 @@ summary.agent-group-head:focus-visible { outline: 2px solid var(--focus); outlin
 .task-executor-picker, .squad-member-nav { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 /* 研发小队: a page like the routines', listing the squads; a squad reads as its leader, then its
    members one line each, opened in place to edit. */
-.squads-page .worktrees-header > .tool-button:first-child { margin-left: -6px; }
 .squad-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
 .squad-cards > li { display: flex; }
-.squad-card { flex: 1; min-width: 0; min-height: 168px; display: flex; flex-direction: column; gap: 10px; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.squad-card { flex: 1; min-width: 0; min-height: 168px; display: flex; flex-direction: column; gap: 12px; padding: 16px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); color: var(--text); font: inherit; text-align: left; cursor: pointer; }
 .squad-card:hover { border-color: var(--border-2); box-shadow: var(--shadow); background: linear-gradient(var(--fill), var(--fill)), var(--surface); }
 .squad-card:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .squad-card[data-archived] { opacity: 0.7; }
-.squad-card-top { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.squad-card-top { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .squad-card-icon { display: grid; place-items: center; width: 32px; height: 32px; flex-shrink: 0; border-radius: var(--radius); background: var(--accent-bg); color: var(--accent); }
 .squad-card-icon svg { width: 18px; height: 18px; }
 .squad-card-name { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -9789,13 +9788,6 @@ summary.agent-group-head:focus-visible { outline: 2px solid var(--focus); outlin
 .squad-card-plus svg { width: 16px; height: 16px; }
 .squad-card-new-hint { font-size: 12px; color: var(--text-3); }
 .squads-tabs { margin: 0 0 12px; }
-/* On the same centred column as the other sidebar pages (DESIGN.md, 页面宽度), so going between
-   them or from the list into a squad moves nothing sideways; a squad and its editor keep to the
-   form's width inside it. */
-.squads-page > * { width: 100%; max-width: var(--page-wide); margin-inline: auto; }
-/* Left-aligned with the column, so its edge lines up with the header above. */
-.squads-page > .squad-page-body { max-width: var(--page-form); margin-left: max(0px, calc((100% - var(--page-wide)) / 2)); margin-right: auto; }
-
 .squad-page-body { display: flex; flex-direction: column; gap: 20px; }
 .squad-header-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .squad-header-actions .button svg { width: 14px; height: 14px; }

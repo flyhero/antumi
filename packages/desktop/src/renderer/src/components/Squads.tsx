@@ -2,12 +2,13 @@ import { t, tr } from '../i18n'
 import { useId, useState, type ReactNode } from 'react'
 import { AgentKind, SquadFields, type Squad, type SquadMember } from '@antumi/protocol'
 import { useAgentCatalog } from '../agent-models'
-import { openOverview, perform, selectSquad, useCore, useSquadsSupported } from '../core-store'
+import { perform, selectSquad, useCore, useSquadsSupported } from '../core-store'
 import { useInstalledAgents } from '../installed-agents'
 import { agentLabel, reasonText } from '../labels'
 import { saveSquad } from '../squads'
 import { timeAgo } from '../conversation-state'
-import { AgentIcon, ArrowLeftIcon, ChevronRightIcon, CloseIcon, PencilIcon, PlusIcon, SquadIcon } from './icons'
+import { AgentIcon, ChevronRightIcon, PencilIcon, PlusIcon, SquadIcon } from './icons'
+import { AgentsPageHeader } from './AgentsPageHeader'
 import { AgentModelPicker } from './AgentModelPicker'
 import { effortLabel } from './ChatOptionsBar'
 import { ChatPicker } from './ChatPicker'
@@ -63,12 +64,10 @@ function SquadList() {
   const now = Date.now()
   return (
     <section className="squads-section" aria-label={t('Squads.developmentSquads')}>
-      {archived.length > 0 && (
-        <div className="squads-tabs">
-          <span id={tabsId} className="visually-hidden">{t('RoutinesSection.show')}</span>
-          <Segmented labelId={tabsId} value={tab} options={[{ value: 'active', label: t('Squads.inUse', { value1: all.length - archived.length }) }, { value: 'archived', label: t('Squads.archived', { value1: archived.length }) }]} onChange={setTab} />
-        </div>
-      )}
+      <div className="squads-tabs">
+        <span id={tabsId} className="visually-hidden">{t('RoutinesSection.show')}</span>
+        <Segmented labelId={tabsId} value={tab} options={[{ value: 'active', label: t('Squads.inUse', { value1: all.length - archived.length }) }, { value: 'archived', label: t('Squads.archived', { value1: archived.length }) }]} onChange={setTab} />
+      </div>
       {tab === 'archived' && shown.length === 0 ? <p className="worktrees-empty muted">{t('Squads.noArchivedSquads')}</p> : (
         <ul className="squad-cards">
           {shown.map((squad) => <SquadCard key={squad.id} squad={squad} now={now} />)}
@@ -323,17 +322,7 @@ function SquadPage({ squad }: { squad: Squad }) {
 }
 
 function PageHeader({ title, description, back, actions = null }: { title: string; description: string | null; back: boolean; actions?: ReactNode }) {
-  return (
-    <header className="worktrees-header">
-      {back && <button type="button" className="tool-button" aria-label={t('Squads.backToSquadList')} data-tooltip={t('Squads.backToSquadList')} onClick={() => selectSquad(null)}><ArrowLeftIcon /></button>}
-      <div className="worktrees-heading">
-        <h2>{title}</h2>
-        {description && <p className="muted">{description}</p>}
-      </div>
-      {actions}
-      <button type="button" className="tool-button" aria-label={t('BackdropPicker.close')} data-tooltip={t('BackdropPicker.close')} onClick={openOverview}><CloseIcon /></button>
-    </header>
-  )
+  return <AgentsPageHeader title={title} description={description} back={back ? { label: t('Squads.backToSquadList'), onClick: () => selectSquad(null) } : undefined} actions={actions} />
 }
 
 export function SquadsView() {
@@ -341,7 +330,7 @@ export function SquadsView() {
   const draft = useCore((state) => state.squadDraft)
   const squad = useCore((state) => (selected ? state.squads[selected] ?? null : null))
   return (
-    <section className="worktrees-page squads-page" aria-label={t('NewTaskDialog.developmentSquad')}>
+    <section className="worktrees-page agents-page squads-page" aria-label={t('NewTaskDialog.developmentSquad')}>
       {draft ? (
         <>
           <PageHeader title={t('Squads.newDevelopmentSquad')} description={t('Squads.preFilledWithLeaderDeveloperAndReviewerChange')} back />

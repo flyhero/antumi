@@ -1,16 +1,19 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { create } from 'zustand'
 import { AgentProfileFields, type AgentProfile } from '@antumi/protocol'
 import { useAgentCatalog } from '../agent-models'
-import { openConversationDraft, openOverview, perform, selectSquad, useCore } from '../core-store'
+import { openConversationDraft, perform, selectSquad, useCore } from '../core-store'
 import { useInstalledAgents } from '../installed-agents'
 import { agentLabel } from '../labels'
 import { t } from '../i18n'
-import { AgentIcon, ArrowLeftIcon, PlusIcon } from './icons'
+import { timeAgo } from '../conversation-state'
+import { AgentIcon, PlusIcon } from './icons'
+import { AgentsPageHeader } from './AgentsPageHeader'
 import { AgentModelPicker } from './AgentModelPicker'
 import { ChatPicker } from './ChatPicker'
 import { ProviderPicker } from './ProviderPicker'
 import { SquadsView } from './Squads'
+import { Segmented } from './SettingsControls'
 import './agent-profiles.css'
 
 const useProfileEditor = create<{ editing: boolean; profile: AgentProfile | null; seed: AgentProfileFields | null }>(() => ({ editing: false, profile: null, seed: null }))
@@ -26,8 +29,10 @@ export function AgentsView() {
   if (!supported) return <SquadsView />
   return <section className="agents-hub">
     <nav className="agents-tabs" aria-label={t('AgentProfiles.title')}>
-      <button type="button" className="button ghost" aria-pressed={tab === 'profiles'} onClick={() => useCore.setState({ agentProfilesTab: 'profiles' })}>{t('AgentProfiles.roles')}</button>
-      {squadsSupported && <button type="button" className="button ghost" aria-pressed={tab === 'squads'} onClick={() => useCore.setState({ agentProfilesTab: 'squads' })}>{t('ChatPlan.squad')}</button>}
+      <div className="agents-tabs-inner">
+        <button type="button" className="button ghost" aria-pressed={tab === 'profiles'} onClick={() => useCore.setState({ agentProfilesTab: 'profiles' })}>{t('AgentProfiles.roles')}</button>
+        {squadsSupported && <button type="button" className="button ghost" aria-pressed={tab === 'squads'} onClick={() => useCore.setState({ agentProfilesTab: 'squads' })}>{t('ChatPlan.squad')}</button>}
+      </div>
     </nav>
     {tab === 'squads' && squadsSupported ? <SquadsView /> : <ProfilesView />}
   </section>
@@ -35,32 +40,48 @@ export function AgentsView() {
 
 function ProfilesView() {
   const profiles = useCore((state) => state.agentProfiles)
-  const [archived, setArchived] = useState(false)
+  const [tab, setTab] = useState<'active' | 'archived'>('active')
+  const tabsId = useId()
   const { editing, profile, seed } = useProfileEditor()
-  const shown = Object.values(profiles).filter((item) => (item.archivedAt !== null) === archived)
+  const all = Object.values(profiles).sort((a, b) => b.updatedAt - a.updatedAt)
+  const archived = all.filter((item) => item.archivedAt !== null)
+  const shown = tab === 'archived' ? archived : all.filter((item) => item.archivedAt === null)
   const [busy, setBusy] = useState(false)
+  const now = Date.now()
+  const create = () => useProfileEditor.setState({ editing: true, profile: null, seed: null })
   const archive = async (item: AgentProfile) => {
     setBusy(true)
     const saved = await perform((rpc) => rpc.call('agentProfiles.archive', { id: item.id, archived: item.archivedAt === null }))
     if (saved) useCore.setState((state) => ({ agentProfiles: { ...state.agentProfiles, [saved.id]: saved } }))
     setBusy(false)
   }
-  return <section className="worktrees-page">
-    <header className="worktrees-header">
-      <button type="button" className="tool-button" aria-label={t('AgentProfiles.back')} onClick={() => editing ? useProfileEditor.setState({ editing: false }) : openOverview()}><ArrowLeftIcon /></button>
-      <div className="worktrees-heading"><h2>{t(editing ? 'AgentProfiles.configure' : 'AgentProfiles.title')}</h2><p className="muted">{t('AgentProfiles.description')}</p></div>
-      {!editing && <button type="button" className="button primary" onClick={() => useProfileEditor.setState({ editing: true, profile: null, seed: null })}><PlusIcon />{t('AgentProfiles.create')}</button>}
-    </header>
-    {editing ? <ProfileEditor key={profile?.id ?? JSON.stringify(seed)} profile={profile} seed={seed} onDone={() => useProfileEditor.setState({ editing: false })} /> : <div className="squad-page-body">
-      <label className="agent-profile-check"><input type="checkbox" checked={archived} onChange={(event) => setArchived(event.target.checked)} />{t('AgentProfiles.showArchived')}</label>
-      {shown.length === 0 && <p className="worktrees-empty muted">{t(archived ? 'AgentProfiles.noArchived' : 'AgentProfiles.empty')}</p>}
-      <ul className="agent-profile-list">{shown.map((item) => <li key={item.id} className="agent-profile-row">
-        <AgentIcon agent={item.agent} /><div className="agent-profile-main"><strong>{item.name}</strong><p>{item.description}</p><span className="muted">{[agentLabel(item.agent), item.model, t(item.capability === 'readOnly' ? 'Squads.readOnlyAnalysis' : 'Squads.developmentTesting')].filter(Boolean).join(' · ')}</span></div>
-        {item.archivedAt === null && <button type="button" className="button" onClick={() => { openConversationDraft(); useCore.setState({ draftProfileId: item.id }) }}>{t('AgentProfiles.chat')}</button>}
-        <button type="button" className="button ghost" onClick={() => useProfileEditor.setState({ editing: true, profile: item, seed: null })}>{t('AgentProfiles.edit')}</button>
-        <button type="button" className="button ghost" disabled={busy} onClick={() => void archive(item)}>{t(item.archivedAt === null ? 'AgentProfiles.archive' : 'AgentProfiles.restore')}</button>
-      </li>)}</ul>
-    </div>}
+  return <section className="worktrees-page agents-page agent-profiles-page" aria-label={t('AgentProfiles.roles')}>
+    <AgentsPageHeader title={editing ? t(profile ? 'AgentProfiles.configure' : 'AgentProfiles.create') : t('AgentProfiles.role')} description={editing ? null : t('AgentProfiles.roleDescription')} back={editing ? { label: t('AgentProfiles.back'), onClick: () => useProfileEditor.setState({ editing: false }) } : undefined}
+      actions={!editing && <button type="button" className="button primary" onClick={create}><PlusIcon />{t('AgentProfiles.create')}</button>} />
+    {editing ? <ProfileEditor key={profile?.id ?? JSON.stringify(seed)} profile={profile} seed={seed} onDone={() => useProfileEditor.setState({ editing: false })} /> : <section className="agent-profiles-section" aria-label={t('AgentProfiles.roles')}>
+      <div className="squads-tabs">
+        <span id={tabsId} className="visually-hidden">{t('RoutinesSection.show')}</span>
+        <Segmented labelId={tabsId} value={tab} options={[{ value: 'active', label: t('Squads.inUse', { value1: all.length - archived.length }) }, { value: 'archived', label: t('Squads.archived', { value1: archived.length }) }]} onChange={setTab} />
+      </div>
+      {tab === 'archived' && shown.length === 0 && <p className="worktrees-empty muted">{t('AgentProfiles.noArchived')}</p>}
+      <ul className="squad-cards agent-profile-list">{shown.map((item) => <li key={item.id}>
+        <article className="squad-card agent-profile-card" data-archived={item.archivedAt !== null || undefined}>
+          <button type="button" className="agent-profile-card-main" onClick={() => useProfileEditor.setState({ editing: true, profile: item, seed: null })}>
+            <span className="squad-card-top"><span className="squad-card-icon"><AgentIcon agent={item.agent} /></span><span className="squad-card-name">{item.name}</span>{item.archivedAt !== null && <span className="squad-tag">{t('ConversationList.archived')}</span>}</span>
+            <span className="squad-card-description" data-empty={!item.description || undefined}>{item.description || t('Squads.noDescription')}</span>
+            <span className="squad-card-members"><span className="squad-card-member">{t(item.capability === 'readOnly' ? 'Squads.readOnlyAnalysis' : 'Squads.developmentTesting')}</span></span>
+            <span className="squad-card-foot"><span className="agent-profile-engine" title={[agentLabel(item.agent), item.model].filter(Boolean).join(' · ')}>{[agentLabel(item.agent), item.model].filter(Boolean).join(' · ')}</span><span className="squad-card-time">{t('SourceInboxView.updated', { value1: timeAgo(item.updatedAt, now) })}</span></span>
+          </button>
+          <footer className="agent-profile-card-actions">
+            {item.archivedAt === null && <button type="button" className="button" onClick={() => { openConversationDraft(); useCore.setState({ draftProfileId: item.id }) }}>{t('AgentProfiles.chat')}</button>}
+            <button type="button" className="button ghost" onClick={() => useProfileEditor.setState({ editing: true, profile: item, seed: null })}>{t('AgentProfiles.edit')}</button>
+            <button type="button" className="button ghost" disabled={busy} onClick={() => void archive(item)}>{t(item.archivedAt === null ? 'AgentProfiles.archive' : 'AgentProfiles.restore')}</button>
+          </footer>
+        </article>
+      </li>)}
+      {tab === 'active' && <li><button type="button" className="squad-card squad-card-new" onClick={create}><span className="squad-card-plus"><PlusIcon /></span>{t('AgentProfiles.create')}<span className="squad-card-new-hint">{t('AgentProfiles.createHint')}</span></button></li>}
+      </ul>
+    </section>}
   </section>
 }
 

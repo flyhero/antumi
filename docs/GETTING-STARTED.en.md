@@ -4,9 +4,9 @@ Look up configuration and features here when you need them. On first use, the pe
 
 ## Agent installation and sign-in
 
-Open [**Settings → Local Agents**](antumi:settings/agents) to check installation, enabled state and readiness. Agents can use their own account or a compatible model provider; the setup check shows what your agent needs.
+Open [**Settings → External agents**](antumi:settings/agents) to check installation, enabled state and readiness. Agents can use their own account or a compatible model provider; the setup check shows what your agent needs.
 
-![Settings → Local Agents: agents installed and signed in show Ready](assets/guide/agents-ready.en.png)
+![Settings → External agents: agents installed and signed in show Ready](assets/guide/agents-ready.en.png)
 
 - To use the agent's own account: run the sign-in command on that row in a terminal, then click **Scan again**.
 - Listed under **Available to install** (click to open it): click **Install in terminal**, or run the install command yourself, then click **Scan again**.

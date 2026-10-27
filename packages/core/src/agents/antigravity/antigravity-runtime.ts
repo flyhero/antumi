@@ -64,7 +64,7 @@ export async function detectAntigravity(_pathEnv: string, platform: NodeJS.Platf
 export async function requireAntigravity(host: Host = thisHost()): Promise<string> {
   if (!pinOf(host)) throw new Rejection('antigravity-unsupported', 'Antigravity ACP 服务不支持这台电脑的系统或架构')
   const server = await installed(host)
-  if (!server) throw new Rejection('antigravity-missing', '未安装 Antigravity ACP 服务，请在 设置 → 本机 Agent 里下载')
+  if (!server) throw new Rejection('antigravity-missing', '未安装 Antigravity ACP 服务，请在 设置 → 外部智能体 里下载')
   return server
 }
 

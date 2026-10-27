@@ -55,7 +55,7 @@ Antumi 驱动的就是你装好、登录好的 Agent CLI，配置和登录都不
 
 ## 更多功能
 
-[小助手](#小助手) · [翻译](#翻译) · [分屏](#分屏) · [群聊](#群聊) · [研发小队](#研发小队) · [定时与预约](#定时与预约) · [待办](#待办)
+[小助手](#小助手) · [翻译](#翻译) · [分屏](#分屏) · [群聊](#群聊) · [团队](#团队) · [定时与预约](#定时与预约) · [待办](#待办)
 
 ### 小助手
 
@@ -81,11 +81,11 @@ Antumi 驱动的就是你装好、登录好的 Agent CLI，配置和登录都不
 
 <img src="docs/assets/features/discussion.webp" alt="群聊演示：三个 Agent 独立作答，点「继续」互相回应，点「立即总结」由主持人总结" width="100%" />
 
-### 研发小队
+### 团队
 
-为队长、开发和评审分别配置 Agent、模型与职责，展开成员即可修改，然后把一项任务交给整支小队。队长先和你确认计划，再安排成员在同一个 worktree 中协作：开发串行，只读分析可并行。
+为负责人、开发和评审分别配置外部智能体、模型与职责，展开成员即可修改，然后把一项任务交给整个团队。负责人先和你确认计划，再安排成员在同一个 worktree 中协作：开发串行，只读分析可并行。
 
-<img src="docs/assets/features/squad.webp" alt="研发小队演示：点「编辑」，展开开发成员，查看它的 Agent、模型与职责" width="100%" />
+<img src="docs/assets/features/squad.webp" alt="团队演示：点「编辑」，展开开发成员，查看它的外部智能体、模型与职责" width="100%" />
 
 ### 定时与预约
 
@@ -129,11 +129,11 @@ Antumi 驱动的是你已经装好、登录好的 Agent CLI。
 | [**ZCode**](docs/ZCODE.md) | `zcode app-server` | 修改前询问 · 自由编辑 · 规划 · 自主 · 只读 | ✓ | ✓ | ✓ |
 | [**Kimi Code**](docs/KIMI.md) | `kimi acp`（Node.js 版 2.3.2+） | Default · Plan · Auto | ✓ | ✓ | ✓ |
 
-「全部放行」不会默认选中。设置 → 本机 Agent 还会列出 Antumi 认识、但尚未接入的 Agent CLI。
+「全部放行」不会默认选中。设置 → 外部智能体 还会列出 Antumi 认识、但尚未接入的 Agent CLI。
 
 ## 快速开始
 
-**前提**：准备好至少一个 Agent（Claude Code、Codex、Cursor、OpenCode、Pi、DeepSeek Harness 请先装好 CLI，ZCode 装好桌面版或 `zcode-app-cli`；Antigravity 可在「设置 → 本机 Agent」中一键下载服务并在首聊时登录）。
+**前提**：准备好至少一个 Agent（Claude Code、Codex、Cursor、OpenCode、Pi、DeepSeek Harness 请先装好 CLI，ZCode 装好桌面版或 `zcode-app-cli`；Antigravity 可在「设置 → 外部智能体」中一键下载服务并在首聊时登录）。
 
 **从源码运行**，需要 Node ≥ 22.13 和 pnpm 12：
 
@@ -175,7 +175,7 @@ pnpm dist:win     # 产物在 packages/desktop/dist/Antumi-Setup-<版本>-x64.ex
 **在 Windows 上安装**：安装包没有签名，SmartScreen 会拦一下，点「更多信息 → 仍要运行」。
 
 <p align="center">
-  <img src="docs/assets/agents.png" alt="设置 → 本机 Agent：Claude Code、Codex、Cursor 都已安装并登录" width="720" />
+  <img src="docs/assets/agents.png" alt="设置 → 外部智能体：Claude Code、Codex、Cursor 都已安装并登录" width="720" />
 </p>
 
 <details>

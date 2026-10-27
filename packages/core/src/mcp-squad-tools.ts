@@ -7,9 +7,9 @@ const argumentsFor = {
   finish: z.object({ summary: z.string().trim().min(1).max(20000) })
 }
 const descriptions = {
-  roster: '查看当前任务的小队成员、角色、工作指令和结果。',
-  dispatch: '给当前小队成员派活，立即返回工作 ID。派活后结束回合，成员完成后系统自动唤醒队长。retryOf 可替换一次失败或取消的工作。',
-  finish: '队长提交整体成果及验证摘要。所有工作须处理完毕，当前回合成功结束后任务进入待验收。'
+  roster: '查看当前任务的团队成员、职责、工作指令和结果。',
+  dispatch: '给当前团队成员派活，立即返回工作 ID。派活后结束回合，成员完成后系统自动唤醒负责人。retryOf 可替换一次失败或取消的工作。',
+  finish: '负责人提交整体成果及验证摘要。所有工作须处理完毕，当前回合成功结束后任务进入待验收。'
 }
 export type SquadTools = ReturnType<typeof squadToolsOverCore>
 export function squadToolsOverCore(withCore: <T>(action: (rpc: RpcConnection) => Promise<T>) => Promise<T>, conversationId: string, run: SquadRun) {

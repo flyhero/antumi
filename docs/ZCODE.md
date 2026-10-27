@@ -7,10 +7,10 @@ Antumi 通过 ZCode 的 **app-server**（`zcode app-server --stdio`）接入 [ZC
 Z.ai 只发布桌面版安装包（dmg / exe），没有单独的 CLI 发行版。可用的 `zcode` 有三种来源：
 
 - **ZCode 桌面版**：装好后 PATH 上的 `zcode` 指向应用内置的运行时。app-server 和 `--prompt` 都能用，终端界面（TUI）用不了，Antumi 也用不到它。
-- **`zcode-app-cli`**：社区维护的 npm 包，打包了桌面版同一个运行时，`npm install -g zcode-app-cli@latest`。设置 → 本机 Agent 缺少 ZCode 时提供的就是这条命令，升级也按 npm 包走。
+- **`zcode-app-cli`**：社区维护的 npm 包，打包了桌面版同一个运行时，`npm install -g zcode-app-cli@latest`。设置 → 外部智能体 缺少 ZCode 时提供的就是这条命令，升级也按 npm 包走。
 - **从源码构建**：见 ZCode 仓库的 `apps/zcode-cli/docs/usage/01-quickstart.md`。
 
-模型和登录都用 ZCode 自己的：`zcode login`（Z.ai 或 BigModel 账号），或在 `~/.zcode/v2/provider_config.json` 配置模型服务商。本机 Agent 的「已登录」看的是这个文件或 `~/.zcode/v2/credentials.json` 是否存在。
+模型和登录都用 ZCode 自己的：`zcode login`（Z.ai 或 BigModel 账号），或在 `~/.zcode/v2/provider_config.json` 配置模型服务商。外部智能体 的「已登录」看的是这个文件或 `~/.zcode/v2/credentials.json` 是否存在。
 
 ## 用量
 

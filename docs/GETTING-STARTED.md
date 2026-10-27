@@ -4,9 +4,9 @@
 
 ## Agent 安装与登录
 
-打开 [**设置 → 本机 Agent**](antumi:settings/agents)，查看安装、启用和可用状态。Agent 可通过自己的账号或兼容的模型服务商使用；具体需求以环境检查提示为准。
+打开 [**设置 → 外部智能体**](antumi:settings/agents)，查看安装、启用和可用状态。Agent 可通过自己的账号或兼容的模型服务商使用；具体需求以环境检查提示为准。
 
-![设置 → 本机 Agent：装好并登录的 Agent 标着已就绪](assets/guide/agents-ready.png)
+![设置 → 外部智能体：装好并登录的 Agent 标着已就绪](assets/guide/agents-ready.png)
 
 - 需要使用 Agent 自己的账号：在终端运行那一行给出的登录命令，再点 **重新检测**。
 - 列在 **可安装** 里（点开它）：点 **在终端安装**，或复制安装命令自己跑，装完点 **重新检测**。

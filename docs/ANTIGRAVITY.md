@@ -4,7 +4,7 @@ Antumi 通过 Google 的 **Antigravity ACP 服务**接入 Antigravity。Zed、Je
 
 ## 安装
 
-设置 → 本机 Agent 里，Antigravity 缺失时标为「未下载」，提供「在终端安装」，完整命令收在「详情」里。安装命令会：
+设置 → 外部智能体 里，Antigravity 缺失时标为「未下载」，提供「在终端安装」，完整命令收在「详情」里。安装命令会：
 
 1. 从 `dl.google.com/agy-extensions/releases` 下载 [ACP registry](https://github.com/agentclientprotocol/registry/blob/main/antigravity-acp/agent.json) 列出的 `1.4.1` 压缩包，大小 110–340 MB；
 2. 核对压缩包的 SHA-256；Google 不发布校验和，这里的值钉在 `core/src/agents/antigravity/antigravity-runtime.ts`；
@@ -19,7 +19,7 @@ Antumi 通过 Google 的 **Antigravity ACP 服务**接入 Antigravity。Zed、Je
 Antumi 用 `oauth-personal`（Google 账号）认证：
 
 - 第一次对话时，服务会在浏览器打开 Google 登录页，并通过本机回环地址接收回调，最长等 5 分钟。这一步计入启动等待时间（`startTimeoutMs`，6 分钟）。
-- Antumi 启动服务时设置 `AGY_ACP_FORCE_FILE_STORAGE=1`，登录凭据存在 `~/.gemini/antigravity-acp/acp_token.json`（权限 0600），而不是 macOS 钥匙串。原因是读钥匙串里别的程序存的条目，每次都会弹授权框，而读用量需要凭据。所以在 Zed、JetBrains 里登录过的账号（存在钥匙串里）在 Antumi 里还要再登录一次。本机 Agent 的「已登录」就是查这个文件。
+- Antumi 启动服务时设置 `AGY_ACP_FORCE_FILE_STORAGE=1`，登录凭据存在 `~/.gemini/antigravity-acp/acp_token.json`（权限 0600），而不是 macOS 钥匙串。原因是读钥匙串里别的程序存的条目，每次都会弹授权框，而读用量需要凭据。所以在 Zed、JetBrains 里登录过的账号（存在钥匙串里）在 Antumi 里还要再登录一次。外部智能体 的「已登录」就是查这个文件。
 - 没登录时，Antumi 不去探测模型目录，免得没人操作就弹出登录页。模型列表要等第一次对话打开会话后才有。
 
 服务使用默认的 `GEMINI_HOME`（`~/.gemini`），所以会读取用户自己的全局规则（`~/.gemini/GEMINI.md` 等）和 `~/.gemini/config/mcp_config.json`。会话保存在 `~/.gemini/antigravity-acp/conversations`，与 `agy` CLI 的会话互不相通。
@@ -34,7 +34,7 @@ Antumi 用 `oauth-personal`（Google 账号）认证：
 
 以上行为根据 1.4.1 服务内 `_permission_handler` 的源码整理。服务没有只读或规划模式（`/plan` 是斜杠命令，不是会话模式）：
 
-- 需要只读的阶段（研发小队的只读成员、任务协调者）会在启动时报错，不会退回到可以改文件的模式。
+- 需要只读的阶段（团队的只读成员、任务协调者）会在启动时报错，不会退回到可以改文件的模式。
 - 群聊成员以 Default 模式运行，改文件前会先问。
 - 没有人值守时无法回答审批，所以 Antigravity 不支持定时任务和例程。
 

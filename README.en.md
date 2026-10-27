@@ -58,7 +58,7 @@ Five agents in five terminal windows means switching between them to find out wh
 
 ## More features
 
-[Side assistant](#side-assistant) · [Translation](#translation) · [Split view](#split-view) · [Group chat](#group-chat) · [Squads](#squads) · [Routines and scheduling](#routines-and-scheduling) · [To-dos](#to-dos)
+[Side assistant](#side-assistant) · [Translation](#translation) · [Split view](#split-view) · [Group chat](#group-chat) · [Teams](#teams) · [Routines and scheduling](#routines-and-scheduling) · [To-dos](#to-dos)
 
 <sub>Looping demos use real UI components with sample data: the pointer makes real clicks, and small areas are zoomed in. The interface shown is in Chinese.</sub>
 
@@ -86,11 +86,11 @@ Bring 2–5 agents into one conversation to answer independently, then respond t
 
 <img src="docs/assets/features/discussion.webp" alt="Group chat: three agents answer independently, respond after Continue, and the chair summarizes after Summarize now" width="100%" />
 
-### Squads
+### Teams
 
-Assign agents, models, and roles to a leader, developers, and reviewers (expand a member to change them), then give the squad a task. The leader agrees on a plan with you before dispatching work in a shared worktree, with sequential development and parallel read-only analysis.
+Assign external agents, models, and responsibilities to a team lead, developers, and reviewers (expand a member to change them), then give the team a task. The team lead agrees on a plan with you before dispatching work in a shared worktree, with sequential development and parallel read-only analysis.
 
-<img src="docs/assets/features/squad.webp" alt="Squads: click Edit and expand the developer to see its agent, model, and role" width="100%" />
+<img src="docs/assets/features/squad.webp" alt="Teams: click Edit and expand the developer to see its external agent, model, and responsibilities" width="100%" />
 
 ### Routines and scheduling
 

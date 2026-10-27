@@ -44,17 +44,17 @@ describe('SetupGuide', () => {
     const html = render()
     expect(html).toContain('需要登录账号')
     expect(html).toContain('codex login')
-    expect(html).toContain('打开本机 Agent')
-    expect(html).not.toContain('已在 Agent 中配置')
+    expect(html).toContain('打开外部智能体')
+    expect(html).not.toContain('已在外部智能体中配置')
     expect(html).not.toContain('data-test-pet')
     expect(html).not.toContain('开始第一条会话')
   })
 
   it('only accepts native confirmation when the account status, rather than the CLI, is unknown', () => {
     useCore.setState({ environment: env(null) })
-    expect(render()).toContain('已在 Agent 中配置')
+    expect(render()).toContain('已在外部智能体中配置')
     useCore.setState({ environment: env(null, 'unknown') })
-    expect(render()).not.toContain('已在 Agent 中配置')
+    expect(render()).not.toContain('已在外部智能体中配置')
   })
 
   it('keeps a confirmed native setup visibly unverified and goes directly to the source question', () => {
@@ -100,7 +100,7 @@ describe('SetupGuide', () => {
 
   it('keeps the pet and actions available in settings, without forcing an off pet on', () => {
     useCore.setState({ settingsOpen: true })
-    expect(render()).toContain('打开本机 Agent')
+    expect(render()).toContain('打开外部智能体')
     expect(render()).not.toContain('data-test-pet')
     usePreferences.setState({ petLevel: 'medium' })
     expect(render()).toContain('data-test-pet')
@@ -120,7 +120,7 @@ describe('SetupGuide', () => {
   it('shows setup when following a settings link from the guide or explicitly resuming', () => {
     openGuide()
     setSettingsOpen(true, 'agents')
-    expect(render()).toContain('打开本机 Agent')
+    expect(render()).toContain('打开外部智能体')
     openGuide()
     updateSetup({ status: 'paused', agent: 'codex' })
     openSetup()
@@ -132,7 +132,7 @@ describe('SetupGuide', () => {
   it('shows waiting on disconnection rather than recommending configuration from stale data', () => {
     useCore.setState({ connection: 'connecting' })
     expect(render()).toContain('连接工作台后继续检查')
-    expect(render()).not.toContain('打开本机 Agent')
+    expect(render()).not.toContain('打开外部智能体')
   })
 
   it('distinguishes configured providers from tested ones and ignores results from earlier edits', () => {

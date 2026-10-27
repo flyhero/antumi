@@ -155,8 +155,8 @@ function SquadOverview({ squad }: { squad: Squad }) {
         <p className="muted squad-block-hint">{LEADER_DUTY()}</p>
         {leader && <ul className="squad-member-lines"><MemberLine member={leader} leader /></ul>}
       </section>
-      <section className="squad-block" aria-label={t('DiscussionDraft.members')}>
-        <h3>{tr('Squads.member', { value1: <span className="muted">{squad.members.length - 1}</span> })}</h3>
+      <section className="squad-block" aria-label={t('Squads.teamMembers')}>
+        <h3>{t('Squads.teamMembers')} <span className="muted">{squad.members.length - 1}</span></h3>
         <p className="muted squad-block-hint">{t('Squads.developmentAndTestingRunSequentiallyReadOnlyAnalysis')}</p>
         <ul className="squad-member-lines">{squad.members.filter((member) => member.id !== squad.leaderId).map((member) => <MemberLine key={member.id} member={member} leader={false} />)}</ul>
       </section>
@@ -210,8 +210,8 @@ function MemberEditor({ member, leader, open, agents, disabled, onToggle, onChan
           </label>
           <div className="squad-member-options">
             <label className="squad-field">{tr('Squads.name', { value1: <input className="input" value={member.name} maxLength={60} required onChange={(event) => onChange({ ...member, name: event.target.value })} /> })}</label>
-            <div className="squad-field">Agent
-              <ChatPicker label="Agent" disabled={Boolean(profile)} value={member.agent} placeholder={agentLabel(member.agent)} size="field" placement="below"
+            <div className="squad-field">{t('AgentProfiles.engine')}
+              <ChatPicker label={t('AgentProfiles.engine')} disabled={Boolean(profile)} value={member.agent} placeholder={agentLabel(member.agent)} size="field" placement="below"
                 options={offered.map((agent) => ({ value: agent, label: agentLabel(agent), icon: <AgentIcon agent={agent} />, description: agents.includes(agent) ? null : t('AgentPicker.notInstalled') }))}
                 onChange={(value) => {
                   const parsed = AgentKind.safeParse(value)
@@ -288,8 +288,8 @@ function SquadEditor({ squad, onDone }: { squad: Squad | null; onDone: (saved: b
         <p className="muted squad-block-hint">{LEADER_DUTY()}</p>
         {leader && <ul className="squad-member-lines">{editor(leader)}</ul>}
       </section>
-      <section className="squad-block" aria-label={t('DiscussionDraft.members')}>
-        <h3>{tr('Squads.member', { value1: <span className="muted">{others.length}</span> })}</h3>
+      <section className="squad-block" aria-label={t('Squads.teamMembers')}>
+        <h3>{t('Squads.teamMembers')} <span className="muted">{others.length}</span></h3>
         <p className="muted squad-block-hint">{t('Squads.atLeastOneDevelopmentTestingMemberDevelopersRun')}</p>
         <ul className="squad-member-lines">{others.map(editor)}</ul>
         <button type="button" className="link-button squad-add" disabled={busy || members.length >= MAX_MEMBERS} onClick={add}>
@@ -330,7 +330,7 @@ export function SquadsView() {
   const draft = useCore((state) => state.squadDraft)
   const squad = useCore((state) => (selected ? state.squads[selected] ?? null : null))
   return (
-    <section className="worktrees-page agents-page squads-page" aria-label={t('NewTaskDialog.developmentSquad')}>
+    <section className="worktrees-page agents-page squads-page" aria-label={t('Squads.developmentSquads')}>
       {draft ? (
         <>
           <PageHeader title={t('Squads.newDevelopmentSquad')} description={t('Squads.preFilledWithLeaderDeveloperAndReviewerChange')} back />
@@ -340,7 +340,7 @@ export function SquadsView() {
         <SquadPage key={squad.id} squad={squad} />
       ) : (
         <>
-          <PageHeader title={t('NewTaskDialog.developmentSquad')} description={t('Squads.aReadOnlyLeaderCoordinatesMembersBreaksDown')} back={false}
+          <PageHeader title={t('Squads.developmentSquads')} description={t('Squads.aReadOnlyLeaderCoordinatesMembersBreaksDown')} back={false}
             actions={<button type="button" className="button primary" onClick={() => selectSquad(null, true)}>{tr('Squads.newSquad_1931', { value1: <PlusIcon /> })}</button>} />
           <SquadList />
         </>

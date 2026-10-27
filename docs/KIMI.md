@@ -5,7 +5,7 @@ Antumi 通过官方 `kimi acp` 接入 Kimi Code CLI，复用通用 ACP driver。
 ## 运行要求
 
 - 使用 Node.js 版 `@moonshot-ai/kimi-code` 2.3.2 或更新版本；旧 Python 版 `kimi-cli` 不支持。
-- 可从 设置 → 本机 Agent 安装官方 npm 包（需要 Node.js 22.19 以上），也可使用官方独立安装器。启动时会重新核对 PATH 上的 CLI 版本。
+- 可从 设置 → 外部智能体 安装官方 npm 包（需要 Node.js 22.19 以上），也可使用官方独立安装器。启动时会重新核对 PATH 上的 CLI 版本。
 - 登录使用 `kimi login`，也可在 Kimi Code 自己的配置中设置模型服务商。Antumi 不代办登录、不读取或修改凭据；环境检查只确认 CLI 可用，登录状态由用户确认，创建会话时再由 Kimi 验证。
 - 默认数据目录是 `~/.kimi-code`，尊重 `KIMI_CODE_HOME`。
 
@@ -20,7 +20,7 @@ Antumi 通过官方 `kimi acp` 接入 Kimi Code CLI，复用通用 ACP driver。
 
 命令只传 `['acp']`，权限通过会话配置设置；不使用根命令上的 `--auto` 或 `--yolo`，因为它们不配置 ACP 会话。提问使用官方兼容的权限请求桥接，显示单题单选；跳过、取消和中断会关闭对应请求。原生计划审批保留计划正文，批准后回到 Default，计划卡只提供这一执行模式。仅规划阶段可以保存或退回计划，不能批准执行。
 
-Kimi 没有独立的只读工作模式或 Antumi 的「自由编辑」模式，不把 Plan 当作只读小队成员运行；只读小队阶段会拒绝启动。群聊讨论使用 Plan。参考项目的明确文件修改请求由 Antumi 拒绝，命令的副作用仍由 Kimi 自己的权限规则控制；这些模式不是操作系统沙箱。
+Kimi 没有独立的只读工作模式或 Antumi 的「自由编辑」模式，不把 Plan 当作只读团队成员运行；只读团队阶段会拒绝启动。群聊讨论使用 Plan。参考项目的明确文件修改请求由 Antumi 拒绝，命令的副作用仍由 Kimi 自己的权限规则控制；这些模式不是操作系统沙箱。
 
 会话绑定原工作目录；恢复使用 CLI 声明的 `session/load` 或 `session/resume`，历史重放不会重复进入聊天。工作目录变化或分叉通过交接创建新会话：Kimi 原生 fork 保留来源会话的 MCP 配置，会把旧 Antumi 会话权限带过去，因此不使用原生 fork。
 

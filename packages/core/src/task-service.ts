@@ -245,7 +245,7 @@ export class TaskService {
   update({ id, title, details, repos, dependsOn, agent, squadId, starts, references, launch, autoRun }: RpcParsedParams<'tasks.update'>): Task {
     const task = this.get(id)
     if (squadId !== undefined && squadId !== task.squadId) {
-      if (this.isLaunching(task.id) || task.status !== 'pending' || this.squads?.busy(task.id)) throw new Rejection('squad-busy', '开发开始后不能更换小队')
+      if (this.isLaunching(task.id) || task.status !== 'pending' || this.squads?.busy(task.id)) throw new Rejection('squad-busy', '开发开始后不能更换团队')
     }
     if (task.squadId && squadId !== null && agent !== undefined && agent !== task.agent) throw new Rejection('squad-managed')
     if ((autoRun !== undefined || dependsOn !== undefined) && this.isLaunching(task.id)) throw new Rejection('run-in-progress')

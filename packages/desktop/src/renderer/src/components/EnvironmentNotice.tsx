@@ -7,7 +7,7 @@ import { usePreferences } from '../preferences'
 
 // Shown over the lists while nothing can run: a missing git or agent is found out at the first
 // start otherwise, as an agent that fails. Clicking goes to where it is fixed, which says what to
-// type: 关于 for Git, 本机 Agent for the agents.
+// type: 关于 for Git, 外部智能体 for the agents.
 export function EnvironmentNotice() {
   const environment = useCore((s) => s.environment)
   const providers = useCore((s) => s.modelProviders)

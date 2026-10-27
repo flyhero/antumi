@@ -1,21 +1,21 @@
 // Application-owned text. Values and external content are passed separately.
 export const MESSAGES = {
-  "AgentTemplates.title": {"zh":"角色模板","en":"Role templates"},
-  "AgentTemplates.chooseHint": {"zh":"选择一个起点，调整配置后保存为自己的角色。","en":"Choose a starting point, customize it, and save your own role."},
-  "AgentTemplates.emptyHint": {"zh":"还没有使用中的角色。可以从模板开始，也可以空白创建。","en":"No active roles yet. Start from a template or create one from scratch."},
+  "AgentTemplates.title": {"zh":"智能体模板","en":"Agent templates"},
+  "AgentTemplates.chooseHint": {"zh":"选择一个起点，调整配置后保存为自己的智能体。","en":"Choose a starting point, customize it, and save your own agent."},
+  "AgentTemplates.emptyHint": {"zh":"还没有使用中的智能体。可以从模板开始，也可以空白创建。","en":"No active agents yet. Start from a template or create one from scratch."},
   "AgentTemplates.blank": {"zh":"空白创建","en":"Start from scratch"},
   "AgentTemplates.blankHint": {"zh":"自己填写名称、调用时机和工作指令","en":"Define the name, when to call it, and instructions"},
   "AgentTemplates.fromTemplate": {"zh":"从「{name}」模板创建","en":"Created from the {name} template"},
-  "AgentTemplates.editHint": {"zh":"配置可以自由修改，保存后成为独立角色。","en":"Customize freely. Saving creates an independent role."},
-  "AgentTemplates.back": {"zh":"返回角色模板","en":"Back to role templates"},
+  "AgentTemplates.editHint": {"zh":"配置可以自由修改，保存后成为独立智能体。","en":"Customize freely. Saving creates an independent agent."},
+  "AgentTemplates.back": {"zh":"返回智能体模板","en":"Back to agent templates"},
   "AgentTemplates.quick": {"zh":"建议轻量模型","en":"Lightweight model suggested"},
   "AgentTemplates.balanced": {"zh":"建议均衡模型","en":"Balanced model suggested"},
   "AgentTemplates.strong": {"zh":"建议较强模型","en":"More capable model suggested"},
   "AgentTemplates.modelHint": {"zh":"模板仅提供模型建议，请确认当前型号适合任务；降低推理强度不会切换成轻量模型。","en":"The model tier is a suggestion. Check the selected model; lowering reasoning effort does not select a smaller model."},
-  "AgentTemplates.readOnlyUnsupported": {"zh":"此执行工具不支持只读角色，请选择其他执行工具或切换为开发测试。","en":"This coding tool cannot run read-only roles. Choose another tool or switch to development and testing."},
-  "AgentTemplates.readOnlyHint": {"zh":"只运行已确认不会产生持久变更的检查；可用命令、网络和审批取决于执行工具。","en":"Run only checks known not to make persistent changes. Commands, network access, and approvals depend on the coding tool."},
+  "AgentTemplates.readOnlyUnsupported": {"zh":"所选外部智能体不支持只读模式，请选择其他外部智能体或切换为开发测试。","en":"This external agent does not support read-only mode. Choose another external agent or switch to development and testing."},
+  "AgentTemplates.readOnlyHint": {"zh":"只运行已确认不会产生持久变更的检查；可用命令、网络和审批取决于外部智能体。","en":"Run only checks known not to make persistent changes. Commands, network access, and approvals depend on the external agent."},
   "AgentTemplates.developHint": {"zh":"委派时编辑逐项确认，与同一目录的其他修改串行。","en":"Delegated edits require approval and run sequentially with other edits in the same directories."},
-  "AgentTemplates.toolsHint": {"zh":"这里只选择 Antumi 附加的技能和 MCP；执行工具自身的配置仍可能加载。只读角色仅收到服务器声明为只读的 MCP 工具。","en":"These choices control skills and MCP servers added by Antumi. The coding tool may still load its own configuration. Read-only roles receive only MCP tools the server marks as read-only."},
+  "AgentTemplates.toolsHint": {"zh":"这里只选择 Antumi 附加的技能和 MCP；外部智能体自身的配置仍可能加载。只读智能体仅收到服务器声明为只读的 MCP 工具。","en":"These choices control skills and MCP servers added by Antumi. The external agent may still load its own configuration. Read-only agents receive only MCP tools the server marks as read-only."},
   "AgentTemplates.example": {"zh":"例如：{example}","en":"Example: {example}"},
   "AgentTemplates.contextInstructions": {"zh":"先读取适用的仓库指令，围绕调用者给出的目标、文件范围和验收要求工作。\n如果本次是被委派的子任务，不假定自己拥有主会话的聊天历史。信息不足但可以安全继续时明确记录假设；缺失信息会影响目标、授权、环境或结论正确性时，返回“缺少必要信息”及最小所需信息，不猜测、不反复提问等待。直接作为主会话使用时可以正常澄清需求。权限审批仍须遵守。","en":"Read applicable repository instructions first. Work within the caller’s goal, file scope, and acceptance criteria.\nFor a delegated task, do not assume access to the main conversation’s history. If it is safe to proceed, state assumptions. If missing information affects the goal, authorization, environment, or correctness, return “Missing required information” and the minimum information needed. Do not guess or wait on repeated questions. In a direct conversation, clarify requirements normally. Always follow approval requirements."},
   "AgentTemplates.readOnlyInstructions": {"zh":"只读分析：不修改文件、数据、配置或部署状态，不提交、不推送。仅运行已确认不会产生持久变更的命令；测试、构建和类型检查都不默认视为只读。工具、网络或权限不足时说明限制，不绕过审批。","en":"Read-only analysis: do not modify files, data, configuration, or deployments; do not commit or push. Run only commands known not to make persistent changes. Tests, builds, and type checks are not inherently read-only. State tool, network, or permission limits rather than bypassing approvals."},
@@ -40,8 +40,8 @@ export const MESSAGES = {
   "AgentTemplates.plannerDescription": {"zh":"需要独立分析跨模块设计、比较实现方案或形成技术评审材料时调用。已有计划时仅分析指定问题，不重复制定整份计划，不直接开发。","en":"Use for independent cross-module design, implementation trade-offs, or technical review material. If a plan exists, analyze only the requested question rather than recreating the whole plan. Do not implement."},
   "AgentTemplates.plannerInstructions": {"zh":"你负责把需求转成可以评审和实施的技术方案。\n明确业务目标、成功标准、范围边界和关键假设。先检查现有实现及项目约束，再提出方案；已有计划时先阅读它，只补充调用者指定的分析。\n有实际取舍时比较少量可行选项，解释推荐理由，不为形式堆砌替代方案。\n按模块说明改动、依赖、数据或接口变化、兼容方式与必要的验证办法。缺少关键资料时按共用规则返回必要信息，不凭假设决定授权、数据范围或破坏性变更。\n方案写在回复中。输出目标与边界、推荐方案、关键取舍、实施步骤、可检查的验收标准和影响方案选择的待确认事项。","en":"Turn the requirements into a reviewable, implementable technical proposal.\nIdentify the business goal, success criteria, boundaries, and key assumptions. Inspect the existing implementation and project constraints first. If a plan already exists, read it and add only the requested analysis.\nCompare a small set of feasible alternatives when there are real trade-offs, explaining the recommendation rather than inventing alternatives for formality.\nDescribe module changes, dependencies, data or API changes, compatibility, and necessary verification. Apply the shared missing-information rules; never assume authorization, data scope, or destructive changes.\nWrite the proposal in the response. Include goals and boundaries, the recommendation, key trade-offs, implementation steps, checkable acceptance criteria, and open questions that affect the choice."},
   "AgentTemplates.plannerExample": {"zh":"设计例程的增量读取与失败恢复","en":"Design incremental reads and failure recovery for routines"},
-  "AgentProfiles.roleDescription": { "zh": "保存角色、模型与工具配置，直接开始会话或接受其他智能体的委派。", "en": "Save roles, models and tools for direct conversations or delegated work." },
-  "AgentProfiles.createHint": { "zh": "配置角色、模型和工具", "en": "Configure a role, model and tools" },
+  "AgentProfiles.roleDescription": { "zh": "保存专长、指令、模型与工具配置，直接开始会话或接受委派。", "en": "Save expertise, instructions, models and tools for direct conversations or delegated work." },
+  "AgentProfiles.createHint": { "zh": "配置指令、模型和工具", "en": "Configure instructions, models and tools" },
   "AgentProfiles.pendingReturn": {"zh": "等待回传", "en": "Returning result"},
   "AgentProfiles.startingHint": {"zh": "正在准备独立会话，即将开始执行。", "en": "Preparing an independent conversation. Work will begin shortly."},
   "AgentProfiles.cardLabel": {"zh": "委派给 {name}", "en": "Delegated to {name}"},
@@ -63,7 +63,7 @@ export const MESSAGES = {
   "AgentProfiles.goalPlaceholder": {"zh": "希望这个智能体完成什么？", "en": "What should this agent accomplish?"},
   "AgentProfiles.context": {"zh": "补充说明（可选）", "en": "Additional context (optional)"},
   "AgentProfiles.contextPlaceholder": {"zh": "必要背景、文件范围、交付要求等", "en": "Background, file scope, expected output…"},
-  "AgentProfiles.noAvailable": {"zh": "当前会话没有可调用的智能体。可在「智能体」中创建角色或调整调用范围。", "en": "No agents are available to this conversation. Create a role or adjust callable agents in Agents."},
+  "AgentProfiles.noAvailable": {"zh": "当前会话没有可调用的智能体。可在「智能体」中新建智能体或调整调用范围。", "en": "No agents are available to this conversation. Create an agent or adjust callable agents in Agents."},
   "AgentProfiles.resultReturned": {"zh": "委派结果已返回，主会话将继续处理", "en": "Delegation result returned; the main conversation will continue"},
   "AgentProfiles.history": {"zh": "委派记录", "en": "Delegation history"},
   "AgentProfiles.result": {"zh": "结果", "en": "Result"},
@@ -72,14 +72,14 @@ export const MESSAGES = {
   "AgentProfiles.delegating": {"zh": "委派工作中", "en": "Delegating work"},
   "AgentProfiles.back": {"zh": "返回智能体列表", "en": "Back to agents"},
   "AgentProfiles.title": {"zh": "智能体", "en": "Agents"},
-  "AgentProfiles.roles": {"zh": "角色", "en": "Roles"},
-  "AgentProfiles.role": {"zh": "智能体角色", "en": "Agent role"},
+  "AgentProfiles.roles": {"zh": "我的智能体", "en": "My agents"},
+  "AgentProfiles.role": {"zh": "智能体", "en": "Agent"},
   "AgentProfiles.configure": {"zh": "配置智能体", "en": "Configure agent"},
-  "AgentProfiles.description": {"zh": "保存角色、模型与工具配置，直接聊天、加入小队或接受其他会话的委派。", "en": "Save roles, models and tools for conversations, squads and delegated work."},
+  "AgentProfiles.description": {"zh": "保存指令、模型与工具配置，直接聊天、加入团队或接受委派。", "en": "Save instructions, models and tools for conversations, teams and delegated work."},
   "AgentProfiles.create": {"zh": "新建智能体", "en": "New agent"},
   "AgentProfiles.showArchived": {"zh": "查看已归档", "en": "Show archived"},
   "AgentProfiles.noArchived": {"zh": "没有已归档的智能体。", "en": "No archived agents."},
-  "AgentProfiles.empty": {"zh": "还没有智能体。创建一个可复用的开发、审查或分析角色。", "en": "Create a reusable development, review or research role."},
+  "AgentProfiles.empty": {"zh": "还没有智能体。创建一个用于开发、审查或分析的智能体。", "en": "No agents yet. Create one for development, review or research."},
   "AgentProfiles.chat": {"zh": "开始会话", "en": "Start conversation"},
   "AgentProfiles.edit": {"zh": "编辑", "en": "Edit"},
   "AgentProfiles.archive": {"zh": "归档", "en": "Archive"},
@@ -87,13 +87,13 @@ export const MESSAGES = {
   "AgentProfiles.name": {"zh": "名称", "en": "Name"},
   "AgentProfiles.expertise": {"zh": "擅长的工作与调用时机", "en": "Expertise and when to call"},
   "AgentProfiles.instructions": {"zh": "工作指令", "en": "Instructions"},
-  "AgentProfiles.engine": {"zh": "执行工具", "en": "Coding tool"},
-  "AgentProfiles.callable": {"zh": "允许调用的智能体", "en": "Agents this role can call"},
-  "AgentProfiles.callableHint": {"zh": "选中的角色可在主会话中接受委派；子会话完成工作后返回结果。", "en": "Selected roles can receive delegated work from the main conversation and return results."},
+  "AgentProfiles.engine": {"zh": "外部智能体", "en": "External agent"},
+  "AgentProfiles.callable": {"zh": "允许调用的智能体", "en": "Agents it can call"},
+  "AgentProfiles.callableHint": {"zh": "选中的智能体可在主会话中接受委派；子会话完成工作后返回结果。", "en": "Selected agents can receive delegated work from the main conversation and return results."},
   "AgentProfiles.skills": {"zh": "技能", "en": "Skills"},
-  "AgentProfiles.inherit": {"zh": "沿用此执行工具的设置", "en": "Inherit this coding tool’s settings"},
+  "AgentProfiles.inherit": {"zh": "沿用所选外部智能体的设置", "en": "Inherit this external agent’s settings"},
   "AgentProfiles.customMember": {"zh": "单独配置成员", "en": "Configure this member"},
-  "AgentProfiles.noRole": {"zh": "直接使用执行工具", "en": "Use a coding tool directly"},
+  "AgentProfiles.noRole": {"zh": "直接使用外部智能体", "en": "Use an external agent directly"},
   "AgentProfiles.saveFromConversation": {"zh": "保存为智能体", "en": "Save as agent"},
   "AgentProfiles.calls": {"zh": "委派", "en": "Delegation"},
   "AgentProfiles.delegate": {"zh": "委派子任务", "en": "Delegate work"},
@@ -130,20 +130,20 @@ export const MESSAGES = {
   "ProjectStar.failed": {"zh": "未能完成 Star，可重试或打开 GitHub 网页。", "en": "Could not add the star. Try again or open GitHub."},
   "Readiness.unknownProvider": { "zh": "已安装，原生服务商配置尚未确认", "en": "Installed; native provider setup is not yet confirmed" },
   "SetupGuide.title": {"zh": "检查使用环境", "en": "Check your setup"},
-  "SetupGuide.agentStep": {"zh": "先准备一个 Agent", "en": "Prepare an agent"},
+  "SetupGuide.agentStep": {"zh": "先准备一个外部智能体", "en": "Set up an external agent"},
   "SetupGuide.sourceStep": {"zh": "要接入任务来源吗？", "en": "Connect a task source?"},
   "SetupGuide.done": {"zh": "准备好了。", "en": "You’re all set."},
   "SetupGuide.waiting": {"zh": "正在读取环境和配置…", "en": "Reading your environment and configuration…"},
   "SetupGuide.disconnected": {"zh": "连接工作台后继续检查，已有进度会保留。", "en": "Reconnect to the workspace to continue. Your progress is saved."},
-  "SetupGuide.chooseAgent": {"zh": "选择要使用的 Agent", "en": "Choose an agent"},
+  "SetupGuide.chooseAgent": {"zh": "选择要使用的外部智能体", "en": "Choose an external agent"},
   "SetupGuide.pause": {"zh": "退出引导", "en": "Exit guide"},
   "SetupGuide.resumeHint": {"zh": "可在左下角「帮助 → 检查使用环境」继续。", "en": "Resume from Help → Check your setup at the bottom left."},
-  "SetupGuide.agents": {"zh": "打开本机 Agent", "en": "Open local agents"},
-  "SetupGuide.enable": {"zh": "启用这个 Agent", "en": "Enable this agent"},
+  "SetupGuide.agents": {"zh": "打开外部智能体", "en": "Open external agents"},
+  "SetupGuide.enable": {"zh": "启用这个外部智能体", "en": "Enable this external agent"},
   "SetupGuide.providers": {"zh": "配置服务商", "en": "Configure a provider"},
   "SetupGuide.refresh": {"zh": "重新检测", "en": "Check again"},
   "SetupGuide.checking": {"zh": "正在检查…", "en": "Checking…"},
-  "SetupGuide.confirm": {"zh": "已在 Agent 中配置", "en": "Already configured in the agent"},
+  "SetupGuide.confirm": {"zh": "已在外部智能体中配置", "en": "Already configured in the external agent"},
   "SetupGuide.deferAuth": {"zh": "知道了，稍后授权", "en": "Got it, authorize on first use"},
   "SetupGuide.confirmed": {"zh": "原生配置由你确认，尚未进行连接验证。", "en": "You confirmed the native setup; its connection has not been verified."},
   "SetupGuide.deferredAuth": {"zh": "已了解首次使用时需授权，当前尚未登录。", "en": "Authorization is deferred to first use; you are not signed in yet."},
@@ -152,7 +152,7 @@ export const MESSAGES = {
   "SetupGuide.providerPassed": {"zh": "服务商连接测试已通过。", "en": "Provider connection test passed."},
   "SetupGuide.providerFailed": {"zh": "服务商连接测试未通过，请到服务商设置查看原因。", "en": "Provider connection test failed. Open provider settings for details."},
   "SetupGuide.providerTesting": {"zh": "服务商正在测试连接…", "en": "Testing the provider connection…"},
-  "SetupGuide.sourceQuestion": {"zh": "Agent 已准备好。可以接入 GitHub、Jira 等任务来源，也可以暂时跳过。", "en": "Your agent is prepared. Connect a task source such as GitHub or Jira, or skip for now."},
+  "SetupGuide.sourceQuestion": {"zh": "外部智能体已准备好。可以接入 GitHub、Jira 等任务来源，也可以暂时跳过。", "en": "Your external agent is prepared. Connect a task source such as GitHub or Jira, or skip for now."},
   "SetupGuide.configureSources": {"zh": "配置任务来源", "en": "Configure a task source"},
   "SetupGuide.skipSources": {"zh": "暂时不需要", "en": "Not now"},
   "SetupGuide.installSources": {"zh": "安装任务来源插件", "en": "Install a task-source plugin"},
@@ -162,7 +162,7 @@ export const MESSAGES = {
   "SetupGuide.sourceSkipped": {"zh": "已跳过任务来源，以后可在设置中配置。", "en": "Task sources skipped. You can configure them later in Settings."},
   "SetupGuide.sourceProblem": {"zh": "任务来源同步仍有问题：{reason}", "en": "Task-source sync still has a problem: {reason}"},
   "SetupGuide.findingSessions": {"zh": "正在找你在终端里用过的会话…", "en": "Looking for sessions you ran in a terminal…"},
-  "SetupGuide.sessionsNote": {"zh": "导入后保留原来的对话，发消息时 Agent 在原目录里恢复同一个会话接着聊。", "en": "Imported sessions keep their history. Your next message resumes the same session in its original folder."},
+  "SetupGuide.sessionsNote": {"zh": "导入后保留原来的对话，发消息时外部智能体在原目录里恢复同一个会话接着聊。", "en": "Imported sessions keep their history. Your next message resumes the same session in its original folder."},
   "SetupGuide.skipSessions": {"zh": "从新会话开始", "en": "Start fresh"},
   "ResumableSessions.title": {"zh": "接着聊", "en": "Pick up where you left off"},
   "ResumableSessions.found": {"zh": "在这台电脑上找到 {count} 个 {agents} 会话，挑一个接着聊吧。", "en": "Found {count} {agents} {count, plural, one {session} other {sessions}} on this computer. Pick one to continue."},
@@ -171,7 +171,7 @@ export const MESSAGES = {
   "ResumableSessions.resuming": {"zh": "正在导入…", "en": "Importing…"},
   "ResumableSessions.viewAll": {"zh": "查看全部", "en": "View all"},
   "SetupGuide.finish": {"zh": "完成检查", "en": "Finish setup"},
-  "SetupGuide.noSupportedAgent": {"zh": "当前工作台未提供可检测的 Agent，请检查连接或更新工作台。", "en": "This workspace provides no detectable agents. Check the connection or update the workspace."},
+  "SetupGuide.noSupportedAgent": {"zh": "当前工作台未提供可检测的外部智能体，请检查连接或更新工作台。", "en": "This workspace provides no detectable external agents. Check the connection or update the workspace."},
   "Readiness.checking": {"zh": "正在读取 Agent 状态", "en": "Reading agent status"},
   "Readiness.unsupported": {"zh": "当前工作台尚未提供这个 Agent 的检测结果", "en": "This workspace has not reported this agent’s status"},
   "Readiness.disabled": {"zh": "Agent 已停用，请先启用", "en": "Agent disabled; enable it first"},
@@ -311,7 +311,7 @@ export const MESSAGES = {
   "sidebar.toggleSection": { "zh": "{action}{label}", "en": "{action} {label}" },
   "sidebar.tasks": { "zh": "任务", "en": "Tasks" },
   "sidebar.conversations": { "zh": "会话", "en": "Conversations" },
-  "squad.leaderReadOnly": { "zh": "队长必须是只读成员", "en": "The leader must be a read-only member" },
+  "squad.leaderReadOnly": { "zh": "负责人必须是只读成员", "en": "The team lead must be a read-only member" },
   "squad.developerRequired": { "zh": "至少需要一名开发成员", "en": "At least one developer is required" },
   "squad.memberDuplicate": { "zh": "成员标识和名称不能重复", "en": "Member IDs and names must be unique" },
   "SettingsPage.theme": { "zh": "主题", "en": "Theme" },
@@ -1851,8 +1851,8 @@ export const MESSAGES = {
     "en": "Read-only coordination"
   },
   "ChatOptionsBar.useThisSquadSConfiguration": {
-    "zh": "沿用本次小队配置",
-    "en": "Use this squad's configuration"
+    "zh": "沿用本次团队配置",
+    "en": "Use this team's configuration"
   },
   "ChatOptionsBar.changeModelAndReasoningEffortAfterThisTurn": {
     "zh": "回合结束后才能换模型和推理强度",
@@ -1991,8 +1991,8 @@ export const MESSAGES = {
     "en": "Execute"
   },
   "ChatPlan.startSquadDevelopment": {
-    "zh": "开始小队开发",
-    "en": "Start squad development"
+    "zh": "开始团队开发",
+    "en": "Start team development"
   },
   "ChatPlan.savePlan": {
     "zh": "保存计划",
@@ -2015,16 +2015,16 @@ export const MESSAGES = {
     "en": "View full plan in inspector"
   },
   "ChatPlan.assignToSquad": {
-    "zh": "交给小队执行",
-    "en": "Assign to squad"
+    "zh": "交给团队",
+    "en": "Assign to team"
   },
   "ChatPlan.thisPlan": {
     "zh": "这份计划",
     "en": "This plan"
   },
   "ChatPlan.afterApprovalTheLeaderAssignsWorkToMembers": {
-    "zh": "批准后，队长按这份计划给「{value1}」的成员派活。",
-    "en": "After approval, the leader assigns work to members of “{value1}” using this plan."
+    "zh": "批准后，负责人按这份计划给「{value1}」的成员派活。",
+    "en": "After approval, the team lead assigns work to members of “{value1}” using this plan."
   },
   "ChatPlan.dependenciesAreUnfinishedSaveThePlanNowThen": {
     "zh": "依赖的任务还没完成：现在只能保存计划，等它们完成后开始执行时再按计划做。",
@@ -2059,12 +2059,12 @@ export const MESSAGES = {
     "en": "Assign plan to “{value1}”"
   },
   "ChatPlan.squad": {
-    "zh": "小队",
-    "en": "Squad"
+    "zh": "团队",
+    "en": "Team"
   },
   "ChatPlan.savePlanFirstAssignToSquadLater": {
-    "zh": "先保存计划，稍后再交给小队",
-    "en": "Save plan first; assign to squad later"
+    "zh": "先保存计划，稍后再交给团队",
+    "en": "Save plan first; assign to team later"
   },
   "ChatPlan.numberKeysToSelectEnterToSubmitEsc": {
     "zh": "数字键选择 · Enter 提交 · Esc 停下",
@@ -2639,8 +2639,8 @@ export const MESSAGES = {
     "en": "Generate message"
   },
   "ConversationActions.onlyWasFoundOnThisComputerInstallAnother": {
-    "zh": "这台电脑上只找到了 {value1}。装好另一个 Agent 后，在 设置 → 本机 Agent 里重新检测，就可以移交了。",
-    "en": "Only {value1} was found on this computer. Install another Agent and scan again in Settings → Local Agents to enable handoffs."
+    "zh": "这台电脑上只找到了 {value1}。装好另一个外部智能体后，在 设置 → 外部智能体 里重新检测，就可以移交了。",
+    "en": "Only {value1} was found on this computer. Install another external agent and scan again in Settings → External agents to enable handoffs."
   },
   "ConversationActions.deleteThisConversationAndItsChatHistoryProject": {
     "zh": "删除这条会话及其聊天记录？项目目录或 Antumi 托管目录都会保留，不会改动其中的文件。",
@@ -4983,8 +4983,8 @@ export const MESSAGES = {
     "en": "Sign in:"
   },
   "InstalledAgentsSettings.keepAtLeastOneAgentEnabled": {
-    "zh": "至少保留一个启用的 Agent",
-    "en": "Keep at least one Agent enabled"
+    "zh": "至少保留一个启用的外部智能体",
+    "en": "Keep at least one external agent enabled"
   },
   "InstalledAgentsSettings.cliNotFound": {
     "zh": "未找到 CLI",
@@ -5031,8 +5031,8 @@ export const MESSAGES = {
     "en": "Installation command finished. If CLI is still missing, check PATH and scan again."
   },
   "InstalledAgentsSettings.appFoundAgentCommandNotFound": {
-    "zh": "仅发现应用 · 未找到 Agent 命令",
-    "en": "App found · Agent command not found"
+    "zh": "仅发现应用 · 未找到外部智能体命令",
+    "en": "App found · External agent command not found"
   },
   "InstalledAgentsSettings.commandResponded": {
     "zh": "命令已响应{value1}",
@@ -5063,8 +5063,8 @@ export const MESSAGES = {
     "en": "App"
   },
   "InstalledAgentsSettings.agentsOnThisComputer": {
-    "zh": "这台电脑上的 Agent",
-    "en": "Agents on this computer"
+    "zh": "这台电脑上的外部智能体",
+    "en": "External agents on this computer"
   },
   "InstalledAgentsSettings.scanAgainAfterInstallingOrSigningIn": {
     "zh": "装好或登录后，重新查一遍",
@@ -5099,8 +5099,8 @@ export const MESSAGES = {
     "en": "Antumi searches these directories for commands ({value1})"
   },
   "InstalledAgentsSettings.pathUsedByCoreAndAgentsPlusCommon": {
-    "zh": "core 和 Agent 启动时用的 PATH，另外也会查常见目录里的 App。CLI 装在别处时，把它的目录加进 PATH 后重启 Antumi。",
-    "en": "PATH used by core and Agents, plus common app directories. If your CLI is elsewhere, add its directory to PATH and restart Antumi."
+    "zh": "core 和外部智能体启动时用的 PATH，另外也会查常见目录里的 App。CLI 装在别处时，把它的目录加进 PATH 后重启 Antumi。",
+    "en": "PATH used by core and external agents, plus common app directories. If your CLI is elsewhere, add its directory to PATH and restart Antumi."
   },
   "KnowledgeBaseSettings.chooseObsidianVault": {
     "zh": "选择 Obsidian 知识库",
@@ -5443,8 +5443,8 @@ export const MESSAGES = {
     "en": "Assignee"
   },
   "NewTaskDialog.developmentSquad": {
-    "zh": "研发小队",
-    "en": "Development squad"
+    "zh": "团队",
+    "en": "Team"
   },
   "NewTaskDialog.moreOptions": {
     "zh": "更多选项",
@@ -7110,12 +7110,12 @@ export const MESSAGES = {
   "SettingsPage.conversationDescription": {"zh": "下一步建议、待办、标题、自动归档和轻量任务用的模型。", "en": "Next-step suggestions, to-dos, titles, auto-archive, and the model for quick tasks."},
   "SettingsPage.extensions": {"zh": "扩展", "en": "Extensions"},
   "SettingsPage.localAgents": {
-    "zh": "本机 Agent",
-    "en": "Local Agents"
+    "zh": "外部智能体",
+    "en": "External agents"
   },
   "SettingsPage.installationSignInAndDefaultsForAgentExecution": {
-    "zh": "本机 Agent 的安装、登录、启用和升级。",
-    "en": "Install, sign in, enable, and upgrade the agents on this computer."
+    "zh": "管理 Claude Code、Codex、Cursor 等外部智能体的安装、登录和可用状态。",
+    "en": "Manage installation, sign-in and availability for external agents such as Claude Code, Codex and Cursor."
   },
   "SettingsPage.local": {
     "zh": "本机",
@@ -7778,20 +7778,20 @@ export const MESSAGES = {
     "en": "From {value1}"
   },
   "SquadLaunchDialog.assignPlanningToSquad": {
-    "zh": "交给小队执行规划",
-    "en": "Assign planning to squad"
+    "zh": "交给团队执行规划",
+    "en": "Assign planning to team"
   },
   "SquadLaunchDialog.assignToDevelopmentSquad": {
-    "zh": "交给研发小队",
-    "en": "Assign to development squad"
+    "zh": "交给团队",
+    "en": "Assign to team"
   },
   "SquadLaunchDialog.useASingleAgent": {
     "zh": "改用单 Agent",
     "en": "Use a single Agent"
   },
   "SquadLaunchDialog.chooseSquad": {
-    "zh": "选择小队",
-    "en": "Choose squad"
+    "zh": "选择团队",
+    "en": "Choose team"
   },
   "SquadLaunchDialog.members": {
     "zh": "{value1} 名成员",
@@ -7810,24 +7810,24 @@ export const MESSAGES = {
     "en": "{value1} (recommended){value2}"
   },
   "SquadLaunchDialog.planWithTheLeaderFirst": {
-    "zh": "先和队长规划",
-    "en": "Plan with the leader first"
+    "zh": "先和负责人规划",
+    "en": "Plan with the team lead first"
   },
   "SquadLaunchDialog.theLeaderReadsCodeAndDiscussesThePlan": {
-    "zh": "队长读代码，和你商量出计划和分工；你批准后，它接着带成员开发。",
-    "en": "The leader reads code and discusses the plan and assignments with you, then leads development after approval."
+    "zh": "负责人读代码，和你商量出计划和分工；你批准后，它接着带成员开发。",
+    "en": "The team lead reads code and discusses the plan and assignments with you, then leads development after approval."
   },
   "SquadLaunchDialog.startDirectly": {
     "zh": "直接开始",
     "en": "Start directly"
   },
   "SquadLaunchDialog.theLeaderBreaksDownTaskDetailsAndAssigns": {
-    "zh": "队长按任务详情自己拆分，边做边派活。",
-    "en": "The leader breaks down task details and assigns work as it proceeds."
+    "zh": "负责人按任务详情自己拆分，边做边派活。",
+    "en": "The team lead breaks down task details and assigns work as it proceeds."
   },
   "SquadLaunchDialog.coordinatesMembersUsingTheSquadSModelsAnd": {
-    "zh": "{value1} 协调 {value2} 名成员；模型与角色沿用小队配置。{value3}",
-    "en": "{value1} coordinates {value2} {value2, plural, one {member} other {members}} using the squad's models and roles.{value3}"
+    "zh": "{value1} 协调 {value2} 名成员；模型与成员配置沿用团队设置。{value3}",
+    "en": "{value1} coordinates {value2} {value2, plural, one {member} other {members}} using the team's models and member settings.{value3}"
   },
   "SquadLaunchDialog.developmentPermissionsApplyAfterPlanApproval": {
     "zh": "开发权限在批准计划后生效。",
@@ -7838,8 +7838,8 @@ export const MESSAGES = {
     "en": "This project is not a Git repository. Changes are written directly to the original directory."
   },
   "SquadLaunchDialog.createADevelopmentSquadFirst": {
-    "zh": "先创建研发小队",
-    "en": "Create a development squad first"
+    "zh": "先创建团队",
+    "en": "Create a team first"
   },
   "SquadLaunchDialog.startPlanning": {
     "zh": "开始规划",
@@ -7902,8 +7902,8 @@ export const MESSAGES = {
     "en": "Open {value1}'s conversation"
   },
   "SquadWorkPanel.leader": {
-    "zh": "队长",
-    "en": "Leader"
+    "zh": "负责人",
+    "en": "Team lead"
   },
   "SquadWorkPanel.working_1865": {
     "zh": "{working} 人在干",
@@ -7922,12 +7922,12 @@ export const MESSAGES = {
     "en": "Past runs"
   },
   "SquadWorkPanel.resumeSquad": {
-    "zh": "继续小队",
-    "en": "Resume squad"
+    "zh": "继续团队",
+    "en": "Resume team"
   },
   "SquadWorkPanel.stopSquad": {
-    "zh": "停止小队",
-    "en": "Stop squad"
+    "zh": "停止团队",
+    "en": "Stop team"
   },
   "SquadWorkPanel.work": {
     "zh": "工作",
@@ -7950,16 +7950,16 @@ export const MESSAGES = {
     "en": "Delivery summary"
   },
   "SquadWorkPanel.noSquadRunHistoryYet": {
-    "zh": "还没有小队运行记录。",
-    "en": "No squad run history yet."
+    "zh": "还没有团队运行记录。",
+    "en": "No team run history yet."
   },
   "Squads.readOnlyLeaderBreaksDownWorkAssignsMembers": {
-    "zh": "队长只读：拆分工作、分派给成员、汇总验证结果，自己不改代码。",
-    "en": "Read-only leader: breaks down work, assigns members, and summarizes verification; does not edit code."
+    "zh": "负责人只读：拆分工作、分派给成员、汇总验证结果，自己不改代码。",
+    "en": "Read-only team lead: breaks down work, assigns members, and summarizes verification; does not edit code."
   },
   "Squads.leaderReadOnly": {
-    "zh": "队长 · 只读",
-    "en": "Leader · Read only"
+    "zh": "负责人 · 只读",
+    "en": "Team lead · Read only"
   },
   "Squads.developmentTesting": {
     "zh": "开发 / 测试",
@@ -7978,8 +7978,8 @@ export const MESSAGES = {
     "en": "Read only {readers}"
   },
   "Squads.developmentSquads": {
-    "zh": "研发小队列表",
-    "en": "Development squads"
+    "zh": "团队",
+    "en": "Teams"
   },
   "Squads.inUse": {
     "zh": "使用中 · {value1}",
@@ -7990,28 +7990,28 @@ export const MESSAGES = {
     "en": "Archived · {value1}"
   },
   "Squads.noArchivedSquads": {
-    "zh": "没有归档的小队。",
-    "en": "No archived squads."
+    "zh": "没有归档的团队。",
+    "en": "No archived teams."
   },
   "Squads.newSquad": {
-    "zh": "{value1}新建小队{value2}",
-    "en": "{value1}New squad{value2}"
+    "zh": "{value1}新建团队{value2}",
+    "en": "{value1}New team{value2}"
   },
   "Squads.preFillLeaderDeveloperReviewerRoles": {
-    "zh": "按 队长 / 开发 / 审查 预填好成员",
-    "en": "Pre-fill leader / developer / reviewer roles"
+    "zh": "按 负责人 / 开发 / 审查 预填好成员",
+    "en": "Start with a team lead, developer and reviewer"
   },
   "Squads.noDescription": {
     "zh": "没有说明",
     "en": "No description"
   },
   "Squads.restoreSquad": {
-    "zh": "恢复小队",
-    "en": "Restore squad"
+    "zh": "恢复团队",
+    "en": "Restore team"
   },
   "Squads.archiveSquad": {
-    "zh": "归档小队",
-    "en": "Archive squad"
+    "zh": "归档团队",
+    "en": "Archive team"
   },
   "Squads.edit": {
     "zh": "{value1}编辑",
@@ -8021,21 +8021,22 @@ export const MESSAGES = {
     "zh": "成员 {value1}",
     "en": "Member {value1}"
   },
+  "Squads.teamMembers": {"zh": "团队成员", "en": "Team members"},
   "Squads.developmentAndTestingRunSequentiallyReadOnlyAnalysis": {
     "zh": "开发和测试串行执行，只读分析可以并行。",
     "en": "Development and testing run sequentially; read-only analysis can run in parallel."
   },
   "Squads.instructionsForTheLeader": {
-    "zh": "发给队长的指令",
-    "en": "Instructions for the leader"
+    "zh": "发给负责人的指令",
+    "en": "Instructions for the team lead"
   },
   "Squads.noneTheLeaderAssignsWorkBasedOnThe": {
-    "zh": "没有写。队长按任务和各成员的角色说明分工。",
-    "en": "None. The leader assigns work based on the task and member roles."
+    "zh": "没有写。负责人按任务和各成员的职责说明分工。",
+    "en": "None. The team lead assigns work based on the task and member responsibilities."
   },
   "Squads.runningTasksKeepTheirStartupConfigurationChangesHere": {
-    "zh": "运行中的任务沿用启动时的小队配置，这里的改动从下一次交给小队起生效。",
-    "en": "Running tasks keep their startup configuration. Changes here apply the next time a task is assigned to this squad."
+    "zh": "运行中的任务沿用启动时的团队配置，这里的改动从下一次交给团队起生效。",
+    "en": "Running tasks keep their startup configuration. Changes here apply the next time a task is assigned to this team."
   },
   "Squads.collapse": {
     "zh": "收起 {value1}",
@@ -8050,8 +8051,8 @@ export const MESSAGES = {
     "en": "Untitled"
   },
   "Squads.makeLeader": {
-    "zh": "设为队长",
-    "en": "Make leader"
+    "zh": "设为负责人",
+    "en": "Make team lead"
   },
   "Squads.name": {
     "zh": "名称{value1}",
@@ -8082,8 +8083,8 @@ export const MESSAGES = {
     "en": "Edit code and run tests, sequentially with other developers"
   },
   "Squads.roleDescription": {
-    "zh": "角色说明{value1}",
-    "en": "Role description{value1}"
+    "zh": "职责说明{value1}",
+    "en": "Responsibilities{value1}"
   },
   "Squads.responsibilitiesExpertiseAndDeliveryRequirements": {
     "zh": "职责、专长与交付要求",
@@ -8106,12 +8107,12 @@ export const MESSAGES = {
     "en": "Review correctness, edge cases, and code quality; report findings."
   },
   "Squads.checkSquadConfiguration": {
-    "zh": "请检查小队配置",
-    "en": "Check squad configuration"
+    "zh": "请检查团队配置",
+    "en": "Check team configuration"
   },
   "Squads.squadName": {
-    "zh": "小队名称{value1}",
-    "en": "Squad name{value1}"
+    "zh": "团队名称{value1}",
+    "en": "Team name{value1}"
   },
   "Squads.forExampleWebsiteTeam": {
     "zh": "例如：网站团队",
@@ -8122,16 +8123,16 @@ export const MESSAGES = {
     "en": "Short description{value1}"
   },
   "Squads.whatThisSquadDoesShownInTheSquad": {
-    "zh": "这个小队负责什么，显示在小队列表里",
-    "en": "What this squad does; shown in the squad list"
+    "zh": "这个团队负责什么，显示在团队列表里",
+    "en": "What this team does; shown in the team list"
   },
   "Squads.atLeastOneDevelopmentTestingMemberDevelopersRun": {
     "zh": "至少一名「开发 / 测试」成员。开发和测试串行执行，只读分析可以并行；点一行展开设置。",
     "en": "At least one development / testing member. Developers run sequentially; read-only analysis can run in parallel. Click a row to configure."
   },
   "Squads.upToMembersIncludingTheLeader": {
-    "zh": "最多 {MAX_MEMBERS} 人（含队长）",
-    "en": "Up to {MAX_MEMBERS} {MAX_MEMBERS, plural, one {member} other {members}} including the leader"
+    "zh": "最多 {MAX_MEMBERS} 人（含负责人）",
+    "en": "Up to {MAX_MEMBERS} {MAX_MEMBERS, plural, one {member} other {members}} including the team lead"
   },
   "Squads.addMember": {
     "zh": "添加成员",
@@ -8142,36 +8143,36 @@ export const MESSAGES = {
     "en": "(Optional)"
   },
   "Squads.assignmentRulesCollaborationAndAcceptanceCriteriaReadBy": {
-    "zh": "分工规则、协作方式与验收要求，队长每次接手任务时都会读到",
-    "en": "Assignment rules, collaboration, and acceptance criteria; read by the leader whenever it takes a task"
+    "zh": "分工规则、协作方式与验收要求，负责人每次接手任务时都会读到",
+    "en": "Assignment rules, collaboration, and acceptance criteria; read by the team lead whenever it takes a task"
   },
   "Squads.createSquad": {
-    "zh": "创建小队",
-    "en": "Create squad"
+    "zh": "创建团队",
+    "en": "Create team"
   },
   "Squads.edit_1926": {
-    "zh": "编辑「{value1}」",
-    "en": "Edit “{value1}”"
+    "zh": "配置团队「{value1}」",
+    "en": "Configure team “{value1}”"
   },
   "Squads.backToSquadList": {
-    "zh": "返回小队列表",
-    "en": "Back to squad list"
+    "zh": "返回团队列表",
+    "en": "Back to team list"
   },
   "Squads.newDevelopmentSquad": {
-    "zh": "新建研发小队",
-    "en": "New development squad"
+    "zh": "新建团队",
+    "en": "New team"
   },
   "Squads.preFilledWithLeaderDeveloperAndReviewerChange": {
-    "zh": "先按 队长 / 开发 / 审查 三人预填好了，改名字、换 Agent 或模型都可以。",
-    "en": "Pre-filled with leader, developer, and reviewer. Change names, Agents, or models as needed."
+    "zh": "先按 负责人 / 开发 / 审查 三名成员预填好了，改名字、换外部智能体或模型都可以。",
+    "en": "Pre-filled with a team lead, developer, and reviewer. Change names, external agents, or models as needed."
   },
   "Squads.aReadOnlyLeaderCoordinatesMembersBreaksDown": {
-    "zh": "一个只读的队长带几名成员：队长拆分任务、分派给成员、汇总结果。开始任务时选「交给研发小队」，或在任务的执行者里选它。",
-    "en": "A read-only leader coordinates members: breaks down tasks, assigns work, and summarizes results. Choose “Assign to development squad” when starting a task, or select the squad as its assignee."
+    "zh": "由只读的负责人拆分任务、分派给成员并汇总结果。开始任务时选「交给团队」，或在任务的执行者里选择团队。",
+    "en": "A read-only team lead breaks down tasks, assigns work, and summarizes results. Choose “Assign to team” when starting a task, or select the team as its assignee."
   },
   "Squads.newSquad_1931": {
-    "zh": "{value1}新建小队",
-    "en": "{value1}New squad"
+    "zh": "{value1}新建团队",
+    "en": "{value1}New team"
   },
   "StatusBar.connectingToAntumiCoreReconnectsAutomaticallyAfterDisconnection": {
     "zh": "正在连接 Antumi core，断开后会自动重连",
@@ -8602,8 +8603,8 @@ export const MESSAGES = {
     "en": "All Agents"
   },
   "TaskChat.assignedToDevelopmentSquad": {
-    "zh": "已交给研发小队执行",
-    "en": "Assigned to development squad"
+    "zh": "已交给团队执行",
+    "en": "Assigned to team"
   },
   "TaskChat.savedExecuteAfterDependenciesFinish": {
     "zh": "已保存，依赖完成后执行",
@@ -8618,28 +8619,28 @@ export const MESSAGES = {
     "en": "{value1} chat"
   },
   "TaskChat.leaderIsPlanning": {
-    "zh": "队长规划中",
-    "en": "Leader is planning"
+    "zh": "负责人规划中",
+    "en": "Team lead is planning"
   },
   "TaskChat.readOnlyPlanning": {
     "zh": "只读规划",
     "en": "Read-only planning"
   },
   "TaskChat.viewSquadInInspector": {
-    "zh": "在检查器里看小队",
-    "en": "View squad in inspector"
+    "zh": "在检查器里看团队",
+    "en": "View team in inspector"
   },
   "TaskChat.backToLeader": {
-    "zh": "返回队长",
-    "en": "Back to leader"
+    "zh": "返回负责人",
+    "en": "Back to team lead"
   },
   "TaskChat.loadingMemberConversation": {
     "zh": "正在读取成员会话…",
     "en": "Loading member conversation…"
   },
   "TaskChat.theLeaderCoordinatesMemberAssignmentsReturnToThe": {
-    "zh": "成员的分工由队长协调；请返回队长交流。",
-    "en": "The leader coordinates member assignments. Return to the leader to discuss."
+    "zh": "成员的分工由负责人协调；请返回负责人交流。",
+    "en": "The team lead coordinates member assignments. Return to the team lead to discuss."
   },
   "TaskChat.startingSyncingCodeAndPreparingWorkspaceThisMay": {
     "zh": "正在启动 {value1}：同步最新代码、准备工作区，稍等几秒…",
@@ -8714,8 +8715,8 @@ export const MESSAGES = {
     "en": "Single Agent"
   },
   "TaskExecutorPicker.developmentSquadMembers": {
-    "zh": "研发小队 · {value1} 名成员{value2}",
-    "en": "Development squad · {value1} {value1, plural, one {member} other {members}}{value2}"
+    "zh": "团队 · {value1} 名成员{value2}",
+    "en": "Team · {value1} {value1, plural, one {member} other {members}}{value2}"
   },
   "TaskExecutorPicker.archived": {
     "zh": " · 已归档",
@@ -8774,8 +8775,8 @@ export const MESSAGES = {
     "en": " · Shared with Agent when execution starts"
   },
   "TaskPlanCard.chooseDevelopmentSquad": {
-    "zh": "选择研发小队",
-    "en": "Choose development squad"
+    "zh": "选择团队",
+    "en": "Choose team"
   },
   "TaskQuickAdd.writeATask": {
     "zh": "＋ 写下一个任务{value1}",
@@ -9786,24 +9787,24 @@ export const MESSAGES = {
     "en": "Sign-in ended after waiting too long"
   },
   "labels.squadIsDevelopingStopItOrWaitUntil": {
-    "zh": "小队正在开发，请先停止或等待工作完成",
-    "en": "Squad is developing. Stop it or wait until work finishes"
+    "zh": "团队正在开发，请先停止或等待工作完成",
+    "en": "Team is developing. Stop it or wait until work finishes"
   },
   "labels.squadIsArchivedRestoreItOrChooseAnother": {
-    "zh": "小队已归档，请恢复或选择其他小队",
-    "en": "Squad is archived. Restore it or choose another"
+    "zh": "团队已归档，请恢复或选择其他团队",
+    "en": "Team is archived. Restore it or choose another"
   },
   "labels.memberExecutionIsCoordinatedByTheSquadUse": {
-    "zh": "成员执行由小队协调，请从任务的小队面板操作",
-    "en": "Member execution is coordinated by the squad. Use the task's squad panel"
+    "zh": "成员执行由团队协调，请从任务的团队面板操作",
+    "en": "Member execution is coordinated by the team. Use the task's team panel"
   },
   "labels.onlyTheLeaderExecutingThisTaskCanAssign": {
-    "zh": "只有正在执行任务的队长可以派活和提交",
-    "en": "Only the leader executing this task can assign work or submit"
+    "zh": "只有正在执行任务的负责人可以派活和提交",
+    "en": "Only the team lead executing this task can assign work or submit"
   },
   "labels.noSquadRunToResumeStartSquadDevelopment": {
-    "zh": "还没有可继续的小队运行，请开始小队开发",
-    "en": "No squad run to resume. Start squad development first"
+    "zh": "还没有可继续的团队运行，请开始团队开发",
+    "en": "No team run to resume. Start team development first"
   },
   "labels.handleUnfinishedOrFailedWorkFirst": {
     "zh": "还有未完成或失败的工作，请先处理",
@@ -9814,8 +9815,8 @@ export const MESSAGES = {
     "en": "This member cannot take this assignment"
   },
   "labels.schedulingSquadTasksIsNotSupportedYet": {
-    "zh": "小队任务暂不支持预约执行",
-    "en": "Scheduling squad tasks is not supported yet"
+    "zh": "团队任务暂不支持预约执行",
+    "en": "Scheduling team tasks is not supported yet"
   },
   "labels.thisMemberCanOnlyReadTheWorkspaceAssign": {
     "zh": "此成员只能读取工作区，请交给开发成员执行",

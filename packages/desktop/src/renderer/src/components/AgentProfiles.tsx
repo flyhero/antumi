@@ -34,7 +34,7 @@ export function AgentsView() {
     <nav className="agents-tabs" aria-label={t('AgentProfiles.title')}>
       <div className="agents-tabs-inner">
         <button type="button" className="button ghost" aria-pressed={tab === 'profiles'} onClick={() => useCore.setState({ agentProfilesTab: 'profiles' })}>{t('AgentProfiles.roles')}</button>
-        {squadsSupported && <button type="button" className="button ghost" aria-pressed={tab === 'squads'} onClick={() => useCore.setState({ agentProfilesTab: 'squads' })}>{t('ChatPlan.squad')}</button>}
+        {squadsSupported && <button type="button" className="button ghost" aria-pressed={tab === 'squads'} onClick={() => useCore.setState({ agentProfilesTab: 'squads' })}>{t('Squads.developmentSquads')}</button>}
       </div>
     </nav>
     {tab === 'squads' && squadsSupported ? <SquadsView /> : <ProfilesView />}
@@ -65,7 +65,7 @@ function ProfilesView() {
     setBusy(false)
   }
   return <section className="worktrees-page agents-page agent-profiles-page" aria-label={t('AgentProfiles.roles')}>
-    <AgentsPageHeader title={editing ? t(profile ? 'AgentProfiles.configure' : 'AgentProfiles.create') : view === 'templates' ? t('AgentTemplates.title') : t('AgentProfiles.role')} description={editing ? null : view === 'templates' ? t('AgentTemplates.chooseHint') : t('AgentProfiles.roleDescription')} back={view !== 'list' ? { label: t(editing && back === 'templates' ? 'AgentTemplates.back' : 'AgentProfiles.back'), onClick: leave } : undefined}
+    <AgentsPageHeader title={editing ? t(profile ? 'AgentProfiles.configure' : 'AgentProfiles.create') : view === 'templates' ? t('AgentTemplates.title') : t('AgentProfiles.roles')} description={editing ? null : view === 'templates' ? t('AgentTemplates.chooseHint') : t('AgentProfiles.roleDescription')} back={view !== 'list' ? { label: t(editing && back === 'templates' ? 'AgentTemplates.back' : 'AgentProfiles.back'), onClick: leave } : undefined}
       actions={view === 'list' && <button type="button" className="button primary" onClick={create}><PlusIcon />{t('AgentProfiles.create')}</button>} />
     {editing ? <ProfileEditor key={profile?.id ?? JSON.stringify(seed)} profile={profile} seed={seed} template={template} onCancel={leave} onDone={() => { if (!profile) setTab('active'); useProfileEditor.setState({ view: 'list', template: null }) }} /> : view === 'templates' ? <AgentProfileTemplates onPick={pick} onBlank={blank} /> : <section className="agent-profiles-section" aria-label={t('AgentProfiles.roles')}>
       <div className="squads-tabs">

@@ -785,7 +785,7 @@ const SECTIONS: readonly Section[] = localized(() => ([
     group: 'Agent',
     title: t('SettingsPage.localAgents'),
     description: t('SettingsPage.installationSignInAndDefaultsForAgentExecution'),
-    keywords: ['agent', t('ConversationList.agent'), t('SettingsPage.local'), t('InstalledAgentsSettings.installed'), t('AgentPicker.notInstalled'), t('SettingsPage.install'), t('SettingsPage.signIn'), t('SettingsPage.version'), t('SettingsPage.scan'), t('SettingsPage.environment'), t('SettingsPage.check'), 'path', t('SettingsPage.notFound'), t('RoutinesSection.enable'), t('SettingsPage.disable'), ...AGENT_KINDS],
+    keywords: ['agent', '本机 Agent', 'Local Agents', '编程智能体', 'coding agents', t('ConversationList.agent'), t('SettingsPage.local'), t('InstalledAgentsSettings.installed'), t('AgentPicker.notInstalled'), t('SettingsPage.install'), t('SettingsPage.signIn'), t('SettingsPage.version'), t('SettingsPage.scan'), t('SettingsPage.environment'), t('SettingsPage.check'), 'path', t('SettingsPage.notFound'), t('RoutinesSection.enable'), t('SettingsPage.disable'), ...AGENT_KINDS],
     Icon: RobotIcon,
     Body: AgentSettings,
     grouped: true
@@ -886,7 +886,7 @@ const MCP_SECTION: Section = localized(() => ({
   Body: McpSettingsSection
 }))
 
-// On a core that keeps them: the agents' accounts and switching between them; it follows 本机 Agent.
+// On a core that keeps them: the agents' accounts and switching between them; it follows 外部智能体.
 const ACCOUNTS_SECTION: Section = localized(() => ({
   id: 'accounts',
   group: 'Agent',

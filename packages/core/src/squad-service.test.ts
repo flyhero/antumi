@@ -229,7 +229,7 @@ describe('squad execution', () => {
     expect(squads.roster(conversationId)).toBeNull()
     const planning = chats.get(conversationId).sessionId!
     const brief = JSON.stringify(daemon.written(planning))
-    expect(brief).toContain('你是队长')
+    expect(brief).toContain('你是负责人')
     expect(brief).toContain('Second build')
     const planningArgs = daemon.spawns.at(-1)!.args
     const providerSession = planningArgs[planningArgs.indexOf('--session-id') + 1]

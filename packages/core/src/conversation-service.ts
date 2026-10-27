@@ -1213,7 +1213,7 @@ export class ConversationService {
     const profile = conversation.profile
     const notes = [profile ? `你是用户配置的智能体「${profile.name}」。\n${profile.instructions}` : '']
     if (this.delegationAvailable?.(conversation.id) && !conversation.parentConversationId && !conversation.discussionId && !conversation.squadRunId && !conversation.routineId && !isHelper(conversation)) {
-      notes.push('用户用 @ 点名智能体时，先查找对应角色并委派，不要自行冒充该角色回答。需要其他专业角色协助时，可用 Antumi 的 antumi_agent_list 查找可调用的智能体，再用 antumi_agent_dispatch 委派具体子任务（说明目标、必要背景、文件范围和交付要求）。这是独立子会话，不自动继承聊天历史。调用后结束当前回合，Antumi 会在结果就绪后自动继续当前会话。用 antumi_agent_status 查看进度；不要反复轮询。')
+      notes.push('用户用 @ 点名智能体时，先查找对应智能体并委派，不要自行代替它回答。需要其他专业智能体协助时，可用 Antumi 的 antumi_agent_list 查找可调用的智能体，再用 antumi_agent_dispatch 委派具体子任务（说明目标、必要背景、文件范围和交付要求）。这是独立子会话，不自动继承聊天历史。调用后结束当前回合，Antumi 会在结果就绪后自动继续当前会话。用 antumi_agent_status 查看进度；不要反复轮询。')
     }
     return notes.filter(Boolean).join('\n\n')
   }
@@ -1275,7 +1275,7 @@ export class ConversationService {
   // remembered, from what the last chat stage offered.
   async setOption(id: string, option: ChatOption, value: string): Promise<void> {
     const conversation = this.get(id)
-    if (conversation.squadRunId || conversation.parentConversationId || conversation.workspaceReadOnly) throw new Rejection(conversation.profile ? 'profile-managed' : 'squad-managed', conversation.profile ? '本次运行沿用智能体配置' : '本次运行沿用小队配置')
+    if (conversation.squadRunId || conversation.parentConversationId || conversation.workspaceReadOnly) throw new Rejection(conversation.profile ? 'profile-managed' : 'squad-managed', conversation.profile ? '本次运行沿用智能体配置' : '本次运行沿用团队配置')
     if (isHelper(conversation) && option === 'permissionMode' && !helperAllowsMode(value)) throw new Rejection('chat-option-invalid', '小助手不能只做规划')
     const { agent } = conversation
     if (isHelper(conversation) && this.chats.activity(id) === null && this.store.stages(id).length === 0) {

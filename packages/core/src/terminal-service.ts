@@ -229,7 +229,7 @@ export class TerminalService {
       await this.stop(conversationId, row.id)
       const until = Date.now() + 5000
       while (!(await this.daemon.request('attach', { sessionId: row.sessionId })).exited) {
-        if (Date.now() >= until) throw new Rejection('squad-terminal-stopping', '成员命令尚未停止，小队已暂停')
+        if (Date.now() >= until) throw new Rejection('squad-terminal-stopping', '成员命令尚未停止，团队已暂停')
         await new Promise((resolve) => setTimeout(resolve, 50))
       }
     }

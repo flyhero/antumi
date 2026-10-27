@@ -1,4 +1,4 @@
-import { AGENT_CALL_TOOLS, browserToolName, HISTORY_TOOLS, historyToolName, SHOW_PREVIEW_TOOL, SQUAD_TOOL_NAMES, terminalToolName, TODO_TOOLS, todoToolName } from '@antumi/protocol'
+import { AGENT_CALL_TOOLS, BROWSER_BOOKMARKS_TOOL, browserToolName, HISTORY_TOOLS, historyToolName, SHOW_PREVIEW_TOOL, SQUAD_TOOL_NAMES, terminalToolName, TODO_TOOLS, todoToolName } from '@antumi/protocol'
 
 // env is added to what the agent runs with, for an agent configured through its environment.
 export type AgentCommand = { command: string; args: string[]; env?: Record<string, string> }
@@ -11,8 +11,9 @@ export type McpServer = { command: string; args: string[]; env?: Record<string, 
 // adds what is secret, or reached at its address where nothing is.
 export type AgentMcpServer = { name: string } & ({ type: 'stdio'; command: string; args: string[]; env?: Record<string, string> } | { type: 'http'; url: string })
 
-// The browser tools that only read: what the page shows, says in its console, or is waited on.
-export const BROWSER_READ_TOOLS: readonly string[] = (['snapshot', 'screenshot', 'scroll', 'wait', 'console', 'tabs'] as const).map(browserToolName)
+// The browser tools that only read: what the page shows, says in its console, or is waited on,
+// and the user's bookmarks.
+export const BROWSER_READ_TOOLS: readonly string[] = [...(['snapshot', 'screenshot', 'scroll', 'wait', 'console', 'tabs'] as const).map(browserToolName), BROWSER_BOOKMARKS_TOOL]
 
 // Antumi's tools that ask nothing of the user: showing a file the agent wrote, reading the
 // browser's page, reading or stopping a terminal the conversation opened itself, the user's

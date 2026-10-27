@@ -8771,6 +8771,18 @@ div.inspector-empty > p { margin: 0 0 8px; }
 .browser-stage-frame { border: 1px solid var(--border); background: var(--bg); pointer-events: none; }
 .browser-stage-note { color: var(--text-3); font-size: 12px; }
 .browser-address .chat-picker { flex-shrink: 0; }
+.browser-address .menu-anchor { flex-shrink: 0; }
+.browser-bookmark-star[data-kept] { color: var(--accent); }
+.browser-bookmark-star[data-kept] svg { fill: currentColor; }
+/* The search and the import stay put; only the list scrolls. */
+.menu:has(> .browser-bookmarks) { display: flex; flex-direction: column; max-height: min(480px, 70vh); overflow: hidden; }
+.browser-bookmarks { display: flex; flex-direction: column; min-height: 0; width: 360px; max-width: 100%; }
+.browser-bookmarks .menu-item svg { width: 14px; height: 14px; }
+.browser-bookmark-list { flex: 0 1 auto; min-height: 0; overflow-y: auto; }
+.browser-bookmark-item { min-height: 36px; font-size: 13px; }
+.browser-bookmark-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.browser-bookmark-text .menu-item-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.browser-bookmark-where { overflow: hidden; color: var(--text-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .browser-status { display: flex; align-items: center; gap: 12px; min-height: 28px; padding: 0 12px; border-top: 1px solid var(--border); color: var(--text-3); font-size: 12px; white-space: nowrap; }
 .browser-empty { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 16px; color: var(--text-muted); font-size: 13px; }
 .browser-empty p { margin: 0; }

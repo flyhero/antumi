@@ -1,6 +1,6 @@
 import { t } from './i18n'
 import { z } from 'zod'
-import { AgentKind } from '@antumi/protocol'
+import { AgentKind, BookmarkFields } from '@antumi/protocol'
 import type { ActionableTarget, Notice } from './attention'
 
 // What the Electron preload exposes; absent when the UI runs in a plain browser.
@@ -34,6 +34,10 @@ declare global {
       browserShow?(tabId: string | null): Promise<unknown>
       browserBounds?(bounds: { x: number; y: number; width: number; height: number }): void
       browserOccluded?(occluded: boolean): Promise<unknown>
+      // Bookmarks to import, read by main; absent from a main older than the renderer.
+      bookmarkSources?(): Promise<unknown>
+      readBookmarks?(id: string): Promise<unknown>
+      pickBookmarksFile?(): Promise<unknown>
       onBrowserFocused?(listener: (event: unknown) => void): () => void
       onBrowserShortcut?(listener: (event: unknown) => void): () => void
       // Newer releases (main's app-update.ts); absent from a main older than the renderer.
@@ -188,6 +192,31 @@ export function reportBrowserBounds(rect: { x: number; y: number; width: number;
 
 export function setBrowserOccluded(occluded: boolean): void {
   void window.antumi?.browserOccluded?.(occluded).catch(() => {})
+}
+
+// Whether main can read other browsers' bookmarks for import.
+export function canImportBookmarks(): boolean {
+  return window.antumi?.bookmarkSources !== undefined
+}
+
+const BookmarkSource = z.object({ id: z.string(), browser: z.string(), profile: z.string(), count: z.number() })
+export type BookmarkSource = z.infer<typeof BookmarkSource>
+
+// The browser profiles on this machine that have bookmarks.
+export async function bookmarkSources(): Promise<BookmarkSource[]> {
+  const found = await window.antumi?.bookmarkSources?.().catch(() => [])
+  return z.array(BookmarkSource).catch([]).parse(found ?? [])
+}
+
+// The bookmarks of one of those profiles; throws when it cannot be read.
+export async function readBookmarks(id: string): Promise<BookmarkFields[]> {
+  return z.array(BookmarkFields).parse(await window.antumi?.readBookmarks?.(id))
+}
+
+// The bookmarks in an exported page the user picks; null when they pick none.
+export async function pickBookmarksFile(): Promise<BookmarkFields[] | null> {
+  const picked = await window.antumi?.pickBookmarksFile?.()
+  return picked === null || picked === undefined ? null : z.array(BookmarkFields).parse(picked)
 }
 
 const Focused = z.object({ tabId: z.string(), focused: z.boolean() })

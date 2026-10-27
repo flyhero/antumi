@@ -356,6 +356,10 @@ export const MIGRATIONS = [
   `CREATE TABLE git_favorites (
      repository TEXT NOT NULL, ref TEXT NOT NULL, favorite INTEGER NOT NULL,
      PRIMARY KEY (repository, ref)
+   );`,
+  // Pages the user keeps for the built-in browser, one row per address.
+  `CREATE TABLE bookmarks (
+     id TEXT PRIMARY KEY, title TEXT NOT NULL, url TEXT NOT NULL UNIQUE, folder TEXT, created_at INTEGER NOT NULL
    );`
 ]
 

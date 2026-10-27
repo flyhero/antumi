@@ -11,6 +11,7 @@ import { ensureBackend, replaceOldDaemon, stopBackendForInstall } from './backen
 import { popupWindowOptions, RequestPopup } from './request-popup'
 import { startBrowserHost, type BrowserHost } from './browser/browser-host'
 import { WindowSlot } from './browser/window-slot'
+import { findBookmarkSources, htmlBookmarks, readBookmarkSource, type BookmarkPlaces } from './browser/bookmark-import'
 import { installedApps, openWith, type InstalledApp } from './open-with'
 import { AppUpdater, InstallBlocked } from './app-update'
 import { bundleOf, leftovers, stageFromDmg, swapBlocked, swapInto } from './app-bundle-swap'
@@ -208,6 +209,26 @@ ipcMain.handle('antumi:pick-folder', async (event, defaultPath: unknown, title: 
   const window = BrowserWindow.fromWebContents(event.sender)
   const result = window ? await dialog.showOpenDialog(window, options) : await dialog.showOpenDialog(options)
   return result.canceled ? null : (result.filePaths[0] ?? null)
+})
+
+// Bookmarks to bring into the built-in browser: from another browser's profile on this machine, or
+// from a page of them a browser exported. Read here, where the user's files are; core keeps them.
+const bookmarkPlaces = (): BookmarkPlaces => ({ platform: process.platform, home: homedir(), env: process.env })
+ipcMain.handle('antumi:bookmark-sources', () => findBookmarkSources(bookmarkPlaces()))
+ipcMain.handle('antumi:bookmark-read', (_event, id: unknown) => (typeof id === 'string' ? readBookmarkSource(id, bookmarkPlaces()) : []))
+ipcMain.handle('antumi:bookmark-pick-html', async (event) => {
+  const options: OpenDialogOptions = {
+    title: uiText('Choose exported bookmarks', '选择导出的收藏文件'),
+    properties: ['openFile'],
+    filters: [{ name: uiText('Bookmarks page', '收藏网页文件'), extensions: ['html', 'htm'] }]
+  }
+  const window = BrowserWindow.fromWebContents(event.sender)
+  const result = window ? await dialog.showOpenDialog(window, options) : await dialog.showOpenDialog(options)
+  const file = result.canceled ? null : result.filePaths[0]
+  if (!file) return null
+  const info = await stat(file)
+  if (info.size > 64 * 1024 * 1024) return []
+  return htmlBookmarks(await readFile(file, 'utf8'))
 })
 
 // Shows a file a reply names in the system's file manager: the first of the paths the renderer

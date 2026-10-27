@@ -25,6 +25,7 @@ import type { UsageLimitResumes } from './usage-limit-resume'
 import { readableUsage, type UsageService } from './usage-service'
 import type { ConversationService } from './conversation-service'
 import type { TerminalCommandStore } from './terminal-commands'
+import type { BookmarkStore } from './bookmarks'
 import type { ChatCommandStore } from './chat-commands'
 import type { TerminalService } from './terminal-service'
 import type { ProjectConfigStore } from './project-config'
@@ -99,11 +100,16 @@ export function createRpcHandlers(
   automation?: UsageAutomation,
   pets?: PetLibrary,
   projectStar?: ProjectStar,
-  profiles?: AgentProfileService
+  profiles?: AgentProfileService,
+  bookmarks?: BookmarkStore
 ): RpcHandlers {
   const profileService = () => {
     if (!profiles) throw new Rejection('profile-unavailable')
     return profiles
+  }
+  const bookmarkStore = (): BookmarkStore => {
+    if (!bookmarks) throw new Rejection('bookmarks-unavailable')
+    return bookmarks
   }
   const petLibrary = (): PetLibrary => {
     if (!pets) throw new Rejection('pets-unavailable')
@@ -249,7 +255,7 @@ export function createRpcHandlers(
     'pets.cancel': ({ id }) => { petLibrary().cancel(id); return OK },
     'pets.remove': ({ id }) => petLibrary().remove(id),
     'pets.read': ({ id }) => petLibrary().read(id),
-    'system.hello': () => ({ protocolVersion: PROTOCOL_VERSION, serverVersion: packageJson.version, features: CORE_FEATURES.filter((feature) => (feature !== 'agent-profiles' || Boolean(profiles)) && (feature !== 'project-star' || Boolean(projectStar)) && (feature !== 'pets' || Boolean(pets)) && (feature !== 'squads' || Boolean(squads)) && (!['plugins', 'plugin-recommendations'].includes(feature) || Boolean(plugins)) && (!['skills-library', 'skills-search', 'skills-activation'].includes(feature) || Boolean(skills)) && (feature !== 'mcp-servers' || Boolean(mcpServers)) && (feature !== 'small-model-stats' || Boolean(smallModels)) && (feature !== 'model-providers' || Boolean(modelProviders)) && (feature !== 'agent-accounts' || Boolean(accounts))) }),
+    'system.hello': () => ({ protocolVersion: PROTOCOL_VERSION, serverVersion: packageJson.version, features: CORE_FEATURES.filter((feature) => (feature !== 'agent-profiles' || Boolean(profiles)) && (feature !== 'project-star' || Boolean(projectStar)) && (feature !== 'bookmarks' || Boolean(bookmarks)) && (feature !== 'pets' || Boolean(pets)) && (feature !== 'squads' || Boolean(squads)) && (!['plugins', 'plugin-recommendations'].includes(feature) || Boolean(plugins)) && (!['skills-library', 'skills-search', 'skills-activation'].includes(feature) || Boolean(skills)) && (feature !== 'mcp-servers' || Boolean(mcpServers)) && (feature !== 'small-model-stats' || Boolean(smallModels)) && (feature !== 'model-providers' || Boolean(modelProviders)) && (feature !== 'agent-accounts' || Boolean(accounts))) }),
     'files.resolve': ({ conversationId, path }) => files.resolve(conversationId, path),
     'files.read': ({ conversationId, path }) => files.read(conversationId, path),
     'files.list': ({ conversationId, path }) => files.list(conversationId, path),
@@ -518,6 +524,13 @@ export function createRpcHandlers(
       terminalCommands.delete(id)
       return OK
     },
+    'bookmarks.list': () => bookmarkStore().list(),
+    'bookmarks.add': (params) => bookmarkStore().add(params),
+    'bookmarks.delete': ({ id }) => {
+      bookmarkStore().delete(id)
+      return OK
+    },
+    'bookmarks.import': ({ bookmarks: imported }) => bookmarkStore().import(imported),
     'chatCommands.list': () => chatCommands.list(),
     'chatCommands.save': (params) => chatCommands.save(params),
     'chatCommands.delete': ({ id }) => {

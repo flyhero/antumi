@@ -1,5 +1,5 @@
 import { localized, t } from './i18n'
-import { BROWSER_HOST_TOOL, browserToolKind, CODEX_IMAGE_GENERATION, historyToolKind, isPreviewTool, isTerminalRunTool, terminalToolKind, todoToolKind, type TodoToolKind, type BrowserToolKind, type ChatDiff, type ChatItem, type ChatToolStatus, type TerminalToolKind } from '@antumi/protocol'
+import { BROWSER_HOST_TOOL, browserToolKind, isBrowserBookmarksTool, CODEX_IMAGE_GENERATION, historyToolKind, isPreviewTool, isTerminalRunTool, terminalToolKind, todoToolKind, type TodoToolKind, type BrowserToolKind, type ChatDiff, type ChatItem, type ChatToolStatus, type TerminalToolKind } from '@antumi/protocol'
 import { browserOperation } from './browser-activity'
 
 type ToolItem = Extract<ChatItem, { kind: 'tool' }>
@@ -75,6 +75,7 @@ const TODO_LABEL: Record<TodoToolKind, string> = localized(() => ({ list: t('cha
 
 export function toolLabel(name: string, display?: ToolDisplay | null): string {
   if (isPreviewTool(name)) return t('chatTools.preview')
+  if (isBrowserBookmarksTool(name)) return t('chatTools.findBookmarks')
   const todo = todoToolKind(name)
   if (todo) return TODO_LABEL[todo]
   const history = historyToolKind(name)
@@ -104,7 +105,7 @@ export function toolIconKind(name: string, display?: ToolDisplay | null): ToolIc
   if (browserOperation(name, display) !== null) return 'browser-control'
   const history = historyToolKind(name)
   if (history) return history === 'list' ? 'list' : 'read'
-  if (todoToolKind(name)) return 'list'
+  if (todoToolKind(name) || isBrowserBookmarksTool(name)) return 'list'
   return TOOL_ICONS[name] ?? 'tool'
 }
 

@@ -4,6 +4,7 @@ import type { BrowserTab, BrowserViewport } from '@antumi/protocol'
 import { ALL_TABS, focusBrowserTab, selectBrowserTab, useBrowserTabs, useWatchAllBrowser } from '../browser-state'
 import { perform, useCore } from '../core-store'
 import { canShowNativeBrowser, onBrowserFocused, reportBrowserBounds, showNativeBrowserTab } from '../desktop-bridge'
+import { BookmarksButton, BookmarkStar } from './BrowserBookmarks'
 import { ChatPicker } from './ChatPicker'
 import { ArrowLeftIcon, ArrowRightIcon, CameraIcon, CloseIcon, GlobeIcon, PlusIcon, RefreshIcon } from './icons'
 import { Spinner } from './Spinner'
@@ -230,6 +231,8 @@ export function BrowserPanel() {
               onBlur={() => setEditing(false)}
               onChange={(event) => setAddress(event.target.value)}
             />
+            <BookmarkStar tab={tab} />
+            <BookmarksButton tab={tab} />
             <ViewportPicker tab={tab} />
             <button
               type="button"

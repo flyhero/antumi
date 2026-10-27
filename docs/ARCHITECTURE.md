@@ -510,7 +510,7 @@ Claude Code 和 Codex 可以登录多个账号（描述符的 `capabilities.acco
 ## 5. 内置浏览器
 
 
-聊天界面里的 Agent 可以用 Antumi 托管的浏览器看页面：Antumi 的 MCP 服务给每个聊天会话提供一组 `browser_*` 工具——`browser_navigate` 打开页面，`browser_snapshot` 读无障碍树快照（每个可交互元素带 ref），`browser_click` / `browser_type` / `browser_press` / `browser_hover` / `browser_scroll` / `browser_select` 按 ref 操作，`browser_wait` 等待，`browser_screenshot` 截图，`browser_console` 读控制台和失败的请求，`browser_tabs` 管标签页。截图会显示在对话的卡片里。
+聊天界面里的 Agent 可以用 Antumi 托管的浏览器看页面：Antumi 的 MCP 服务给每个聊天会话提供一组 `browser_*` 工具——`browser_navigate` 打开页面，`browser_snapshot` 读无障碍树快照（每个可交互元素带 ref），`browser_click` / `browser_type` / `browser_press` / `browser_hover` / `browser_scroll` / `browser_select` 按 ref 操作，`browser_wait` 等待，`browser_screenshot` 截图，`browser_console` 读控制台和失败的请求，`browser_tabs` 管标签页，`browser_bookmarks` 在用户的收藏里找地址。截图会显示在对话的卡片里。
 
 - **运行位置**：浏览器就是 Antumi 应用自带的 Chromium，标签页由桌面端主进程持有：关窗口、刷新界面都不影响它，退出应用才结束。应用没开时，Agent 的浏览器工具会提示先打开 Antumi。不用下载任何东西。
 - **隔离与登录态**：所有标签页共用一份持久会话（Electron 的 `persist:antumi-browser` 分区），所以登录态在所有会话间共享；标签页按会话隔离，Agent 只看到自己会话的标签页，删除会话时它的标签页一并关闭。
@@ -519,7 +519,10 @@ Claude Code 和 Codex 可以登录多个账号（描述符的 `capabilities.acco
 - **浏览器面板**：状态栏右下角的浏览器按钮（或 Ctrl+Shift+`）打开右侧的浏览器面板，和终端面板一样可以拖宽、最大化。它列出所有会话的标签页（标签上带会话名），也能用「＋」开你自己的标签页：这种标签页不属于任何会话，Agent 看不到，打开什么站点也不会问你。Agent 用浏览器时，对话里出现一个浏览器示意窗（这一回合访问过的标签页、当前页的地址和「打开」），浏览器在后台跑，点标签或「打开」才展开面板并选中那个标签页；标签页关闭后示意窗保留最后一次成功操作的标题和地址，「打开」改为不可点击的「已关闭」，关闭的标签仍可在卡片内切换回看；当前聊天订阅自身标签列表，其他回合或浏览器面板中的关闭操作也会同步到历史卡片（工具结果的格式见 `describeClosedTab`）；在 设置 → 集成 → 浏览器 里可以改成 Agent 第一次用浏览器时自动打开。
 - **页面**：面板里直接显示选中的标签页本身，铺满面板，和普通浏览器一样可以点击、输入（Esc 回到应用，Shift+Esc 把 Esc 发给页面）、改地址、后退刷新，也能关标签页、截图存成图片。地址栏右侧可以把页面固定成手机、平板等尺寸，固定尺寸的页面在面板里等比居中显示；Agent 调用 `browser_navigate` 或 `browser_tabs new` 时也可以传 `viewport`，之后一直保持到再改。你操作时标签页标为「你在操作」，Agent 对它的调用会被拒绝并被告知等待，5 秒没动作或点「交还给 Agent」后恢复。
 - **升级**：早期版本下载到 `~/.antumi/browser/` 的 Chromium 和 profile，在新版 core 第一次启动时自动删除；网站需要重新登录。
-- **Codex**：Codex 对 Antumi 的 MCP 工具不弹自己的确认，所以站点确认是它唯一的闸；Claude Code 对打开页面和点击、输入会弹它自己的确认，只读的快照、截图、滚动、等待、控制台和标签页列表已放行。
+- **收藏**：地址栏的星标收藏或取消收藏当前页，旁边的收藏按钮列出全部收藏，可搜索；点一条在当前标签页打开，按住 ⌘（Windows 上 Ctrl）在新标签页打开。收藏存在 core 的 `bookmarks` 表，一个地址只存一条，最多 5000 条，变动经 `bookmarks.changed` 同步到所有窗口。只收 http(s) 网址，书签小程序（`javascript:`）和 `chrome://` 之类的页面导入时跳过。
+- **导入收藏**：收藏菜单里的「从其他浏览器导入」由桌面端主进程读文件（`bookmark-import.ts`），渲染进程分批（每批 500 条）交给 core 的 `bookmarks.import`，已有的地址跳过。Chromium 系浏览器（Chrome、Edge、Brave、Arc（仅 macOS）、Vivaldi、Chromium）直接读各 profile 的 `Bookmarks` 文件，profile 名取自 `Local State`，所在文件夹记成「书签栏 / 工作」这样的路径。Safari、Firefox 的收藏库要额外权限或被浏览器锁着，所以走它们导出的 HTML 收藏文件（Netscape 格式，各浏览器都能导出）。只读收藏，不碰 cookie 和密码。
+- **Agent 查收藏**：`browser_bookmarks` 按关键词在收藏里找地址（标题、网址、文件夹都匹配，多个词要同时出现），用户说「去后台看看」却没给地址时用。它是只读工具，和浏览器工具一起提供，只读工作区和群聊成员也有。
+- **Codex**：Codex 对 Antumi 的 MCP 工具不弹自己的确认，所以站点确认是它唯一的闸；Claude Code 对打开页面和点击、输入会弹它自己的确认，只读的快照、截图、滚动、等待、控制台、标签页列表和查收藏已放行。
 
 ## 6. 终端与端口
 

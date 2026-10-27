@@ -24,6 +24,9 @@ import {
   type Task,
   type Terminal,
   type TerminalCommand,
+  type Bookmark,
+  type BookmarkFields,
+  type BookmarkImport,
   type SavedChatCommand,
   type SkillRepo,
   type McpServer,
@@ -201,6 +204,8 @@ export type CoreState = {
   activeTerminalId: string | null
   // Commands kept for the terminal panel, oldest first; empty from a core that keeps none.
   terminalCommands: TerminalCommand[]
+  // Pages kept for the built-in browser, oldest first; empty from a core that keeps none.
+  bookmarks: Bookmark[]
   // The user's own chat commands, oldest first; empty from a core that keeps none.
   chatCommands: SavedChatCommand[]
   // The skills repositories core installed; empty from a core without a library.
@@ -292,6 +297,7 @@ export const useCore = create<CoreState>()(() => ({
   utilityPanelOrder: [],
   activeTerminalId: null,
   terminalCommands: [],
+  bookmarks: [],
   chatCommands: [],
   skillRepos: [],
   mcpServers: [],
@@ -536,6 +542,29 @@ export function saveTerminalCommand(params: RpcParams<'terminalCommands.save'>):
 
 export function deleteTerminalCommand(id: string): void {
   void perform((rpc) => rpc.call('terminalCommands.delete', { id }))
+}
+
+// The list updates when core says so, through bookmarks.changed.
+export function addBookmark(fields: BookmarkFields): void {
+  void perform((rpc) => rpc.call('bookmarks.add', fields))
+}
+
+export function deleteBookmark(id: string): void {
+  void perform((rpc) => rpc.call('bookmarks.delete', { id }))
+}
+
+// In slices, so a browser's thousands of bookmarks stay well under a message's size.
+const IMPORT_SLICE = 500
+export async function importBookmarks(bookmarks: readonly BookmarkFields[]): Promise<BookmarkImport | null> {
+  const total: BookmarkImport = { added: 0, skipped: 0 }
+  for (let at = 0; at < bookmarks.length; at += IMPORT_SLICE) {
+    const slice = bookmarks.slice(at, at + IMPORT_SLICE)
+    const result = await perform((rpc) => rpc.call('bookmarks.import', { bookmarks: slice }))
+    if (!result) return null
+    total.added += result.added
+    total.skipped += result.skipped
+  }
+  return total
 }
 
 // The list updates when core says so, through chatCommands.changed.
@@ -1149,6 +1178,10 @@ export async function setAwakeMode(mode: ComputerAwakeStatus['mode']): Promise<v
   if (status) useCore.setState({ awake: status })
 }
 
+export function useBookmarksSupported(): boolean {
+  return useCore((s) => s.rpc?.features.includes('bookmarks') ?? false)
+}
+
 export function useTerminalCommandsSupported(): boolean {
   return useCore((s) => s.rpc?.features.includes('terminal-commands') ?? false)
 }
@@ -1325,6 +1358,7 @@ export function startCoreConnection(scope: 'app' | 'requests' = 'app'): void {
           }))
         )
         rpc.on('terminalCommands.changed', ({ commands }) => useCore.setState({ terminalCommands: commands }))
+        rpc.on('bookmarks.changed', ({ bookmarks }) => useCore.setState({ bookmarks }))
         rpc.on('chatCommands.changed', ({ commands }) => useCore.setState({ chatCommands: commands }))
         rpc.on('skills.changed', ({ repos }) => useCore.setState({ skillRepos: repos }))
         rpc.on('mcpServers.changed', ({ servers }) => useCore.setState({ mcpServers: servers }))
@@ -1375,6 +1409,7 @@ export function startCoreConnection(scope: 'app' | 'requests' = 'app'): void {
         const terminalCommands = full && rpc.features.includes('terminal-commands') ? await rpc.call('terminalCommands.list', {}).catch(() => []) : []
         // Asked only of a core that has one, and never waited for: it starts the host when it is down.
         if (full && rpc.features.includes('browser')) void rpc.call('browser.status', {}).then((status) => useCore.setState({ browser: status })).catch(() => {})
+        if (full && rpc.features.includes('bookmarks')) void rpc.call('bookmarks.list', {}).then((bookmarks) => useCore.setState({ bookmarks })).catch(() => {})
         if (full && rpc.features.includes('keep-awake')) void rpc.call('system.awakeStatus', {}).then((awake) => useCore.setState({ awake })).catch(() => {})
         // What is left to do everywhere, for the overview; todos.changed keeps it current.
         if (full && rpc.features.includes('todo-overview')) void rpc.call('todos.open', {}).then((open) => open.forEach(({ conversationId, groups }) => receiveTodos(conversationId, groups))).catch(() => {})

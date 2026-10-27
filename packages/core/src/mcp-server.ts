@@ -1,4 +1,5 @@
 import { agentToolsOverCore } from './mcp-agent-tools'
+import { bookmarkToolsOverCore } from './mcp-bookmark-tools'
 import { squadToolsOverCore, type SquadTools } from './mcp-squad-tools'
 import { todoToolsOverCore } from './mcp-todo-tools'
 import readline from 'node:readline'
@@ -60,6 +61,8 @@ export type McpTools = {
   preview: (path: string) => Promise<void>
   // The browser tools, there when the server was started for a conversation.
   browser?: BrowserTools
+  // The user's bookmarks, there with the browser.
+  bookmarks?: ReturnType<typeof bookmarkToolsOverCore>
   // Terminals of the conversation's own in the app's panel, there likewise.
   terminal?: TerminalTools
   // The user's conversations, tasks and group chats, read-only; there unless turned off.
@@ -96,7 +99,7 @@ const describe = (error: unknown) => (error instanceof Error ? error.message : S
 // arguments are the model's to fix, so they come back as a tool error it can read.
 type ToolEntry = { spec: object & { name: string }; run(args: Record<string, unknown>): Promise<McpResult> }
 
-function toolTable({ preview, browser, terminal, history, squad, agents, todo, planOnly }: McpTools): ToolEntry[] {
+function toolTable({ preview, browser, bookmarks, terminal, history, squad, agents, todo, planOnly }: McpTools): ToolEntry[] {
   const entries: ToolEntry[] = [
     {
       spec: PREVIEW_TOOL,
@@ -127,6 +130,7 @@ function toolTable({ preview, browser, terminal, history, squad, agents, todo, p
       })
     }
   }
+  if (bookmarks) entries.push(...bookmarks)
   if (terminal) {
     for (const { kind, ...spec } of TERMINAL_TOOL_SPECS) {
       if (planOnly && !spec.annotations.readOnlyHint) continue
@@ -256,6 +260,7 @@ export async function serveMcp(home: string | undefined, conversationId?: string
     preview: checkPreviewFile,
     ...(conversationId ? {
       browser: browserToolsOverCore(withCore, conversationId, new AttachmentStore(antumiPaths(home).attachments)),
+      bookmarks: bookmarkToolsOverCore(withCore),
       terminal: terminalToolsOverCore(withCore, conversationId),
       ...(todos && scope?.todos !== false ? { todo: todoToolsOverCore(withCore, conversationId) } : {})
     } : {}),

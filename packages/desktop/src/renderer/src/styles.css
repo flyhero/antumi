@@ -6299,6 +6299,14 @@ div.inspector-empty > p { margin: 0 0 8px; }
 .chat-markdown th { background: var(--fill); font-weight: 600; }
 .chat-markdown td { border-top: 1px solid var(--border); }
 .chat-markdown a { color: var(--accent); }
+.chat-markdown .chat-web-link { text-decoration-thickness: from-font; text-underline-offset: 0.18em; text-decoration-color: color-mix(in srgb, var(--accent) 55%, transparent); }
+.chat-markdown .chat-web-link:hover { text-decoration-color: currentColor; }
+.chat-link-space-before { margin-inline-start: 0.15em; }
+.chat-link-space-after { margin-inline-end: 0.15em; }
+.chat-markdown .chat-link-standalone { text-decoration: none; }
+.chat-link-standalone .chat-web-link-label { text-decoration: underline; text-decoration-thickness: from-font; text-underline-offset: 0.18em; text-decoration-color: transparent; }
+.chat-link-standalone:is(:hover, :focus-visible) .chat-web-link-label { text-decoration-color: currentColor; }
+.chat-link-standalone > svg { width: 0.9em; height: 0.9em; margin-inline-start: 0.3em; vertical-align: -0.1em; user-select: none; }
 
 /* The thought itself: quieter than the reply it leads to, and no taller than a screen's share.
    The line beside it runs while it streams, as if the words came down it, and settles after. */

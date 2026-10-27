@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom'
 import Markdown, { defaultUrlTransform, type Components, type ExtraProps } from 'react-markdown'
 import rehypeHighlight from 'rehype-highlight'
 import { remarkPlugins } from '../markdown-syntax'
+import { remarkChatLinks } from '../markdown-links'
 import { perform, showError, useFindFileSupported } from '../core-store'
 import { canRevealFile, revealFile } from '../desktop-bridge'
 import { fileCandidates, fileReference, isAbsolutePath, isImagePath, linkTarget, previewUrl, type FileReference, type LinkTarget } from '../file-links'
@@ -14,6 +15,7 @@ import { blockCommand } from '../code-commands'
 import { FILE_MANAGER, showChatFile, useFilePreviewSupported } from '../file-actions'
 import { useChatFiles } from './ChatContextMenu'
 import { ImageViewer, type ViewerImage } from './ImageViewer'
+import { ExternalIcon } from './icons'
 
 // The folders a conversation works in, the primary first: where a file a reply names is looked for.
 export const ChatRoots = createContext<readonly string[]>([])
@@ -107,13 +109,14 @@ function ImageLink({ image, children }: { image: LocalImage; children: ReactNode
 }
 
 // Web links open in the browser, text files in the inspector, images in the viewer.
-function ChatLink({ href, title, children }: { href?: string; title?: string; children: ReactNode }) {
+function ChatLink({ href, title, className, children }: { href?: string; title?: string; className?: string; children: ReactNode }) {
   const roots = useContext(ChatRoots)
   const target = href ? linkTarget(href) : null
   const image = localImage(target, roots)
   if (image) return <ImageLink image={image}>{children}</ImageLink>
   if (target?.kind === 'file') return <FileLink reference={target} code={false}>{children}</FileLink>
-  return <a href={href} title={title} target="_blank" rel="noreferrer">{children}</a>
+  const standalone = className?.split(' ').includes('chat-link-standalone')
+  return <a href={href} title={title ?? href} className={className} target="_blank" rel="noreferrer">{standalone ? <><span className="chat-web-link-label">{children}</span><ExternalIcon /></> : children}</a>
 }
 
 // An image a reply embeds. One on this machine is shown; one on the web is not fetched, which would
@@ -132,6 +135,7 @@ type HastChild = HastElement['children'][number]
 
 // Code is coloured by its fence's language; one highlight.js does not know stays plain.
 const rehypePlugins = [rehypeHighlight]
+const chatRemarkPlugins = [...remarkPlugins, remarkChatLinks]
 
 // Whether the text is final: a reply still streaming draws no diagram, it would redraw at every delta.
 const ChatSettled = createContext(true)
@@ -178,7 +182,7 @@ function languageOf(code: HastElement | undefined): string | null {
 // opens a new window, which main hands to the browser for http(s) and refuses otherwise; a file's
 // link and image are Antumi's to show. A code block carries its language and a copy button above it.
 const components: Components = {
-  a: ({ node: _node, href, title, children }) => <ChatLink href={href} title={title}>{children}</ChatLink>,
+  a: ({ node: _node, href, title, className, children }) => <ChatLink href={href} title={title} className={className}>{children}</ChatLink>,
   img: ({ node: _node, src, alt }) => <ReplyImage src={typeof src === 'string' ? src : undefined} alt={alt} />,
   p: ({ node, ...props }) => (
     <>
@@ -229,7 +233,7 @@ export function ChatMarkdown({ text, highlight = true, runnable = false }: { tex
     <div className="chat-markdown">
       <ChatRunnable.Provider value={runnable}>
         <ChatSettled.Provider value={highlight}>
-          <Markdown remarkPlugins={remarkPlugins} rehypePlugins={highlight ? rehypePlugins : []} components={components} urlTransform={urlTransform}>
+          <Markdown remarkPlugins={chatRemarkPlugins} rehypePlugins={highlight ? rehypePlugins : []} components={components} urlTransform={urlTransform}>
             {text}
           </Markdown>
         </ChatSettled.Provider>

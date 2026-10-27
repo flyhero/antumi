@@ -13,3 +13,10 @@
 .agent-profile-card-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 0 16px 12px; }
 .agent-profile-card-actions .button { padding: 4px 8px; font-size: 12px; }
 .agent-profile-check { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
+.agent-templates-empty { margin: 4px 0 16px; }
+.agent-template-card .squad-card-description { min-height: 4.8em; -webkit-line-clamp: 3; }
+.agent-template-example { font-size: 12px; line-height: 1.6; color: var(--text-3); }
+.agent-template-card .squad-card-foot { align-items: center; }
+.agent-template-model { margin-inline-start: auto; text-align: end; }
+.agent-template-origin { padding: 12px 16px; border-radius: var(--radius); background: var(--fill); font-size: 12px; }
+.agent-template-origin p { margin: 4px 0 0; }

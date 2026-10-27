@@ -26,6 +26,8 @@ export type AgentDescriptor = {
   // the mode, so not a planning mode, in which it would propose a plan rather than do the work.
   readOnlyMode: ChatPermissionMode
   capabilities: {
+    // False when a stage required to keep its workspace read-only cannot start. Unset means supported.
+    readOnly?: boolean
     // Runs with nobody there: schedules and routines.
     unattended: boolean
     // Can run with nothing asked and nothing sandboxed, where the user allows it.

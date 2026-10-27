@@ -3067,8 +3067,12 @@ export const MESSAGES = {
     "en": "Start a new conversation"
   },
   "ConversationDraft.chooseAnAgentToStart": {
-    "zh": "用哪个 Agent 开始",
-    "en": "Choose an Agent to start"
+    "zh": "用哪个开始呢？",
+    "en": "Which one to start with?"
+  },
+  "ConversationDraft.usingAgent": {
+    "zh": "使用智能体",
+    "en": "Using agent"
   },
   "ConversationDraft.agentReadsTheOriginalIssueAndInvestigatesIn": {
     "zh": "Agent 先读这个 issue 的原文，只读排查，给出原因和修复方案后停下；确认后可以切换模式，就在这个会话里修。",

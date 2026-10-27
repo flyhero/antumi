@@ -203,10 +203,16 @@ export function ConversationDraft() {
                 </div>
               )}
               <h2 className="chat-draft-title">{from ? t('ConversationDraft.startANewConversation') : t('ConversationDraft.chooseAnAgentToStart')}</h2>
-              {!issue && Object.values(profiles).some((item) => item.archivedAt === null) && <ChatPicker label={t('AgentProfiles.role')} value={profileId ?? ''} placeholder={t('AgentProfiles.noRole')}
-                size="large" placement="below" disabled={busy}
-                options={[{ value: '', label: t('AgentProfiles.noRole') }, ...Object.values(profiles).filter((item) => item.archivedAt === null).map((item) => ({ value: item.id, label: item.name, description: item.description }))]}
-                onChange={(id) => { setProfileId(id || null); const picked = profiles[id]; if (picked) { setAgent(picked.agent); setPicks((known) => ({ ...known, [picked.agent]: { model: picked.model ?? undefined, effort: picked.effort ?? undefined } })); setProviderId(picked.modelProvider) } }} />}
+              {/* Starting is one choice, the agent below; one of the user's own agents comes along only
+                  from its card on the agents page, and goes with the ×. */}
+              {!issue && profile && (
+                <div className="chat-draft-issue chat-draft-profile">
+                  <span className="muted">{t('ConversationDraft.usingAgent')}</span>
+                  <span className="chat-draft-issue-title" title={profile.description || undefined}>{profile.name}</span>
+                  <button type="button" className="tool-button" aria-label={t('AgentProfiles.noRole')} data-tooltip={t('AgentProfiles.noRole')} disabled={busy}
+                    onClick={() => setProfileId(null)}><CloseIcon /></button>
+                </div>
+              )}
               <div className="chat-draft-agents" role="radiogroup" aria-label="agent">
                 {installed.map((kind) => (
                   <button

@@ -276,6 +276,16 @@ export class ChatHost {
     return live !== undefined && this.isIdle(live)
   }
 
+  // Whether the agent's turn is over and nothing waits on the user, though a command or subagent it
+  // left running in the background may go on. An agent that does not name its turn keeps nothing
+  // running between turns, so for it this is idle.
+  turnOver(conversationId: string): boolean {
+    const live = this.liveOf(conversationId)
+    if (!live?.attached || !live.driver.ready() || this.queued(live).length > 0) return false
+    const activity = live.driver.activity()
+    return activity === 'idle' || (activity === 'running' && live.driver.activeTurnRef?.() === null)
+  }
+
   // The watched turn the agent has not answered with a single event yet, by its ref.
   silentTurn(conversationId: string): string | null {
     const watch = this.liveOf(conversationId)?.watch

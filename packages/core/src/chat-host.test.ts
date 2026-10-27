@@ -234,6 +234,21 @@ describe('ChatHost', () => {
     expect(host.items(STAGE).filter((item) => item.kind === 'user').map((item) => item.kind === 'user' && item.text)).toEqual(['first', 'second'])
   })
 
+  it('counts a turn over when it ends, though a command it started runs on in the background', async () => {
+    const { host, sessionId } = await started()
+    daemon.reply = (id) => {
+      daemon.emit(id, { type: 'assistant', uuid: 'uuid-1', message: { id: 'msg-1', content: [{ type: 'tool_use', id: 'toolu_bg', name: 'Bash', input: { command: 'pnpm dev', run_in_background: true } }] }, parent_tool_use_id: null })
+      daemon.emit(id, { type: 'system', subtype: 'task_started', task_id: 'task-1', tool_use_id: 'toolu_bg', task_type: 'local_bash', is_backgrounded: true })
+    }
+    await host.send(STAGE.conversationId, 'start the server')
+    await flushMicrotasks()
+    expect(host.turnOver(STAGE.conversationId)).toBe(false)
+    finish(sessionId, 'completed')
+    await flushMicrotasks()
+    expect(host.turnOver(STAGE.conversationId)).toBe(true)
+    expect(host.idle(STAGE.conversationId)).toBe(false)
+  })
+
   it('stops a background task on its own, and refuses what is not running in the background', async () => {
     const { host, sessionId } = await started()
     daemon.reply = (id) => {

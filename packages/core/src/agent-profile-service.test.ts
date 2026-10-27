@@ -28,6 +28,11 @@ describe('reusable agent roles and delegated work', () => {
     daemon.emit(sessionId, { type: 'assistant', uuid: `a-${sessionId}-${daemon.writes.length}`, message: { id: `m-${sessionId}-${daemon.writes.length}`, content: [{ type: 'text', text }] }, parent_tool_use_id: null })
     daemon.emit(sessionId, { type: 'result', subtype: failed ? 'error_during_execution' : 'success', is_error: failed, result: text, terminal_reason: failed ? 'error' : 'completed', duration_ms: 5 })
   }
+  // A command the agent runs on in the background after its turn, as a dev server does.
+  const background = (sessionId: string, id: string, command: string) => {
+    daemon.emit(sessionId, { type: 'assistant', uuid: `a-${id}`, message: { id: `m-${id}`, content: [{ type: 'tool_use', id, name: 'Bash', input: { command, run_in_background: true } }] }, parent_tool_use_id: null })
+    daemon.emit(sessionId, { type: 'system', subtype: 'task_started', task_id: `task-${id}`, tool_use_id: id, task_type: 'local_bash', is_backgrounded: true })
+  }
   beforeEach(async () => {
     root = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'antumi-profiles-')))
     const db = path.join(root, 'antumi.db')
@@ -146,6 +151,66 @@ describe('reusable agent roles and delegated work', () => {
     profiles.tick()
     await waitFor(() => store.call(second.id).state === 'running')
     expect(chats.list(false, false, true).some((conversation) => conversation.id === second.conversationId)).toBe(true)
+  })
+
+  it('starts members once the caller\'s turn ends, leaving the dev server it runs alone', async () => {
+    await chats.send(parentId, 'Start the dev server, then get a review')
+    const session = chats.get(parentId).sessionId!
+    background(session, 'bg-parent', 'pnpm dev')
+    const call = await profiles.dispatch(parentId, reviewer.id, 'Review the module')
+    await waitFor(() => store.call(call.id).waiting === 'parent')
+    expect(store.call(call.id).state).toBe('queued')
+    complete(session, 'delegated')
+    await waitFor(() => store.call(call.id).state === 'running')
+    expect(store.call(call.id).waiting).toBeNull()
+    expect(chats.get(parentId)).toMatchObject({ sessionId: session, chat: { turn: 'running' } })
+    complete(chats.get(call.conversationId).sessionId!, 'No defects found')
+    await waitFor(() => store.call(call.id).delivered)
+    expect(chats.get(parentId).sessionId).toBe(session)
+    expect(chats.messages(parentId).some((message) => message.text.includes('No defects found'))).toBe(true)
+  })
+
+  it('frees an idle caller\'s slot while its members work', async () => {
+    await chats.send(parentId, 'Get a review')
+    const call = await profiles.dispatch(parentId, reviewer.id, 'Review the module')
+    complete(chats.get(parentId).sessionId!, 'delegated')
+    await waitFor(() => store.call(call.id).state === 'running')
+    expect(chats.get(parentId).sessionId).toBeNull()
+  })
+
+  it('finishes a member that leaves a command running, stopping it and saying so', async () => {
+    const call = await profiles.dispatch(parentId, reviewer.id, 'Check the preview')
+    await waitFor(() => store.call(call.id).state === 'running')
+    const child = chats.get(call.conversationId)
+    background(child.sessionId!, 'bg-child', 'pnpm preview')
+    complete(child.sessionId!, 'The preview is up on port 4173')
+    await waitFor(() => store.call(call.id).delivered)
+    expect(store.call(call.id).state).toBe('completed')
+    expect(store.call(call.id).result).toMatch(/^The preview is up on port 4173\n\n.*pnpm preview/)
+    expect(chats.get(child.id).sessionId).toBeNull()
+  })
+
+  it('lets an edit start beside a dev server another conversation runs, and tells the member of it', async () => {
+    const developer = profiles.save({ name: 'Developer', agent: 'claude', capability: 'develop' })
+    const other = await chats.create('claude', chats.get(parentId).projectPaths, false, { permissionMode: 'ask' })
+    await chats.send(other.id, 'Run the dev server')
+    const session = chats.get(other.id).sessionId!
+    background(session, 'bg-other', 'pnpm dev --port 5173')
+    const call = await profiles.dispatch(parentId, developer.id, 'Edit the module')
+    await waitFor(() => store.call(call.id).waiting === 'writer')
+    complete(session, 'The server runs')
+    await waitFor(() => store.call(call.id).state === 'running')
+    expect(chats.get(other.id).sessionId).toBe(session)
+    expect(chats.messages(call.conversationId).some((message) => message.role === 'user' && message.text.includes('- pnpm dev --port 5173'))).toBe(true)
+  })
+
+  it('says a member waits for a free slot', async () => {
+    const other = await chats.create('claude', chats.get(parentId).projectPaths, false, { permissionMode: 'ask' })
+    await chats.send(other.id, 'Busy elsewhere')
+    chats.setCapacity({ maxConcurrentAgents: 20, agentConcurrency: { claude: 1 } }, () => profiles.tick())
+    const call = await profiles.dispatch(parentId, reviewer.id, 'Review the module')
+    await waitFor(() => store.call(call.id).waiting === 'capacity')
+    expect(store.call(call.id).state).toBe('queued')
   })
 
   it('marks a vanished process as failed after reconciliation', async () => {

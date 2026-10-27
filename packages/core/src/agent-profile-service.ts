@@ -1,14 +1,17 @@
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { agentCallOpen, agentDescriptor, AgentCall, type AgentProfile, type AgentProfileFields, type Conversation, isHelper } from '@antumi/protocol'
+import { agentCallOpen, agentDescriptor, AgentCall, type AgentProfile, type AgentProfileFields, type ChatItem, type Conversation, isHelper } from '@antumi/protocol'
 import type { ConversationService } from './conversation-service'
 import { AgentProfileStore } from './agent-profile-store'
 import { Rejection } from './rejection'
 
-type Chats = Pick<ConversationService, 'get' | 'listAll' | 'create' | 'continue' | 'resumeDelegation' | 'send' | 'stop' | 'interrupt' | 'chatPage' | 'messages' | 'capacityAvailable' | 'validateStartOptions'>
+type Chats = Pick<ConversationService, 'get' | 'listAll' | 'create' | 'continue' | 'resumeDelegation' | 'send' | 'stop' | 'interrupt' | 'chatPage' | 'messages' | 'capacityAvailable' | 'validateStartOptions' | 'turnOver' | 'agentIdle'>
 const refOf = (call: AgentCall) => `agent-call:${call.id}`
 const busy = (conversation: Conversation) => conversation.starting || conversation.chat?.turn === 'running' || conversation.chat?.turn === 'awaiting'
 const failure = (error: unknown) => error instanceof Error ? error.message : String(error)
+// What an agent left running in the background, by name.
+const backgroundWork = (items: readonly ChatItem[]) => items.flatMap((item) =>
+  item.kind === 'tool' && item.background && item.status === 'running' ? [(item.title || item.name).slice(0, 160)] : [])
 
 export class AgentProfileService {
   private chain: Promise<unknown> = Promise.resolve()
@@ -121,7 +124,7 @@ export class AgentProfileService {
   private async stopChild(call: AgentCall): Promise<void> {
     const conversation = this.lookup(call.conversationId)
     if (!conversation) return
-    if (busy(conversation)) await this.chats.interrupt(conversation.id)
+    if (this.working(conversation)) await this.chats.interrupt(conversation.id)
     await this.chats.stop(conversation.id)
     await this.stopTerminals(conversation.id)
   }
@@ -162,17 +165,20 @@ export class AgentProfileService {
         if (call.state !== 'awaiting') this.patch(call.id, { state: 'awaiting' })
         continue
       }
-      if (busy(child)) continue
+      if (this.working(child)) continue
       const items = this.chats.chatPage(child.id).items
       const sent = items.some((item) => item.id === `u:${refOf(call)}`)
       const ended = sent ? items.findLast((item) => item.kind === 'turn') : null
       if (ended?.kind === 'turn') {
         const result = this.chats.messages(child.id).findLast((message) => message.role === 'assistant' && message.complete)?.text ?? ''
+        // The member's own leftovers go with it; its result may still speak of them as running.
+        const left = backgroundWork(items)
         await this.stopChild(call)
-        this.patch(call.id, { state: ended.state === 'completed' && result.trim() ? 'completed' : 'failed', result: result.trim() || null,
+        const stopped = left.length ? `\n\n（委派结束时，已停止成员留在后台的命令：${left.join('；')}）` : ''
+        this.patch(call.id, { state: ended.state === 'completed' && result.trim() ? 'completed' : 'failed', result: result.trim() ? `${result.trim()}${stopped}` : null,
           error: ended.state === 'completed' ? (result.trim() ? null : '没有返回结果') : ended.error ?? ended.state })
       } else if (!sent && child.sessionId) {
-        await this.chats.send(child.id, this.prompt(call), [], false, false, refOf(call))
+        await this.chats.send(child.id, this.prompt(call, parent), [], false, false, refOf(call))
         this.patch(call.id, { state: 'running' })
       } else if (!child.sessionId && !child.starting) {
         await this.stopChild(call)
@@ -180,8 +186,9 @@ export class AgentProfileService {
       }
     }
     const current = this.chats.get(id)
-    if (busy(current)) return
     const calls = this.store.calls(id)
+    const queued = calls.filter((call) => call.state === 'queued')
+    if (this.working(current)) return this.waitOn(queued, 'parent')
     const writer = calls.some((call) => !call.readOnly && ['starting', 'running', 'awaiting'].includes(call.state))
     const undelivered = calls.find((call) => !agentCallOpen(call) && !call.delivered)
     if (undelivered && !writer) {
@@ -191,15 +198,22 @@ export class AgentProfileService {
       this.patch(undelivered.id, { delivered: true })
       return
     }
-    const queued = calls.filter((call) => call.state === 'queued')
     if (!queued.length) return
-    if (current.sessionId) await this.chats.stop(id)
+    // Waiting on its members frees the caller's slot; it comes back with their results. Not while it
+    // runs something in the background, which would go with it.
+    if (current.sessionId && this.chats.agentIdle(id)) await this.chats.stop(id)
     for (const call of queued) {
       if (!call.readOnly && (this.store.calls().some((each) => {
         const owner = this.lookup(each.parentId)
         return !each.readOnly && ['starting', 'running', 'awaiting'].includes(each.state) && owner && this.overlaps(owner, current)
-      }) || this.chats.listAll().some((other) => other.id !== id && !other.workspaceReadOnly && busy(other) && this.overlaps(other, current)))) continue
-      if (!this.chats.capacityAvailable(call.profile.agent)) continue
+      }) || this.chats.listAll().some((other) => other.id !== id && !other.workspaceReadOnly && this.working(other) && this.overlaps(other, current)))) {
+        this.waitOn([call], 'writer')
+        continue
+      }
+      if (!this.chats.capacityAvailable(call.profile.agent)) {
+        this.waitOn([call], 'capacity')
+        continue
+      }
       this.patch(call.id, { state: 'starting' })
       try {
         const profile = call.profile
@@ -208,7 +222,7 @@ export class AgentProfileService {
             modelProvider: profile.modelProvider ?? undefined, profile, parentId: id, callId: call.id, readOnly: call.readOnly,
             referencePaths: current.referencePaths, deferStart: true }, null, call.conversationId)
         await this.chats.continue(call.conversationId)
-        await this.chats.send(call.conversationId, this.prompt(call), [], false, false, refOf(call))
+        await this.chats.send(call.conversationId, this.prompt(call, current), [], false, false, refOf(call))
         this.patch(call.id, { state: 'running' })
       } catch (error) {
         await this.stopChild(call)
@@ -225,10 +239,26 @@ export class AgentProfileService {
         || (!reverse.startsWith(`..${path.sep}`) && reverse !== '..' && !path.isAbsolute(reverse))
     }))
   }
-  private prompt(call: AgentCall): string {
-    return `这是一个由主会话委派的子任务。仅完成以下工作，返回具体结果、证据和验证情况。需要用户批准的操作仍通过正常审批处理。不要继续委派，也不要把后续事项记进用户待办；交给主会话汇总。\n\n${call.instruction}`
+  // A member that edits is told what other agents left running in the same directories (a dev
+  // server, a watcher): its edits may meet them, and they are not its to stop.
+  private prompt(call: AgentCall, parent: Conversation): string {
+    const running = call.readOnly ? [] : this.chats.listAll()
+      .filter((other) => other.sessionId && other.id !== call.conversationId && this.overlaps(other, parent))
+      .flatMap((other) => backgroundWork(this.chats.chatPage(other.id).items))
+    const note = running.length ? `\n\n这些目录里还有其他会话留在后台运行的命令，修改文件时留意它们，不要停止或重启：\n${running.map((each) => `- ${each}`).join('\n')}` : ''
+    return `这是一个由主会话委派的子任务。仅完成以下工作，返回具体结果、证据和验证情况。需要用户批准的操作仍通过正常审批处理。不要继续委派，也不要把后续事项记进用户待办；交给主会话汇总。${note}\n\n${call.instruction}`
   }
-  private patch(id: string, patch: Partial<AgentCall>): AgentCall { return this.announce(this.store.patchCall(id, patch)) }
+  // On a turn, waiting on the user or starting. A command or subagent left running in the background
+  // is not: it may run for hours, as a dev server does, and the turn that started it is over.
+  private working(conversation: Conversation): boolean {
+    return conversation.starting || (busy(conversation) && !this.chats.turnOver(conversation.id))
+  }
+  private waitOn(calls: readonly AgentCall[], waiting: NonNullable<AgentCall['waiting']>): void {
+    for (const call of calls) if (call.waiting !== waiting) this.patch(call.id, { waiting })
+  }
+  private patch(id: string, patch: Partial<AgentCall>): AgentCall {
+    return this.announce(this.store.patchCall(id, patch.state && patch.state !== 'queued' ? { waiting: null, ...patch } : patch))
+  }
   private announce(call: AgentCall): AgentCall { this.events.call(call); return call }
   private serially<T>(action: () => Promise<T>): Promise<T> {
     const next = this.chain.catch(() => {}).then(action)

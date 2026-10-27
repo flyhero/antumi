@@ -359,6 +359,12 @@ export class ConversationService {
     if (hadCapacity) released()
   }
 
+  // The turn is over and nothing waits on the user; work left in the background may run on.
+  turnOver(id: string): boolean { return this.chats.turnOver(id) }
+
+  // Nothing would be lost if the agent went: no turn, request, queued message or background work.
+  agentIdle(id: string): boolean { return this.chats.idle(id) }
+
   // Count sessions, not turns: an agent awaiting approval still owns a process and a slot. A
   // launch in progress reserves its slot until it either attaches a session or fails.
   capacityAvailable(agent: AgentKind, conversationId?: string | null): boolean {

@@ -29,6 +29,9 @@ export const AgentCall = z.object({
   permissionMode: z.string(), readOnly: z.boolean(),
   state: z.enum(['queued', 'starting', 'running', 'awaiting', 'completed', 'failed', 'cancelled']),
   result: z.string().nullable(), error: z.string().nullable(), delivered: z.boolean(),
+  // What a queued call waits for: the caller's turn to end, another edit in the same directories to
+  // finish, or a free slot under the concurrency limits.
+  waiting: z.enum(['parent', 'writer', 'capacity']).nullable().optional(),
   createdAt: z.number(), updatedAt: z.number()
 })
 export type AgentCall = z.infer<typeof AgentCall>

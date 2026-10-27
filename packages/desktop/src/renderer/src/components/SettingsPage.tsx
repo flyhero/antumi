@@ -747,7 +747,7 @@ const SECTIONS: readonly Section[] = localized(() => ([
     group: t('SettingsPage.interface'),
     title: t('Pet.title'),
     description: t('Pet.description'),
-    keywords: ['pet', 'pets', 'mascot', 'moss', 'zip', 'clay', '宠物', '蚂蚁', '吉祥物', '毛毡', '软陶', '漫画', t('Pet.size'), t('Pet.activity')],
+    keywords: ['pet', 'pets', 'mascot', 'moss', 'zip', 'clay', '宠物', '蚂蚁', '吉祥物', '毛毡', '软陶', '漫画', 'custom', 'sprite', '自定义', '素材', '规范', t('Pet.size'), t('Pet.activity'), t('Pet.createYourOwn')],
     Icon: SparkIcon,
     Body: PetSettings,
     grouped: true

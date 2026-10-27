@@ -21,3 +21,19 @@
 .pet-style-actions progress { min-width: 0; width: 100%; accent-color: var(--accent); }
 .pet-style-option:disabled { cursor: default; opacity: .65; }
 .pet-style-error { color: var(--danger); font-size: var(--chat-font-small); }
+
+.pet-creation-guide { margin-bottom: 24px; border-block: 1px solid var(--border); }
+.pet-creation-guide > summary { display: flex; align-items: center; gap: 16px; padding: 16px 4px; list-style: none; cursor: pointer; border-radius: var(--radius-sm); }
+.pet-creation-guide > summary::-webkit-details-marker { display: none; }
+.pet-creation-guide > summary:hover { background: var(--fill); }
+.pet-creation-guide > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.pet-creation-heading { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.pet-creation-title { font-weight: 600; }
+.pet-creation-description { color: var(--text-muted); font-size: var(--chat-font-small); }
+.pet-creation-guide > summary > svg { width: 16px; height: 16px; flex-shrink: 0; color: var(--text-muted); }
+.pet-creation-guide[open] > summary > svg { transform: rotate(90deg); }
+.pet-creation-content { min-width: 0; padding: 0 4px 24px; }
+.pet-creation-actions { display: flex; justify-content: flex-end; margin-bottom: 12px; }
+.pet-creation-body { max-width: var(--page-reading); color: var(--text); font-size: var(--chat-font-size); line-height: 1.7; overflow-wrap: anywhere; }
+.pet-creation-body :is(h2, h3) { margin: 24px 0 8px; font-size: inherit; }
+.pet-creation-body :is(a, button):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }

@@ -4,6 +4,7 @@ import { getLocale, t, useLocale } from '../i18n'
 import { setPreference, usePreferences } from '../preferences'
 import { BUILTIN_PET, cancelPet, installPet, refreshPets, removePet, usePetLibrary, usePetLibraryStore } from '../pet-library'
 import { Segmented, SettingsGroup, SettingsRow } from './SettingsControls'
+import { PetCreationGuide } from './PetCreationGuide'
 import './pet-settings.css'
 
 export function petName(id: string): string {
@@ -70,6 +71,7 @@ export function PetSettings() {
         <h3 id={styleId} className="settings-subsection-title">{t('Pet.style')}</h3>
         <PetStylePicker labelId={styleId} />
       </section>
+      <PetCreationGuide />
       <SettingsGroup>
         <SettingsRow label={t('Pet.activity')} description={t('Pet.activityDescription')} control={(labelId) => (
           <Segmented labelId={labelId} value={level} options={[

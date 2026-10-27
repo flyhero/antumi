@@ -1,6 +1,6 @@
 import { mkdir, rm } from 'node:fs/promises'
 import path from 'node:path'
-import { WebContentsView, type WebContents } from 'electron'
+import { session, WebContentsView, type WebContents } from 'electron'
 import { chromium } from 'playwright-core'
 import { BROWSER_HOST_PROTOCOL_VERSION, writePrivateJson, type BrowserHostResult } from '@antumi/protocol/node'
 import { BROWSER_VIEWPORT, normalizeBrowserUrl, type BrowserNavigateTo, type BrowserStatus, type BrowserViewport } from '@antumi/protocol'
@@ -10,6 +10,7 @@ import { HostGate } from './host-gate'
 import { startHostServer, type HostServer } from './host-server'
 import { startTabProxy } from './tab-cdp-proxy'
 import { TabRegistry, type Tab } from './tabs'
+import { chromeUserAgent } from './user-agent'
 import { applyViewport } from './viewport'
 import type { WindowSlot } from './window-slot'
 
@@ -32,6 +33,8 @@ export type BrowserHost = {
 // over each tab's own CDP proxy, and shown to the user by the window slot. Core connects over the
 // host server, finding it through the host file, and keeps every policy; this only does.
 export async function startBrowserHost(slot: WindowSlot, hostFile: string): Promise<BrowserHost> {
+  const tabSession = session.fromPartition(PARTITION)
+  tabSession.setUserAgent(chromeUserAgent(tabSession.getUserAgent(), process.versions.chrome))
   const views = new Map<string, WebContentsView>()
   let server: HostServer | null = null
   let closing = false

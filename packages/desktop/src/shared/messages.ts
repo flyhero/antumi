@@ -1782,6 +1782,13 @@ export const MESSAGES = {
     "zh": "引用文件或项目",
     "en": "Reference a file or project"
   },
+  "ChatMentionMenu.categories": {"zh": "引用类型", "en": "Reference categories"},
+  "ChatMentionMenu.files": {"zh": "文件", "en": "Files"},
+  "ChatMentionMenu.projects": {"zh": "项目", "en": "Projects"},
+  "ChatMentionMenu.matchingResults": {"zh": "当前匹配数量", "en": "Current matching results"},
+  "ChatMentionMenu.searching": {"zh": "正在查找…", "en": "Searching…"},
+  "ChatMentionMenu.noProject": {"zh": "当前会话没有项目目录。", "en": "This conversation has no project folders."},
+  "ChatMentionMenu.noMatches": {"zh": "没有匹配结果，试试其他关键词。", "en": "No matches. Try another search."},
   "ChatMentionMenu.file": {
     "zh": "文件",
     "en": "File"

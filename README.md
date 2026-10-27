@@ -2,13 +2,13 @@
 
 # Antumi（安图米）
 
-**Claude Code、Codex 等 Agent 照常用，Antumi 补上终端里最缺的三件事。**
+**Claude Code、Codex 等 Agent 照常用，Antumi 补上终端里最缺的四件事。**
 
-额度看得见 · 用完不断档 · 多个任务并行
+额度看得见 · 用完不断档 · 多个任务并行 · Agent 互相委派
 
 [![Version](https://img.shields.io/github/package-json/v/flyhero/antumi?label=version&color=blue)](CHANGELOG.md)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%C2%B7%20Windows-lightgrey)
-![Agents](https://img.shields.io/badge/agents-8%20supported-8A2BE2)
+![Agents](https://img.shields.io/badge/agents-9%20supported-8A2BE2)
 
 [下载](https://github.com/flyhero/antumi/releases) · [为什么不只用终端](#为什么不只用终端) · [更多功能](#更多功能) · [快速开始](#快速开始) · [文档](#文档) · [更新日志](CHANGELOG.md) · [反馈](https://github.com/flyhero/antumi/issues)
 
@@ -22,7 +22,8 @@
   <a href="#支持的-agent" title="Pi"><img src="docs/assets/agents/pi.svg" alt="Pi" width="32" height="32" /></a>&nbsp;&nbsp;
   <a href="#支持的-agent" title="DeepSeek Harness"><img src="docs/assets/agents/dsh.svg" alt="DeepSeek Harness" width="32" height="32" /></a>&nbsp;&nbsp;
   <a href="#支持的-agent" title="Antigravity"><img src="docs/assets/agents/antigravity.svg" alt="Antigravity" width="32" height="32" /></a>&nbsp;&nbsp;
-  <a href="#支持的-agent" title="ZCode"><img src="docs/assets/agents/zcode.svg" alt="ZCode" width="32" height="32" /></a>
+  <a href="#支持的-agent" title="ZCode"><img src="docs/assets/agents/zcode.svg" alt="ZCode" width="32" height="32" /></a>&nbsp;&nbsp;
+  <a href="#支持的-agent" title="Kimi Code"><img src="docs/assets/agents/kimi.svg" alt="Kimi Code" width="32" height="32" /></a>
 </p>
 
 https://github.com/user-attachments/assets/44398279-8f26-441f-ad24-fa1b1e344674
@@ -31,7 +32,7 @@ https://github.com/user-attachments/assets/44398279-8f26-441f-ad24-fa1b1e344674
 
 ## 为什么不只用终端
 
-Antumi 驱动的就是你装好、登录好的 Agent CLI，配置和登录都不用重来，终端里聊到一半的会话也能导进来接着聊。在此之上，它先解决终端里最常卡住人的三件事，其余的见[更多功能](#更多功能)：
+Antumi 驱动的就是你装好、登录好的 Agent CLI，配置和登录都不用重来，终端里聊到一半的会话也能导进来接着聊。在此之上，它先解决终端里最常卡住人的四件事，其余的见[更多功能](#更多功能)：
 
 ### 额度看得见
 
@@ -50,6 +51,12 @@ Antumi 驱动的就是你装好、登录好的 Agent CLI，配置和登录都不
 终端里开五个窗口跑五个 Agent，谁在等你批准、谁已经做完，只能挨个切过去看。在 Antumi 里，每个任务一个独立 worktree，代码互不干扰；等你批准、回答、验收的事集中在总览里，Agent 做完或在等你时会发系统通知。
 
 <img src="docs/assets/overview.png" alt="总览：Claude Code、Codex、Cursor 的四个任务在等你回复或验收，右侧是接下来的预约" width="100%" />
+
+### Agent 互相委派
+
+终端里想让另一个 Agent 帮忙审一遍，只能你在窗口间复制粘贴，再把结论贴回来。在 Antumi 里，把常用角色存成智能体，如代码审查员、测试验证专员，各配外部智能体、模型、技能与 MCP，也可从模板开始；会话里打 @ 点名，主 Agent 也会按需自己调用。被委派的智能体在独立子会话里工作，委派卡片实时显示进度，结果自动回到主会话；只读分析可并行，改代码的委派依次执行、逐项确认。
+
+<img src="docs/assets/features/delegate.webp" alt="委派演示：在输入框 @ 代码审查员，主 Agent 委派后卡片显示工作中，审查结果自动回到主会话" width="100%" />
 
 <sub>我在重度使用多个 Agent 半年后，为解决自己的这些痛点做了 Antumi。</sub>
 
@@ -83,7 +90,7 @@ Antumi 驱动的就是你装好、登录好的 Agent CLI，配置和登录都不
 
 ### 团队
 
-为队长、开发和评审分别配置外部智能体、模型与职责，展开成员即可修改，然后把一项任务交给整个团队。队长先和你确认计划，再安排成员在同一个 worktree 中协作：开发串行，只读分析可并行。
+为队长、开发和评审分别配置外部智能体、模型与职责，或直接选用已保存的智能体，然后把一项任务交给整个团队。队长先和你确认计划，再安排成员在同一个 worktree 中协作：开发串行，只读分析可并行。
 
 <img src="docs/assets/features/squad.webp" alt="团队演示：点「编辑」，展开开发成员，查看它的外部智能体、模型与职责" width="100%" />
 

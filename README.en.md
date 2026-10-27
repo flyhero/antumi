@@ -2,14 +2,14 @@
 
 # Antumi
 
-**Keep using Claude Code, Codex and your other agents. Antumi adds the three things the terminal lacks most.**
+**Keep using Claude Code, Codex and your other agents. Antumi adds the four things the terminal lacks most.**
 
-See your quota · Keep working when it runs out · Run tasks in parallel
+See your quota · Keep working when it runs out · Run tasks in parallel · Let agents delegate
 
 [![Version](https://img.shields.io/github/package-json/v/flyhero/antumi?label=version&color=blue)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%C2%B7%20Windows-lightgrey)
-![Agents](https://img.shields.io/badge/agents-8%20supported-8A2BE2)
+![Agents](https://img.shields.io/badge/agents-9%20supported-8A2BE2)
 
 [Download](https://github.com/flyhero/antumi/releases) · [Why not just the terminal](#why-not-just-the-terminal) · [More features](#more-features) · [Getting started](#getting-started) · [Docs](#docs) · [Changelog](CHANGELOG.md) · [Feedback](https://github.com/flyhero/antumi/issues)
 
@@ -23,7 +23,8 @@ See your quota · Keep working when it runs out · Run tasks in parallel
   <a href="#supported-agents" title="Pi"><img src="docs/assets/agents/pi.svg" alt="Pi" width="32" height="32" /></a>&nbsp;&nbsp;
   <a href="#supported-agents" title="DeepSeek Harness"><img src="docs/assets/agents/dsh.svg" alt="DeepSeek Harness" width="32" height="32" /></a>&nbsp;&nbsp;
   <a href="#supported-agents" title="Antigravity"><img src="docs/assets/agents/antigravity.svg" alt="Antigravity" width="32" height="32" /></a>&nbsp;&nbsp;
-  <a href="#supported-agents" title="ZCode"><img src="docs/assets/agents/zcode.svg" alt="ZCode" width="32" height="32" /></a>
+  <a href="#supported-agents" title="ZCode"><img src="docs/assets/agents/zcode.svg" alt="ZCode" width="32" height="32" /></a>&nbsp;&nbsp;
+  <a href="#supported-agents" title="Kimi Code"><img src="docs/assets/agents/kimi.svg" alt="Kimi Code" width="32" height="32" /></a>
 </p>
 
 https://github.com/user-attachments/assets/44398279-8f26-441f-ad24-fa1b1e344674
@@ -34,7 +35,7 @@ https://github.com/user-attachments/assets/44398279-8f26-441f-ad24-fa1b1e344674
 
 ## Why not just the terminal
 
-Antumi runs the agent CLIs you have already installed and signed in to, so there is no setup or login to redo, and sessions you started in a terminal can be imported and continued. On top of them, it first fixes the three things that get in the way most often; the rest is under [More features](#more-features):
+Antumi runs the agent CLIs you have already installed and signed in to, so there is no setup or login to redo, and sessions you started in a terminal can be imported and continued. On top of them, it first fixes the four things that get in the way most often; the rest is under [More features](#more-features):
 
 ### See your quota
 
@@ -53,6 +54,12 @@ In a terminal, a turn that hits the limit just stops and waits for you. In Antum
 Five agents in five terminal windows means switching between them to find out which one is waiting for approval and which one is done. In Antumi each task gets its own worktree, so they never touch each other's code; whatever waits for your approval, answer or review is gathered in the overview, and you get a notification when an agent finishes or needs you.
 
 <img src="docs/assets/overview.png" alt="Overview: four tasks by Claude Code, Codex and Cursor waiting for a reply or review, with upcoming reservations on the right" width="100%" />
+
+### Let agents delegate to each other
+
+In a terminal, getting a second agent to review the work means copying between windows and pasting its findings back. In Antumi, save the roles you call on often as agents, such as a code reviewer or a test verifier, each with its own external agent, model, skills, and MCP servers, or start from a template; type @ in a conversation to name one, and the main agent also calls one on its own when it needs to. A delegated agent works in its own sub-conversation, a card shows its progress, and its result comes back to the main conversation. Read-only analysis runs in parallel; delegations that change code run one at a time, each step approved.
+
+<img src="docs/assets/features/delegate.webp" alt="Delegation: type @ to name the code reviewer, the card shows it working, and the review comes back to the main conversation" width="100%" />
 
 <sub>I built Antumi after half a year of heavy use of several agents, to fix these pain points of my own.</sub>
 
@@ -88,7 +95,7 @@ Bring 2–5 agents into one conversation to answer independently, then respond t
 
 ### Teams
 
-Assign external agents, models, and responsibilities to a team lead, developers, and reviewers (expand a member to change them), then give the team a task. The team lead agrees on a plan with you before dispatching work in a shared worktree, with sequential development and parallel read-only analysis.
+Assign external agents, models, and responsibilities to a team lead, developers, and reviewers, or pick agents you have saved, then give the team a task. The team lead agrees on a plan with you before dispatching work in a shared worktree, with sequential development and parallel read-only analysis.
 
 <img src="docs/assets/features/squad.webp" alt="Teams: click Edit and expand the developer to see its external agent, model, and responsibilities" width="100%" />
 

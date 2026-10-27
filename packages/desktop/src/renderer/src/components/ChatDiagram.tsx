@@ -10,6 +10,20 @@ let drawn = 0
 // Mermaid is configured globally, so one diagram is drawn at a time, each with the colours of now.
 let queue: Promise<unknown> = Promise.resolve()
 
+// Mermaid lays a diagram out in a scratch element before handing back its SVG. Left in <body>, a
+// tall one makes the page taller than the window for a moment, and the scroll bar that flashes up
+// shifts the whole app sideways; a fixed element adds nothing to what the page can scroll.
+let scratch: HTMLElement | null = null
+function scratchArea(): HTMLElement {
+  if (!scratch?.isConnected) {
+    scratch = document.createElement('div')
+    scratch.className = 'chat-diagram-scratch'
+    scratch.setAttribute('aria-hidden', 'true')
+    document.body.append(scratch)
+  }
+  return scratch
+}
+
 // Mermaid is large and few replies hold a diagram: it loads the first time one is drawn.
 function draw(source: string): Promise<Drawn> {
   const next = queue.then(async (): Promise<Drawn> => {
@@ -38,7 +52,7 @@ function draw(source: string): Promise<Drawn> {
     })
     try {
       await mermaid.parse(source)
-      return { svg: (await mermaid.render(`chat-diagram-${++drawn}`, source)).svg }
+      return { svg: (await mermaid.render(`chat-diagram-${++drawn}`, source, scratchArea())).svg }
     } catch (error) {
       return { error: error instanceof Error ? error.message : String(error) }
     }

@@ -55,7 +55,7 @@ describe('development squad user paths', () => {
     expect(list).toContain('新建团队')
     selectSquad(squad.id)
     const overview = renderToStaticMarkup(createElement(SquadsView))
-    expect(overview).toContain('负责人 · 只读')
+    expect(overview).toContain('队长 · 只读')
     expect(overview).toContain('开发 / 测试')
     expect(overview).toContain('implement and test')
     expect(overview).toContain('编辑')

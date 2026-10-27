@@ -311,7 +311,7 @@ export const MESSAGES = {
   "sidebar.toggleSection": { "zh": "{action}{label}", "en": "{action} {label}" },
   "sidebar.tasks": { "zh": "任务", "en": "Tasks" },
   "sidebar.conversations": { "zh": "会话", "en": "Conversations" },
-  "squad.leaderReadOnly": { "zh": "负责人必须是只读成员", "en": "The team lead must be a read-only member" },
+  "squad.leaderReadOnly": { "zh": "队长必须是只读成员", "en": "The team lead must be a read-only member" },
   "squad.developerRequired": { "zh": "至少需要一名开发成员", "en": "At least one developer is required" },
   "squad.memberDuplicate": { "zh": "成员标识和名称不能重复", "en": "Member IDs and names must be unique" },
   "SettingsPage.theme": { "zh": "主题", "en": "Theme" },
@@ -2023,7 +2023,7 @@ export const MESSAGES = {
     "en": "This plan"
   },
   "ChatPlan.afterApprovalTheLeaderAssignsWorkToMembers": {
-    "zh": "批准后，负责人按这份计划给「{value1}」的成员派活。",
+    "zh": "批准后，队长按这份计划给「{value1}」的成员派活。",
     "en": "After approval, the team lead assigns work to members of “{value1}” using this plan."
   },
   "ChatPlan.dependenciesAreUnfinishedSaveThePlanNowThen": {
@@ -7810,11 +7810,11 @@ export const MESSAGES = {
     "en": "{value1} (recommended){value2}"
   },
   "SquadLaunchDialog.planWithTheLeaderFirst": {
-    "zh": "先和负责人规划",
+    "zh": "先和队长规划",
     "en": "Plan with the team lead first"
   },
   "SquadLaunchDialog.theLeaderReadsCodeAndDiscussesThePlan": {
-    "zh": "负责人读代码，和你商量出计划和分工；你批准后，它接着带成员开发。",
+    "zh": "队长读代码，和你商量出计划和分工；你批准后，它接着带成员开发。",
     "en": "The team lead reads code and discusses the plan and assignments with you, then leads development after approval."
   },
   "SquadLaunchDialog.startDirectly": {
@@ -7822,7 +7822,7 @@ export const MESSAGES = {
     "en": "Start directly"
   },
   "SquadLaunchDialog.theLeaderBreaksDownTaskDetailsAndAssigns": {
-    "zh": "负责人按任务详情自己拆分，边做边派活。",
+    "zh": "队长按任务详情自己拆分，边做边派活。",
     "en": "The team lead breaks down task details and assigns work as it proceeds."
   },
   "SquadLaunchDialog.coordinatesMembersUsingTheSquadSModelsAnd": {
@@ -7902,7 +7902,7 @@ export const MESSAGES = {
     "en": "Open {value1}'s conversation"
   },
   "SquadWorkPanel.leader": {
-    "zh": "负责人",
+    "zh": "队长",
     "en": "Team lead"
   },
   "SquadWorkPanel.working_1865": {
@@ -7954,11 +7954,11 @@ export const MESSAGES = {
     "en": "No team run history yet."
   },
   "Squads.readOnlyLeaderBreaksDownWorkAssignsMembers": {
-    "zh": "负责人只读：拆分工作、分派给成员、汇总验证结果，自己不改代码。",
+    "zh": "队长只读：拆分工作、分派给成员、汇总验证结果，自己不改代码。",
     "en": "Read-only team lead: breaks down work, assigns members, and summarizes verification; does not edit code."
   },
   "Squads.leaderReadOnly": {
-    "zh": "负责人 · 只读",
+    "zh": "队长 · 只读",
     "en": "Team lead · Read only"
   },
   "Squads.developmentTesting": {
@@ -7998,7 +7998,7 @@ export const MESSAGES = {
     "en": "{value1}New team{value2}"
   },
   "Squads.preFillLeaderDeveloperReviewerRoles": {
-    "zh": "按 负责人 / 开发 / 审查 预填好成员",
+    "zh": "按 队长 / 开发 / 审查 预填好成员",
     "en": "Start with a team lead, developer and reviewer"
   },
   "Squads.noDescription": {
@@ -8027,11 +8027,11 @@ export const MESSAGES = {
     "en": "Development and testing run sequentially; read-only analysis can run in parallel."
   },
   "Squads.instructionsForTheLeader": {
-    "zh": "发给负责人的指令",
+    "zh": "发给队长的指令",
     "en": "Instructions for the team lead"
   },
   "Squads.noneTheLeaderAssignsWorkBasedOnThe": {
-    "zh": "没有写。负责人按任务和各成员的职责说明分工。",
+    "zh": "没有写。队长按任务和各成员的职责说明分工。",
     "en": "None. The team lead assigns work based on the task and member responsibilities."
   },
   "Squads.runningTasksKeepTheirStartupConfigurationChangesHere": {
@@ -8051,7 +8051,7 @@ export const MESSAGES = {
     "en": "Untitled"
   },
   "Squads.makeLeader": {
-    "zh": "设为负责人",
+    "zh": "设为队长",
     "en": "Make team lead"
   },
   "Squads.name": {
@@ -8131,7 +8131,7 @@ export const MESSAGES = {
     "en": "At least one development / testing member. Developers run sequentially; read-only analysis can run in parallel. Click a row to configure."
   },
   "Squads.upToMembersIncludingTheLeader": {
-    "zh": "最多 {MAX_MEMBERS} 人（含负责人）",
+    "zh": "最多 {MAX_MEMBERS} 人（含队长）",
     "en": "Up to {MAX_MEMBERS} {MAX_MEMBERS, plural, one {member} other {members}} including the team lead"
   },
   "Squads.addMember": {
@@ -8143,7 +8143,7 @@ export const MESSAGES = {
     "en": "(Optional)"
   },
   "Squads.assignmentRulesCollaborationAndAcceptanceCriteriaReadBy": {
-    "zh": "分工规则、协作方式与验收要求，负责人每次接手任务时都会读到",
+    "zh": "分工规则、协作方式与验收要求，队长每次接手任务时都会读到",
     "en": "Assignment rules, collaboration, and acceptance criteria; read by the team lead whenever it takes a task"
   },
   "Squads.createSquad": {
@@ -8163,11 +8163,11 @@ export const MESSAGES = {
     "en": "New team"
   },
   "Squads.preFilledWithLeaderDeveloperAndReviewerChange": {
-    "zh": "先按 负责人 / 开发 / 审查 三名成员预填好了，改名字、换外部智能体或模型都可以。",
+    "zh": "先按 队长 / 开发 / 审查 三名成员预填好了，改名字、换外部智能体或模型都可以。",
     "en": "Pre-filled with a team lead, developer, and reviewer. Change names, external agents, or models as needed."
   },
   "Squads.aReadOnlyLeaderCoordinatesMembersBreaksDown": {
-    "zh": "由只读的负责人拆分任务、分派给成员并汇总结果。开始任务时选「交给团队」，或在任务的执行者里选择团队。",
+    "zh": "由只读的队长拆分任务、分派给成员并汇总结果。开始任务时选「交给团队」，或在任务的执行者里选择团队。",
     "en": "A read-only team lead breaks down tasks, assigns work, and summarizes results. Choose “Assign to team” when starting a task, or select the team as its assignee."
   },
   "Squads.newSquad_1931": {
@@ -8619,7 +8619,7 @@ export const MESSAGES = {
     "en": "{value1} chat"
   },
   "TaskChat.leaderIsPlanning": {
-    "zh": "负责人规划中",
+    "zh": "队长规划中",
     "en": "Team lead is planning"
   },
   "TaskChat.readOnlyPlanning": {
@@ -8631,7 +8631,7 @@ export const MESSAGES = {
     "en": "View team in inspector"
   },
   "TaskChat.backToLeader": {
-    "zh": "返回负责人",
+    "zh": "返回队长",
     "en": "Back to team lead"
   },
   "TaskChat.loadingMemberConversation": {
@@ -8639,7 +8639,7 @@ export const MESSAGES = {
     "en": "Loading member conversation…"
   },
   "TaskChat.theLeaderCoordinatesMemberAssignmentsReturnToThe": {
-    "zh": "成员的分工由负责人协调；请返回负责人交流。",
+    "zh": "成员的分工由队长协调；请返回队长交流。",
     "en": "The team lead coordinates member assignments. Return to the team lead to discuss."
   },
   "TaskChat.startingSyncingCodeAndPreparingWorkspaceThisMay": {
@@ -9799,7 +9799,7 @@ export const MESSAGES = {
     "en": "Member execution is coordinated by the team. Use the task's team panel"
   },
   "labels.onlyTheLeaderExecutingThisTaskCanAssign": {
-    "zh": "只有正在执行任务的负责人可以派活和提交",
+    "zh": "只有正在执行任务的队长可以派活和提交",
     "en": "Only the team lead executing this task can assign work or submit"
   },
   "labels.noSquadRunToResumeStartSquadDevelopment": {

@@ -213,6 +213,18 @@ describe('reusable agent roles and delegated work', () => {
     expect(store.call(call.id).state).toBe('queued')
   })
 
+  it('shows a member back at work as soon as its request is answered', async () => {
+    const call = await profiles.dispatch(parentId, reviewer.id, 'Inspect the module')
+    await waitFor(() => store.call(call.id).state === 'running')
+    const child = chats.get(call.conversationId)
+    daemon.emit(child.sessionId!, { type: 'control_request', request_id: 'ask-1', request: { subtype: 'can_use_tool', tool_name: 'Bash', input: { command: 'ls' }, tool_use_id: 'toolu_ask-1' } })
+    await waitFor(() => store.call(call.id).state === 'awaiting')
+    await chats.respond(child.id, 'ask-1', { decision: 'allow' })
+    await waitFor(() => store.call(call.id).state === 'running')
+    complete(child.sessionId!, 'Inspected')
+    await waitFor(() => store.call(call.id).state === 'completed')
+  })
+
   it('marks a vanished process as failed after reconciliation', async () => {
     const call = await profiles.dispatch(parentId, reviewer.id, 'Inspect the module')
     await waitFor(() => store.call(call.id).state === 'running')

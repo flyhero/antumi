@@ -165,6 +165,8 @@ export class AgentProfileService {
         if (call.state !== 'awaiting') this.patch(call.id, { state: 'awaiting' })
         continue
       }
+      // Answered, it is back at work until its turn ends.
+      if (call.state === 'awaiting') this.patch(call.id, { state: 'running' })
       if (this.working(child)) continue
       const items = this.chats.chatPage(child.id).items
       const sent = items.some((item) => item.id === `u:${refOf(call)}`)

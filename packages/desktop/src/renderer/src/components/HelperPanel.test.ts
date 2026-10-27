@@ -57,7 +57,11 @@ describe('helper UI', () => {
     expect(renderMenu('selected')).toBe('')
   })
 
-  it('always offers the tab in both inspectors and marks it when the helper awaits approval', () => {
+  it('hides an unused helper in both inspectors, then shows it with its approval indicator', () => {
+    for (const html of [
+      renderToStaticMarkup(createElement(ConversationInspector, { conversation: parent, widthRatio: 0.35, onWidthRatioChange: () => {} })),
+      renderToStaticMarkup(createElement(TaskInspector, { task, widthRatio: 0.35, onWidthRatioChange: () => {} }))
+    ]) expect(html).not.toContain('>小助手')
     useCore.setState({ conversations: { [parent.id]: parent, [helper.id]: helper } })
     const conversationHtml = renderToStaticMarkup(createElement(ConversationInspector, { conversation: parent, widthRatio: 0.35, onWidthRatioChange: () => {} }))
     const taskHtml = renderToStaticMarkup(createElement(TaskInspector, { task, widthRatio: 0.35, onWidthRatioChange: () => {} }))

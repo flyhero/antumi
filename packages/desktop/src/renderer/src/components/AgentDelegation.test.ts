@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StateCreator } from 'zustand'
 import { AgentCall, createRpcClient, Task, type Conversation, type RpcConnection } from '@antumi/protocol'
-import { isAgentCallResult, showAgentCalls } from '../agent-calls'
+import { isAgentCallResult, showAgentCalls, useAgentCalls } from '../agent-calls'
 import { useCore } from '../core-store'
 import { useChat } from '../chat-state'
 import { AgentDelegation, AgentDelegationResult } from './AgentDelegation'
@@ -12,6 +12,12 @@ import { ConversationInspector } from './ConversationInspector'
 import { TaskInspector } from './TaskInspector'
 import { TaskToolbar } from './TaskActions'
 import { ChatDelegationCard } from './ChatDelegationCard'
+import { ConversationView } from './ConversationView'
+
+vi.mock('../agent-calls', async (importOriginal) => ({
+  ...await importOriginal<typeof import('../agent-calls')>(),
+  useAgentCalls: vi.fn(() => ({ calls: null, error: null }))
+}))
 
 vi.hoisted(() => {
   vi.stubGlobal('window', { antumi: undefined, matchMedia: () => ({ matches: false, addEventListener() {}, removeEventListener() {} }) })
@@ -42,6 +48,7 @@ beforeEach(() => {
   useCore.setState(useCore.getInitialState(), true)
   useChat.setState({}, true)
   connect()
+  vi.mocked(useAgentCalls).mockReturnValue({ calls: null, error: null })
 })
 
 describe('delegation surfaces', () => {
@@ -72,7 +79,25 @@ describe('delegation surfaces', () => {
     expect(renderButton()).toBe('')
   })
 
-  it('keeps history reachable in both inspectors even without git, todos or a helper', () => {
+  it('hides delegation tabs and empty inspector entries before the first record arrives', () => {
+    useCore.setState({ conversationInspectorTab: 'delegation', taskInspectorTab: 'delegation' })
+    for (const calls of [null, []]) {
+      vi.mocked(useAgentCalls).mockReturnValue({ calls, error: null })
+      for (const html of [
+        renderToStaticMarkup(createElement(ConversationInspector, { conversation: parent, widthRatio: 0.35, onWidthRatioChange() {} })),
+        renderToStaticMarkup(createElement(TaskInspector, { task, widthRatio: 0.35, onWidthRatioChange() {} }))
+      ]) {
+        expect(html).not.toContain('>委派')
+        expect(html).not.toContain('委派记录')
+      }
+      expect(renderToStaticMarkup(createElement(TaskToolbar, { task, view: 'chat' }))).not.toContain('aria-label="检查器"')
+      expect(renderToStaticMarkup(createElement(ConversationView, { id: parent.id }))).not.toContain('aria-label="检查器"')
+    }
+    expect(renderButton()).toContain('委派子任务')
+  })
+
+  it('keeps existing history reachable in both inspectors even without git, todos or a helper', () => {
+    vi.mocked(useAgentCalls).mockReturnValue({ calls: [{ ...call, state: 'completed' }], error: null })
     useCore.setState({ conversationInspectorTab: 'delegation', taskInspectorTab: 'delegation' })
     const conversation = renderToStaticMarkup(createElement(ConversationInspector, { conversation: parent, widthRatio: 0.35, onWidthRatioChange() {} }))
     const taskPanel = renderToStaticMarkup(createElement(TaskInspector, { task, widthRatio: 0.35, onWidthRatioChange() {} }))

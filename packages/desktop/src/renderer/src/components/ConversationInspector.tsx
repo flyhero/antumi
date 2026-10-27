@@ -1,5 +1,5 @@
 import { AgentCalls } from './AgentCalls'
-import { useAgentCallsSupported } from '../agent-calls'
+import { useAgentCalls, useAgentCallsSupported } from '../agent-calls'
 import { t } from '../i18n'
 import { HelperPanel } from './HelperPanel'
 import { useHelper, useHelperSupported } from '../helper-conversations'
@@ -74,6 +74,7 @@ export function ConversationInspector({ conversation, widthRatio, onWidthRatioCh
   wire?: boolean
 }) {
   const delegationSupported = useAgentCallsSupported(conversation)
+  const { calls } = useAgentCalls(delegationSupported ? conversation.id : null)
   const helperSupported = useHelperSupported(conversation)
   const helper = useHelper(helperSupported ? conversation.id : null)
   const conversationId = conversation.id
@@ -87,7 +88,7 @@ export function ConversationInspector({ conversation, widthRatio, onWidthRatioCh
   const plans = usePlans(conversation.id)
   const todosShown = useTodosShown()
   const todos = useConversationTodos(todosShown ? conversation.id : null)
-  const tabs: InspectorTab[] = [...(helperSupported ? ['helper' as const] : []), ...(delegationSupported ? ['delegation' as const] : []),...(conversation.projectPaths.length > 0 ? GIT_TABS : []), ...(plans.length > 0 ? ['plan' as const] : []), ...(todosShown ? ['todos' as const] : []), ...(wire ? ['wire' as const] : []), ...(files.tabs.length > 0 || (fileEditor && fileRoots.length > 0) ? ['files' as const] : [])]
+  const tabs: InspectorTab[] = [...(helper ? ['helper' as const] : []), ...(calls?.length ? ['delegation' as const] : []),...(conversation.projectPaths.length > 0 ? GIT_TABS : []), ...(plans.length > 0 ? ['plan' as const] : []), ...(todosShown ? ['todos' as const] : []), ...(wire ? ['wire' as const] : []), ...(files.tabs.length > 0 || (fileEditor && fileRoots.length > 0) ? ['files' as const] : [])]
   const tab = tabs.includes(wanted) ? wanted : (tabs[0] ?? 'changes')
   useEffect(() => {
     if (wanted !== 'files') updateFileTabs(conversationId, (state) => state.maximized ? { ...state, maximized: false } : state)

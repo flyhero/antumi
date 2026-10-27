@@ -1,4 +1,4 @@
-import { useAgentCallsSupported } from '../agent-calls'
+import { useAgentCalls, useAgentCallsSupported } from '../agent-calls'
 import { t, tr } from '../i18n'
 import { RouteBadge } from './RouteBadge'
 import { useHelper, useHelperSupported } from '../helper-conversations'
@@ -40,7 +40,9 @@ function ForkOrigin({ id }: { id: string }) {
 export function useConversationPanel(conversation: Conversation | undefined) {
   const id = conversation?.id ?? ''
   const delegationSupported = useAgentCallsSupported(conversation)
+  const { calls } = useAgentCalls(delegationSupported ? id : null)
   const helperSupported = useHelperSupported(conversation)
+  const helper = useHelper(helperSupported ? id : null)
   const files = useFileTabs((state) => state[id] ?? EMPTY_FILE_TABS)
   const plans = usePlans(id)
   const wire = useWireLogShown()
@@ -49,7 +51,7 @@ export function useConversationPanel(conversation: Conversation | undefined) {
   // A managed workspace is Antumi's own scratch folder: nothing of the user's to compare, but the
   // inspector still shows the agent's plans.
   const inspectable = (conversation?.projectPaths.length ?? 0) > 0
-  const hasPanel = delegationSupported || helperSupported || inspectable || plans.length > 0 || wire || files.tabs.length > 0 || todosShown
+  const hasPanel = Boolean(calls?.length || helper || inspectable || plans.length > 0 || wire || files.tabs.length > 0 || todosShown)
   const hint = todoLeft > 0 ? t('ConversationView.inspectorToDos', { todoLeft: todoLeft }) : inspectable ? t('ConversationView.viewChanges') : plans.length > 0 ? t('ConversationView.viewPlan') : wire ? t('ConversationView.viewRawData') : t('chatTools.listToDos')
   return { hasPanel, wire, todoLeft, hint }
 }

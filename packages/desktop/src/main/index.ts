@@ -7,7 +7,7 @@ import { z } from 'zod'
 import { resolveUiLocale, UiLocale } from '@antumi/protocol'
 import { applicationMenu } from './application-menu'
 import { antumiPaths, readCoreEndpoint } from '@antumi/protocol/node'
-import { ensureBackend, stopBackendForInstall } from './backend'
+import { ensureBackend, replaceOldDaemon, stopBackendForInstall } from './backend'
 import { popupWindowOptions, RequestPopup } from './request-popup'
 import { startBrowserHost, type BrowserHost } from './browser/browser-host'
 import { WindowSlot } from './browser/window-slot'
@@ -389,6 +389,9 @@ ipcMain.handle('antumi:update-automatic', (event, automatic: unknown) => {
 })
 ipcMain.handle('antumi:update-prerelease', (_event, prerelease: unknown) => updater?.setPrerelease(prerelease === true))
 
+// How often a daemon an update left running, busy at launch, is asked again whether it can go.
+const OLD_DAEMON_CHECK_MS = 5 * 60_000
+
 // Packaged, a second launch would race the first for daemon and core; hand it to the open window.
 const primary = !app.isPackaged || app.requestSingleInstanceLock()
 if (!primary) {
@@ -418,6 +421,7 @@ void app.whenReady().then(async () => {
     (host) => { browserHost = host },
     (error: unknown) => console.error('[antumi] the browser host did not start', error)
   ))
+  setInterval(() => void replaceOldDaemon(), OLD_DAEMON_CHECK_MS).unref()
   app.on('activate', () => {
     if (!mainWindow) {
       createWindow()

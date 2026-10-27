@@ -103,14 +103,17 @@ function daemonReachable(): Promise<boolean> {
 
 // A daemon from another build is replaced only when it runs nothing (an agent, a terminal shell):
 // it decides that itself, so nothing starts between asking and leaving. One that still runs
-// something stays, and is asked again at the next launch; one from before info and retire stays
-// until it ends (a restart of the computer). True when it left.
+// something stays, and is asked again later (replaceOldDaemon); one from before info and retire
+// stays until it ends (a restart of the computer). True when it left.
+let reportedBusy: unknown = null
 async function retireOldDaemon(): Promise<boolean> {
   const info = await daemonCall('info')
   if (!info || info.version === app.getVersion()) return false
   const answer = await daemonCall('retire')
   if (answer?.retired !== true) {
-    console.log(`[antumi] daemon ${String(info.version)} still runs ${String(answer?.live ?? '?')} sessions; keeping it until they end`)
+    // Asked every few minutes: say so once per daemon, not each time.
+    if (reportedBusy !== info.pid) console.log(`[antumi] daemon ${String(info.version)} still runs ${String(answer?.live ?? '?')} sessions; keeping it until they end`)
+    reportedBusy = info.pid
     return false
   }
   console.log(`[antumi] daemon ${String(info.version)} is older than this app (${app.getVersion()}); replacing it`)
@@ -199,21 +202,8 @@ async function daemonGone(): Promise<boolean> {
   return false
 }
 
-// Starts daemon and core from the app's bundled copies when none serve this home yet, or when
-// the ones that do are of another build: an app updated in place would otherwise keep talking to
-// what it found, and lack whatever the update put there. The daemon only goes when it runs nothing. Both are detached with their own
-// logs: closing the window or quitting the app never touches them, exactly as when they run from
-// source. A daemon already serving the socket makes the spawned one exit by itself
-// (endpoint-claim), so starting one is safe to over-ask.
-export async function ensureBackend(): Promise<void> {
-  if (!app.isPackaged) return
-  const daemonReplaced = await retireOldDaemon()
-  const running = await runningCore()
-  const coreCurrent = running?.version === app.getVersion()
-  if (coreCurrent && !daemonReplaced) return
-  if (running && !coreCurrent) await retireCore(running)
-  const paths = antumiPaths()
-  const logs = join(paths.home, 'logs')
+async function launch(names: ('daemon' | 'core')[]): Promise<void> {
+  const logs = join(antumiPaths().home, 'logs')
   mkdirSync(logs, { recursive: true, mode: 0o700 })
   const backend = join(process.resourcesPath, 'backend')
   const env = {
@@ -225,7 +215,7 @@ export async function ensureBackend(): Promise<void> {
     ELECTRON_RUN_AS_NODE: '1',
     ANTUMI_MCP_JS: join(backend, 'mcp.mjs')
   }
-  const launch = (name: 'daemon' | 'core') => {
+  for (const name of names) {
     const log = openSync(join(logs, `${name}.log`), 'a')
     spawn(process.execPath, [join(backend, `${name}.mjs`)], {
       env,
@@ -235,14 +225,48 @@ export async function ensureBackend(): Promise<void> {
       stdio: ['ignore', log, log]
     }).unref()
   }
-  launch('daemon')
-  // A core of this build stays: it reconnects to the new daemon by itself.
-  if (!coreCurrent) launch('core')
-  // The renderer retries on its own; waiting here only surfaces a start that never lands.
-  const until = Date.now() + START_WAIT_MS
-  while (Date.now() < until) {
-    if (await runningCore()) return
-    await sleep(300)
-  }
-  console.error(`[antumi] core did not come up; see ${join(logs, 'core.log')}`)
+}
+
+// One at a time: a check that overlapped a start could launch a second daemon beside it.
+let backendWork: Promise<void> = Promise.resolve()
+function serialized(work: () => Promise<void>): Promise<void> {
+  backendWork = backendWork.then(work, work)
+  return backendWork
+}
+
+// Starts daemon and core from the app's bundled copies when none serve this home yet, or when
+// the ones that do are of another build: an app updated in place would otherwise keep talking to
+// what it found, and lack whatever the update put there. The daemon only goes when it runs nothing. Both are detached with their own
+// logs: closing the window or quitting the app never touches them, exactly as when they run from
+// source. A daemon already serving the socket makes the spawned one exit by itself
+// (endpoint-claim), so starting one is safe to over-ask.
+export function ensureBackend(): Promise<void> {
+  if (!app.isPackaged) return Promise.resolve()
+  return serialized(async () => {
+    const daemonReplaced = await retireOldDaemon()
+    const running = await runningCore()
+    const coreCurrent = running?.version === app.getVersion()
+    if (coreCurrent && !daemonReplaced) return
+    if (running && !coreCurrent) await retireCore(running)
+    // A core of this build stays: it reconnects to the new daemon by itself.
+    await launch(coreCurrent ? ['daemon'] : ['daemon', 'core'])
+    // The renderer retries on its own; waiting here only surfaces a start that never lands.
+    const until = Date.now() + START_WAIT_MS
+    while (Date.now() < until) {
+      if (await runningCore()) return
+      await sleep(300)
+    }
+    console.error(`[antumi] core did not come up; see ${join(antumiPaths().home, 'logs', 'core.log')}`)
+  })
+}
+
+// A daemon an update left running still runs from the old bundle, which a macOS update renamed
+// and then trashed: it asks for folder access again under that name, and the old code keeps serving. Busy
+// at launch, it is asked again while the app runs, and replaced once it runs nothing. Core
+// reconnects to the new one by itself.
+export function replaceOldDaemon(): Promise<void> {
+  if (!app.isPackaged) return Promise.resolve()
+  return serialized(async () => {
+    if (await retireOldDaemon()) await launch(['daemon'])
+  })
 }

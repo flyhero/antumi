@@ -13,7 +13,8 @@ const CLOSE_DELAY_MS = 100
 type Peek = { id: string; row: DOMRect }
 
 // Which row the pointer rests on, once it has rested a moment; moving on to the next row while
-// one is open shows that one at once, as tooltips do. A scroll moves the rows from under it.
+// one is open shows that one at once, as tooltips do. A scroll moves the rows from under it, and
+// typing means the user is at work elsewhere, the pointer only left where it was.
 export function useConversationPeek(): { peek: Peek | null; rowProps: (id: string) => { onPointerEnter: (event: PointerEvent<HTMLElement>) => void; onPointerLeave: () => void; onPointerDown: () => void } } {
   const [peek, setPeek] = useState<Peek | null>(null)
   const timer = useRef<number | undefined>(undefined)
@@ -26,9 +27,11 @@ export function useConversationPeek(): { peek: Peek | null; rowProps: (id: strin
     if (!peek) return
     const close = () => setPeek(null)
     document.addEventListener('scroll', close, true)
+    document.addEventListener('keydown', close, true)
     window.addEventListener('blur', close)
     return () => {
       document.removeEventListener('scroll', close, true)
+      document.removeEventListener('keydown', close, true)
       window.removeEventListener('blur', close)
     }
   }, [peek])

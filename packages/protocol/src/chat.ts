@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { ChatReference } from './chat-reference'
 import { AttachmentId } from './attachments'
 import { AgentKind } from './agent'
 import { ModelProviderId } from './model-provider-id'
@@ -185,7 +186,7 @@ export type ChatImage = z.infer<typeof ChatImage>
 
 // A message waiting for the turn to end, in the order the user wrote them; held after an
 // interrupted or failed turn until the user sends or drops it. ref names the user item it becomes.
-export const ChatQueued = z.object({ ref: z.string(), text: z.string(), held: z.boolean(), images: z.array(ChatImage).default([]) })
+export const ChatQueued = z.object({ ref: z.string(), text: z.string(), held: z.boolean(), images: z.array(ChatImage).default([]), references: z.array(ChatReference).optional() })
 export type ChatQueued = z.infer<typeof ChatQueued>
 
 // waiting: for the limit to lift, or for the user · retrying: the continue message is going out
@@ -198,7 +199,7 @@ const Base = z.object({ id: z.string(), stageId: z.string(), revision: z.number(
 
 export const ChatItem = z.discriminatedUnion('kind', [
   // steer: sent into a running turn rather than starting one; the agent took it mid-way.
-  Base.extend({ kind: z.literal('user'), text: z.string(), images: z.array(ChatImage).default([]), steer: z.boolean().optional() }),
+  Base.extend({ kind: z.literal('user'), text: z.string(), images: z.array(ChatImage).default([]), steer: z.boolean().optional(), references: z.array(ChatReference).optional() }),
   Base.extend({ kind: z.literal('assistant'), text: z.string(), streaming: z.boolean() }),
   Base.extend({ kind: z.literal('reasoning'), text: z.string(), streaming: z.boolean() }),
   Base.extend({
@@ -351,7 +352,7 @@ export const ChatItem = z.discriminatedUnion('kind', [
     // null between turns and for an agent that reports only at the end. Older cores leave it out.
     turnUsage: z.object({ input: z.number(), output: z.number() }).nullable().default(null),
     // The first message waiting for the turn to end, for older clients; queue has them all.
-    queued: z.object({ text: z.string(), held: z.boolean(), images: z.array(ChatImage).default([]) }).nullable(),
+    queued: z.object({ text: z.string(), held: z.boolean(), images: z.array(ChatImage).default([]), references: z.array(ChatReference).optional() }).nullable(),
     queue: z.array(ChatQueued).default([]),
     // Whether the agent takes a message into a running turn (Claude Code does, Codex does not).
     steerable: z.boolean().default(false),

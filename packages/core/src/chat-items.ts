@@ -1,4 +1,4 @@
-import type { ChatItem } from '@antumi/protocol'
+import { validChatReferences, type ChatReference, type ChatItem } from '@antumi/protocol'
 
 // An item as a driver writes it; the book stamps the stage, revision and first-seen time.
 export type ChatItemBody = ChatItem extends infer Item
@@ -27,6 +27,11 @@ export class ChatItems {
   private readonly changed = new Set<string>()
   private deltas = new Map<string, string>()
   private notices = 0
+  private readonly references = new Map<string, ChatReference[]>()
+
+  rememberReferences(ref: string, references: ChatReference[]): void {
+    this.references.set(`u:${ref}`, references)
+  }
 
   constructor(private readonly stageId: string) {}
 
@@ -35,6 +40,10 @@ export class ChatItems {
   }
 
   put(body: ChatItemBody, at: number): ChatItem {
+    if (body.kind === 'user') {
+      const references = body.references ?? this.references.get(body.id)
+      if (references) body = { ...body, references: validChatReferences(body.text, references) }
+    }
     const previous = this.items.get(body.id)
     const item: ChatItem = { ...body, stageId: this.stageId, revision: (previous?.revision ?? 0) + 1, at: previous?.at ?? at }
     if (!previous) {

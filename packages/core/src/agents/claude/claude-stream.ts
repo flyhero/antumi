@@ -465,6 +465,7 @@ export class ClaudeStream implements ChatDriver {
   }
 
   apply(record: ChatRecord): void {
+    if (record.dir === 'out' && record.ref && record.references) this.items.rememberReferences(record.ref, record.references)
     switch (record.dir) {
       case 'in':
         this.receive(record.frame, record.at)
@@ -614,7 +615,7 @@ export class ClaudeStream implements ChatDriver {
     return [{ type: 'control_request', request_id: `${STOP_PREFIX}${this.stops + 1}`, request: { subtype: 'stop_task', task_id: task[0] } }]
   }
 
-  queuedToSend(): { text: string; images: ChatImage[]; ref: string } | null {
+  queuedToSend() {
     return this.ready() && !this.turn ? this.queue.next() : null
   }
 

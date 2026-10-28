@@ -1,4 +1,4 @@
-import type { ChatDecision, ChatImage, ChatItem, ChatModel, ChatOption, ChatPermissionMode, ChatTurnActivity, KnowledgeBase } from '@antumi/protocol'
+import type { ChatReference, ChatQueued, ChatDecision, ChatImage, ChatItem, ChatModel, ChatOption, ChatPermissionMode, ChatTurnActivity, KnowledgeBase } from '@antumi/protocol'
 import type { AttachmentFile } from './attachment-store'
 import type { ChatItems } from './chat-items'
 import type { UsageReport } from './usage-source'
@@ -9,7 +9,7 @@ import type { AgentMcpServer, McpServer } from './agent-command'
 export type ChatRecord =
   | { dir: 'in'; at: number; frame: unknown }
   // ref names the item an outgoing user message becomes, images what it showed the agent.
-  | { dir: 'out'; at: number; frame: unknown; ref?: string; images?: ChatImage[] }
+  | { dir: 'out'; at: number; frame: unknown; ref?: string; images?: ChatImage[]; references?: ChatReference[] }
   | {
       dir: 'note'
       at: number
@@ -22,7 +22,7 @@ export type ChatRecord =
   | { dir: 'option'; at: number; option: ChatOption; value: string }
   // A message to wait for the turn to end (ref names its user item); text null with a ref drops
   // that one, or with release lets a held one go; text null alone drops them all.
-  | { dir: 'queue'; at: number; text: string | null; ref?: string; images?: ChatImage[]; release?: boolean; held?: boolean }
+  | { dir: 'queue'; at: number; text: string | null; ref?: string; images?: ChatImage[]; references?: ChatReference[]; release?: boolean; held?: boolean }
   | { dir: 'exit'; at: number; code: number | null; stderr: string }
   // An item as another record showed it: a session run outside Antumi, imported.
   | { dir: 'item'; at: number; item: ChatItem }
@@ -152,7 +152,7 @@ export interface ChatDriver {
   // Providers whose configuration responses acknowledge a switch, rather than just the write.
   optionResult?(frame: unknown): { pending: boolean; error: string | null }
   // The queued message, once the agent is ready and idle to take it.
-  queuedToSend(): { text: string; images: ChatImage[]; ref: string } | null
+  queuedToSend(): Omit<ChatQueued, 'held'> | null
   // What of an incoming frame to keep in the log, or null for nothing: streamed deltas are
   // covered by the frames that complete them.
   logged(frame: unknown): unknown | null

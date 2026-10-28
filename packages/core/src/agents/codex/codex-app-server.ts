@@ -547,6 +547,7 @@ export class CodexAppServer implements ChatDriver {
   }
 
   apply(record: ChatRecord): void {
+    if (record.dir === 'out' && record.ref && record.references) this.items.rememberReferences(record.ref, record.references)
     switch (record.dir) {
       case 'in': {
         const frame = Frame.safeParse(record.frame)
@@ -706,7 +707,7 @@ export class CodexAppServer implements ChatDriver {
     }
   }
 
-  queuedToSend(): { text: string; images: ChatImage[]; ref: string } | null {
+  queuedToSend() {
     return this.ready() && !this.turn ? this.queue.next() : null
   }
 

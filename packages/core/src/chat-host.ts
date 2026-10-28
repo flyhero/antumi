@@ -1,6 +1,6 @@
 import { stripAnsi } from './ansi-text'
 import { randomUUID } from 'node:crypto'
-import { agentDescriptor, ANTUMI_REQUEST_PREFIX, isAntumiRequest, type AgentKind, type ChatImage, type ChatItem, type ChatOption, type ChatQueued, type ChatTurnActivity, type ConversationDoing, type ConversationRequest } from '@antumi/protocol'
+import { agentDescriptor, ANTUMI_REQUEST_PREFIX, isAntumiRequest, type AgentKind, type ChatReference, type ChatImage, type ChatItem, type ChatOption, type ChatQueued, type ChatTurnActivity, type ConversationDoing, type ConversationRequest } from '@antumi/protocol'
 import type { AttachmentStore } from './attachment-store'
 import type { ChatAnswer, ChatDriver, ChatImageFile, ChatOutgoing, ChatRecord, ChatStageOptions, StageMessage } from './chat-driver'
 import { ChatLog, type LoggedRecord } from './chat-log'
@@ -320,16 +320,16 @@ export class ChatHost {
   // While a turn runs: with steer, the message goes into it (an agent that takes none rejects);
   // with queue, it waits its turn behind any already waiting. Idle, it starts a turn either way.
   // A caller that names the message's ref sends it at most once per stage: again, it is a no-op.
-  async send(conversationId: string, text: string, images: readonly ChatImage[] = [], queue = false, steer = false, ref: string = randomUUID()): Promise<void> {
+  async send(conversationId: string, text: string, images: readonly ChatImage[] = [], queue = false, steer = false, ref: string = randomUUID(), references?: ChatReference[]): Promise<void> {
     const live = this.running(conversationId)
     if (live.driver.items.get(`u:${ref}`)) return
     const busy = live.driver.activity() !== 'idle'
     if (busy && queue && !steer) {
-      this.enqueue(live, text, images, ref)
+      this.enqueue(live, text, images, ref, references)
       return
     }
     const outgoing = busy && steer ? live.driver.steer(text, this.files(images)) : live.driver.send(text, this.files(images))
-    const sent = this.dispatch(live, outgoing, ref, images)
+    const sent = this.dispatch(live, outgoing, ref, images, references)
     this.flush(live)
     await sent
   }
@@ -350,7 +350,7 @@ export class ChatHost {
     if (now) {
       if (live.driver.activity() !== 'idle' && !live.driver.canSteer()) throw new Rejection('chat-no-steer', 'the agent takes no message into a running turn')
       this.record(live, { dir: 'queue', at: this.now(), text: null, ref: entry.ref })
-      await this.send(conversationId, entry.text, entry.images, false, true)
+      await this.send(conversationId, entry.text, entry.images, false, true, entry.ref, entry.references)
       return
     }
     this.record(live, { dir: 'queue', at: this.now(), text: null, ref: entry.ref, release: true })
@@ -377,8 +377,8 @@ export class ChatHost {
     if (changed.length) this.sink.items(stage.conversationId, changed)
   }
 
-  private enqueue(live: Live, text: string, images: readonly ChatImage[], ref: string): void {
-    this.record(live, { dir: 'queue', at: this.now(), text, ref, ...(images.length ? { images: [...images] } : {}) })
+  private enqueue(live: Live, text: string, images: readonly ChatImage[], ref: string, references?: ChatReference[]): void {
+    this.record(live, { dir: 'queue', at: this.now(), text, ref, ...(images.length ? { images: [...images] } : {}), ...(references?.length ? { references } : {}) })
     this.pump(live)
     this.flush(live)
   }
@@ -553,7 +553,7 @@ export class ChatHost {
     const queued = live.driver.queuedToSend()
     if (!queued) return
     try {
-      void this.dispatch(live, live.driver.send(queued.text, this.files(queued.images)), queued.ref, queued.images).catch(ignore)
+      void this.dispatch(live, live.driver.send(queued.text, this.files(queued.images)), queued.ref, queued.images, queued.references).catch(ignore)
     } catch (error) {
       // An image gone from the store since it was queued: that message is dropped with a word.
       this.record(live, { dir: 'queue', at: this.now(), text: null, ref: queued.ref })
@@ -566,9 +566,9 @@ export class ChatHost {
   }
 
   // Logged and applied before it is written, so a crash in between cannot send it twice.
-  private dispatch(live: Live, message: ChatOutgoing, ref?: string, images: readonly ChatImage[] = []): Promise<unknown> {
+  private dispatch(live: Live, message: ChatOutgoing, ref?: string, images: readonly ChatImage[] = [], references?: ChatReference[]): Promise<unknown> {
     if (ref && live.driver.activity() === 'idle') this.sink.prompt?.(live, ref)
-    this.record(live, { dir: 'out', at: this.now(), frame: message.logged, ...(ref ? { ref } : {}), ...(images.length ? { images: [...images] } : {}) })
+    this.record(live, { dir: 'out', at: this.now(), frame: message.logged, ...(ref ? { ref } : {}), ...(images.length ? { images: [...images] } : {}), ...(references?.length ? { references } : {}) })
     const turns = adapterOf(live.agent).turns
     const timeout = turns?.firstFrameTimeoutMs
     const signal = timeout ? live.driver.turnSignal?.(message.logged, 'out') : null

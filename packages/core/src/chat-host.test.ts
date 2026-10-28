@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { ChatItem } from '@antumi/protocol'
+import type { ChatReference, ChatItem } from '@antumi/protocol'
 import type { StageMessage } from './chat-driver'
 import type { UsageReport } from './usage-source'
 import { ChatHost, type ChatSink, type ChatStage } from './chat-host'
@@ -334,6 +334,29 @@ describe('ChatHost', () => {
     finish(sessionId, 'completed')
     await flushMicrotasks()
     expect(userFrames(sessionId)).toHaveLength(2)
+  })
+
+  it('persists reference targets with queued and sent messages without changing the agent prompt', async () => {
+    const first = recordingSink()
+    const { host, sessionId } = await started(first.sink)
+    daemon.reply = () => {}
+    await host.send(STAGE.conversationId, 'first')
+    const text = 'look @src/a.ts'
+    const references: ChatReference[] = [{ start: 5, end: text.length, target: { kind: 'file', path: '/work/repo/src/a.ts', relative: 'src/a.ts' } }]
+    await host.send(STAGE.conversationId, text, [], true, false, 'with-reference', references)
+    expect(stateOf(host)).toMatchObject({ queue: [{ text, references }] })
+    const restarted = new ChatHost(daemon, root, attachments, recordingSink().sink)
+    daemon.deliver = (event) => {
+      if (event.event === 'data') restarted.handleData(event.sessionId, event.offset, event.data)
+    }
+    await restarted.open(STAGE, sessionId, first.offsets.at(-1) ?? 0, false)
+    expect(stateOf(restarted)).toMatchObject({ queue: [{ references }] })
+    finish(sessionId, 'completed')
+    await flushMicrotasks()
+    expect(restarted.items(STAGE).find((item) => item.id === 'u:with-reference')).toMatchObject({ text, references })
+    expect(userFrames(sessionId).at(-1)).toMatchObject({ message: { content: text } })
+    const replayed = new ChatHost(daemon, root, attachments, recordingSink().sink)
+    expect(replayed.items(STAGE).find((item) => item.id === 'u:with-reference')).toMatchObject({ text, references })
   })
 
   it('notes a hole in the output instead of reading half a frame', async () => {

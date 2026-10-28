@@ -1,7 +1,7 @@
 import { appendFileSync, mkdirSync, openSync, readFileSync, closeSync, fstatSync, ftruncateSync, readSync } from 'node:fs'
 import path from 'node:path'
 import { z } from 'zod'
-import { ChatImage, ChatItem, ChatOption } from '@antumi/protocol'
+import { ChatReference, ChatImage, ChatItem, ChatOption } from '@antumi/protocol'
 import type { ChatRecord } from './chat-driver'
 
 const Level = z.enum(['info', 'warning', 'error']).catch('info')
@@ -9,7 +9,7 @@ const Images = z.array(ChatImage).optional()
 const LogLine = z.discriminatedUnion('dir', [
   // end: the output offset just past this frame's line, so a restart knows where to pick up.
   z.object({ dir: z.literal('in'), at: z.number(), frame: z.unknown(), end: z.number().optional() }),
-  z.object({ dir: z.literal('out'), at: z.number(), frame: z.unknown(), ref: z.string().optional(), images: Images }),
+  z.object({ dir: z.literal('out'), at: z.number(), frame: z.unknown(), ref: z.string().optional(), images: Images, references: z.array(ChatReference).optional() }),
   z.object({
     dir: z.literal('note'),
     at: z.number(),
@@ -20,7 +20,7 @@ const LogLine = z.discriminatedUnion('dir', [
     action: z.object({ kind: z.enum(['retryTurn', 'retryCursorTurn']).transform(() => 'retryTurn' as const), userItemId: z.string(), stop: z.boolean().optional() }).nullable().optional()
   }),
   z.object({ dir: z.literal('option'), at: z.number(), option: ChatOption, value: z.string() }),
-  z.object({ dir: z.literal('queue'), at: z.number(), text: z.string().nullable(), ref: z.string().optional(), images: Images, release: z.boolean().optional(), held: z.boolean().optional() }),
+  z.object({ dir: z.literal('queue'), at: z.number(), text: z.string().nullable(), ref: z.string().optional(), images: Images, references: z.array(ChatReference).optional(), release: z.boolean().optional(), held: z.boolean().optional() }),
   z.object({ dir: z.literal('exit'), at: z.number(), code: z.number().nullable(), stderr: z.string() }),
   z.object({ dir: z.literal('item'), at: z.number(), item: ChatItem }),
   z.object({

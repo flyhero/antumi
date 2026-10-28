@@ -1,3 +1,4 @@
+import type { ChatReference } from '@antumi/protocol'
 import {
   agentDescriptor,
   DEFAULT_INSTANCE,
@@ -58,7 +59,8 @@ export type SourceConversations = {
     allowBypass: boolean | undefined,
     start: { permissionMode?: string; model?: string; effort?: string; worktree?: boolean; branch?: string; modelProvider?: string },
     issue: { source: TaskSource; title: string; brief: string; readable: readonly string[] },
-    note: string
+    note: string,
+    references?: ChatReference[]
   ): Promise<Conversation>
 }
 
@@ -409,7 +411,7 @@ export class SourceService {
     check()
     const source: TaskSource = { provider: id, instance, name: ready.provider.name, key: issue.key, url: issue.url }
     const images = await Promise.all(snapshot.images.map(async (image) => ({ name: image.name, path: await this.attachments.pathOf(image.id) })))
-    const { agent, projectPaths, allowBypass, note, ...start } = options
+    const { agent, projectPaths, allowBypass, note, references, ...start } = options
     const title = issue.title.trim() || issue.key
     // Unless asked otherwise, it only reads: a finding first, then the user decides on a fix.
     const permissionMode = start.permissionMode ?? agentDescriptor(agent).discussionMode
@@ -418,7 +420,7 @@ export class SourceService {
       title,
       brief: investigationBrief(source, snapshot, images),
       readable: images.flatMap((image) => (image.path ? [image.path] : []))
-    }, note?.trim() || `排查 ${source.name} ${source.key}：${title}`)
+    }, note?.trim() || `排查 ${source.name} ${source.key}：${title}`, references)
     this.emitInbox(id, instance)
     return conversation
   }

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { CHAT_PERMISSION_MODES, ChatPermissionMode, RESERVED_MCP_SERVER_NAME, takeImageMarkers, type ChatImage, type ChatItem, type ChatModel, type ChatOption, type ChatTurnActivity, type ChatTurnState } from '@antumi/protocol'
+import { CHAT_PERMISSION_MODES, ChatPermissionMode, RESERVED_MCP_SERVER_NAME, takeImageMarkers, type ChatReference, type ChatImage, type ChatItem, type ChatModel, type ChatOption, type ChatTurnActivity, type ChatTurnState } from '@antumi/protocol'
 import { ChatItems, clip } from '../../chat-items'
 import { StageState } from '../../chat-stage-state'
 import { ChatQueue } from '../../chat-queue'
@@ -127,7 +127,7 @@ export class AcpDriver implements ChatDriver {
   private stopping = false
   private turn: { id: string; ref: string; began: number; text: string; block: string | null; blocks: number } | null = null
   private messages: StageMessage[] = []
-  private execution: { text: string; images: ChatImage[]; ref: string } | null = null
+  private execution: { text: string; images: ChatImage[]; ref: string; references?: ChatReference[] } | null = null
   private subagents = new Map<string, Subagent>()
   // The session's cost in dollars as last reported; null until a report, but 0 for a session this
   // stage opened new. turnCost is what it stood at as the running turn began.
@@ -163,6 +163,7 @@ export class AcpDriver implements ChatDriver {
   }
 
   apply(record: ChatRecord): void {
+    if (record.dir === 'out' && record.ref && record.references) this.items.rememberReferences(record.ref, record.references)
     if (record.dir === 'in' || record.dir === 'out') {
       const parsed = Frame.safeParse(record.frame)
       if (parsed.success) {

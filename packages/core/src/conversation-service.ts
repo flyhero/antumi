@@ -1,9 +1,9 @@
-import type { AgentProfile, SkillRef } from '@antumi/protocol'
+import type { ChatReference, AgentProfile, SkillRef } from '@antumi/protocol'
 import { agentCliAccess } from './agent-cli-access'
 import { randomUUID } from 'node:crypto'
 import { mkdir, realpath, rm, rmdir, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import { canHaveHelper, helperAllowsMode, isHelper, agentDescriptor, modelPrice, providerEndpoint, type CostBaseline, checkEditAdditionalProjects, checkSwitchBranch, handoffMessage, isPlanApproval, parseHandoffMessage, MAX_TASK_REPOS, type AgentKind, type ChatCatalog, type ChatImage, type ChatItem, type ChatModel, type ChatOption, type ChatSettings, type CommitPushResult, type CommitResult, type PushResult, type Conversation, type ConversationMessage, type ConversationSearchHit, type ConversationStage, type FileDiff, type FolderChanges, type ProjectBranches, type ProjectHead, type ChatDecision, type KnowledgeBase, type TaskSource, type UnattendedMode, isAntumiRequest , PROCESS_OWNER_ENV, processOwner, parseProcessOwner } from '@antumi/protocol'
+import { chatReferencesFor, canHaveHelper, helperAllowsMode, isHelper, agentDescriptor, modelPrice, providerEndpoint, type CostBaseline, checkEditAdditionalProjects, checkSwitchBranch, handoffMessage, isPlanApproval, parseHandoffMessage, MAX_TASK_REPOS, type AgentKind, type ChatCatalog, type ChatImage, type ChatItem, type ChatModel, type ChatOption, type ChatSettings, type CommitPushResult, type CommitResult, type PushResult, type Conversation, type ConversationMessage, type ConversationSearchHit, type ConversationStage, type FileDiff, type FolderChanges, type ProjectBranches, type ProjectHead, type ChatDecision, type KnowledgeBase, type TaskSource, type UnattendedMode, isAntumiRequest , PROCESS_OWNER_ENV, processOwner, parseProcessOwner } from '@antumi/protocol'
 import type { DaemonEvent, SessionInfo } from '@antumi/protocol/node'
 import { canReuseConversation, DEFAULT_ACCOUNT, type ConversationConfiguration, type TaskLaunchOptions } from '@antumi/protocol'
 import type { RunMeasure } from './agent-run-store'
@@ -61,7 +61,7 @@ export type ChatStageRef = { conversationId: string; taskId: string | null; stag
 // What a model choice holds: see TaskLaunchOptions.
 export type ModelChoice = Pick<TaskLaunchOptions, 'model' | 'effort'>
 // What an agent takes over with on a handoff; each left out stays as the chat last had it.
-export type HandoffChoice = Pick<TaskLaunchOptions, 'permissionMode' | 'model' | 'effort'>
+export type HandoffChoice = Pick<TaskLaunchOptions, 'permissionMode' | 'model' | 'effort'> & { references?: ChatReference[] }
 
 export type TaskChatLaunch = TaskLaunchOptions & {
   profile?: AgentProfile
@@ -77,6 +77,7 @@ export type TaskChatLaunch = TaskLaunchOptions & {
   allowBypass?: boolean
   // What the user adds for the next agent when the task's agent changes on the way.
   handoffNote?: string
+  references?: ChatReference[]
   // The stage's first message. An agent going on from a handoff reads it there, in the turn the
   // handoff opens; otherwise it is sent once the agent is up.
   opening?: { text: string; imageIds: readonly string[] }
@@ -85,7 +86,7 @@ export type TaskChatLaunch = TaskLaunchOptions & {
 // What a stage's start takes beyond the agent: see TaskChatLaunch; moved says the agent works
 // somewhere else than its last stage did.
 // brief: a file written for the first stage to read before anything else, sent as a handoff is.
-type StageLaunch = { fresh?: boolean; moved?: boolean; planOnly?: boolean; readable?: readonly string[]; fork?: ForkPoint; opening?: string; brief?: string }
+type StageLaunch = { fresh?: boolean; moved?: boolean; planOnly?: boolean; readable?: readonly string[]; fork?: ForkPoint; opening?: string; brief?: string; references?: ChatReference[] }
 // The provider session another conversation's stage ran, taken over through the turn `at` names;
 // neither null means a session the agent can fork, else the fork starts afresh.
 // latest: the point is the last the agent's session holds, so the session forked whole is the same.
@@ -727,7 +728,8 @@ export class ConversationService {
       moved,
       planOnly: launch.planOnly,
       readable: launch.readable,
-      opening: launch.opening?.text
+      opening: launch.opening?.text,
+      references: launch.references
     })
     if (launch.opening && !this.openedInHandoff.delete(id)) await this.send(id, launch.opening.text, launch.opening.imageIds)
     return started
@@ -850,7 +852,7 @@ export class ConversationService {
     this.pickModel(id, agent, choice)
     // After the stop, which may leave the old agent's last mode in the options.
     if (choice.permissionMode) this.store.setChatOptions(id, { permissionMode: choice.permissionMode })
-    return this.start(id, agent, note, true)
+    return this.start(id, agent, note, true, { references: choice.references })
   }
 
   // The model and effort an agent starts in: each as picked, null back to the default, absent as it
@@ -880,7 +882,8 @@ export class ConversationService {
     allowBypass: boolean | undefined,
     start: { permissionMode?: string; model?: string; effort?: string; worktree?: boolean; branch?: string; modelProvider?: string },
     issue: { source: TaskSource; title: string; brief: string; readable: readonly string[] },
-    note: string
+    note: string,
+    references?: ChatReference[]
   ): Promise<Conversation> {
     if (!this.capacityAvailable(agent)) throw new Rejection('agent-capacity', 'Agent 运行数量已达到上限，请等待其他会话结束，或预约稍后执行')
     const { id } = await this.create(agent, projectPaths, allowBypass, { ...start, deferStart: true })
@@ -890,7 +893,7 @@ export class ConversationService {
     await mkdir(directory, { recursive: true, mode: 0o700 })
     const brief = path.join(directory, `${randomUUID()}.md`)
     await writeFile(brief, issue.brief, { mode: 0o600 })
-    return this.start(id, agent, note, false, { brief, readable: issue.readable })
+    return this.start(id, agent, note, false, { brief, readable: issue.readable, references })
   }
 
   // The latest conversation opened for each issue of a source instance, by issue key.
@@ -1060,7 +1063,7 @@ export class ConversationService {
     const stageId = randomUUID()
     const stage = this.store.startStage(id, agent, providerSessionId, this.store.maxSequence(id), stageId, launch.planOnly ?? false, route, account?.id ?? null)
     const provider = decision.kind === 'provider' ? providerLaunch(decision.route, decision.apiKey) : undefined
-    return { ...await this.startChat(current, stage, saved !== null, handoffPath === null ? null : { path: handoffPath, note }, launch.readable ?? [], null, provider, account), starting: false }
+    return { ...await this.startChat(current, stage, saved !== null, handoffPath === null ? null : { path: handoffPath, note, references: launch.references }, launch.readable ?? [], null, provider, account), starting: false }
   }
 
   // The first stage of a fork: the source's session taken over through the fork point, where the
@@ -1096,7 +1099,7 @@ export class ConversationService {
     stage: ConversationStage,
     resume: boolean,
     // The file a new agent reads first, and what the user added for it.
-    handoff: { path: string; note: string } | null,
+    handoff: { path: string; note: string; references?: ChatReference[] } | null,
     readable: readonly string[],
     forkAt: string | null = null,
     // The model provider the stage runs on, with its key; the stage's route says which.
@@ -1184,7 +1187,10 @@ export class ConversationService {
       const retired = this.rememberedOnProvider(this.store.chatOptions(id)[agent], opened.options.providerModels)
       if (retired.dropped) this.chats.updateNotice(opened, { dir: 'note', at: Date.now(), level: 'info', id: `provider-model:${stage.id}`, text: `服务商不再提供上次用的模型 ${retired.dropped}，这次改用它的默认模型 ${retired.instead ?? ''}`.trim() })
       await launch?.ready(agentStage)
-      if (handoff) await this.chats.send(id, handoffMessage(handoff.path, handoff.note))
+      if (handoff) {
+        const message = handoffMessage(handoff.path, handoff.note)
+        await this.chats.send(id, message, [], false, false, undefined, chatReferencesFor(handoff.note, message, handoff.references))
+      }
     } catch (error) {
       // A stage that never started leaves nothing to resume, so it goes, log and all.
       this.chats.forget(sessionId, stage.id)
@@ -1417,22 +1423,23 @@ export class ConversationService {
   }
 
   // A retry may resume in a new stage; its ref still names the original message.
-  async send(id: string, text: string, imageIds: readonly string[] = [], queue = false, steer = false, ref?: string): Promise<void> {
+  async send(id: string, text: string, imageIds: readonly string[] = [], queue = false, steer = false, ref?: string, references?: ChatReference[]): Promise<void> {
     const conversation = this.writable(id)
     this.squadGuard?.(conversation)
     if (adapterOf(conversation.agent).turns?.serialized) {
-      return this.serially(id, () => this.sendNow(id, text, imageIds, queue, steer, ref))
+      return this.serially(id, () => this.sendNow(id, text, imageIds, queue, steer, ref, references))
     }
-    return this.sendNow(id, text, imageIds, queue, steer, ref)
+    return this.sendNow(id, text, imageIds, queue, steer, ref, references)
   }
 
-  private async sendNow(id: string, text: string, imageIds: readonly string[], queue: boolean, steer: boolean, ref?: string): Promise<void> {
+  private async sendNow(id: string, text: string, imageIds: readonly string[], queue: boolean, steer: boolean, ref?: string, references?: ChatReference[]): Promise<void> {
     this.gitSending.set(id, (this.gitSending.get(id) ?? 0) + 1)
     try {
       await this.gitGuard?.(this.get(id).projectPaths)
       if (ref && this.sentRef(id, ref, 0)) return
       const note = this.switchNote(id)
-      await this.chats.send(id, note ? `${note}\n\n${text}` : text, await this.chatImages(imageIds), queue, steer, ref)
+      const message = note ? `${note}\n\n${text}` : text
+      await this.chats.send(id, message, await this.chatImages(imageIds), queue, steer, ref, chatReferencesFor(text, message, references))
       if (note) this.store.setSwitchedBranches(id, {})
     } finally { const pending = (this.gitSending.get(id) ?? 1) - 1; if (pending) this.gitSending.set(id, pending); else this.gitSending.delete(id) }
   }
@@ -1454,7 +1461,7 @@ export class ConversationService {
   // approved, or the agent is readied in the unattended mode (`ready` starts it: a task's chat goes
   // through its task) and told to go ahead. A turn still running has the message wait behind it.
   // images go with the text; a message of pictures alone is sent as it is, not as the go-ahead.
-  async runScheduled(id: string, text: string, images: readonly string[], mode: UnattendedMode, ready: () => Promise<unknown>, ref: string): Promise<void> {
+  async runScheduled(id: string, text: string, images: readonly string[], mode: UnattendedMode, ready: () => Promise<unknown>, ref: string, references?: ChatReference[]): Promise<void> {
     const conversation = this.get(id)
     if (isHelper(conversation)) throw new Rejection('chat-option-invalid', '小助手不能无人值守执行')
     checkUnattended(conversation.agent)
@@ -1464,7 +1471,10 @@ export class ConversationService {
       await this.chats.respond(id, plan.requestId, { decision: 'allowForSession' })
       // Edits are what approving lets through; bypass only where the stage was started allowing it.
       if (mode === 'bypass') await this.chats.setOption(id, 'permissionMode', mode).catch(() => {})
-      if (text || images.length) await this.send(id, `${UNATTENDED_NOTE}\n\n${text}`.trim(), images, true, false, ref)
+      if (text || images.length) {
+        const message = `${UNATTENDED_NOTE}\n\n${text}`.trim()
+        await this.send(id, message, images, true, false, ref, chatReferencesFor(text, message, references))
+      }
       return
     }
     const live = this.chats.activity(id) !== null
@@ -1475,7 +1485,8 @@ export class ConversationService {
       this.store.setChatOptions(id, { permissionMode: mode, ...(mode === 'bypass' ? { allowBypass: true } : {}) })
       await ready()
     }
-    await this.send(id, `${UNATTENDED_NOTE}\n\n${text || (images.length ? '' : SCHEDULED_GO_TEXT)}`.trim(), images, !this.chats.idle(id), false, ref)
+    const message = `${UNATTENDED_NOTE}\n\n${text || (images.length ? '' : SCHEDULED_GO_TEXT)}`.trim()
+    await this.send(id, message, images, !this.chats.idle(id), false, ref, chatReferencesFor(text, message, references))
   }
 
   // The plan the live stage waits on the user to approve, if any.

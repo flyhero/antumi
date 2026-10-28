@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { ChatReference } from './chat-reference'
 import { AgentProfile, AgentProfileFields, AgentCall } from './agent-profile'
 import { GitTarget, GitBranch, GitStatus, GitHistory, GitDetail, GitComparison, GitAction, GitResult, GitOutgoing } from './git'
 import { AgentKind, MAX_DETAILS_LENGTH, MAX_TASK_REPOS, RepoStartOptions, Task, TaskStatus } from './task'
@@ -99,7 +100,8 @@ const UsageParams = z.object({ windowKinds: z.array(z.string()).optional() })
 // project-config-edit: core writes that file as the user filled it in (projects.writeConfig), and
 // suggests what to fill it with (projects.suggestConfig).
 // conversation-references: history_read resolves explicit antumi://conversation/<id> references.
-export const CORE_FEATURES = ['conversation-references', 'agent-profiles', 'pets', 'plugins', 'plugin-recommendations', 'chat-options', 'chat-images', 'task-start', 'worktrees', 'conversation-branches', 'conversation-commit-push', 'find-file', 'conversation-projects', 'browser', 'keep-awake', 'terminal-commands', 'bookmarks', 'usage-limit', 'agent-stats', 'conversation-stats', 'prompt-suggestions', 'environment', 'conversation-pin', 'schedules', 'chat-commands', 'file-mentions', 'plan-modes', 'agent-terminals', 'schedule-images', 'dashboard', 'task-conversation-summaries', 'routines', 'ports', 'conversation-fork', 'conversation-configuration', 'conversation-commit-steps', 'conversation-worktrees', 'conversation-start-branch', 'wire-log', 'file-preview', 'deferred-conversation-start', 'agent-cli-installation', 'agent-cli-maintenance', 'task-launch-options', 'git-management', 'git-commit-branches', 'task-handoff', 'handoff-model', 'handoff-mode', 'task-launch', 'discussions', 'discussion-members', 'discussion-projects', 'discussion-topics', 'discussion-requirements', 'task-cancel', 'task-redo-in-place', 'conversation-archive', 'discussion-archive', 'translate', 'commit-message', 'squads', 'squad-leader-planning', 'conversation-todos', 'knowledge-base', 'knowledge-base-kind', 'skills-library', 'skills-search', 'skills-activation', 'mcp-servers', 'source-investigate', 'todo-overview', 'conversation-helper', 'small-model-stats', 'terminal-color-prompt', 'git-commit-actions', 'file-editor', 'project-config', 'project-config-edit', 'model-providers', 'git-update', 'git-push-target', 'task-auto-run', 'session-import', 'agent-accounts', 'usage-analytics', 'task-references', 'release-idle-chats', 'project-star', 'git-favorites'] as const
+// chat-references: user messages and queues retain the composer's explicit reference targets.
+export const CORE_FEATURES = ['chat-references', 'conversation-references', 'agent-profiles', 'pets', 'plugins', 'plugin-recommendations', 'chat-options', 'chat-images', 'task-start', 'worktrees', 'conversation-branches', 'conversation-commit-push', 'find-file', 'conversation-projects', 'browser', 'keep-awake', 'terminal-commands', 'bookmarks', 'usage-limit', 'agent-stats', 'conversation-stats', 'prompt-suggestions', 'environment', 'conversation-pin', 'schedules', 'chat-commands', 'file-mentions', 'plan-modes', 'agent-terminals', 'schedule-images', 'dashboard', 'task-conversation-summaries', 'routines', 'ports', 'conversation-fork', 'conversation-configuration', 'conversation-commit-steps', 'conversation-worktrees', 'conversation-start-branch', 'wire-log', 'file-preview', 'deferred-conversation-start', 'agent-cli-installation', 'agent-cli-maintenance', 'task-launch-options', 'git-management', 'git-commit-branches', 'task-handoff', 'handoff-model', 'handoff-mode', 'task-launch', 'discussions', 'discussion-members', 'discussion-projects', 'discussion-topics', 'discussion-requirements', 'task-cancel', 'task-redo-in-place', 'conversation-archive', 'discussion-archive', 'translate', 'commit-message', 'squads', 'squad-leader-planning', 'conversation-todos', 'knowledge-base', 'knowledge-base-kind', 'skills-library', 'skills-search', 'skills-activation', 'mcp-servers', 'source-investigate', 'todo-overview', 'conversation-helper', 'small-model-stats', 'terminal-color-prompt', 'git-commit-actions', 'file-editor', 'project-config', 'project-config-edit', 'model-providers', 'git-update', 'git-push-target', 'task-auto-run', 'session-import', 'agent-accounts', 'usage-analytics', 'task-references', 'release-idle-chats', 'project-star', 'git-favorites'] as const
 // session-import: core lists the sessions agents ran outside Antumi and imports them as conversations (sessionImports.*).
 // agent-accounts: Claude and Codex sign in to several accounts, one active each, and a usage limit
 // moves the agent to the next with quota (accounts.*); usage readings name their account.
@@ -129,7 +131,7 @@ export const CORE_FEATURES = ['conversation-references', 'agent-profiles', 'pets
 // keeps what its latest start said.
 const AllowBypass = z.boolean().optional()
 // The mode, model and effort an agent takes over with; absent keeps what it last ran in this chat.
-const HandoffOptions = TaskLaunchOptions.pick({ permissionMode: true, model: true, effort: true })
+const HandoffOptions = TaskLaunchOptions.pick({ permissionMode: true, model: true, effort: true }).extend({ references: z.array(ChatReference).max(1000).optional() })
 // One page of a conversation's chat history; `before` fetches the page older than it, null when none is left.
 const ChatPage = z.object({ items: ChatItemList, before: z.string().nullable() })
 // Browser calls from an agent name the conversation they act for, and a tab of that conversation.
@@ -418,7 +420,8 @@ export const rpcMethods = {
       images: z.array(AttachmentId).max(MAX_CHAT_IMAGES).optional(),
       queue: z.boolean().optional(),
       ref: z.string().uuid().optional(),
-      steer: z.boolean().optional()
+      steer: z.boolean().optional(),
+      references: z.array(ChatReference).max(1000).optional()
     }).refine((params) => params.text !== '' || (params.images?.length ?? 0) > 0, { message: 'a message needs text or an image' }),
     result: Ok
   },
@@ -758,6 +761,7 @@ export const rpcMethods = {
       branch: z.string().trim().min(1).max(500).optional(),
       // What the user adds, shown as their first message.
       note: z.string().trim().max(100000).optional(),
+      references: z.array(ChatReference).max(1000).optional(),
       allowBypass: AllowBypass,
       permissionMode: ChatPermissionMode.optional(),
       model: z.string().trim().min(1).max(200).optional(),

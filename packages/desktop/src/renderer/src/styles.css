@@ -8284,6 +8284,9 @@ div.inspector-empty > p { margin: 0 0 8px; }
 }
 .chat-draft-agent .agent-mark { width: 28px; height: 28px; }
 .chat-draft-hint { margin: 0; max-width: 520px; font-size: 12px; }
+/* One easy-to-miss thing the conversation can do, quieter than the hint above it. */
+.chat-draft-tip { display: inline-flex; align-items: flex-start; gap: 6px; margin: 0; max-width: 520px; padding: 4px 12px; border-radius: var(--radius); background: var(--fill); color: var(--text-muted); font-size: 12px; line-height: 1.5; }
+.chat-draft-tip > svg { flex-shrink: 0; width: 14px; height: 18px; color: var(--status-done); }
 /* The issue a new conversation is to look into, above the agents to start it with. */
 .chat-draft-issue { display: flex; align-items: center; gap: 8px; max-width: 100%; padding: 4px 4px 4px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); font-size: 13px; }
 .chat-draft-issue-key { flex-shrink: 0; color: var(--text); font-family: var(--mono); font-size: 12px; text-decoration: none; }
@@ -8375,6 +8378,7 @@ div.inspector-empty > p { margin: 0 0 8px; }
   .chat-plan-line,
   .chat-plan-view-status,
   .chat-draft-hint,
+  .chat-draft-tip,
   .chat-draft-projects,
   .chat-options-note,
   .chat-usage-limit .conversation-confirm,

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { agentDescriptor, ChatPermissionMode, type AgentKind, type ChatCatalog } from '@antumi/protocol'
 import { closeConversationDraft, perform, selectConversation, useChatImagesSupported, useChatOptionsSupported, useConversationWorktreesSupported, useCore, useSourceInvestigateSupported, useStartBranchSupported } from '../core-store'
 import { OtherProjectsHint } from './OtherProjectsHint'
+import { ConversationTip } from './ConversationTip'
 import { defaultAgent } from '../default-agent'
 import { useInstalledAgents } from '../installed-agents'
 import { agentLabel } from '../labels'
@@ -242,6 +243,7 @@ export function ConversationDraft() {
                   : from ? t('ConversationDraft.usingTheConfigurationOfWithAFreshConversation', { value1: from.title }) : t('ConversationDraft.sendingTheFirstMessageCreatesTheConversationAnd')}
               </p>
               <OtherProjectsHint agent={agent} projectCount={projectPaths.length} />
+              {!issue && <ConversationTip agent={agent} agents={installed.length} images={imagesSupported} />}
             </div>
           </div>
           <div className="chat-dock">

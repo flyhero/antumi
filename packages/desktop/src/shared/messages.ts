@@ -3138,6 +3138,13 @@ export const MESSAGES = {
     "zh": "开始新的会话",
     "en": "Start a new conversation"
   },
+  "ConversationTip.referenceConversation": {"zh": "输入 @ 选择「会话」，让 Agent 参考之前的讨论。", "en": "Type @ and pick a conversation to let the agent build on an earlier discussion."},
+  "ConversationTip.delegate": {"zh": "会话开始后，在消息里 @ 你的智能体，Agent 会把子任务交给它。", "en": "Once the conversation starts, @ one of your agents in a message to hand it a subtask."},
+  "ConversationTip.handOff": {"zh": "额度用完或想换个思路时，可在会话菜单里「移交」给另一个 Agent 接着做。", "en": "Out of quota or want a second take? Hand off from the conversation menu and another agent picks up here."},
+  "ConversationTip.images": {"zh": "截图可以直接粘贴，图片也能拖进输入框。", "en": "Paste a screenshot straight in, or drag images into the input."},
+  "ConversationTip.sendWays": {"zh": "Agent 工作时发的消息会等这一回合结束再送达，按 {keys} 可立刻插入；鼠标停在发送按钮上能看到全部发送方式。", "en": "A message sent while the agent works waits for the turn to end; {keys} inserts it now. Hover the send button for every way to send."},
+  "ConversationTip.sendToNewConversation": {"zh": "会话中按 {keys}，可把消息发到一个新会话，沿用原会话的 Agent 和设置。", "en": "In a conversation, {keys} sends the message to a new one with the same agent and settings."},
+  "ConversationTip.schedule": {"zh": "额度不够或想晚点再做？会话中点输入框里的时钟「预约发送」，额度恢复后或到点自动发出。", "en": "Out of quota or want it later? In a conversation, click the clock in the input to schedule it for when quota resets or a time you pick."},
   "ConversationDraft.chooseAnAgentToStart": {
     "zh": "用哪个开始呢？",
     "en": "Which one to start with?"

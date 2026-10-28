@@ -25,7 +25,7 @@ describe('guidePage', () => {
     expect(guideSettingsSection('https://example.com')).toBeNull()
     for (const locale of ['zh-CN', 'en'] as const) {
       const sections = [...guideFor(locale).body.matchAll(/\]\((antumi:[^)]+)\)/g)].map((match) => guideSettingsSection(match[1] ?? ''))
-      expect(sections).toEqual(['agents', 'model-providers', 'accounts', 'plugins', 'conversation'])
+      expect(sections).toEqual(['agents', 'model-providers', 'accounts', 'plugins', 'permissions', 'conversation'])
     }
   })
 })

@@ -5111,6 +5111,12 @@ div.inspector-empty > p { margin: 0 0 8px; }
 .project-star-thanks { display: inline-flex; align-items: center; gap: 8px; color: var(--accent); }
 .project-star-thanks svg { fill: currentColor; }
 .support-feedback-link { text-decoration: none; }
+.settings-row:has(.support-share-button) { flex-wrap: wrap; }
+.settings-row:has(.support-share-button) .settings-row-text { flex: 1 1 32ch; }
+.settings-row-control:has(.support-share-button) { margin-left: auto; }
+.support-share-status { display: block; }
+.support-share-status:not(:empty) { margin-top: 8px; }
+.support-share-status[data-error] { color: var(--danger); }
 
 .task-launch-dialog { width: min(420px, calc(100vw - 32px)); border-radius: var(--radius-lg); }
 .task-launch-dialog .modal-body { padding: 24px; gap: 16px; }

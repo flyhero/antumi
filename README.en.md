@@ -2,7 +2,7 @@
 
 # Antumi
 
-**Keep using Claude Code, Codex and your other agents. Antumi adds the four things the terminal lacks most.**
+**Keep using Claude Code, Codex and your other agents. Antumi takes over the copying and pasting between windows.**
 
 See your quota · Keep working when it runs out · Run tasks in parallel · Let agents delegate
 
@@ -35,7 +35,21 @@ https://github.com/user-attachments/assets/44398279-8f26-441f-ad24-fa1b1e344674
 
 ## Why not just the terminal
 
-Antumi runs the agent CLIs you have already installed and signed in to, so there is no setup or login to redo, and sessions you started in a terminal can be imported and continued. On top of them, it first fixes the four things that get in the way most often; the rest is under [More features](#more-features):
+Antumi runs the agent CLIs you have already installed and signed in to, so there is no setup or login to redo, and sessions you started in a terminal can be imported and continued.
+
+### No more copy and paste
+
+With several agents at once, much of the day goes into carrying things between them. In Antumi you no longer paste:
+
+- **Between agents**: a handoff brings the chat history, a [delegation](#let-agents-delegate-to-each-other)'s result comes back to the main conversation, and agents in a [group chat](#group-chat) answer each other; agents can also look up what you discussed with other agents before.
+- **Errors and output**: agents look at pages, read the console and take screenshots in the built-in browser, and read dev server output in the built-in terminal.
+- **Tasks and bugs**: issues from GitHub, Jira, Linear and ZenTao come in as tasks; a group chat's conclusion becomes a task in one click.
+- **Code**: type @ in the composer to reference a file or project instead of pasting paths and snippets.
+- **Notes and to-dos**: agents write notes straight into your Markdown or Obsidian knowledge base, and record what you need to do later as [to-dos](#to-dos).
+- **Replies you don't follow**: select text and ask the [side assistant](#side-assistant), or [translate](#translation) it in one click.
+- **Prompts and config**: save instructions you repeat as an agent or a [routine](#routines-and-scheduling); set up MCP servers once and pick which agents get them.
+
+Below are the four things that get in the way most often in a terminal; the rest is under [More features](#more-features).
 
 ### See your quota
 

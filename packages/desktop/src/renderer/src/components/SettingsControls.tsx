@@ -8,7 +8,7 @@ export function SettingsRow({
   control
 }: {
   label: string
-  description?: string
+  description?: ReactNode
   control: (labelId: string) => ReactNode
 }) {
   const labelId = useId()

@@ -7,6 +7,15 @@ import { findFiles } from './file-search'
 import { Rejection } from './rejection'
 
 type FileOwner = Pick<Conversation, 'workspacePath' | 'projectPaths'>
+// A conversation's id, whose folders the files belong to, or the folders themselves.
+export type FileScope = string | { roots: readonly string[] }
+
+export function fileScope(conversationId: string | undefined, roots: readonly string[] | undefined): FileScope {
+  if (conversationId) return conversationId
+  if (!roots?.length) throw new Rejection('file-scope-missing', '需要会话或项目目录')
+  if (!roots.every((root) => path.isAbsolute(root))) throw new Rejection('file-path-invalid', '项目目录需要绝对路径')
+  return { roots: roots.map((root) => path.normalize(root)) }
+}
 
 export function projectLocation(file: string, roots: readonly string[], paths = path): { root: string | null; relative: string | null } {
   const root = [...roots].sort((a, b) => b.length - a.length).find((root) => {
@@ -23,13 +32,14 @@ function missing(error: unknown): boolean {
 export class ConversationFiles {
   constructor(private readonly owner: (id: string) => FileOwner) {}
 
-  private roots(id: string): string[] {
-    const conversation = this.owner(id)
+  private roots(scope: FileScope): readonly string[] {
+    if (typeof scope !== 'string') return scope.roots
+    const conversation = this.owner(scope)
     return conversation.projectPaths.length ? conversation.projectPaths : [conversation.workspacePath]
   }
 
-  async resolve(id: string, name: string): Promise<ResolvedFile | null> {
-    const roots = this.roots(id)
+  async resolve(scope: FileScope, name: string): Promise<ResolvedFile | null> {
+    const roots = this.roots(scope)
     const expanded = name === '~' || /^~[\\/]/.test(name) ? path.join(homedir(), name.slice(2)) : name
     const absolute = path.isAbsolute(expanded)
     const candidates = absolute ? [path.normalize(expanded)] : roots.map((root) => path.resolve(root, expanded))
@@ -56,8 +66,8 @@ export class ConversationFiles {
     return null
   }
 
-  async read(id: string, file: string): Promise<FileRead> {
-    this.owner(id)
+  async read(scope: FileScope, file: string): Promise<FileRead> {
+    this.roots(scope)
     if (!path.isAbsolute(file)) throw new Rejection('file-path-invalid', '读取文件需要绝对路径')
     try {
       const info = await stat(file)
@@ -93,8 +103,8 @@ export class ConversationFiles {
     }
   }
 
-  async list(id: string, dir: string): Promise<DirectoryListing> {
-    const roots = this.roots(id)
+  async list(scope: FileScope, dir: string): Promise<DirectoryListing> {
+    const roots = this.roots(scope)
     if (!path.isAbsolute(dir) || projectLocation(path.normalize(dir), roots).root === null) throw new Rejection('file-path-invalid', '只能列出项目里的目录')
     let found
     try {
@@ -115,8 +125,8 @@ export class ConversationFiles {
 
   // Overwrites an existing project file in place, so its mode and hard links survive; `expected` is the
   // mtime the editor read, and a different one means someone else (usually the agent) wrote it since.
-  async write(id: string, file: string, text: string, expected: number | null): Promise<FileWrite> {
-    const roots = this.roots(id)
+  async write(scope: FileScope, file: string, text: string, expected: number | null): Promise<FileWrite> {
+    const roots = this.roots(scope)
     if (!path.isAbsolute(file)) throw new Rejection('file-path-invalid', '保存文件需要绝对路径')
     if (Buffer.byteLength(text) > MAX_FILE_PREVIEW_BYTES) throw new Rejection('file-too-large', '文件超过 2 MiB，无法保存')
     let real: string

@@ -4,7 +4,7 @@ import { homedir, tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { MAX_FILE_PREVIEW_BYTES } from '@antumi/protocol'
-import { ConversationFiles, projectLocation } from './conversation-files'
+import { ConversationFiles, fileScope, projectLocation } from './conversation-files'
 
 describe('conversation files', () => {
   let root: string
@@ -143,6 +143,20 @@ describe('conversation files', () => {
       await expect(files.write('chat', path.join(primary, 'link.txt'), 'x', null)).rejects.toThrow('项目')
       expect(await readFile(outside, 'utf8')).toBe('outside')
     }
+  })
+  it('works within given folders when no conversation owns them', async () => {
+    const scope = fileScope(undefined, [extra])
+    const file = path.join(extra, 'notes.md')
+    await writeFile(file, 'before')
+    expect(await files.resolve(scope, 'notes.md')).toMatchObject({ path: file, root: extra, relative: 'notes.md' })
+    expect((await files.list(scope, extra)).entries.map((entry) => entry.name)).toEqual(['notes.md'])
+    await expect(files.list(scope, primary)).rejects.toThrow('项目')
+    expect(await files.write(scope, file, 'after', null)).toMatchObject({ kind: 'saved' })
+    await writeFile(path.join(primary, 'x.ts'), 'x')
+    await expect(files.write(scope, path.join(primary, 'x.ts'), 'y', null)).rejects.toThrow('项目')
+    expect(() => fileScope(undefined, undefined)).toThrow('需要会话或项目目录')
+    expect(() => fileScope(undefined, ['relative'])).toThrow('绝对路径')
+    expect(fileScope('chat', [extra])).toBe('chat')
   })
 })
 

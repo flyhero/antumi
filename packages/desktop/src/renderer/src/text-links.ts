@@ -36,3 +36,16 @@ export function textLinks(text: string): TextPart[] {
   if (at < text.length) parts.push({ kind: 'text', text: text.slice(at) })
   return parts
 }
+
+const SHORT_LENGTH = 36
+
+// An address as a chip names it: without its scheme, a leading www. or a closing slash, and when
+// still long, its host and the end of its path, the middle given up for an ellipsis.
+export function shortLink(href: string): string {
+  const bare = href.replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/$/, '')
+  if (bare.length <= SHORT_LENGTH) return bare
+  const slash = bare.indexOf('/')
+  const host = slash < 0 ? bare : bare.slice(0, slash)
+  const room = SHORT_LENGTH - host.length - 2
+  return room > 8 ? `${host}/…${bare.slice(-room)}` : `${bare.slice(0, SHORT_LENGTH - 1)}…`
+}

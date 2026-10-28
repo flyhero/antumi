@@ -1,11 +1,12 @@
 import { useCallback, useLayoutEffect, useRef, useState, type HTMLAttributes, type RefObject } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
-import { Annotation, Compartment, EditorState, StateEffect, StateField, type ChangeDesc } from '@codemirror/state'
+import { Annotation, Compartment, EditorState, StateEffect, StateField, type ChangeDesc, type Range } from '@codemirror/state'
 import { Decoration, EditorView, WidgetType, drawSelection, keymap, placeholder, type DecorationSet } from '@codemirror/view'
 import { invertedEffects } from '@codemirror/commands'
 import { ChatReference, validChatReferences } from '@antumi/protocol'
-import { ReferenceMark, useOpenReference } from './ChatReference'
+import { LinkMark, ReferenceMark, useOpenReference } from './ChatReference'
+import { textLinks } from '../text-links'
 import { shiftMentions, type Mention, type MentionedText, type MentionTarget } from '../chat-mentions'
 
 const EMPTY: MentionedText = { text: '', mentions: [] }
@@ -86,6 +87,49 @@ class ReferenceWidget extends WidgetType {
   }
 }
 
+function LinkContent({ href, view }: { href: string; view: EditorView }) {
+  useLayoutEffect(() => { view.requestMeasure() }, [view])
+  return <LinkMark href={href} tabIndex={-1} onMouseDown={(event) => event.preventDefault()} />
+}
+
+class LinkWidget extends WidgetType {
+  constructor(readonly href: string) { super() }
+  override eq(other: LinkWidget): boolean { return this.href === other.href }
+  override toDOM(view: EditorView): HTMLElement {
+    const element = document.createElement('span')
+    element.className = 'cm-reference'
+    const root = createRoot(element)
+    widgetRoots.set(element, root)
+    root.render(<LinkContent href={this.href} view={view} />)
+    return element
+  }
+  override destroy(element: HTMLElement): void {
+    const root = widgetRoots.get(element)
+    queueMicrotask(() => root?.unmount())
+  }
+}
+
+// Whether the input last changed by the user typing: an address still being typed at the caret
+// stays text, so it is not cut short into a chip, until the caret leaves its end.
+const typing = StateField.define<boolean>({
+  create: () => false,
+  update: (value, transaction) => transaction.isUserEvent('input.type') ? true : transaction.docChanged || transaction.selection ? false : value
+})
+
+// The web addresses in the text, outside any mention, as chips; the text stays the address.
+function linkRanges(state: EditorState, mentions: readonly Mention[]): Range<Decoration>[] {
+  const caret = state.selection.main.head
+  const ranges: Range<Decoration>[] = []
+  let at = 0
+  for (const part of textLinks(state.doc.toString())) {
+    const start = at
+    at += part.kind === 'text' ? part.text.length : part.href.length
+    if (part.kind === 'text' || (state.field(typing) && at === caret) || mentions.some((mention) => mention.start < at && mention.end > start)) continue
+    ranges.push(Decoration.replace({ widget: new LinkWidget(part.href) }).range(start, at))
+  }
+  return ranges
+}
+
 type Props = Omit<HTMLAttributes<HTMLDivElement>, 'onChange' | 'onInput' | 'onSelect' | 'children'> & {
   value: MentionedText
   setValue: (value: MentionedText) => void
@@ -96,7 +140,7 @@ type Props = Omit<HTMLAttributes<HTMLDivElement>, 'onChange' | 'onInput' | 'onSe
   autoFocus?: boolean
 }
 
-// Atomic widgets keep the native paths out of the editing surface without changing its text.
+// Atomic widgets keep the native paths and web addresses out of the editing surface without changing its text.
 export function MentionField({ value, setValue, input, onSelectionChange, placeholder: hint = '', readOnly = false, autoFocus, ...props }: Props) {
   const host = useRef<HTMLDivElement>(null)
   const open = useOpenReference()
@@ -110,8 +154,12 @@ export function MentionField({ value, setValue, input, onSelectionChange, placeh
     if (!host.current) return
     const decorations = StateField.define<DecorationSet>({
       create: () => Decoration.none,
-      update: (_, transaction) => Decoration.set(transaction.state.field(referenceState).map((mention) =>
-        Decoration.replace({ widget: new ReferenceWidget(mention.target, (target) => handlers.current.open(target)) }).range(mention.start, mention.end))),
+      update: (_, transaction) => {
+        const mentions = transaction.state.field(referenceState)
+        return Decoration.set([...mentions.map((mention) =>
+          Decoration.replace({ widget: new ReferenceWidget(mention.target, (target) => handlers.current.open(target)) }).range(mention.start, mention.end)),
+        ...linkRanges(transaction.state, mentions)], true)
+      },
       provide: (field) => [EditorView.decorations.from(field), EditorView.atomicRanges.of((view) => view.state.field(field))]
     })
     const view = new EditorView({
@@ -119,7 +167,7 @@ export function MentionField({ value, setValue, input, onSelectionChange, placeh
       state: EditorState.create({
         doc: initial.current.text,
         extensions: [
-          referenceState, decorations, history(), drawSelection(),
+          referenceState, typing, decorations, history(), drawSelection(),
           invertedEffects.of((transaction) => transaction.docChanged || transaction.effects.some((effect) => effect.is(setMentions))
             ? [setMentions.of(transaction.startState.field(referenceState))] : []),
           keymap.of([...defaultKeymap, ...historyKeymap]), EditorView.lineWrapping,

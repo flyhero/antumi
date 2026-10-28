@@ -38,7 +38,7 @@ describe('conversation reference display', () => {
     expect(html).toContain('>SupportSettings.tsx</span>')
     expect(html).toContain('>代码审查员</span>')
     expect(html).toContain('**参考**')
-    expect(renderToStaticMarkup(createElement(ChatUserText, { text }))).not.toContain('data-reference-kind')
+    expect(renderToStaticMarkup(createElement(ChatUserText, { text }))).not.toMatch(/data-reference-kind="(file|agent)"/)
   })
 
   it('shows a linked title in user prose and assistant Markdown while leaving ordinary user Markdown literal', () => {
@@ -48,7 +48,7 @@ describe('conversation reference display', () => {
     expect(html).toContain('**参考**')
     expect(html).toContain(`data-conversation-id="${conversation.id}"`)
     expect(html).toContain('>鉴权方案</span>')
-    expect(html).toContain('href="https://example.com"')
+    expect(html).toContain('data-reference-kind="link" title="https://example.com"')
     expect(html).not.toContain('antumi://')
     expect(html).not.toContain('disabled')
     expect(renderToStaticMarkup(createElement(ChatMarkdown, { text: reference, highlight: false }))).toContain(`data-conversation-id="${conversation.id}"`)
@@ -59,6 +59,14 @@ describe('conversation reference display', () => {
     const html = renderToStaticMarkup(createElement(ChatUserText, { text: conversationReference(conversation.id, '<旧方案>') }))
     expect(html).toContain('disabled=""')
     expect(html).toContain('&lt;旧方案&gt;')
-    expect(html).not.toContain('href=')
+    expect(html).not.toContain('data-reference-kind="link"')
+  })
+
+  it('draws a web address as a chip naming it short, the full address kept for its tooltip', () => {
+    const html = renderToStaticMarkup(createElement(ChatUserText, { text: '看下https://www.example.com/docs/。' }))
+    expect(html).toContain('看下<button')
+    expect(html).toContain('title="https://www.example.com/docs/"')
+    expect(html).toContain('>example.com/docs</span>')
+    expect(html).toContain('</button>。')
   })
 })

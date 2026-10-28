@@ -2,6 +2,7 @@ import type { ChatReferenceTarget } from '@antumi/protocol'
 import { useSyncExternalStore, type MouseEventHandler, type ReactNode } from 'react'
 import { isDarkTheme, onThemeChange } from '../appearance'
 import { mentionLabel } from '../chat-mentions'
+import { shortLink } from '../text-links'
 import { selectConversation, useCore } from '../core-store'
 import { revealFile } from '../desktop-bridge'
 import { showChatFile } from '../file-actions'
@@ -9,7 +10,7 @@ import { t } from '../i18n'
 import { useChatFiles } from './ChatContextMenu'
 import { openAgentProfile } from './AgentProfiles'
 import { FileTypeIcon } from './FileTypeIcon'
-import { AgentIcon, ChatIcon, FolderIcon } from './icons'
+import { AgentIcon, ChatIcon, FolderIcon, GlobeIcon } from './icons'
 import './chat-reference.css'
 
 // The icon the mention menu showed for it: an agent's own mark, a file's type.
@@ -58,4 +59,13 @@ export function ChatReferenceLink({ target, children }: { target: ChatReferenceT
   const open = useOpenReference()
   const available = useCore((state) => target.kind === 'conversation' ? Boolean(state.conversations[target.id]) : target.kind === 'agent' ? Boolean(state.agentProfiles[target.id]) : true)
   return <ReferenceMark target={target} disabled={!available} title={target.kind === 'conversation' && !available ? t('ConversationReference.unavailable') : undefined} onClick={() => open(target)}>{children}</ReferenceMark>
+}
+
+// A web address the user wrote, drawn as a reference is: the text stays the address, which is what
+// the agent reads. It opens as any link in the chat does, outside the app.
+export function LinkMark({ href, onMouseDown, tabIndex }: { href: string; onMouseDown?: MouseEventHandler<HTMLButtonElement>; tabIndex?: number }) {
+  return <button type="button" className="chat-reference" data-reference-kind="link" title={href} tabIndex={tabIndex} onMouseDown={onMouseDown}
+    onClick={() => window.open(href, '_blank', 'noreferrer')}>
+    <span className="chat-reference-icon" aria-hidden="true"><GlobeIcon /></span><span className="chat-reference-name">{shortLink(href)}</span>
+  </button>
 }

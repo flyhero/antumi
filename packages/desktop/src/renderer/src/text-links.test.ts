@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { textLinks } from './text-links'
+import { shortLink, textLinks } from './text-links'
 
 const hrefs = (text: string) => textLinks(text).flatMap((part) => (part.kind === 'link' ? [part.href] : []))
 
@@ -42,5 +42,25 @@ describe('textLinks', () => {
 
   it('takes only web addresses with something after the scheme', () => {
     expect(hrefs('https:// and ftp://example.com and file:///tmp/a')).toEqual([])
+  })
+})
+
+describe('shortLink', () => {
+  it('drops the scheme, a leading www. and a closing slash', () => {
+    expect(shortLink('https://www.example.com/')).toBe('example.com')
+    expect(shortLink('http://github.com/flyhero/antumi/pull/12')).toBe('github.com/flyhero/antumi/pull/12')
+  })
+
+  it('keeps the host and the end of a long path', () => {
+    const short = shortLink('https://github.com/flyhero/antumi/blob/main/packages/desktop/src/renderer/src/text-links.ts')
+    expect(short.length).toBe(36)
+    expect(short.startsWith('github.com/…')).toBe(true)
+    expect(short.endsWith('/text-links.ts')).toBe(true)
+  })
+
+  it('cuts a long host at the end', () => {
+    const short = shortLink(`https://${'a'.repeat(60)}.example/x`)
+    expect(short.length).toBe(36)
+    expect(short.endsWith('…')).toBe(true)
   })
 })

@@ -6359,9 +6359,6 @@ div.inspector-empty > p { margin: 0 0 8px; }
 .chat-user a { color: var(--accent); }
 :is(.chat-markdown, .chat-user) .chat-web-link { text-decoration-thickness: from-font; text-underline-offset: 0.18em; text-decoration-color: color-mix(in srgb, var(--accent) 55%, transparent); }
 :is(.chat-markdown, .chat-user) .chat-web-link:hover { text-decoration-color: currentColor; }
-.chat-conversation-link { margin-inline: 0.15em; }
-.chat-conversation-link:disabled { color: var(--text-muted); cursor: default; text-decoration-style: dotted; }
-.chat-conversation-link:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--radius-xs); }
 .chat-link-space-before { margin-inline-start: 0.15em; }
 .chat-link-space-after { margin-inline-end: 0.15em; }
 .chat-markdown .chat-link-standalone { text-decoration: none; }
@@ -7507,45 +7504,6 @@ div.inspector-empty > p { margin: 0 0 8px; }
 
 /* Grows with what is typed up to a limit, so no resize grip competes with the corner button. Its
    copy under it (.chat-input-marks) must lay text out exactly as it does. */
-.chat-input,
-.chat-input-marks {
-  padding: 10px 12px 4px;
-  font: inherit;
-  line-height: 1.5;
-  letter-spacing: normal;
-  word-spacing: normal;
-}
-.chat-input {
-  display: block;
-  width: 100%;
-  field-sizing: content;
-  min-height: 48px;
-  max-height: 40vh;
-  border: none;
-  outline: none;
-  resize: none;
-  background: transparent;
-  color: var(--text);
-}
-
-/* While the input holds mentions, what shows is a copy of its text under it with their names in
-   colour; the textarea above keeps only its caret and selection, the selection see-through. */
-.chat-input-field { position: relative; }
-.chat-input-field > .chat-input { position: relative; }
-.chat-input-marks {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  color: var(--text);
-  white-space: pre-wrap;
-  overflow-wrap: break-word;
-  pointer-events: none;
-}
-.chat-input-field[data-marked] > .chat-input { color: transparent; caret-color: var(--text); }
-.chat-input-field[data-marked] > .chat-input::selection { background: color-mix(in srgb, var(--accent) 24%, transparent); }
-.chat-mention { color: var(--accent); }
-.chat-input-marks [data-composing] { text-decoration: underline; }
-
 /* Send, or stop: round, at the end of the toolbar. One turns into the other as the turn starts
    and ends. */
 /* Sends a handoff: worded, not an arrow, as it changes who the chat is with. As tall as the send. */

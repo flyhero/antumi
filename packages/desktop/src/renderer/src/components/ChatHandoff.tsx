@@ -1,5 +1,5 @@
 import { t } from '../i18n'
-import { checkTaskHandoff, ChatPermissionMode, type AgentKind, type ChatModel, type Conversation, type TaskLaunchOptions } from '@antumi/protocol'
+import { checkTaskHandoff, ChatPermissionMode, type ChatReference, type AgentKind, type ChatModel, type Conversation, type TaskLaunchOptions } from '@antumi/protocol'
 import { resolveModel, useAgentCatalog } from '../agent-models'
 import { providerFor } from '../model-provider-choice'
 import { cancelHandoff, chooseHandoffMode, chooseHandoffModel, proposeHandoff, useHandoffs } from '../chat-handoff'
@@ -31,7 +31,7 @@ export type ComposerHandoff = {
   // A free conversation's agent mid-turn is stopped for it, once the user agrees.
   stopsRunning: boolean
   // Hands the chat over, the message as the note it goes with. Resolves to whether it went.
-  send: (note: string) => Promise<boolean>
+  send: (note: string, references?: ChatReference[]) => Promise<boolean>
 }
 
 // The mode an agent takes over in: the one picked for it, else the one the chat is in where it has
@@ -74,13 +74,13 @@ export function useComposerHandoff(conversation: Conversation): ComposerHandoff 
     mode,
     options: { ...(mode ? { permissionMode: mode } : {}), ...(modelsSupported ? { model: modelId ?? null, effort: effort ?? null } : {}) }
   }
-  const send = async (note: string) => {
+  const send = async (note: string, references?: ChatReference[]) => {
     if (!target || found) return false
     if (stopsRunning && !window.confirm(t('ChatHandoff.stopTheCurrentAndHandOffTo', { value1: agentLabel(from), value2: agentLabel(target.agent) }))) return false
     if (!targetProvider && !confirmQuota(target.agent, modelText(target.model))) return false
     const result = task
-      ? await perform((rpc) => rpc.call('tasks.handoff', { id: task.id, agent: target.agent, note, ...startOptions(), ...target.options }))
-      : await perform((rpc) => rpc.call('conversations.handoff', { id, agent: target.agent, note, stopRunning: stopsRunning, ...startOptions(), ...target.options }))
+      ? await perform((rpc) => rpc.call('tasks.handoff', { id: task.id, agent: target.agent, note, ...(rpc.features.includes('chat-references') ? { references } : {}), ...startOptions(), ...target.options }))
+      : await perform((rpc) => rpc.call('conversations.handoff', { id, agent: target.agent, note, ...(rpc.features.includes('chat-references') ? { references } : {}), stopRunning: stopsRunning, ...startOptions(), ...target.options }))
     if (result) cancelHandoff(id)
     return result !== null
   }

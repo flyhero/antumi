@@ -269,9 +269,10 @@ export function ChatQuestionCard({ conversationId, item }: { conversationId: str
   // them from one question to the next.
   useEffect(() => {
     const active = document.activeElement
-    const writing = active instanceof HTMLTextAreaElement && active.value !== ''
+    const editor = active instanceof HTMLElement && active.isContentEditable
+    const writing = active instanceof HTMLTextAreaElement ? active.value !== '' : editor && !active.querySelector('.cm-placeholder') && active.textContent !== ''
     const within = active === document.body || (active !== null && card.current?.contains(active))
-    if (!writing && (within || active instanceof HTMLTextAreaElement)) {
+    if (!writing && (within || active instanceof HTMLTextAreaElement || editor)) {
       card.current?.querySelector<HTMLElement>('[data-option]')?.focus()
     }
   }, [index])

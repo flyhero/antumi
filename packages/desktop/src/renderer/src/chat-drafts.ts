@@ -1,10 +1,10 @@
 import { create } from 'zustand'
-import type { ChatImage } from '@antumi/protocol'
+import type { ChatReference, ChatImage } from '@antumi/protocol'
 
 // A message left in a chat's input for the user to go on from, by something other than their
 // typing: a fork before one of their messages puts that message here, unsent. Taken once, by the
 // composer of that conversation when it shows.
-export type ChatDraft = { text: string; images: readonly ChatImage[] }
+export type ChatDraft = { text: string; images: readonly ChatImage[]; references?: ChatReference[] }
 
 const useDraftStore = create<Record<string, ChatDraft>>()(() => ({}))
 

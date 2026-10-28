@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { createRpcClient, RpcRequest, type ChatImage, type Conversation, type RpcConnection } from '@antumi/protocol'
+import { createRpcClient, RpcRequest, type ChatImage, type ChatReference, type Conversation, type RpcConnection } from '@antumi/protocol'
 import { acknowledgeInitialMessage, keepInitialMessage, restoredInitialMessages, sendInitialMessage, useInitialMessages } from './initial-messages'
 
 const id = 'd964b86b-6a8c-4e23-9b79-dff4fdb4a3ad'
@@ -7,10 +7,10 @@ const image: ChatImage = { id: `${'a'.repeat(64)}.png`, width: 4, height: 3 }
 const conversation: Conversation = { id, title: 'New', titleLocked: false, agent: 'cursor', workspacePath: '/workspace', projectPaths: [], managedWorkspace: true, sessionId: 'session', createdAt: 0, updatedAt: 0 }
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0))
 
-function connection() {
+function connection(features: RpcConnection['features'] = ['deferred-conversation-start']) {
   const sent: Array<ReturnType<typeof RpcRequest.parse>> = []
   const client = createRpcClient((frame) => sent.push(RpcRequest.parse(JSON.parse(frame))))
-  const rpc: RpcConnection = { ...client, close() {}, closed: Promise.resolve(), features: ['deferred-conversation-start'] }
+  const rpc: RpcConnection = { ...client, close() {}, closed: Promise.resolve(), features }
   const reply = (index: number, result: unknown) => rpc.receive(JSON.stringify({ jsonrpc: '2.0', id: sent[index]?.id, result }))
   const fail = (index: number) => rpc.receive(JSON.stringify({ jsonrpc: '2.0', id: sent[index]?.id, error: { code: -32000, message: 'startup failed' } }))
   return { rpc, sent, reply, fail }
@@ -19,6 +19,21 @@ function connection() {
 beforeEach(() => useInitialMessages.setState({}, true))
 
 describe('initial message delivery', () => {
+  it('restores reference targets after a reload and delivers them separately from the native prompt', async () => {
+    const { rpc, sent, reply } = connection(['deferred-conversation-start', 'chat-references'])
+    const references: ChatReference[] = [{ start: 0, end: 6, target: { kind: 'file', path: '/workspace/src/a.ts', relative: 'src/a.ts' } }]
+    keepInitialMessage(id, 'a.ts 文件', [], references)
+    const restored = restoredInitialMessages(JSON.stringify(useInitialMessages.getState()))
+    expect(restored[id]?.references).toEqual(references)
+    useInitialMessages.setState(restored, true)
+    const delivery = sendInitialMessage(id, rpc)
+    reply(0, conversation)
+    await settle()
+    expect(sent[1]).toMatchObject({ params: { text: 'a.ts 文件', references } })
+    reply(1, { ok: true })
+    await delivery
+  })
+
   it('shows the message while startup waits and sends its images only after readiness', async () => {
     const { rpc, sent, reply } = connection()
     keepInitialMessage(id, 'look at this', [image])

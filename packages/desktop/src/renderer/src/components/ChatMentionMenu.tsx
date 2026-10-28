@@ -1,11 +1,12 @@
 import { getLocale, t, tr } from '../i18n'
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode, type RefObject, type TextareaHTMLAttributes } from 'react'
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode, type RefObject, type HTMLAttributes } from 'react'
+import type { EditorView } from '@codemirror/view'
 import type { AgentKind, ProjectFileMatch } from '@antumi/protocol'
 import { useCore, useFileMentionsSupported } from '../core-store'
 import { fileTarget, insertMention, matchConversations, matchProjects, mentionQuery, placeMention, type MentionedText, type MentionTarget } from '../chat-mentions'
 import type { SetText } from './ChatMentionField'
 import { projectName } from './ProjectPicker'
-import { AgentIcon, FolderIcon } from './icons'
+import { ChatIcon, FolderIcon, RobotIcon } from './icons'
 import { FileTypeIcon } from './FileTypeIcon'
 import { isDarkTheme, onThemeChange } from '../appearance'
 import { agentLabel } from '../labels'
@@ -14,8 +15,9 @@ import './chat-mention-menu.css'
 // Long enough that a word typed at speed asks once.
 const SEARCH_DELAY_MS = 80
 
-type InputProps = Pick<TextareaHTMLAttributes<HTMLTextAreaElement>, 'onSelect' | 'onInput' | 'aria-autocomplete' | 'aria-expanded' | 'aria-controls' | 'aria-activedescendant'> & {
-  ref: RefObject<HTMLTextAreaElement | null>
+type InputProps = Pick<HTMLAttributes<HTMLDivElement>, 'aria-autocomplete' | 'aria-expanded' | 'aria-controls' | 'aria-activedescendant'> & {
+  input: RefObject<EditorView | null>
+  onSelectionChange: () => void
 }
 
 // `opens`: what Tab puts after the @ to look inside a folder, its path under its project.
@@ -67,7 +69,7 @@ function MentionOption({ entry, id, active, onHover, onPick }: {
 }
 
 // Agents, files, projects and conversations matching the @word above the input. Enter puts the
-// one picked in as a mention, its name in colour, written out for the agent as the message goes
+// one picked in as a mention, its icon and short name, written out for the agent as the message goes
 // (see writeMentions); Tab on a folder opens it to pick inside, and elsewhere picks too; Esc puts
 // the list away until the text changes.
 export function useChatMentionMenu({ value, setText, setValue, roots, cwd, agent, conversationId }: {
@@ -82,11 +84,11 @@ export function useChatMentionMenu({ value, setText, setValue, roots, cwd, agent
 }): {
   menu: ReactNode
   inputProps: InputProps
-  onKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => boolean
+  onKeyDown: (event: KeyboardEvent<HTMLElement>) => boolean
 } {
   const listId = useId()
   const { text } = value
-  const input = useRef<HTMLTextAreaElement>(null)
+  const input = useRef<EditorView>(null)
   const [caret, setCaret] = useState(0)
   // Where the caret goes once a pick's text is in the input.
   const placed = useRef<number | null>(null)
@@ -116,7 +118,7 @@ export function useChatMentionMenu({ value, setText, setValue, roots, cwd, agent
 
   useLayoutEffect(() => {
     if (placed.current === null || !input.current) return
-    input.current.setSelectionRange(placed.current, placed.current)
+    input.current.dispatch({ selection: { anchor: placed.current } })
     setCaret(placed.current)
     placed.current = null
   }, [text])
@@ -158,14 +160,14 @@ export function useChatMentionMenu({ value, setText, setValue, roots, cwd, agent
       icon: <FolderIcon />
     }))
     const profileRows = callable.filter((profile) => profile.name.toLocaleLowerCase().includes(query.toLocaleLowerCase())).map((profile): MentionEntry => ({
-      key: `profile:${profile.id}`, group: 'profiles', target: null, name: profile.name, detail: profile.description || agentLabel(profile.agent), opens: null,
-      icon: <AgentIcon agent={profile.agent} />
+      key: `profile:${profile.id}`, group: 'profiles', target: { kind: 'agent', id: profile.id, name: profile.name }, name: profile.name, detail: profile.description || agentLabel(profile.agent), opens: null,
+      icon: <RobotIcon />
     }))
     const conversationRows = references ? matchConversations(Object.values(conversations), query, conversationId).map((entry): MentionEntry => ({
       key: `conversation:${entry.id}`, group: 'conversations', target: { kind: 'conversation', id: entry.id, title: entry.title },
       name: entry.title || entry.id.slice(0, 8),
       detail: [agentLabel(entry.agent), ...entry.projectPaths.map(projectName), entry.archivedAt != null ? t('ConversationList.archived') : '', entry.id.slice(0, 8)].filter(Boolean).join(' · '),
-      opens: null, icon: <AgentIcon agent={entry.agent} />
+      opens: null, icon: <ChatIcon />
     })) : []
     return { profiles: profileRows, files: fileRows, projects: projectRows, conversations: conversationRows }
   }, [query, files, projects, cwd, rootsKey, roots.length, profiles, conversation, delegates, conversations, conversationId, references, dark, getLocale()])
@@ -205,7 +207,7 @@ export function useChatMentionMenu({ value, setText, setValue, roots, cwd, agent
     }
   }
 
-  const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>): boolean => {
+  const onKeyDown = (event: KeyboardEvent<HTMLElement>): boolean => {
     if (!open || event.nativeEvent.isComposing || event.metaKey || event.ctrlKey || event.altKey) return false
     const entry = shown[active]
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -258,11 +260,10 @@ export function useChatMentionMenu({ value, setText, setValue, roots, cwd, agent
     </div>
   ) : null
 
-  const track = () => setCaret(input.current?.selectionStart ?? 0)
+  const track = () => setCaret(input.current?.state.selection.main.head ?? 0)
   const inputProps: InputProps = {
-    ref: input,
-    onSelect: track,
-    onInput: track,
+    input,
+    onSelectionChange: track,
     // Only while open: the command menu describes the input otherwise.
     ...(open ? {
       'aria-autocomplete': 'list' as const,

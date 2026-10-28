@@ -1,13 +1,13 @@
 import { getLocale, t, tr } from '../i18n'
 import { HelperStartOptions } from './HelperModelPicker'
 import { useCallback, useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
-import { agentDescriptor, canReuseConversation, type ChatImage, type ChatItem, type ChatQueued, type Conversation } from '@antumi/protocol'
+import { chatReferencesIn, chatReferencesFor, type ChatReference, agentDescriptor, canReuseConversation, type ChatImage, type ChatItem, type ChatQueued, type Conversation } from '@antumi/protocol'
 import { perform, useChatImagesSupported, useChatOptionsSupported, useCore, useFileMentionsSupported, useScheduleImagesSupported, useSchedulesSupported } from '../core-store'
 import { agentEntries, antumiEntries } from '../chat-commands'
 import { composeMessage, parseQuotes, setQuotes, useQuotes, type ChatQuote } from '../chat-quotes'
 import { takeDraft } from '../chat-drafts'
-import { writeMentions } from '../chat-mentions'
-import { usePlans } from '../chat-state'
+import { messageReferences, shiftMentions, readMentionedText, writeMentionedText } from '../chat-mentions'
+import { saidText, usePlans } from '../chat-state'
 import { QuoteCards } from './ChatQuoteCards'
 import { agentLabel } from '../labels'
 import { PRIMARY_KEY_LABEL } from '../shortcut-keys'
@@ -32,22 +32,22 @@ import { useInitialMessages } from '../initial-messages'
 
 // Enter sends and Shift+Enter breaks the line; Enter while an input method is composing picks a
 // candidate instead.
-export function sendsMessage(event: KeyboardEvent<HTMLTextAreaElement>): boolean {
+export function sendsMessage(event: KeyboardEvent<HTMLElement>): boolean {
   return event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing
 }
 
 // ⌘⇧Enter (Ctrl+Shift+Enter elsewhere) sends to a new conversation on this one's settings.
-export function sendsToNewConversation(event: KeyboardEvent<HTMLTextAreaElement>): boolean {
+export function sendsToNewConversation(event: KeyboardEvent<HTMLElement>): boolean {
   return event.key === 'Enter' && event.shiftKey && (event.metaKey || event.ctrlKey) && !event.nativeEvent.isComposing
 }
 
 // ⌘Enter (Ctrl+Enter elsewhere) sends into the running turn instead of queueing.
-export function steersMessage(event: KeyboardEvent<HTMLTextAreaElement>): boolean {
+export function steersMessage(event: KeyboardEvent<HTMLElement>): boolean {
   return event.key === 'Enter' && (event.metaKey || event.ctrlKey) && !event.nativeEvent.isComposing
 }
 
 // Tab or →, alone, takes the suggestion the empty input shows.
-function takesSuggestion(event: KeyboardEvent<HTMLTextAreaElement>): boolean {
+function takesSuggestion(event: KeyboardEvent<HTMLElement>): boolean {
   const alone = !event.shiftKey && !event.metaKey && !event.ctrlKey && !event.altKey && !event.nativeEvent.isComposing
   return alone && (event.key === 'Tab' || event.key === 'ArrowRight')
 }
@@ -69,10 +69,11 @@ function queuedText(text: string): string {
 
 // Sends what the input holds later, unattended: once its time comes and the agent has quota again.
 // An empty input schedules carrying out the plan the chat has; with no plan, it schedules nothing.
-function ScheduleSendButton({ conversationId, text, quotes, images, disabledReason, onScheduled }: {
+function ScheduleSendButton({ conversationId, text, references, quotes, images, disabledReason, onScheduled }: {
   conversationId: string
   // What the input holds, which the picker starts from and lets the user change there.
   text: string
+  references: ChatReference[]
   quotes: readonly ChatQuote[]
   // The pictures in the input, by their names in core's attachment store, which keeps them.
   images: readonly string[]
@@ -110,7 +111,7 @@ function ScheduleSendButton({ conversationId, text, quotes, images, disabledReas
           empty={!planned && draft.trim() === '' && quotes.length === 0 && images.length === 0}
           onSchedule={async (notBefore) => {
             const message = composeMessage(quotes, draft)
-            const run = await createSchedule({ kind: 'conversation', conversationId, text: message.trim(), ...(images.length ? { images: [...images] } : {}) }, notBefore)
+            const run = await createSchedule({ kind: 'conversation', conversationId, text: message.trim(), references: chatReferencesFor(draft, message.trim(), shiftMentions(references, text, draft, null)), ...(images.length ? { images: [...images] } : {}) }, notBefore)
             if (run) onScheduled()
             return run !== null
           }}
@@ -281,8 +282,8 @@ export function ChatComposer({ conversation, state, compact = false }: { convers
   useEffect(() => {
     const draft = takeDraft(id)
     if (!draft) return
-    const { quotes: quoted, body } = parseQuotes(draft.text)
-    setText(body)
+    const { quotes: quoted, body } = parseQuotes(saidText(draft.text))
+    setValue(readMentionedText(body, chatReferencesIn(draft.text, body, draft.references)))
     if (quoted.length > 0) setQuotes(id, quoted)
     attached.setImages([...draft.images])
     // Once, when the composer shows for this conversation.
@@ -330,7 +331,8 @@ export function ChatComposer({ conversation, state, compact = false }: { convers
   })
   const mentionMenu = useChatMentionMenu({ conversationId: conversation.id, value, setText, setValue, roots: conversation.projectPaths, cwd: conversation.workspacePath, agent: conversation.agent })
   // The input as the agent reads it, each mention written out.
-  const written = writeMentions(value, conversation.agent)
+  const writtenMessage = writeMentionedText(value, handingOff ?? conversation.agent)
+  const written = writtenMessage.text
   // steer: into the running turn now; otherwise a message while the agent works waits its turn.
   // The user's own command expands into the input to be read over, rather than going.
   const send = async (steer = false, message = written) => {
@@ -347,10 +349,11 @@ export function ChatComposer({ conversation, state, compact = false }: { convers
     const images = attached.images
     // Getting ready resolves once the agent can take it; if that fails, the text stays to try again.
     const ready = await surface.prepareSend(stopped)
-    const relay = ready && (!queueable || steer) ? beginRelay(composed, images.map((image) => image.id), mentionMenu.inputProps.ref.current) : null
+    const relay = ready && (!queueable || steer) ? beginRelay(composed, images.map((image) => image.id), mentionMenu.inputProps.input.current?.contentDOM ?? null) : null
     const sent = ready && await perform((rpc) => rpc.call('conversations.send', {
       id,
       text: composed,
+      ...(rpc.features.includes('chat-references') ? { references: messageReferences(writtenMessage, composed) } : {}),
       ...(images.length ? { images: images.map((image) => image.id) } : {}),
       ...(queueable ? (steer ? { steer: true } : { queue: true }) : {})
     }))
@@ -373,7 +376,7 @@ export function ChatComposer({ conversation, state, compact = false }: { convers
     const composed = quoting ? composeMessage(quotes, written) : written.trim()
     if (!canSendNew || (composed === '' && attached.images.length === 0)) return
     setBusy(true)
-    const went = await sendToNewConversation(conversation, composed, attached.images)
+    const went = await sendToNewConversation(conversation, composed, attached.images, messageReferences(writtenMessage, composed))
     setBusy(false)
     if (!went) return
     setText('')
@@ -386,7 +389,8 @@ export function ChatComposer({ conversation, state, compact = false }: { convers
     if (busy || starting || handoff.blocker) return
     const quoting = quotes.length > 0
     setBusy(true)
-    const went = await handoff.send(quoting ? composeMessage(quotes, written) : written.trim())
+    const message = quoting ? composeMessage(quotes, written) : written.trim()
+    const went = await handoff.send(message, messageReferences(writtenMessage, message))
     setBusy(false)
     if (went) {
       setText('')
@@ -395,7 +399,7 @@ export function ChatComposer({ conversation, state, compact = false }: { convers
   }
   // Picking an agent to hand to, here or from elsewhere, leads to the input that sends it.
   useEffect(() => {
-    if (handingOff) mentionMenu.inputProps.ref.current?.focus()
+    if (handingOff) mentionMenu.inputProps.input.current?.focus()
     // Only when the agent picked changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [handingOff])
@@ -406,7 +410,11 @@ export function ChatComposer({ conversation, state, compact = false }: { convers
     if (await cancelQueued(entry.ref)) {
       const parsed = parseQuotes(entry.text)
       if (parsed.quotes.length) setQuotes(id, [...parsed.quotes, ...quotes])
-      setText((current) => [parsed.body, current].filter((part) => part.trim()).join('\n\n'))
+      const restored = readMentionedText(parsed.body, chatReferencesIn(entry.text, parsed.body, entry.references))
+      setValue((current) => {
+        const prefix = restored.text + (restored.text && current.text ? '\n\n' : '')
+        return { text: prefix + current.text, mentions: [...restored.mentions, ...current.mentions.map((mention) => ({ ...mention, start: mention.start + prefix.length, end: mention.end + prefix.length }))] }
+      })
       attached.setImages((current) => mergeImages(entry.images, current))
     }
   }
@@ -441,52 +449,48 @@ export function ChatComposer({ conversation, state, compact = false }: { convers
     >
       {commandMenu.menu}
       {mentionMenu.menu}
-      {quotes.length > 0 && <QuoteCards conversationId={id} quotes={quotes} onDone={() => mentionMenu.inputProps.ref.current?.focus()} />}
+      {quotes.length > 0 && <QuoteCards conversationId={id} quotes={quotes} onDone={() => mentionMenu.inputProps.input.current?.focus()} />}
       {imagesSupported && <ChatImageStrip images={attached.images} uploading={attached.uploading} onRemove={attached.remove} />}
-      <MentionField value={value} input={mentionMenu.inputProps.ref}>
-        <textarea
-          className="chat-input"
-          rows={3}
-          value={text}
-          aria-label={t('ChatComposer.messageToAgent')}
-          {...commandMenu.inputProps}
-          {...mentionMenu.inputProps}
-          readOnly={starting}
-          autoFocus={compact}
-          placeholder={compact ? t('ChatComposer.askHelper') :
-            handingOff ? t('ChatComposer.handOffToAddInstructionsOrPressEnter', { value1: agentLabel(handingOff) })
-            : surface.sendBlocker ?? initialHint ?? suggestion ?? (idle || stopped ? t('ChatComposer.messageAgentEnterToSendShiftEnterFor', { value1: commandEntries.length > 0 ? t('ChatComposer.forCommands') : '', value2: mentionsSupported ? t('ChatComposer.toReferenceFiles') : '' })
-              : workingPlaceholder({ awaiting: turn === 'awaiting', queueable, steerable }))
+      <MentionField
+        value={value}
+        aria-label={t('ChatComposer.messageToAgent')}
+        {...commandMenu.inputProps}
+        {...mentionMenu.inputProps}
+        readOnly={starting}
+        autoFocus={compact}
+        placeholder={compact ? t('ChatComposer.askHelper') :
+          handingOff ? t('ChatComposer.handOffToAddInstructionsOrPressEnter', { value1: agentLabel(handingOff) })
+          : surface.sendBlocker ?? initialHint ?? suggestion ?? (idle || stopped ? t('ChatComposer.messageAgentEnterToSendShiftEnterFor', { value1: commandEntries.length > 0 ? t('ChatComposer.forCommands') : '', value2: mentionsSupported ? t('ChatComposer.toReferenceFiles') : '' })
+            : workingPlaceholder({ awaiting: turn === 'awaiting', queueable, steerable }))
+        }
+        setValue={(next) => {
+          if (suggestion && next.text) setDismissed(suggestion)
+          setValue(next)
+        }}
+        onPasteCapture={imagesSupported ? attached.handlers.onPaste : undefined}
+        onKeyDownCapture={(event) => {
+          if (commandMenu.onKeyDown(event) || mentionMenu.onKeyDown(event)) return
+          if (handingOff && (steersMessage(event) || sendsMessage(event))) {
+            event.preventDefault()
+            void handOff()
+          } else if (suggestion && takesSuggestion(event)) {
+            event.preventDefault()
+            setText(suggestion)
+          } else if (reusable && sendsToNewConversation(event)) {
+            event.preventDefault()
+            void sendNew()
+          } else if (steersMessage(event)) {
+            event.preventDefault()
+            void send(true)
+          } else if (sendsMessage(event)) {
+            event.preventDefault()
+            void send()
+          } else if (event.key === 'Escape' && working && !event.nativeEvent.isComposing) {
+            event.preventDefault()
+            interrupt()
           }
-          onChange={(event) => {
-            if (suggestion && event.target.value) setDismissed(suggestion)
-            setText(event.target.value, event.target.selectionEnd)
-          }}
-          onPaste={imagesSupported ? attached.handlers.onPaste : undefined}
-          onKeyDown={(event) => {
-            if (commandMenu.onKeyDown(event) || mentionMenu.onKeyDown(event)) return
-            if (handingOff && (steersMessage(event) || sendsMessage(event))) {
-              event.preventDefault()
-              void handOff()
-            } else if (suggestion && takesSuggestion(event)) {
-              event.preventDefault()
-              setText(suggestion)
-            } else if (reusable && sendsToNewConversation(event)) {
-              event.preventDefault()
-              void sendNew()
-            } else if (steersMessage(event)) {
-              event.preventDefault()
-              void send(true)
-            } else if (sendsMessage(event)) {
-              event.preventDefault()
-              void send()
-            } else if (event.key === 'Escape' && working && !event.nativeEvent.isComposing) {
-              event.preventDefault()
-              interrupt()
-            }
-          }}
-        />
-      </MentionField>
+        }}
+      />
       {/* Under the input, inside its box: what goes with the message, how the agent runs, and send. */}
       <div className="chat-options">
         {imagesSupported && <ChatAddMenu disabled={starting} onAdd={attached.add} />}
@@ -508,6 +512,7 @@ export function ChatComposer({ conversation, state, compact = false }: { convers
           <ScheduleSendButton
             conversationId={id}
             text={written}
+            references={writtenMessage.references}
             quotes={quotes}
             images={attached.images.map((image) => image.id)}
             disabledReason={

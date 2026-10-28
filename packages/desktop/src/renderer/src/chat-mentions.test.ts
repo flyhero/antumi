@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { caretOutside, fileTarget, insertMention, markedRuns, matchConversations, matchProjects, mentionBeside, mentionLabel, mentionQuery, mentionText, placeMention, shiftMentions, writeMentions, type Mention, type MentionTarget } from './chat-mentions'
+import { caretOutside, fileTarget, insertMention, markedRuns, matchConversations, matchProjects, mentionBeside, mentionLabel, mentionQuery, mentionText, placeMention, shiftMentions, writeMentions, writeMentionedText, messageReferences, readMentionedText, type Mention, type MentionTarget } from './chat-mentions'
 import { conversationReference, type Conversation } from '@antumi/protocol'
 
 describe('mentionQuery', () => {
@@ -150,6 +150,19 @@ ${text}`, null)).toEqual([at(6, 13)])
 })
 
 describe('writeMentions', () => {
+  it('retains short names and targets independently of the native text, including trim and quote wrappers', () => {
+    const reviewer: MentionTarget = { kind: 'agent', id: 'bbbbbbbb-0000-4000-8000-000000000002', name: '代码审查员' }
+    const value = { text: ' font.ts 代码审查员 ', mentions: [at(1, 8), at(9, 14, reviewer)] }
+    const written = writeMentionedText(value, 'claude')
+    expect(written.text).toBe(' @src/font.ts @代码审查员 ')
+    expect(written.references.map((reference) => written.text.slice(reference.start, reference.end))).toEqual(['@src/font.ts', '@代码审查员'])
+    expect(readMentionedText(written.text, written.references)).toEqual(value)
+    const message = `> 上一条引用\n\n${written.text.trim()}`
+    const references = messageReferences(written, message)
+    expect(references.map((reference) => message.slice(reference.start, reference.end))).toEqual(['@src/font.ts', '@代码审查员'])
+    expect(messageReferences(written, '/help')).toEqual([])
+  })
+
   it('writes each mention out as the agent reads it', () => {
     const value = { text: '看看 font.ts 和 orca', mentions: [at(3, 10), at(13, 17, orca)] }
     expect(writeMentions(value, 'claude')).toBe('看看 @src/font.ts 和 /work/orca')

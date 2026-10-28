@@ -20,6 +20,13 @@ import { usePreferences } from '../preferences'
 import './agent-profiles.css'
 
 const useProfileEditor = create<{ view: 'list' | 'templates' | 'editor'; profile: AgentProfile | null; seed: AgentProfileFields | null; template: AgentProfileTemplate | null; back: 'list' | 'templates' }>(() => ({ view: 'list', profile: null, seed: null, template: null, back: 'list' }))
+export function openAgentProfile(id: string): void {
+  const profile = useCore.getState().agentProfiles[id]
+  if (!profile) return
+  selectSquad(null)
+  useCore.setState({ agentProfilesTab: 'profiles' })
+  useProfileEditor.setState({ view: 'editor', profile, seed: null, template: null, back: 'list' })
+}
 export function editAgentProfile(seed: AgentProfileFields): void {
   selectSquad(null)
   useCore.setState({ agentProfilesTab: 'profiles' })

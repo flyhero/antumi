@@ -1,13 +1,14 @@
 import { t } from './i18n'
 import { create } from 'zustand'
 import { z } from 'zod'
-import { ChatImage, RpcError, type ChatItem, type RpcConnection } from '@antumi/protocol'
+import { ChatReference, ChatImage, RpcError, type ChatItem, type RpcConnection } from '@antumi/protocol'
 import { reasonText } from './labels'
 
 const InitialMessage = z.object({
   ref: z.string().uuid(),
   text: z.string(),
   images: z.array(ChatImage),
+  references: z.array(ChatReference).optional(),
   at: z.number(),
   phase: z.enum(['starting', 'sending', 'failed']),
   error: z.string().nullable()
@@ -36,8 +37,8 @@ useInitialMessages.subscribe((messages) => {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(messages)) } catch { /* Keep the in-memory copy. */ }
 })
 
-export function keepInitialMessage(id: string, text: string, images: readonly ChatImage[]): void {
-  useInitialMessages.setState({ [id]: { ref: crypto.randomUUID(), text, images: [...images], at: Date.now(), phase: 'starting', error: null } })
+export function keepInitialMessage(id: string, text: string, images: readonly ChatImage[], references?: ChatReference[]): void {
+  useInitialMessages.setState({ [id]: { ref: crypto.randomUUID(), text, images: [...images], at: Date.now(), ...(references?.length ? { references } : {}), phase: 'starting', error: null } })
 }
 
 function discard(id: string): void {
@@ -65,7 +66,7 @@ export function sendInitialMessage(id: string, rpc: RpcConnection): Promise<void
       await rpc.call('conversations.continue', { id })
       if (!useInitialMessages.getState()[id]) return
       useInitialMessages.setState({ [id]: { ...message, phase: 'sending', error: null } })
-      await rpc.call('conversations.send', { id, text: message.text, images: message.images.map((image) => image.id), ref: message.ref })
+      await rpc.call('conversations.send', { id, text: message.text, images: message.images.map((image) => image.id), ref: message.ref, ...(rpc.features.includes('chat-references') ? { references: message.references } : {}) })
       discard(id)
     } catch (error) {
       if (!useInitialMessages.getState()[id]) return

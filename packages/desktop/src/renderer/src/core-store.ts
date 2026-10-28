@@ -663,7 +663,7 @@ export function focusSplitPane(index: 0 | 1): boolean {
 }
 
 export function focusPaneInput(index: 0 | 1): void {
-  requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>(`[data-split-pane="${index + 1}"] .chat-dock-composer .chat-input`)?.focus())
+  requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-split-pane="${index + 1}"] .chat-dock-composer .chat-input`)?.focus())
 }
 
 // Opening a routine's conversation is looking at its run, whose id the conversation shares; core

@@ -1,4 +1,4 @@
-import { agentDescriptor, conversationReference, type AgentKind, type Conversation, type ProjectFileMatch } from '@antumi/protocol'
+import { agentDescriptor, chatReferencesFor, conversationReference, type ChatReference, type ChatReferenceTarget, type AgentKind, type Conversation, type ProjectFileMatch } from '@antumi/protocol'
 
 const MAX_PROJECTS = 8
 
@@ -17,8 +17,7 @@ export function mentionQuery(text: string, caret: number): MentionRange | null {
 
 // What a mention points at. `relative` is set only inside the agent's working folder, where the
 // shorter path reads the same to it.
-export type MentionTarget = { kind: 'file' | 'directory' | 'project'; path: string; relative: string | null }
-  | { kind: 'conversation'; id: string; title: string }
+export type MentionTarget = ChatReferenceTarget
 
 export function fileTarget(match: ProjectFileMatch, cwd: string | null): MentionTarget {
   return { kind: match.kind, path: match.path, relative: match.root === cwd ? match.relative : null }
@@ -28,6 +27,7 @@ export function fileTarget(match: ProjectFileMatch, cwd: string | null): Mention
 // mentions, so it gets the path to read. A project is only named, for either.
 export function mentionText(target: MentionTarget, agent: AgentKind): string {
   if (target.kind === 'conversation') return conversationReference(target.id, target.title)
+  if (target.kind === 'agent') return `@${target.name}`
   const shown = target.relative ?? target.path
   const written = target.kind === 'directory' ? `${shown}/` : shown
   const spaced = /\s/.test(written)
@@ -47,13 +47,14 @@ export function insertMention(text: string, range: MentionRange, inserted: strin
   return { text: lead + inserted + spaced, caret: lead.length + inserted.length + 1 }
 }
 
-// A pick as the input holds it: its short name over [start, end) of the text, in colour, and what
+// A pick as the input holds it: its short name over [start, end) of the text, and what
 // it stands for, written out for the agent only as the message goes (see writeMentions).
-export type Mention = { start: number; end: number; target: MentionTarget }
+export type Mention = ChatReference
 export type MentionedText = { text: string; mentions: readonly Mention[] }
 
 // The name a pick shows in the input: the file's, folder's or project's own, a folder's with a slash.
 export function mentionLabel(target: MentionTarget): string {
+  if (target.kind === 'agent') return target.name
   if (target.kind === 'conversation') return target.title.replace(/\s+/g, ' ').trim() || target.id
   const name = target.path.split(/[\\/]/).filter(Boolean).at(-1) ?? target.path
   return target.kind === 'directory' ? `${name}/` : name
@@ -95,18 +96,46 @@ export function placeMention(value: MentionedText, range: MentionRange, target: 
 
 // The message as the agent reads it: each name written out as mentionText has it, set apart from
 // text running into it, since Claude takes an @path to the next space.
-export function writeMentions(value: MentionedText, agent: AgentKind): string {
+export function writeMentionedText(value: MentionedText, agent: AgentKind): { text: string; references: ChatReference[] } {
   let written = ''
+  const references: ChatReference[] = []
   let at = 0
   for (const mention of [...value.mentions].sort((a, b) => a.start - b.start)) {
     written += value.text.slice(at, mention.start)
     const next = value.text[mention.end]
     const lead = written === '' || /\s$/.test(written) ? '' : ' '
     const trail = next === undefined || /\s/.test(next) ? '' : ' '
-    written += lead + mentionText(mention.target, agent) + trail
+    written += lead
+    const start = written.length
+    written += mentionText(mention.target, agent)
+    references.push({ start, end: written.length, target: mention.target })
+    written += trail
     at = mention.end
   }
-  return written + value.text.slice(at)
+  return { text: written + value.text.slice(at), references }
+}
+
+export function writeMentions(value: MentionedText, agent: AgentKind): string {
+  return writeMentionedText(value, agent).text
+}
+
+export function messageReferences(written: { text: string; references: readonly ChatReference[] }, message: string): ChatReference[] {
+  return chatReferencesFor(written.text, message, written.references)
+}
+
+// Restore short names when a queued message or fork is put back into the composer.
+export function readMentionedText(text: string, references: readonly ChatReference[] = []): MentionedText {
+  let shown = ''
+  let at = 0
+  const mentions: Mention[] = []
+  for (const reference of references) {
+    shown += text.slice(at, reference.start)
+    const start = shown.length
+    shown += mentionLabel(reference.target)
+    mentions.push({ start, end: shown.length, target: reference.target })
+    at = reference.end
+  }
+  return { text: shown + text.slice(at), mentions }
 }
 
 // Where a caret come to rest inside a mention (a click, a word's step) goes, as a mention is one

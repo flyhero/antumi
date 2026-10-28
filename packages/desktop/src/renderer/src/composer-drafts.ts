@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { ChatImage } from '@antumi/protocol'
+import { ChatImage, ChatReference } from '@antumi/protocol'
 import type { MentionedText } from './chat-mentions'
 
 // Unsent input belongs to the conversation it was written in. The new-conversation page has its
@@ -7,18 +7,8 @@ import type { MentionedText } from './chat-mentions'
 // what the user has typed or attached; a successful send removes it. Images are kept by their ids
 // in core's attachment store, which holds them already once uploaded.
 
-const MentionTarget = z.union([z.object({
-  kind: z.enum(['file', 'directory', 'project']),
-  path: z.string(),
-  relative: z.string().nullable()
-}), z.object({ kind: z.literal('conversation'), id: z.string().uuid(), title: z.string() })])
-const Mention = z.object({
-  start: z.number().int().nonnegative(),
-  end: z.number().int().nonnegative(),
-  target: MentionTarget
-})
 // Drafts kept before images were have none.
-const Draft = z.object({ text: z.string(), mentions: z.array(Mention), images: z.array(ChatImage).default([]) }).refine(
+const Draft = z.object({ text: z.string(), mentions: z.array(ChatReference), images: z.array(ChatImage).default([]) }).refine(
   (draft) => draft.mentions.every((mention) => mention.start <= mention.end && mention.end <= draft.text.length)
 )
 const Drafts = z.record(z.string(), Draft)

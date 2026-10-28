@@ -1,0 +1,38 @@
+.chat-reference {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: min(256px, 100%);
+  margin: 0 2px;
+  padding: 0 4px;
+  min-height: 24px;
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-xs);
+  background: var(--fill);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--chat-font-small, 12px);
+  font-weight: 500;
+  line-height: 1.5;
+  vertical-align: middle;
+  text-decoration: none;
+}
+button.chat-reference { cursor: pointer; }
+button.chat-reference:hover { background: var(--fill-2); }
+button.chat-reference:disabled { color: var(--text-muted); cursor: default; }
+button.chat-reference:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.chat-reference-icon { display: inline-flex; flex-shrink: 0; color: var(--text-muted); }
+.chat-reference-icon > svg { width: 14px; height: 14px; }
+.chat-reference-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cm-reference { display: inline; }
+.cm-reference .chat-reference { user-select: none; }
+
+.chat-input-field .cm-editor { background: transparent; color: var(--text); }
+.chat-input-field .cm-editor.cm-focused { outline: none; }
+.chat-input-field .cm-scroller { min-height: 48px; max-height: 40vh; overflow: auto; font: inherit; line-height: 1.7; }
+.chat-input-field .cm-content { padding: 8px 12px 4px; caret-color: var(--text); overflow-wrap: anywhere; }
+.chat-input-field .cm-line { padding: 0; }
+.chat-input-field .cm-placeholder { color: var(--text-3); }
+.chat-input-field .cm-cursor { border-left-color: var(--text); }
+.chat-input-field .cm-selectionBackground,
+.chat-input-field .cm-editor.cm-focused .cm-selectionBackground { background: color-mix(in srgb, var(--accent) 24%, transparent); }

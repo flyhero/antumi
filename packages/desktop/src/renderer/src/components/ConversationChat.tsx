@@ -3,7 +3,7 @@ import { HelperTurnCost } from './HelperTurnCost'
 import { addQuote } from '../chat-quotes'
 import { focusChatInput } from '../helper-conversations'
 import { Fragment, createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { CODEX_IMAGE_GENERATION, cursorProviderError, isBrowserTool, isPlanApproval, isPreviewTool, parseHandoffMessage, toolImagePath, type AgentKind, type ChatItem, type Conversation, type ConversationStage } from '@antumi/protocol'
+import { CODEX_IMAGE_GENERATION, cursorProviderError, isBrowserTool, isPlanApproval, isPreviewTool, chatReferencesIn, parseHandoffMessage, toolImagePath, type AgentKind, type ChatItem, type Conversation, type ConversationStage } from '@antumi/protocol'
 import { ChatBrowserTabs, firstBrowserCall, shouldOpenBrowser, useWatchBrowserTabs } from '../browser-state'
 import { ChatBrowserCard, ChatBrowserRun, ChatShotCard } from './ChatBrowserCard'
 import { chatBlocks, dropChat, finalReplies, foldsOfTools, itemKey, pathShortener, prependChatPage, previousTodos, saidText, setChatPage, stageAgents, thoughtDurations, timeline, useChat, type ChatBlock, type TimelineEntry, type TurnAgent, type TurnFile } from '../chat-state'
@@ -235,7 +235,7 @@ function UserMessage({ item, pending = false }: { item: UserItem; pending?: bool
         {item.steer && <span className="chat-user-steer" title={t('ConversationChat.messageInsertedDuringTheTurn')}>{t('ConversationChat.additionalInstructions')}</span>}
         <ChatImageStrip images={item.images} />
         {quotes.length > 0 && <UserQuotes quotes={quotes} />}
-        <ChatUserText text={body} />
+        <ChatUserText text={body} references={chatReferencesIn(item.text, body, item.references)} />
       </div>
       {long && (
         <div className="chat-user-more">
@@ -254,7 +254,7 @@ function InitialMessageEntry({ id, agent, message }: { id: string; agent: AgentK
   return (
     <>
       <div className="chat-entry" data-user>
-        <UserMessage pending item={{ kind: 'user', id: `u:${message.ref}`, stageId: 'pending', revision: 0, at: message.at, text: message.text, images: message.images }} />
+        <UserMessage pending item={{ kind: 'user', id: `u:${message.ref}`, stageId: 'pending', revision: 0, at: message.at, text: message.text, images: message.images, references: message.references }} />
       </div>
       {message.phase === 'failed' ? (
         <div className="chat-initial-error chat-notice" data-level="error" role="alert">
@@ -969,7 +969,7 @@ export function ConversationChat({ conversation, surface, onHandoff, variant = '
         name="reply"
         label={t('ConversationChat.commentOnThisReply')}
         hidden={contextMenu.open}
-        onAdded={() => list.current?.closest('.chat-view')?.querySelector<HTMLTextAreaElement>('.chat-input')?.focus()}
+        onAdded={() => list.current?.closest('.chat-view')?.querySelector<HTMLElement>('.chat-input')?.focus()}
       />}
       {contextMenu.menu}
     </div>

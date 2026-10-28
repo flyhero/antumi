@@ -93,7 +93,7 @@ export function ensureHelper(parent: Conversation, choice?: { model: string | nu
 }
 
 export function focusChatInput(id: string): void {
-  requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>(`.chat-view[data-conversation-id="${id}"] .chat-input`)?.focus())
+  requestAnimationFrame(() => document.querySelector<HTMLElement>(`.chat-view[data-conversation-id="${id}"] .chat-input`)?.focus())
 }
 
 export async function handToHelper(parent: Conversation, selection: string, inspector: 'task' | 'conversation'): Promise<void> {

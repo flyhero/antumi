@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { conversationReference, type Conversation } from '@antumi/protocol'
+import { conversationReference, type ChatReference, type Conversation } from '@antumi/protocol'
 import { useCore } from '../core-store'
 import { ChatUserText } from './ChatUserText'
 import { ChatMarkdown } from './ChatMarkdown'
@@ -26,13 +26,28 @@ const conversation: Conversation = {
 afterEach(() => useCore.setState({ conversations: original }))
 
 describe('conversation reference display', () => {
+  it('draws only explicitly picked files and agents as short reference marks', () => {
+    const text = '**参考** @src/SupportSettings.tsx @代码审查员 https://example.com'
+    const references: ChatReference[] = [
+      { start: 7, end: 30, target: { kind: 'file', path: '/repo/src/SupportSettings.tsx', relative: 'src/SupportSettings.tsx' } },
+      { start: 31, end: 37, target: { kind: 'agent', id: 'bbbbbbbb-0000-4000-8000-000000000002', name: '代码审查员' } }
+    ]
+    const html = renderToStaticMarkup(createElement(ChatUserText, { text, references }))
+    expect(html).toContain('data-reference-kind="file"')
+    expect(html).toContain('data-reference-kind="agent"')
+    expect(html).toContain('>SupportSettings.tsx</span>')
+    expect(html).toContain('>代码审查员</span>')
+    expect(html).toContain('**参考**')
+    expect(renderToStaticMarkup(createElement(ChatUserText, { text }))).not.toContain('data-reference-kind')
+  })
+
   it('shows a linked title in user prose and assistant Markdown while leaving ordinary user Markdown literal', () => {
     useCore.setState({ conversations: { [conversation.id]: conversation } })
     const reference = conversationReference(conversation.id, conversation.title)
     const html = renderToStaticMarkup(createElement(ChatUserText, { text: `**参考** ${reference} https://example.com` }))
     expect(html).toContain('**参考**')
     expect(html).toContain(`data-conversation-id="${conversation.id}"`)
-    expect(html).toContain('>鉴权方案</button>')
+    expect(html).toContain('>鉴权方案</span>')
     expect(html).toContain('href="https://example.com"')
     expect(html).not.toContain('antumi://')
     expect(html).not.toContain('disabled')

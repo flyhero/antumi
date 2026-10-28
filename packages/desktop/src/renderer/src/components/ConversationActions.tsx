@@ -1,6 +1,6 @@
 import { editAgentProfile } from './AgentProfiles'
 import { t } from '../i18n'
-import { canReuseConversation, ChatPermissionMode, type AgentKind, type ChatImage, type ChatItem, type Conversation } from '@antumi/protocol'
+import { canReuseConversation, ChatPermissionMode, type AgentKind, type ChatReference, type ChatImage, type ChatItem, type Conversation } from '@antumi/protocol'
 import { openBeside, openConversationDraft, perform, selectConversation, selectTask, showView, useConversationArchiveSupported, useConversationPinSupported, useCore } from '../core-store'
 import { proposeHandoff } from '../chat-handoff'
 import { agentLabel } from '../labels'
@@ -57,24 +57,24 @@ export function deferredStartSupported(): boolean {
 // A conversation core just made, opened on its first message. Created with deferStart, it shows
 // the message at once while the agent starts; an older core started it already. Resolves whether
 // the message is in its hands, so the input it came from knows to clear.
-export async function openWithFirstMessage(created: Conversation, text: string, images: readonly ChatImage[], deferred: boolean): Promise<boolean> {
+export async function openWithFirstMessage(created: Conversation, text: string, images: readonly ChatImage[], deferred: boolean, references?: ChatReference[]): Promise<boolean> {
   const { rpc } = useCore.getState()
   if (deferred && rpc) {
-    keepInitialMessage(created.id, text, images)
+    keepInitialMessage(created.id, text, images, references)
     useCore.setState((state) => ({ conversations: { ...state.conversations, [created.id]: created } }))
     selectConversation(created.id)
     void sendInitialMessage(created.id, rpc)
     return true
   }
   const ids = images.map((image) => image.id)
-  const sent = await perform((rpc) => rpc.call('conversations.send', { id: created.id, text, ...(ids.length ? { images: ids } : {}) }))
+  const sent = await perform((rpc) => rpc.call('conversations.send', { id: created.id, text, ...(rpc.features.includes('chat-references') ? { references } : {}), ...(ids.length ? { images: ids } : {}) }))
   selectConversation(created.id)
   return sent !== null
 }
 
 // The composer's other send: the message opens a new conversation on this one's settings, read in
 // core as the button in the header reads them, while this one keeps running.
-export async function sendToNewConversation(conversation: Conversation, text: string, images: readonly ChatImage[]): Promise<boolean> {
+export async function sendToNewConversation(conversation: Conversation, text: string, images: readonly ChatImage[], references?: ChatReference[]): Promise<boolean> {
   if (!canReuseConversation(conversation)) return false
   const configuration = await perform((rpc) => rpc.call('conversations.configuration', { id: conversation.id }))
   if (!configuration) return false
@@ -92,7 +92,7 @@ export async function sendToNewConversation(conversation: Conversation, text: st
     ...(options ? { ...(mode.success ? { permissionMode: mode.data } : {}), ...(model ? { model } : {}), ...(effort ? { effort } : {}) } : {}),
     ...(modelProvider ? { modelProvider } : {})
   }))
-  return created ? openWithFirstMessage(created, text, images, deferred) : false
+  return created ? openWithFirstMessage(created, text, images, deferred, references) : false
 }
 
 // A new conversation holding this one's chat up to a message, opened once core has it. A fork
@@ -100,7 +100,7 @@ export async function sendToNewConversation(conversation: Conversation, text: st
 export async function forkConversation(id: string, item: ChatItem): Promise<void> {
   const forked = await perform((rpc) => rpc.call('conversations.fork', { id, stageId: item.stageId, itemId: item.id }))
   if (!forked) return
-  if (item.kind === 'user') offerDraft(forked.id, { text: saidText(item.text), images: item.images })
+  if (item.kind === 'user') offerDraft(forked.id, { text: item.text, images: item.images, references: item.references })
   selectConversation(forked.id)
 }
 

@@ -52,7 +52,7 @@ export function useChatCommandMenu({ text, entries, agentLabel, setText, sendCom
 }): {
   menu: ReactNode
   inputProps: InputProps
-  onKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => boolean
+  onKeyDown: (event: KeyboardEvent<HTMLElement>) => boolean
   expand: (text: string) => string | null
 } {
   const listId = useId()
@@ -78,7 +78,7 @@ export function useChatCommandMenu({ text, entries, agentLabel, setText, sendCom
     }
   }
 
-  const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>): boolean => {
+  const onKeyDown = (event: KeyboardEvent<HTMLElement>): boolean => {
     if (!open || event.nativeEvent.isComposing || event.metaKey || event.ctrlKey || event.altKey) return false
     const entry = shown[active]
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {

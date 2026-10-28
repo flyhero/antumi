@@ -16,7 +16,7 @@ import { ChatAddMenu, ChatImageStrip, useComposerImages } from './ChatImages'
 import { useChatCommandMenu } from './ChatCommandMenu'
 import { useChatMentionMenu } from './ChatMentionMenu'
 import { MentionField, useMentionedText } from './ChatMentionField'
-import { writeMentions } from '../chat-mentions'
+import { messageReferences, writeMentionedText } from '../chat-mentions'
 import { defaultStartMode, effortLabel, modeOptions, modeTone, startModes } from './ChatOptionsBar'
 import { ChatModelPicker, ChatPicker } from './ChatPicker'
 import { AgentIcon, CloseIcon, EnterIcon } from './icons'
@@ -96,7 +96,8 @@ export function ConversationDraft() {
   // The agent will work in the first project picked.
   const mentionMenu = useChatMentionMenu({ value, setText, setValue, roots: projectPaths, cwd: projectPaths[0] ?? null, agent })
   // Written out for the agent picked when it goes, which may not be the one picked before.
-  const written = agent ? writeMentions(value, agent) : text
+  const writtenMessage = agent ? writeMentionedText(value, agent) : { text, references: [] }
+  const written = writtenMessage.text
 
   const provider = providerOf(agent)
   const key = agent ? catalogKey(agent, provider) : null
@@ -152,7 +153,7 @@ export function ConversationDraft() {
     setBusy(true)
     const note = written.trim()
     const opened = await perform((rpc) => rpc.call('sources.investigate', {
-      provider: issue.provider, instance: issue.instance, key: issue.key, agent, ...where, ...(note ? { note } : {}), ...startOptions(), ...chosen
+      provider: issue.provider, instance: issue.instance, key: issue.key, agent, ...where, ...(note ? { note } : {}), ...(rpc.features.includes('chat-references') ? { references: messageReferences(writtenMessage, note) } : {}), ...startOptions(), ...chosen
     }))
     if (!opened) {
       setBusy(false)
@@ -176,7 +177,7 @@ export function ConversationDraft() {
     setBusy(true)
     const created = await create()
     if (created) {
-      if (await openWithFirstMessage(created, written.trim(), attached.images, deferStart)) saveComposerDraft(composerId, EMPTY_DRAFT)
+      if (await openWithFirstMessage(created, written.trim(), attached.images, deferStart, messageReferences(writtenMessage, written.trim()))) saveComposerDraft(composerId, EMPTY_DRAFT)
       return
     }
     setBusy(false)
@@ -275,26 +276,22 @@ export function ConversationDraft() {
               {commandMenu.menu}
               {mentionMenu.menu}
               {imagesSupported && !issue && <ChatImageStrip images={attached.images} uploading={attached.uploading} onRemove={attached.remove} />}
-              <MentionField value={value} input={mentionMenu.inputProps.ref}>
-                <textarea
-                  className="chat-input"
-                  rows={3}
-                  value={text}
-                  {...commandMenu.inputProps}
-                  {...mentionMenu.inputProps}
-                  autoFocus
-                  readOnly={busy}
-                  aria-label={t('ConversationDraft.firstMessage')}
-                  placeholder={!agent ? t('ConversationDraft.chooseAnAgentAboveFirst') : issue ? t('ConversationDraft.additionalInstructionsOptionalEnterToInvestigate') : t('ConversationDraft.sendTheFirstMessageToEnterToSend', { value1: agentLabel(agent) })}
-                  onChange={(event) => setText(event.target.value, event.target.selectionEnd)}
-                  onPaste={imagesSupported ? attached.handlers.onPaste : undefined}
-                  onKeyDown={(event) => {
-                    if (commandMenu.onKeyDown(event) || mentionMenu.onKeyDown(event) || !sendsMessage(event)) return
-                    event.preventDefault()
-                    void send()
-                  }}
-                />
-              </MentionField>
+              <MentionField
+                value={value}
+                setValue={setValue}
+                {...commandMenu.inputProps}
+                {...mentionMenu.inputProps}
+                autoFocus
+                readOnly={busy}
+                aria-label={t('ConversationDraft.firstMessage')}
+                placeholder={!agent ? t('ConversationDraft.chooseAnAgentAboveFirst') : issue ? t('ConversationDraft.additionalInstructionsOptionalEnterToInvestigate') : t('ConversationDraft.sendTheFirstMessageToEnterToSend', { value1: agentLabel(agent) })}
+                onPasteCapture={imagesSupported ? attached.handlers.onPaste : undefined}
+                onKeyDownCapture={(event) => {
+                  if (commandMenu.onKeyDown(event) || mentionMenu.onKeyDown(event) || !sendsMessage(event)) return
+                  event.preventDefault()
+                  void send()
+                }}
+              />
               <div className="chat-options">
                 {imagesSupported && !issue && <ChatAddMenu disabled={busy} onAdd={attached.add} />}
                 {agent && (

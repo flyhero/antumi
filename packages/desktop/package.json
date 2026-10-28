@@ -1,7 +1,7 @@
 {
   "name": "@antumi/desktop",
   "productName": "Antumi",
-  "version": "0.21.1",
+  "version": "0.21.2-beta.1",
   "private": true,
   "description": "Antumi desktop client",
   "repository": {

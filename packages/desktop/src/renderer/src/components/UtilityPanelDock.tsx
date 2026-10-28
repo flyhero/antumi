@@ -13,6 +13,7 @@ import {
 } from './side-panel-size'
 import { TerminalPanel } from './TerminalPanel'
 import { PortsPanel } from './PortsPanel'
+import { FilesPanel } from './FilesPanel'
 
 function StackedPanelSeparator({ ratio, upperPanel, lowerPanel, onRatioChange }: {
   ratio: number
@@ -78,7 +79,7 @@ function StackedPanelSeparator({ ratio, upperPanel, lowerPanel, onRatioChange }:
   )
 }
 
-// Browser, terminal and ports share one right-hand dock, two at most, the one opened first above.
+// Browser, terminal, ports and files share one right-hand dock, two at most, the one opened first above.
 // A maximized one shows alone.
 export function UtilityPanelDock({ open, maximized, order }: {
   open: UtilityPanelsOpen
@@ -123,7 +124,7 @@ export function UtilityPanelDock({ open, maximized, order }: {
                 onRatioChange={setUpperRatio}
               />
             )}
-            {panel === 'browser' ? <BrowserSidePanel /> : panel === 'terminal' ? <TerminalPanel /> : <PortsPanel />}
+            {panel === 'browser' ? <BrowserSidePanel /> : panel === 'terminal' ? <TerminalPanel /> : panel === 'files' ? <FilesPanel /> : <PortsPanel />}
           </Fragment>
         ))}
       </section>

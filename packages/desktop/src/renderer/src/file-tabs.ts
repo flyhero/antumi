@@ -1,11 +1,25 @@
 import { create } from 'zustand'
 import type { ResolvedFile } from '@antumi/protocol'
 
+// The folders the files panel shows, and the conversation they came from when there is one: a
+// core without project-files reads files only through a conversation.
+export type FileScope = { conversationId: string | null; roots: readonly string[] }
+
+// Open files belong to the folders, so chats on the same checkout share them; a chat with no
+// project folder of its own keeps its own.
+export function fileScopeKey(scope: FileScope): string {
+  return scope.roots.length ? scope.roots.join('\0') : `conversation:${scope.conversationId ?? ''}`
+}
+
+export function fileScopeParams(scope: FileScope): { conversationId: string } | { roots: string[] } {
+  return scope.conversationId ? { conversationId: scope.conversationId } : { roots: [...scope.roots] }
+}
+
 // `dirty`: the editor holds changes not saved to disk.
 export type FileTab = { file: ResolvedFile; line: number | null; reveal: number; scrollTop: number; scrollLeft: number; dirty: boolean; preview: boolean }
 // `expanded` lists the open folders of the file tree; null until the user folds one, when every project is open.
-export type FileTabs = { tabs: FileTab[]; active: string | null; wrap: boolean; maximized: boolean; tree: boolean; expanded: string[] | null }
-export const EMPTY_FILE_TABS: FileTabs = { tabs: [], active: null, wrap: true, maximized: false, tree: true, expanded: null }
+export type FileTabs = { tabs: FileTab[]; active: string | null; wrap: boolean; tree: boolean; expanded: string[] | null }
+export const EMPTY_FILE_TABS: FileTabs = { tabs: [], active: null, wrap: true, tree: true, expanded: null }
 export const useFileTabs = create<Record<string, FileTabs>>()(() => ({}))
 
 export function openedFile(state: FileTabs, file: ResolvedFile, line: number | null): FileTabs {

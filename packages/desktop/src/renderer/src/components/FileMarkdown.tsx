@@ -5,7 +5,8 @@ import rehypeRaw from 'rehype-raw'
 import rehypeSanitize from 'rehype-sanitize'
 import type { ResolvedFile } from '@antumi/protocol'
 import { remarkPlugins } from '../markdown-syntax'
-import { showChatFile, type ChatFileScope } from '../file-actions'
+import { showChatFile } from '../file-actions'
+import type { FileScope } from '../file-tabs'
 import { isAbsolutePath, isImagePath, linkTarget, previewUrl, urlPath, type FileReference } from '../file-links'
 
 // Relative links and images belong to this document, including on Windows.
@@ -20,7 +21,7 @@ export function markdownFileReference(href: string, path: string): FileReference
 
 const plugins = [rehypeRaw, rehypeSanitize, rehypeHighlight]
 
-export function FileMarkdown({ text, file, scope }: { text: string; file: ResolvedFile; scope: ChatFileScope }) {
+export function FileMarkdown({ text, file, scope }: { text: string; file: ResolvedFile; scope: FileScope }) {
   return <div className="chat-markdown file-markdown">
     <Markdown remarkPlugins={remarkPlugins} rehypePlugins={plugins} components={{
       a: ({ href, children, title }) => {

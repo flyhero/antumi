@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { openUtilityPanel, updateUtilityPanelOrder, visibleUtilityPanelOrder, type UtilityPanelsOpen } from './utility-panel-order'
 
-const none: UtilityPanelsOpen = { browser: false, terminal: false, ports: false }
+const none: UtilityPanelsOpen = { browser: false, terminal: false, ports: false, files: false }
 
 describe('utility panel order', () => {
   it('puts a newly opened panel below one already open', () => {

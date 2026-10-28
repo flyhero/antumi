@@ -210,9 +210,11 @@ pnpm dist:win     # 产物在 packages/desktop/dist/Antumi-Setup-<版本>-x64.ex
 | <kbd>⌘</kbd> <kbd>N</kbd> | 打开完整的新建任务对话框 |
 | <kbd>Ctrl</kbd> <kbd>`</kbd> | 打开 / 关闭终端面板 |
 | <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>`</kbd> | 打开 / 关闭浏览器面板 |
+| <kbd>⌘</kbd> <kbd>Shift</kbd> <kbd>E</kbd> | 打开 / 关闭文件面板 |
+| <kbd>⌘</kbd> <kbd>P</kbd> | 按名称转到文件 |
 | <kbd>⌘</kbd> <kbd>,</kbd> | 设置 |
 | <kbd>⌘</kbd> <kbd>F</kbd> | 搜索当前聊天 |
-| <kbd>⌘</kbd> <kbd>S</kbd> | 保存检查器里正在编辑的文件 |
+| <kbd>⌘</kbd> <kbd>S</kbd> | 保存文件面板里正在编辑的文件 |
 | <kbd>Enter</kbd> / <kbd>Shift</kbd> <kbd>Enter</kbd> | 发送 / 换行；Agent 忙时 Enter 会把消息排队 |
 | <kbd>Tab</kbd> 或 <kbd>→</kbd> | 采用 Claude Code 预测的下一句 |
 | <kbd>Esc</kbd> | 中断当前回合；在任务页里回到看板 |

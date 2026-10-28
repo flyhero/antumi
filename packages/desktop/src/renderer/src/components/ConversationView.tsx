@@ -17,7 +17,6 @@ import { beginHandoff, newConversationFrom, renameConversation, useReuseConversa
 import { CloseIcon, CopyIcon, InspectorIcon, SplitIcon } from './icons'
 import { PRIMARY_KEY_LABEL } from '../shortcut-keys'
 import { DEFAULT_SIDE_PANEL_RATIO } from './side-panel-size'
-import { EMPTY_FILE_TABS, useFileTabs } from '../file-tabs'
 import { TitleEditor } from './TitleEditor'
 import { useOpenTodoCount, useTodosShown } from '../conversation-todos'
 import { CONVERSATION_DRAG_TYPE, draggedConversation } from '../conversation-drag'
@@ -43,7 +42,6 @@ export function useConversationPanel(conversation: Conversation | undefined) {
   const { calls } = useAgentCalls(delegationSupported ? id : null)
   const helperSupported = useHelperSupported(conversation)
   const helper = useHelper(helperSupported ? id : null)
-  const files = useFileTabs((state) => state[id] ?? EMPTY_FILE_TABS)
   const plans = usePlans(id)
   const wire = useWireLogShown()
   const todosShown = useTodosShown()
@@ -51,7 +49,7 @@ export function useConversationPanel(conversation: Conversation | undefined) {
   // A managed workspace is Antumi's own scratch folder: nothing of the user's to compare, but the
   // inspector still shows the agent's plans.
   const inspectable = (conversation?.projectPaths.length ?? 0) > 0
-  const hasPanel = Boolean(calls?.length || helper || inspectable || plans.length > 0 || wire || files.tabs.length > 0 || todosShown)
+  const hasPanel = Boolean(calls?.length || helper || inspectable || plans.length > 0 || wire || todosShown)
   const hint = todoLeft > 0 ? t('ConversationView.inspectorToDos', { todoLeft: todoLeft }) : inspectable ? t('ConversationView.viewChanges') : plans.length > 0 ? t('ConversationView.viewPlan') : wire ? t('ConversationView.viewRawData') : t('chatTools.listToDos')
   return { hasPanel, wire, todoLeft, hint }
 }

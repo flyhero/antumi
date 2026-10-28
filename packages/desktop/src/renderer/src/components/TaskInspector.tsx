@@ -16,9 +16,7 @@ import { TodoPanel } from './TodoPanel'
 import { useConversationTodos, useTodosShown } from '../conversation-todos'
 import { projectName } from './ProjectPicker'
 import { WireLogView } from './WireLogView'
-import { FileEditor } from './FileEditor'
 import { DiffCommentConversation } from './DiffComments'
-import { EMPTY_FILE_TABS, updateFileTabs, useFileTabs } from '../file-tabs'
 
 // Read again whenever the task changes (every agent turn and exit), the window regains focus,
 // or the user refreshes. An older core without the method has nothing to show.
@@ -63,7 +61,6 @@ function ChangeList({ changes, onOpen }: { changes: RepoChanges[] | null; onOpen
   )
 }
 
-const NO_ROOTS: readonly string[] = []
 
 // Beside the terminal: what the agent changed since its branch started, to judge a result under
 // review before accepting it.
@@ -86,9 +83,6 @@ export function TaskInspector({ task, widthRatio, onWidthRatioChange, plans = []
   const { calls } = useAgentCalls(delegationSupported ? conversationId : null)
   const helperSupported = useHelperSupported(parent)
   const helper = useHelper(helperSupported ? conversationId : null)
-  const files = useFileTabs((state) => state[conversationId] ?? EMPTY_FILE_TABS)
-  const fileEditor = useCore((state) => state.rpc?.features.includes('file-editor') ?? false)
-  const fileRoots = parent?.projectPaths ?? NO_ROOTS
   const gitRevision = useCore((state) => state.gitRevision)
   const rpc = useCore((state) => state.rpc)
   const wanted = useCore((state) => state.taskInspectorTab)
@@ -96,14 +90,8 @@ export function TaskInspector({ task, widthRatio, onWidthRatioChange, plans = []
   const worktree = task.repos.some((repo) => repo.worktreePath !== null)
   const todosShown = useTodosShown() && task.conversationId !== null
   const todos = useConversationTodos(todosShown ? task.conversationId : null)
-  const tabs: InspectorTab[] = [...(helper ? ['helper' as const] : []), ...(calls?.length ? ['delegation' as const] : []),...(squadRuns.length ? ['squad' as const] : []),...(worktree ? GIT_TABS : []), ...(plans.length > 0 ? ['plan' as const] : []), ...(todosShown ? ['todos' as const] : []), ...(wire && task.conversationId ? ['wire' as const] : []), ...(files.tabs.length > 0 || (fileEditor && fileRoots.length > 0) ? ['files' as const] : [])]
+  const tabs: InspectorTab[] = [...(helper ? ['helper' as const] : []), ...(calls?.length ? ['delegation' as const] : []),...(squadRuns.length ? ['squad' as const] : []),...(worktree ? GIT_TABS : []), ...(plans.length > 0 ? ['plan' as const] : []), ...(todosShown ? ['todos' as const] : []), ...(wire && task.conversationId ? ['wire' as const] : [])]
   const tab = tabs.includes(wanted) ? wanted : (tabs[0] ?? 'changes')
-  useEffect(() => {
-    if (wanted !== 'files') updateFileTabs(conversationId, (state) => state.maximized ? { ...state, maximized: false } : state)
-  }, [conversationId, wanted])
-  useEffect(() => () => {
-    updateFileTabs(conversationId, (state) => state.maximized ? { ...state, maximized: false } : state)
-  }, [conversationId])
   const [refreshCount, setRefreshCount] = useState(0)
   const [gitMaximized, setGitMaximized] = useState(false)
   useEffect(() => { setGitMaximized(false) }, [wanted, task.id])
@@ -113,15 +101,10 @@ export function TaskInspector({ task, widthRatio, onWidthRatioChange, plans = []
   const changes = useTaskChanges(task.id, task.updatedAt, refreshCount)
   const heads = useProjectHeads({ kind: 'task', id: task.id }, task.updatedAt, refreshCount)
   const fileCount = changes?.reduce((sum, repo) => sum + repo.files.length, 0) ?? 0
-  const onEmpty = () => {
-    const other = tabs.find((tab) => tab !== 'files')
-    if (other) setTaskInspectorTab(other)
-    else setInspectorOpen(false)
-  }
   return (
     <InspectorPanel
       label={t('TaskInspector.taskInspector')}
-      maximized={(tab === 'files' && files.maximized) || (tab === 'branch' && gitMaximized)}
+      maximized={tab === 'branch' && gitMaximized}
       ratio={widthRatio}
       onRatioChange={onWidthRatioChange}
       tabs={tabs}
@@ -142,8 +125,6 @@ export function TaskInspector({ task, widthRatio, onWidthRatioChange, plans = []
           <SquadWorkPanel runs={squadRuns} onConversation={(id) => onMemberConversation?.(id)} />
         ) : tab === 'todos' && task.conversationId ? (
           <TodoPanel conversationId={task.conversationId} />
-        ) : tab === 'files' ? (
-          <FileEditor conversationId={conversationId} roots={fileRoots} updatedAt={task.updatedAt} inspector="task" editor={fileEditor} onEmpty={onEmpty} />
         ) : tab === 'wire' && task.conversationId ? (
           <WireLogView conversationId={task.conversationId} />
         ) : tab === 'plan' ? (

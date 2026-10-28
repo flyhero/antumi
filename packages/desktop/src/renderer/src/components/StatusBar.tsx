@@ -1,11 +1,11 @@
 import { localized, t, tr } from '../i18n'
 import { useRef, useState } from 'react'
-import { openGuide, setAwakeMode, setSchedulesOpen, setSettingsOpen, setWorktreesOpen, toggleBrowserPanel, togglePortsPanel, toggleTerminalPanel, useAwakeSupported, useBrowserSupported, useCore, useSchedulesOpen, useSchedulesSupported, useWorktreesSupported, type ConnectionState } from '../core-store'
+import { openGuide, setAwakeMode, setSchedulesOpen, setSettingsOpen, setWorktreesOpen, toggleBrowserPanel, toggleFilesPanel, togglePortsPanel, toggleTerminalPanel, useAwakeSupported, useBrowserSupported, useCore, useSchedulesOpen, useSchedulesSupported, useWorktreesSupported, type ConnectionState } from '../core-store'
 import { ALL_TABS, useBrowserTabs } from '../browser-state'
 import { formatBytes, worktreeRows, worktreeSummary } from '../worktree-groups'
 import { useWorktrees } from '../worktree-store'
 import { PRIMARY_KEY_LABEL } from '../shortcut-keys'
-import { BookIcon, BranchIcon, ChatIcon, CheckIcon, ClockIcon, CoffeeIcon, GearIcon, GlobeIcon, HelpIcon, PortsIcon, PulseIcon, TerminalIcon } from './icons'
+import { BookIcon, BranchIcon, ChatIcon, CheckIcon, ClockIcon, CoffeeIcon, FolderIcon, GearIcon, GlobeIcon, HelpIcon, PortsIcon, PulseIcon, TerminalIcon } from './icons'
 import { usePorts } from '../port-state'
 import { UsageBar } from './UsageBar'
 import { openRuns } from '../schedules'
@@ -113,6 +113,23 @@ function BrowserButton() {
     >
       <GlobeIcon />
       {count > 0 && <span className="count">{count}</span>}
+    </button>
+  )
+}
+
+function FilesButton() {
+  const open = useCore((s) => s.filesPanelOpen)
+  return (
+    <button
+      type="button"
+      className="tool-button statusbar-files"
+      aria-label={t('FilesPanel.files')}
+      aria-pressed={open}
+      data-tooltip={`${open ? t('FilesPanel.hideFiles') : t('FilesPanel.files')} ${PRIMARY_KEY_LABEL}⇧E`}
+      data-tooltip-side="top-end"
+      onClick={toggleFilesPanel}
+    >
+      <FolderIcon />
     </button>
   )
 }
@@ -250,6 +267,7 @@ export function StatusBar() {
       <ScheduleButton />
       <WorktreeButton />
       <PortsButton />
+      <FilesButton />
       <BrowserButton />
       <TerminalButton />
       <AwakeButton />

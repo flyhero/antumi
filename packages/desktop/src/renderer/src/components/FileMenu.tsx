@@ -2,14 +2,15 @@ import { t } from '../i18n'
 import { useCallback, useState, type ReactNode } from 'react'
 import type { ResolvedFile } from '@antumi/protocol'
 import { canOpenFile, canRevealFile } from '../desktop-bridge'
-import { copyFileText, FILE_MANAGER, openResolvedFile, revealResolvedFile, showResolvedFile, type ChatFileScope } from '../file-actions'
+import { copyFileText, FILE_MANAGER, openResolvedFile, revealResolvedFile, showResolvedFile } from '../file-actions'
+import type { FileScope } from '../file-tabs'
 import { ContextMenu, MenuItem, menuPoint, type MenuPoint } from './ContextMenu'
 import { CopyIcon, ExternalIcon, FolderIcon, InspectorIcon } from './icons'
 
 // `inPanel`: the menu is in the side panel's files already, where a click opens the file and
 // offering to open it there again does nothing.
 export function FileMenuItems({ scope, file, line = null, inPanel = false, onClose }: {
-  scope: ChatFileScope; file: ResolvedFile; line?: number | null; inPanel?: boolean; onClose(): void
+  scope: FileScope; file: ResolvedFile; line?: number | null; inPanel?: boolean; onClose(): void
 }) {
   const act = (action: () => void | Promise<void>) => { onClose(); void action() }
   return <>
@@ -21,7 +22,7 @@ export function FileMenuItems({ scope, file, line = null, inPanel = false, onClo
   </>
 }
 
-export function FileMenu({ scope, file, inPanel = false, children }: { scope: ChatFileScope; file: ResolvedFile; inPanel?: boolean; children: ReactNode }) {
+export function FileMenu({ scope, file, inPanel = false, children }: { scope: FileScope; file: ResolvedFile; inPanel?: boolean; children: ReactNode }) {
   const [at, setAt] = useState<MenuPoint | null>(null)
   const close = useCallback(() => setAt(null), [])
   return <span className="file-menu-target" onKeyDown={(event) => {

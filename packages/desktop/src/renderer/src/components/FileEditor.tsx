@@ -3,9 +3,8 @@ import { useEffect, useId, useMemo, useRef, useState, type RefObject } from 'rea
 import type { FileRead, ResolvedFile } from '@antumi/protocol'
 import { useCore } from '../core-store'
 import { canOpenWith } from '../desktop-bridge'
-import type { ChatFileScope } from '../file-actions'
 import { isImagePath } from '../file-links'
-import { closedFile, dropFileDraft, EMPTY_FILE_TABS, expandedFolders, openedFile, revealedFile, revealedFolder, toggledFolder, updateFileTabs, useFileTabs, type FileTab } from '../file-tabs'
+import { closedFile, dropFileDraft, EMPTY_FILE_TABS, expandedFolders, fileScopeKey, fileScopeParams, openedFile, revealedFile, revealedFolder, toggledFolder, updateFileTabs, useFileTabs, type FileScope, type FileTab } from '../file-tabs'
 import { MAX_FILE_TREE_WIDTH, MIN_FILE_TREE_WIDTH, setPreference, usePreferences } from '../preferences'
 import { PRIMARY_KEY_LABEL } from '../shortcut-keys'
 import { FileSource, type FileDisk, type FileSourceHandle } from './FileSource'
@@ -16,7 +15,7 @@ import { useFocusCount } from './Inspector'
 import { ContextMenu, MenuItem, type MenuPoint } from './ContextMenu'
 import { FileMenu, FileMenuItems } from './FileMenu'
 import { Segmented } from './SettingsControls'
-import { CheckIcon, CloseIcon, MaximizeIcon, MoreIcon, RefreshIcon, RestoreIcon, SearchIcon, SidebarIcon } from './icons'
+import { CheckIcon, CloseIcon, MoreIcon, RefreshIcon, SearchIcon, SidebarIcon } from './icons'
 
 const REASON: Record<Extract<FileRead, { kind: 'unavailable' }>['reason'], string> = localized(() => ({
   'not-found': t('FileEditor.fileDoesNotExistItMayHaveBeen'),
@@ -27,9 +26,8 @@ const REASON: Record<Extract<FileRead, { kind: 'unavailable' }>['reason'], strin
 }))
 
 function FileContent({ scope, tab, wrap, writable, source, refresh, preview }: {
-  scope: ChatFileScope; tab: FileTab; wrap: boolean; writable: boolean; source: RefObject<FileSourceHandle | null>; refresh: string; preview: boolean
+  scope: FileScope; tab: FileTab; wrap: boolean; writable: boolean; source: RefObject<FileSourceHandle | null>; refresh: string; preview: boolean
 }) {
-  const { conversationId } = scope
   const rpc = useCore((state) => state.rpc)
   const [result, setResult] = useState<FileRead | null>(null)
   const [loading, setLoading] = useState(true)
@@ -38,11 +36,11 @@ function FileContent({ scope, tab, wrap, writable, source, refresh, preview }: {
     if (!rpc) return
     let current = true
     setLoading(true)
-    void rpc.call('files.read', { conversationId, path }).catch(() => ({ kind: 'unavailable', reason: 'unreadable' } as const)).then((read) => {
+    void rpc.call('files.read', { ...fileScopeParams(scope), path }).catch(() => ({ kind: 'unavailable', reason: 'unreadable' } as const)).then((read) => {
       if (current) { setResult(read); setLoading(false) }
     })
     return () => { current = false }
-  }, [rpc, conversationId, path, refresh])
+  }, [rpc, fileScopeKey(scope), path, refresh])
   const disk = useMemo<FileDisk | null>(() => result?.kind === 'text' ? { text: result.text, mtimeMs: result.mtimeMs ?? null } : null, [result])
   return <div className="file-editor-content" data-file-path={path} aria-busy={loading}>
     {disk
@@ -94,12 +92,12 @@ function TreeResizer({ width, onWidth }: { width: number; onWidth(width: number)
   />
 }
 
-// The inspector's 文件 tab: the projects' files on the left, the open ones on the right. Without
+// The files panel's body: the folders' files on the left, the open ones on the right. Without
 // core's file-editor it is the earlier preview: read-only, with no tree.
-export function FileEditor({ conversationId, roots, updatedAt, onEmpty, inspector, editor }: {
-  conversationId: string; roots: readonly string[]; updatedAt: number; onEmpty(): void; inspector: 'task' | 'conversation'; editor: boolean
-}) {
-  const state = useFileTabs((state) => state[conversationId] ?? EMPTY_FILE_TABS)
+export function FileEditor({ scope, updatedAt, editor }: { scope: FileScope; updatedAt: number; editor: boolean }) {
+  const key = fileScopeKey(scope)
+  const { roots } = scope
+  const state = useFileTabs((state) => state[key] ?? EMPTY_FILE_TABS)
   const treeWidth = usePreferences((preferences) => preferences.fileTreeWidth)
   const focus = useFocusCount()
   const source = useRef<FileSourceHandle>(null)
@@ -114,39 +112,36 @@ export function FileEditor({ conversationId, roots, updatedAt, onEmpty, inspecto
   const image = active && isImagePath(active.file.path)
   const text = active && (!image || svg)
   const preview = Boolean((markdown || svg) && active.preview)
-  const scope: ChatFileScope = { conversationId, inspector, roots }
   const browsable = editor && roots.length > 0
   const tree = browsable && state.tree
   const expanded = expandedFolders(state, roots)
 
   useEffect(() => {
-    if (editor && active) updateFileTabs(conversationId, (state) => revealedFile(state, roots, active.file.path))
-  }, [editor, conversationId, active?.file.path, active?.reveal, roots.join('\0')])
+    if (editor && active) updateFileTabs(key, (state) => revealedFile(state, roots, active.file.path))
+  }, [editor, key, active?.file.path, active?.reveal, roots.join('\0')])
 
   const close = (tab: FileTab) => {
     if (tab.dirty && !window.confirm(t('FileEditor.hasUnsavedChangesCloseAndDiscardThem', { value1: tab.file.path.split(/[\\/]/).at(-1) }))) return
-    const next = closedFile(useFileTabs.getState()[conversationId] ?? EMPTY_FILE_TABS, tab.file.path)
-    updateFileTabs(conversationId, () => next)
-    dropFileDraft(conversationId, tab.file.path)
-    if (next.tabs.length === 0 && !editor) onEmpty()
+    updateFileTabs(key, (state) => closedFile(state, tab.file.path))
+    dropFileDraft(key, tab.file.path)
   }
-  const open = (file: ResolvedFile) => updateFileTabs(conversationId, (state) => openedFile(state, file, null))
-  const showFolder = (folder: string) => updateFileTabs(conversationId, (state) => revealedFolder({ ...state, tree: true }, roots, folder))
+  const open = (file: ResolvedFile) => updateFileTabs(key, (state) => openedFile(state, file, null))
+  const showFolder = (folder: string) => updateFileTabs(key, (state) => revealedFolder({ ...state, tree: true }, roots, folder))
   // With a tree to browse, the bar stays even with the tree folded away, so it can be opened again.
   if (!active && !browsable) return <p className="inspector-empty muted">{t('FileEditor.clickAFileInTheChatToPreview')}</p>
 
   const writable = editor && active?.file.root != null && Boolean(text)
   const name = (tab: FileTab) => tab.file.path.split(/[\\/]/).at(-1) ?? tab.file.path
-  const setPreview = (preview: boolean) => updateFileTabs(conversationId, (state) => ({ ...state, tabs: state.tabs.map((tab) => tab.file.path === active?.file.path ? { ...tab, preview } : tab) }))
+  const setPreview = (preview: boolean) => updateFileTabs(key, (state) => ({ ...state, tabs: state.tabs.map((tab) => tab.file.path === active?.file.path ? { ...tab, preview } : tab) }))
   return <div className="file-editor" onKeyDown={(event) => {
     if (preview && (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') { event.preventDefault(); source.current?.save() }
   }}>
     <div className="file-editor-bar">
-      {browsable && <button type="button" className="tool-button" aria-label={state.tree ? t('FileEditor.collapseFileTree') : t('FileEditor.openFileTree')} aria-pressed={state.tree} title={state.tree ? t('FileEditor.collapseFileTree') : t('FileEditor.openFileTree')} onClick={() => updateFileTabs(conversationId, (state) => ({ ...state, tree: !state.tree }))}><SidebarIcon /></button>}
+      {browsable && <button type="button" className="tool-button" aria-label={state.tree ? t('FileEditor.collapseFileTree') : t('FileEditor.openFileTree')} aria-pressed={state.tree} title={state.tree ? t('FileEditor.collapseFileTree') : t('FileEditor.openFileTree')} onClick={() => updateFileTabs(key, (state) => ({ ...state, tree: !state.tree }))}><SidebarIcon /></button>}
       <div className="file-editor-tabs" role="tablist" aria-label={t('FileEditor.openFiles')}>
         {state.tabs.map((tab) => <div className="file-editor-tab" key={tab.file.path} data-active={tab.file.path === state.active || undefined} data-dirty={tab.dirty || undefined}>
           <FileMenu scope={scope} file={tab.file} inPanel>
-            <button type="button" role="tab" aria-selected={tab.file.path === state.active} title={tab.dirty ? t('FileEditor.unsaved', { value1: tab.file.path }) : tab.file.path} onClick={() => updateFileTabs(conversationId, (state) => ({ ...state, active: tab.file.path }))}>
+            <button type="button" role="tab" aria-selected={tab.file.path === state.active} title={tab.dirty ? t('FileEditor.unsaved', { value1: tab.file.path }) : tab.file.path} onClick={() => updateFileTabs(key, (state) => ({ ...state, active: tab.file.path }))}>
               {name(tab)}
               {state.tabs.some((other) => other.file.path !== tab.file.path && name(other) === name(tab)) && <span className="muted"> · {tab.file.relative ?? tab.file.path}</span>}
             </button>
@@ -162,10 +157,9 @@ export function FileEditor({ conversationId, roots, updatedAt, onEmpty, inspecto
         const bounds = event.currentTarget.getBoundingClientRect()
         setMenu((menu) => menu ? null : { x: bounds.right, y: bounds.bottom + 4 })
       }}><MoreIcon /></button>
-      <button type="button" className="tool-button" aria-label={state.maximized ? t('FileEditor.restoreFilePanel') : t('FileEditor.maximizeFilePanel')} title={state.maximized ? t('BrowserSidePanel.restore') : t('BrowserSidePanel.maximize')} onClick={() => updateFileTabs(conversationId, (state) => ({ ...state, maximized: !state.maximized }))}>{state.maximized ? <RestoreIcon /> : <MaximizeIcon />}</button>
       {menu && <ContextMenu at={menu} align="end" trigger={more.current} label={t('FileEditor.fileActions')} onClose={() => setMenu(null)}>
         {writable && active?.dirty && <MenuItem label={t('FileEditor.save')} icon={<CheckIcon />} hint={`${PRIMARY_KEY_LABEL}S`} onSelect={() => { setMenu(null); source.current?.save() }} />}
-        {text && <MenuItem label={state.wrap ? t('FileEditor.disableWordWrap') : t('FileEditor.wordWrap')} icon={<span aria-hidden>↩</span>} onSelect={() => { setMenu(null); updateFileTabs(conversationId, (state) => ({ ...state, wrap: !state.wrap })) }} />}
+        {text && <MenuItem label={state.wrap ? t('FileEditor.disableWordWrap') : t('FileEditor.wordWrap')} icon={<span aria-hidden>↩</span>} onSelect={() => { setMenu(null); updateFileTabs(key, (state) => ({ ...state, wrap: !state.wrap })) }} />}
         <MenuItem label={t('BrowserPanel.reload')} icon={<RefreshIcon />} onSelect={() => { setMenu(null); setRefreshCount((count) => count + 1) }} />
         {active && <><div className="menu-separator" role="separator" /><FileMenuItems scope={scope} file={active.file} inPanel onClose={() => setMenu(null)} /></>}
       </ContextMenu>}
@@ -174,7 +168,7 @@ export function FileEditor({ conversationId, roots, updatedAt, onEmpty, inspecto
       {tree && <>
         <div className="file-editor-tree" style={{ width: treeWidth }}>
           <FileTree scope={scope} roots={roots} expanded={expanded} active={active?.file.path ?? null} refresh={refresh}
-            onToggle={(folder) => updateFileTabs(conversationId, (state) => toggledFolder(state, roots, folder))} onOpen={open} />
+            onToggle={(folder) => updateFileTabs(key, (state) => toggledFolder(state, roots, folder))} onOpen={open} />
         </div>
         <TreeResizer width={treeWidth} onWidth={(width) => setPreference('fileTreeWidth', width)} />
       </>}

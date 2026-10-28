@@ -2,7 +2,7 @@ import { getLocale, t } from '../i18n'
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent } from 'react'
 import type { ProjectFileMatch, ResolvedFile } from '@antumi/protocol'
 import { useCore } from '../core-store'
-import type { ChatFileScope } from '../file-actions'
+import { fileScopeKey, fileScopeParams, type FileScope } from '../file-tabs'
 import { FileMenu } from './FileMenu'
 import { ChevronRightIcon, SearchIcon } from './icons'
 import { FileTypeIcon } from './FileTypeIcon'
@@ -15,7 +15,7 @@ function relativeTo(root: string, path: string): string {
 }
 
 export function FileTree({ scope, roots, expanded, active, refresh, onToggle, onOpen }: {
-  scope: ChatFileScope
+  scope: FileScope
   roots: readonly string[]
   expanded: readonly string[]
   active: string | null
@@ -26,7 +26,7 @@ export function FileTree({ scope, roots, expanded, active, refresh, onToggle, on
 }) {
   const rpc = useCore((state) => state.rpc)
   const dark = useSyncExternalStore(onThemeChange, isDarkTheme, () => false)
-  const conversationId = scope.conversationId
+  const key = fileScopeKey(scope)
   const [listings, setListings] = useState<Record<string, Listing>>({})
   const requested = useRef<{ refresh: string; folders: Set<string> }>({ refresh, folders: new Set() })
   const [filter, setFilter] = useState('')
@@ -34,7 +34,7 @@ export function FileTree({ scope, roots, expanded, active, refresh, onToggle, on
   const list = useRef<HTMLDivElement>(null)
   const query = filter.startsWith('?') ? filter.slice(1).trim() : null
 
-  useEffect(() => { setListings({}); requested.current = { refresh, folders: new Set() } }, [conversationId])
+  useEffect(() => { setListings({}); requested.current = { refresh, folders: new Set() } }, [key])
 
   const { rows, needed: shown } = useMemo(() => treeRows(roots, expanded, listings), [roots, expanded, listings, getLocale()])
 
@@ -45,11 +45,11 @@ export function FileTree({ scope, roots, expanded, active, refresh, onToggle, on
     for (const folder of shown) {
       if (requested.current.folders.has(folder)) continue
       requested.current.folders.add(folder)
-      void rpc.call('files.list', { conversationId, path: folder })
+      void rpc.call('files.list', { ...fileScopeParams(scope), path: folder })
         .then((listing): Listing => listing, (): Listing => 'error')
         .then((listing) => setListings((listings) => ({ ...listings, [folder]: listing })))
     }
-  }, [rpc, conversationId, refresh, shown.join('\0')])
+  }, [rpc, key, refresh, shown.join('\0')])
 
   useEffect(() => {
     if (query === null || !rpc || roots.length === 0) { setMatches(null); return }

@@ -44,7 +44,7 @@ import {
 } from '@antumi/protocol'
 import { receiveChatDelta, receiveChatItems } from './chat-state'
 import { forgetDiscussionPosts, receiveDiscussionPosts } from './discussions'
-import { forgetFileTabs } from './file-tabs'
+import { fileScopeKey, forgetFileTabs, type FileScope } from './file-tabs'
 import { usePreferences } from './preferences'
 import { closePane, panesAfterSelect, panesBeside, restorePanes, shownPanes, splitPanesOf, type SplitPanes } from './conversation-split'
 import { activeInboxes, inboxKey } from './source-inboxes'
@@ -196,6 +196,13 @@ export type CoreState = {
   terminalMaximized: boolean
   portsPanelOpen: boolean
   portsMaximized: boolean
+  filesPanelOpen: boolean
+  filesMaximized: boolean
+  // Folders the user picked in the files panel over what they look at, while they still look at it
+  // (the context it was picked in); null to follow it.
+  filesFolders: { scope: FileScope; context: string } | null
+  // The go-to-file box over the files panel's folders (⌘P).
+  fileQuickOpen: boolean
   // The browser panel in the shared utility dock: every tab there is, the user's own included.
   browserPanelOpen: boolean
   browserMaximized: boolean
@@ -292,6 +299,10 @@ export const useCore = create<CoreState>()(() => ({
   terminalMaximized: false,
   portsPanelOpen: false,
   portsMaximized: false,
+  filesPanelOpen: false,
+  filesMaximized: false,
+  filesFolders: null,
+  fileQuickOpen: false,
   browserPanelOpen: false,
   browserMaximized: false,
   utilityPanelOrder: [],
@@ -305,7 +316,7 @@ export const useCore = create<CoreState>()(() => ({
   login: null
 }))
 
-// One side of the room beside the content at a time: the terminal panel or an inspector.
+// One side of the room beside the content at a time: the terminal, ports or files panel, or an inspector.
 useCore.subscribe((next, previous) => {
   const patch = exclusivePanels(next, previous)
   if (patch) useCore.setState(patch)
@@ -391,7 +402,7 @@ export function showConversationPlan(key: string | null): void {
   useCore.setState({ conversationInspectorOpen: true, conversationInspectorTab: 'plan', conversationPlan: key })
 }
 
-type UtilityPanelState = Pick<CoreState, 'utilityPanelOrder' | 'browserPanelOpen' | 'terminalPanelOpen' | 'portsPanelOpen' | 'browserMaximized' | 'terminalMaximized' | 'portsMaximized'>
+type UtilityPanelState = Pick<CoreState, 'utilityPanelOrder' | 'browserPanelOpen' | 'terminalPanelOpen' | 'portsPanelOpen' | 'filesPanelOpen' | 'browserMaximized' | 'terminalMaximized' | 'portsMaximized' | 'filesMaximized'>
 
 // The browser, terminal and ports panels as the dock's order says, which is what decides: those in
 // it are open, and a maximized one stays so only while it is, and only if asked to.
@@ -402,14 +413,16 @@ function utilityPanels(s: CoreState, order: UtilityPanelKind[], keepMaximized: b
     browserPanelOpen: open('browser'),
     terminalPanelOpen: open('terminal'),
     portsPanelOpen: open('ports'),
+    filesPanelOpen: open('files'),
     browserMaximized: keepMaximized && s.browserMaximized && open('browser'),
     terminalMaximized: keepMaximized && s.terminalMaximized && open('terminal'),
-    portsMaximized: keepMaximized && s.portsMaximized && open('ports')
+    portsMaximized: keepMaximized && s.portsMaximized && open('ports'),
+    filesMaximized: keepMaximized && s.filesMaximized && open('files')
   }
 }
 
 function openPanels(s: CoreState): UtilityPanelsOpen {
-  return { browser: s.browserPanelOpen, terminal: s.terminalPanelOpen, ports: s.portsPanelOpen }
+  return { browser: s.browserPanelOpen, terminal: s.terminalPanelOpen, ports: s.portsPanelOpen, files: s.filesPanelOpen }
 }
 
 // One panel brought up: below what is open, the top one going past two, and no other left
@@ -532,7 +545,7 @@ export function togglePortsPanel(): void {
 }
 
 export function setPortsMaximized(maximized: boolean): void {
-  useCore.setState({ portsMaximized: maximized, ...(maximized ? { terminalMaximized: false, browserMaximized: false } : {}) })
+  useCore.setState({ portsMaximized: maximized, ...(maximized ? { terminalMaximized: false, browserMaximized: false, filesMaximized: false } : {}) })
 }
 
 // The list updates when core says so, through terminalCommands.changed.
@@ -577,7 +590,7 @@ export function deleteChatCommand(id: string): void {
 }
 
 export function setTerminalMaximized(maximized: boolean): void {
-  useCore.setState({ terminalMaximized: maximized, ...(maximized ? { browserMaximized: false, portsMaximized: false } : {}) })
+  useCore.setState({ terminalMaximized: maximized, ...(maximized ? { browserMaximized: false, portsMaximized: false, filesMaximized: false } : {}) })
 }
 
 export function toggleBrowserPanel(): void {
@@ -585,7 +598,71 @@ export function toggleBrowserPanel(): void {
 }
 
 export function setBrowserMaximized(maximized: boolean): void {
-  useCore.setState({ browserMaximized: maximized, ...(maximized ? { terminalMaximized: false, portsMaximized: false } : {}) })
+  useCore.setState({ browserMaximized: maximized, ...(maximized ? { terminalMaximized: false, portsMaximized: false, filesMaximized: false } : {}) })
+}
+
+export function setFilesMaximized(maximized: boolean): void {
+  useCore.setState({ filesMaximized: maximized, ...(maximized ? { terminalMaximized: false, portsMaximized: false, browserMaximized: false } : {}) })
+}
+
+export function toggleFilesPanel(): void {
+  useCore.setState((s) => (s.filesPanelOpen ? hiddenUtilityPanel(s, 'files') : shownUtilityPanel(s, 'files')))
+}
+
+// What the user is looking at, which the files panel follows: a key that changes when they look
+// elsewhere, and the folders it has, null where it has none (a page, or nothing selected).
+export function filesContext(s: CoreState): { key: string; scope: FileScope | null } {
+  if (s.settingsOpen || s.overviewOpen || s.inboxOpen || s.worktreesOpen || s.routinesOpen) return { key: 'page', scope: null }
+  if (s.section === 'discussions') {
+    const discussion = s.selectedDiscussionId ? s.discussions[s.selectedDiscussionId] : undefined
+    return { key: `discussion:${s.selectedDiscussionId ?? ''}`, scope: discussion?.projectPaths.length ? { conversationId: null, roots: discussion.projectPaths } : null }
+  }
+  if (s.section === 'conversations') {
+    const conversation = s.selectedConversationId ? s.conversations[s.selectedConversationId] : undefined
+    return { key: `conversation:${s.selectedConversationId ?? ''}`, scope: conversation ? { conversationId: conversation.id, roots: conversation.projectPaths } : null }
+  }
+  const task = s.selectedId ? s.tasks[s.selectedId] : undefined
+  const conversation = task?.conversationId ? s.conversations[task.conversationId] : undefined
+  const scope: FileScope | null = conversation ? { conversationId: conversation.id, roots: conversation.projectPaths }
+    : task?.repos.length ? { conversationId: null, roots: task.repos.map((repo) => repo.worktreePath ?? repo.path) } : null
+  return { key: `task:${s.selectedId ?? ''}`, scope }
+}
+
+// The folders the files panel shows: the ones the user picked while they look at the same thing,
+// else those of what they look at.
+export function filesScope(s: CoreState): FileScope | null {
+  const context = filesContext(s)
+  return s.filesFolders?.context === context.key ? s.filesFolders.scope : context.scope
+}
+
+// A scope as two plain values, so components re-render only when it changes.
+function useScope(select: (s: CoreState) => FileScope | null): FileScope | null {
+  const conversationId = useCore((s) => select(s)?.conversationId ?? null)
+  const roots = useCore((s) => select(s)?.roots.join('\0') ?? null)
+  return useMemo(() => roots === null ? null : { conversationId, roots: roots ? roots.split('\0') : [] }, [conversationId, roots])
+}
+
+export function useFilesScope(): FileScope | null {
+  return useScope(filesScope)
+}
+
+export function useFilesContextScope(): FileScope | null {
+  return useScope((s) => filesContext(s).scope)
+}
+
+export function setFileQuickOpen(open: boolean): void {
+  useCore.setState({ fileQuickOpen: open })
+}
+
+// Opens the files panel, on `scope` when given (null: follow what the user looks at).
+export function showFilesPanel(scope?: FileScope | null): void {
+  useCore.setState((s) => {
+    const context = filesContext(s)
+    const follows = scope === undefined ? {} : {
+      filesFolders: scope && (!context.scope || fileScopeKey(scope) !== fileScopeKey(context.scope)) ? { scope, context: context.key } : null
+    }
+    return { ...follows, ...shownUtilityPanel(s, 'files') }
+  })
 }
 
 export function selectConversation(id: string | null): void {
@@ -1321,7 +1398,7 @@ export function startCoreConnection(scope: 'app' | 'requests' = 'app'): void {
           }))
         })
         rpc.on('conversations.deleted', ({ id }) => {
-          forgetFileTabs(id)
+          forgetFileTabs(fileScopeKey({ conversationId: id, roots: [] }))
           // A column whose conversation went leaves the other on its own, in front where it was.
           const panes = savedPanes()
           const other = panes?.includes(id) ? closePane(panes, id) : null

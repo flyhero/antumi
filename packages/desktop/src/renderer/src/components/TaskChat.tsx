@@ -14,7 +14,6 @@ import type { ChatSurface } from './chat-surface'
 import { ConversationChat } from './ConversationChat'
 import { primaryProjectName } from './ProjectPicker'
 import { DEFAULT_SIDE_PANEL_RATIO } from './side-panel-size'
-import { EMPTY_FILE_TABS, useFileTabs } from '../file-tabs'
 import { SourceLink } from './SourceLink'
 import { StatusIcon } from './StatusIcon'
 import { useSquadRuns } from '../squads'
@@ -111,7 +110,6 @@ export function TaskChat({ taskId }: { taskId: string }) {
   const starting = useCore((s) => s.startingTasks.includes(taskId))
   const bypassable = useChatOptionsSupported()
   const [sidePanelRatio, setSidePanelRatio] = useState(DEFAULT_SIDE_PANEL_RATIO)
-  const files = useFileTabs((state) => state[conversationId ?? ''] ?? EMPTY_FILE_TABS)
   const plans = usePlans(conversationId ?? '')
   const wire = useWireLogShown() && conversationId !== null
   const todosShown = useTodosShown() && conversationId !== null
@@ -143,7 +141,7 @@ export function TaskChat({ taskId }: { taskId: string }) {
     return null
   }
   const worktree = task.repos.some((repo) => repo.worktreePath !== null)
-  const showInspector = inspectorOpen && (delegationSupported || helperSupported || worktree || runs.length > 0 || plans.length > 0 || wire || files.tabs.length > 0 || todosShown)
+  const showInspector = inspectorOpen && (delegationSupported || helperSupported || worktree || runs.length > 0 || plans.length > 0 || wire || todosShown)
 
   return (
     <section className="detail terminal-view" aria-label={t('TaskChat.chat', { value1: task.title })}>

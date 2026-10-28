@@ -9,8 +9,8 @@ import { drawSelection, EditorView, highlightActiveLine, highlightActiveLineGutt
 import { indentationMarkers } from '@replit/codemirror-indentation-markers'
 import { tags } from '@lezer/highlight'
 import { perform } from '../core-store'
-import { dropFileDraft, fileDraft, keepFileDraft, markedDirty, saveFileScroll, updateFileTabs, useFileTabs, type FileTab } from '../file-tabs'
-import { copyFileText, type ChatFileScope } from '../file-actions'
+import { dropFileDraft, fileDraft, fileScopeKey, fileScopeParams, keepFileDraft, markedDirty, saveFileScroll, updateFileTabs, useFileTabs, type FileScope, type FileTab } from '../file-tabs'
+import { copyFileText } from '../file-actions'
 import { ContextMenu, MenuItem, menuPoint, type MenuPoint } from './ContextMenu'
 import { CheckIcon, CopyIcon, DocumentIcon } from './icons'
 import { PRIMARY_KEY_LABEL } from '../shortcut-keys'
@@ -84,9 +84,9 @@ export type FileSourceHandle = { search(): void; save(): void }
 type Notice = 'disk' | 'conflict' | null
 
 export function FileSource({ scope, tab, disk, wrap, writable, preview, ref }: {
-  scope: ChatFileScope; tab: FileTab; disk: FileDisk; wrap: boolean; writable: boolean; preview: boolean; ref?: Ref<FileSourceHandle>
+  scope: FileScope; tab: FileTab; disk: FileDisk; wrap: boolean; writable: boolean; preview: boolean; ref?: Ref<FileSourceHandle>
 }) {
-  const { conversationId } = scope
+  const key = fileScopeKey(scope)
   const host = useRef<HTMLDivElement>(null)
   const editor = useRef<EditorView | null>(null)
   const base = useRef<{ text: string; doc: Text | null; mtimeMs: number | null }>({ text: disk.text, doc: null, mtimeMs: disk.mtimeMs })
@@ -106,7 +106,7 @@ export function FileSource({ scope, tab, disk, wrap, writable, preview, ref }: {
   const setBase = (text: string, mtimeMs: number | null) => { base.current = { text, doc: null, mtimeMs } }
   const syncDirty = (view: EditorView) => {
     const dirty = !view.state.doc.eq(baseDoc(view))
-    updateFileTabs(conversationId, (state) => markedDirty(state, path, dirty))
+    updateFileTabs(key, (state) => markedDirty(state, path, dirty))
     return dirty
   }
   const replace = (view: EditorView, text: string) => {
@@ -120,13 +120,13 @@ export function FileSource({ scope, tab, disk, wrap, writable, preview, ref }: {
     if (!view || !writableNow.current || saving) return
     const text = view.state.sliceDoc()
     setSaving(true)
-    const result = await perform((rpc) => rpc.call('files.write', { conversationId, path, text, expectedMtimeMs: force ? null : base.current.mtimeMs }))
+    const result = await perform((rpc) => rpc.call('files.write', { ...fileScopeParams(scope), path, text, expectedMtimeMs: force ? null : base.current.mtimeMs }))
     setSaving(false)
     if (!result || editor.current !== view) return
     if (result.kind === 'conflict') { setNotice('conflict'); return }
     setBase(text, result.mtimeMs)
     setNotice(null)
-    if (!syncDirty(view)) dropFileDraft(conversationId, path)
+    if (!syncDirty(view)) dropFileDraft(key, path)
   }
   const saveRef = useRef(save)
   saveRef.current = save
@@ -135,13 +135,13 @@ export function FileSource({ scope, tab, disk, wrap, writable, preview, ref }: {
   const reload = async () => {
     const view = editor.current
     if (!view) return
-    const read = await perform((rpc) => rpc.call('files.read', { conversationId, path }))
+    const read = await perform((rpc) => rpc.call('files.read', { ...fileScopeParams(scope), path }))
     if (read?.kind !== 'text' || editor.current !== view) return
     setBase(read.text, read.mtimeMs ?? null)
     replace(view, read.text)
     setNotice(null)
     syncDirty(view)
-    dropFileDraft(conversationId, path)
+    dropFileDraft(key, path)
   }
 
   useImperativeHandle(ref, () => ({
@@ -153,7 +153,7 @@ export function FileSource({ scope, tab, disk, wrap, writable, preview, ref }: {
     if (!host.current) return
     let current = true
     const language = new Compartment()
-    const draft = fileDraft(conversationId, path)
+    const draft = fileDraft(key, path)
     if (draft) setBase(draft.base, draft.mtimeMs)
     const view = new EditorView({
       parent: host.current,
@@ -174,12 +174,12 @@ export function FileSource({ scope, tab, disk, wrap, writable, preview, ref }: {
     })
     editor.current = view
     syncDirty(view)
-    const saved = useFileTabs.getState()[conversationId]?.tabs.find((tab) => tab.file.path === path)
+    const saved = useFileTabs.getState()[key]?.tabs.find((tab) => tab.file.path === path)
     const restore = requestAnimationFrame(() => {
       view.scrollDOM.scrollTop = saved?.scrollTop ?? 0
       view.scrollDOM.scrollLeft = saved?.scrollLeft ?? 0
     })
-    const scroll = () => saveFileScroll(conversationId, path, view.scrollDOM.scrollTop, view.scrollDOM.scrollLeft)
+    const scroll = () => saveFileScroll(key, path, view.scrollDOM.scrollTop, view.scrollDOM.scrollLeft)
     view.scrollDOM.addEventListener('scroll', scroll)
     const description = LanguageDescription.matchFilename(languages, path.split(/[\\/]/).at(-1) ?? path)
     if (description) void description.load().then((support) => {
@@ -190,13 +190,13 @@ export function FileSource({ scope, tab, disk, wrap, writable, preview, ref }: {
       cancelAnimationFrame(restore)
       view.scrollDOM.removeEventListener('scroll', scroll)
       // Kept while the tab stays open, so switching tabs or panels loses nothing; a closed tab was confirmed.
-      const open = useFileTabs.getState()[conversationId]?.tabs.some((tab) => tab.file.path === path)
-      if (open && !view.state.doc.eq(baseDoc(view))) keepFileDraft(conversationId, path, { text: view.state.sliceDoc(), base: base.current.text, mtimeMs: base.current.mtimeMs })
-      else dropFileDraft(conversationId, path)
+      const open = useFileTabs.getState()[key]?.tabs.some((tab) => tab.file.path === path)
+      if (open && !view.state.doc.eq(baseDoc(view))) keepFileDraft(key, path, { text: view.state.sliceDoc(), base: base.current.text, mtimeMs: base.current.mtimeMs })
+      else dropFileDraft(key, path)
       view.destroy()
       editor.current = null
     }
-  }, [conversationId, path])
+  }, [key, path])
 
   // A fresh read: taken as is under no edits, else only noted, so typing is never thrown away.
   useEffect(() => {
@@ -227,10 +227,10 @@ export function FileSource({ scope, tab, disk, wrap, writable, preview, ref }: {
     const frame = requestAnimationFrame(() => {
       view.dispatch({ selection: { anchor: line }, effects: EditorView.scrollIntoView(line, { y: 'center' }) })
       view.focus()
-      updateFileTabs(conversationId, (state) => ({ ...state, tabs: state.tabs.map((each) => each.file.path === path && each.reveal === tab.reveal ? { ...each, line: null } : each) }))
+      updateFileTabs(key, (state) => ({ ...state, tabs: state.tabs.map((each) => each.file.path === path && each.reveal === tab.reveal ? { ...each, line: null } : each) }))
     })
     return () => cancelAnimationFrame(frame)
-  }, [conversationId, path, tab.line, tab.reveal])
+  }, [key, path, tab.line, tab.reveal])
 
   return <>
     {notice && <div className="file-notice" role="alert">

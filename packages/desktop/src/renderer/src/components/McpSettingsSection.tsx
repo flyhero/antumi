@@ -3,7 +3,9 @@ import { useEffect, useId, useState, type FormEvent } from 'react'
 import { AGENT_KINDS, agentDescriptor, McpServerName, type AgentKind, type McpImportCandidate, type McpProbe, type McpServer, type McpServerInput } from '@antumi/protocol'
 import { perform, useCore } from '../core-store'
 import { agentLabel } from '../labels'
-import { Segmented, Toggle } from './SettingsControls'
+import { Segmented, SettingsGroup, Toggle } from './SettingsControls'
+import { SettingsEmptyState } from './SettingsEmptyState'
+import { PlugIcon } from './icons'
 
 // The agents a server can be handed to, as their descriptors say.
 const TAKERS = AGENT_KINDS.filter((kind) => agentDescriptor(kind).capabilities.userMcp)
@@ -121,7 +123,8 @@ function ServerForm({ initial, onDone }: { initial: Draft; onDone: (saved: strin
   const what = draft.type === 'stdio' ? t('McpSettingsSection.environmentVariables') : t('McpSettingsSection.requestHeaders')
 
   return (
-    <form className="chat-command-form" onSubmit={(event) => void save(event)}>
+    <SettingsGroup title={initial.previousName ? t('McpSettingsSection.editServer', { name: initial.previousName }) : t('McpSettingsSection.addServer')}>
+      <form className="chat-command-form" onSubmit={(event) => void save(event)}>
       {json === null ? (
         <button type="button" className="button ghost mcp-json-toggle" onClick={() => setJson('')}>{t('McpSettingsSection.pasteJsonToFillFields')}</button>
       ) : (
@@ -188,12 +191,14 @@ function ServerForm({ initial, onDone }: { initial: Draft; onDone: (saved: strin
         <button type="button" className="button ghost" onClick={() => onDone(null)}>{t('ChatCommandSettings.cancel')}</button>
         <button type="submit" className="button primary" disabled={!ready || saving}>{saving ? t('McpSettingsSection.saving') : t('McpSettingsSection.saveAndTest')}</button>
       </div>
-    </form>
+      </form>
+    </SettingsGroup>
   )
 }
 
-function ProbeResult({ probe }: { probe: McpProbe | 'running' }) {
+function ProbeResult({ probe }: { probe: McpProbe | 'running' | 'unavailable' }) {
   const [open, setOpen] = useState(false)
+  if (probe === 'unavailable') return <p className="settings-status warning" role="status">{t('McpSettingsSection.probeUnavailable')}</p>
   if (probe === 'running') return <p className="settings-status" role="status">{t('McpSettingsSection.connectingFirstUseOfNpxUvxMayRequire')}</p>
   if (!probe.ok) {
     return (
@@ -220,7 +225,7 @@ function summary(server: McpServer): string {
   return transport.type === 'stdio' ? [transport.command, ...transport.args].join(' ') : transport.url
 }
 
-function ServerRow({ server, probe, onProbe, onEdit }: { server: McpServer; probe: McpProbe | 'running' | undefined; onProbe: () => void; onEdit: () => void }) {
+function ServerRow({ server, probe, onProbe, onEdit }: { server: McpServer; probe: McpProbe | 'running' | 'unavailable' | undefined; onProbe: () => void; onEdit: () => void }) {
   const labelId = useId()
   const [removing, setRemoving] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -230,10 +235,13 @@ function ServerRow({ server, probe, onProbe, onEdit }: { server: McpServer; prob
     try { await action() } finally { setBusy(false) }
   }
   return (
-    <div className="plugin-row">
+    <article className="mcp-server-entry">
       <div className="settings-row">
         <div className="settings-row-text">
-          <span id={labelId} className="settings-row-label mono">{server.name}</span>
+          <div className="settings-entry-title"><span id={labelId} className="settings-row-label mono">{server.name}</span>
+            <span className="settings-state-pill">{server.transport.type === 'stdio' ? t('McpSettingsSection.localCommand') : t('McpSettingsSection.remoteUrl')}</span>
+            <span className="settings-state-pill">{server.enabled ? t('McpSettingsSection.enabled') : t('McpSettingsSection.disabled')}</span>
+          </div>
           <p className="settings-row-description mono mcp-summary" title={summary(server)}>{summary(server)}</p>
           <p className="settings-row-description">
             {server.agents.length ? t('McpSettingsSection.sharedWith', { value1: server.agents.map(agentLabel).join('、') }) : t('McpSettingsSection.notSharedWithAnyAgent')}
@@ -242,19 +250,19 @@ function ServerRow({ server, probe, onProbe, onEdit }: { server: McpServer; prob
         </div>
         <Toggle labelId={labelId} checked={server.enabled} disabled={busy} onChange={(enabled) => void run(() => perform((rpc) => rpc.call('mcpServers.setEnabled', { name: server.name, enabled })))} />
       </div>
-      {probe && <ProbeResult probe={probe} />}
-      <div className="plugin-actions">
+      <div className="mcp-server-feedback">
+      {probe ? <ProbeResult probe={probe} /> : <p className="settings-note">{t('McpSettingsSection.notTested')}</p>}
+      <div className="settings-inline-actions">
         <button type="button" className="button" disabled={busy || probe === 'running'} onClick={onProbe}>{t('McpSettingsSection.testConnection')}</button>
         <button type="button" className="button" disabled={busy} onClick={onEdit}>{t('chatTools.edit')}</button>
-        {removing ? (
-          <>
+        <button type="button" className="button ghost" disabled={busy} onClick={() => setRemoving(true)}>{t('ChatCommandSettings.delete')}</button>
+      </div></div>
+      {removing && <div className="account-remove-confirm">
             <span className="settings-note">{t('McpSettingsSection.afterDeletionAgentsLoseTheseToolsAtTheir')}</span>
             <button type="button" className="button" disabled={busy} onClick={() => void run(() => perform((rpc) => rpc.call('mcpServers.remove', { name: server.name })))}>{t('McpSettingsSection.confirmDeletion')}</button>
             <button type="button" className="button ghost" onClick={() => setRemoving(false)}>{t('ChatCommandSettings.cancel')}</button>
-          </>
-        ) : <button type="button" className="button ghost" disabled={busy} onClick={() => setRemoving(true)}>{t('ChatCommandSettings.delete')}</button>}
-      </div>
-    </div>
+      </div>}
+    </article>
   )
 }
 
@@ -267,7 +275,15 @@ function ImportPanel({ onDone }: { onDone: (imported: string[]) => void }) {
   const [chosen, setChosen] = useState<Record<string, string>>({})
   const [agents, setAgents] = useState<AgentKind[]>([...TAKERS])
   const [busy, setBusy] = useState(false)
-  useEffect(() => { void perform((rpc) => rpc.call('mcpServers.importable', {})).then((found) => setCandidates(found ?? [])) }, [])
+  const [failed, setFailed] = useState(false)
+  const load = async () => {
+    setFailed(false)
+    setCandidates(null)
+    const found = await perform((rpc) => rpc.call('mcpServers.importable', {}))
+    if (found) setCandidates(found)
+    else setFailed(true)
+  }
+  useEffect(() => { void load() }, [])
   const keyOf = (candidate: McpImportCandidate) => `${candidate.source}/${candidate.name}`
   const picked = (candidates ?? []).filter((candidate) => keyOf(candidate) in chosen)
   const valid = picked.length > 0 && picked.every((candidate) => McpServerName.safeParse(chosen[keyOf(candidate)]).success)
@@ -290,10 +306,10 @@ function ImportPanel({ onDone }: { onDone: (imported: string[]) => void }) {
     }
   }
 
-  if (candidates === null) return <p className="settings-empty">{t('McpSettingsSection.readingAgentConfigurations')}</p>
   return (
+    <SettingsGroup title={t('McpSettingsSection.importFromClaudeCodexCursor')}>
     <div className="chat-command-form">
-      {candidates.length === 0 ? <p className="settings-empty">{t('McpSettingsSection.noMcpServersInAnyAgentSUser')}</p> : (
+      {failed ? <div className="settings-loading" role="status"><p>{t('McpSettingsSection.importFailed')}</p><button type="button" className="button" onClick={() => void load()}>{t('AppUpdate.retry')}</button></div> : candidates === null ? <p className="settings-empty" role="status">{t('McpSettingsSection.readingAgentConfigurations')}</p> : candidates.length === 0 ? <SettingsEmptyState icon={<PlugIcon />} title={t('McpSettingsSection.noImportTitle')} actions={<button type="button" className="button" onClick={() => void load()}>{t('AppUpdate.retry')}</button>}>{t('McpSettingsSection.noMcpServersInAnyAgentSUser')}</SettingsEmptyState> : (
         <ul className="settings-project-list">
           {candidates.map((candidate) => {
             const key = keyOf(candidate)
@@ -318,7 +334,7 @@ function ImportPanel({ onDone }: { onDone: (imported: string[]) => void }) {
           })}
         </ul>
       )}
-      {candidates.length > 0 && (
+      {candidates && candidates.length > 0 && (
         <div className="chat-command-field">
           <span>{t('McpSettingsSection.shareWithAgents')}</span>
           <AgentChoices value={agents} onChange={setAgents} />
@@ -327,9 +343,10 @@ function ImportPanel({ onDone }: { onDone: (imported: string[]) => void }) {
       )}
       <div className="chat-command-actions">
         <button type="button" className="button ghost" onClick={() => onDone([])}>{t('ChatCommandSettings.cancel')}</button>
-        {candidates.length > 0 && <button type="button" className="button primary" disabled={!valid || busy} onClick={() => void submit()}>{busy ? t('McpSettingsSection.importing') : t('McpSettingsSection.import_1237', { value1: picked.length })}</button>}
+        {candidates && candidates.length > 0 && <button type="button" className="button primary" disabled={!valid || busy} onClick={() => void submit()}>{busy ? t('McpSettingsSection.importing') : t('McpSettingsSection.import_1237', { value1: picked.length })}</button>}
       </div>
     </div>
+    </SettingsGroup>
   )
 }
 
@@ -340,12 +357,15 @@ export function McpSettingsSection() {
   const servers = useCore((s) => s.mcpServers)
   const [draft, setDraft] = useState<Draft | null>(null)
   const [importing, setImporting] = useState(false)
-  const [probes, setProbes] = useState<Record<string, McpProbe | 'running'>>({})
+  const [probes, setProbes] = useState<Record<string, { updatedAt: number; result: McpProbe | 'running' | 'unavailable' }>>({})
 
   const probe = async (name: string) => {
-    setProbes((current) => ({ ...current, [name]: 'running' }))
+    const server = useCore.getState().mcpServers.find((each) => each.name === name)
+    if (!server) return
+    const updatedAt = server.updatedAt
+    setProbes((current) => ({ ...current, [name]: { updatedAt, result: 'running' } }))
     const result = await perform((rpc) => rpc.call('mcpServers.probe', { name }))
-    setProbes(({ [name]: _running, ...rest }) => (result ? { ...rest, [name]: result } : rest))
+    setProbes((current) => current[name]?.updatedAt === updatedAt ? { ...current, [name]: { updatedAt, result: result ?? 'unavailable' } } : current)
   }
 
   if (!connected) return <p className="settings-empty">{t('ChatCommandSettings.connectToAntumiCoreToView')}</p>
@@ -353,14 +373,17 @@ export function McpSettingsSection() {
   if (importing) return <ImportPanel onDone={(imported) => { setImporting(false); imported.forEach((name) => void probe(name)) }} />
   return (
     <>
-      <p className="settings-note">{t('McpSettingsSection.agentConfigurationsStayUntouchedAndTheirExistingServers')}</p>
-      {servers.length === 0 ? <p className="settings-empty">{t('McpSettingsSection.noMcpServersYet')}</p> : servers.map((server) => (
-        <ServerRow key={server.name} server={server} probe={probes[server.name]} onProbe={() => void probe(server.name)} onEdit={() => setDraft(draftOf(server))} />
-      ))}
-      <div className="chat-command-actions">
+      {servers.length === 0 ? <SettingsEmptyState icon={<PlugIcon />} title={t('McpSettingsSection.emptyTitle')} actions={<>
+        <button type="button" className="button primary" onClick={() => setDraft(NEW_DRAFT)}>{t('McpSettingsSection.addServer')}</button>
+        <button type="button" className="button" onClick={() => setImporting(true)}>{t('McpSettingsSection.importFromClaudeCodexCursor')}</button>
+      </>}>{t('McpSettingsSection.emptyHint')}</SettingsEmptyState> : <>
+      <div className="settings-list-toolbar"><span className="settings-list-count">{t('McpSettingsSection.serverCount', { count: servers.length, enabled: servers.filter((server) => server.enabled).length })}</span><div className="settings-inline-actions">
         <button type="button" className="button" onClick={() => setImporting(true)}>{t('McpSettingsSection.importFromClaudeCodexCursor')}</button>
         <button type="button" className="button primary" onClick={() => setDraft(NEW_DRAFT)}>{t('McpSettingsSection.addServer')}</button>
-      </div>
+      </div></div>
+      <SettingsGroup>{servers.map((server) => <ServerRow key={server.name} server={server} probe={probes[server.name]?.updatedAt === server.updatedAt ? probes[server.name]?.result : undefined} onProbe={() => void probe(server.name)} onEdit={() => setDraft(draftOf(server))} />)}</SettingsGroup>
+      </>}
+      <details className="settings-disclosure" open={servers.length === 0}><summary>{t('McpSettingsSection.sharingHelp')}</summary><p className="settings-note">{t('McpSettingsSection.agentConfigurationsStayUntouchedAndTheirExistingServers')}</p></details>
     </>
   )
 }

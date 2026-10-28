@@ -7,9 +7,12 @@ import { agentLabel } from '../labels'
 import { Segmented, SettingsGroup } from './SettingsControls'
 import { SkillActivationDialog } from './SkillActivationDialog'
 import { SkillRepoSettings } from './SkillRepoSettings'
+import { SettingsEmptyState } from './SettingsEmptyState'
+import { BoltIcon } from './icons'
 
-// The ways to add a skill, in tab order. A lone way needs no tab.
+// Available installation routes, after the installed library.
 export type SkillAddTab = 'recommended' | 'search' | 'url'
+type SkillTab = 'installed' | SkillAddTab
 
 export function skillAddTabs(options: { recommended: boolean; search: boolean }): SkillAddTab[] {
   return [...(options.recommended ? ['recommended' as const] : []), ...(options.search ? ['search' as const] : []), 'url' as const]
@@ -124,12 +127,11 @@ export function SkillsSettingsSection() {
   const [recommended, setRecommended] = useState<RecommendedSkillRepo[] | null>(null)
   const [url, setUrl] = useState('')
   const [installing, setInstalling] = useState(false)
-  const [tab, setTab] = useState<SkillAddTab>('recommended')
-  const [page, setPage] = useState<'installed' | 'discover'>('installed')
+  const [tab, setTab] = useState<SkillTab>('installed')
   const [managing, setManaging] = useState<string | null>(null)
+  const [filter, setFilter] = useState('')
   const tabLabelId = useId()
-  const pageLabelId = useId()
-  const onManage = (id: string) => { setPage('installed'); if (managed) setManaging(id) }
+  const onManage = (id: string) => { setTab('installed'); if (managed) setManaging(id) }
 
   useEffect(() => {
     if (connected) void perform((rpc) => rpc.call('skills.recommended', {})).then((found) => setRecommended(found ?? []))
@@ -155,36 +157,39 @@ export function SkillsSettingsSection() {
   const others = AGENT_KINDS.filter((kind) => !agentDescriptor(kind).capabilities.skills).map(agentLabel)
   const suggested = recommended ?? []
   const tabs = skillAddTabs({ recommended: suggested.length > 0, search: searchSupported })
-  const active = activeSkillAddTab(tabs, tab)
+  const active = tab === 'installed' ? 'installed' : activeSkillAddTab(tabs, tab)
   const current = repos.find((repo) => repo.id === managing)
   const fallback = knowledgeBaseSkillRefs(base)
   const installedLabel = repos.length > 0 ? t('SkillsSettingsSection.installed', { value1: repos.length }) : t('InstalledAgentsSettings.installed')
+  const visible = repos.filter((repo) => [repo.plugin?.name, repo.id, repo.url, ...repo.skills.flatMap((skill) => [skill.name, skill.description])].some((value) => value?.toLocaleLowerCase().includes(filter.trim().toLocaleLowerCase())))
   const tabOptions = tabs.map((value) => ({
     value,
     label: value === 'recommended' ? t('AgentPicker.recommended') : value === 'search' ? t('SkillsSettingsSection.searchTheSkillMarket') : t('SkillsSettingsSection.installFromAnotherRepository')
   }))
   return (
-    <>
-      <p className="settings-note">{tr('SkillsSettingsSection.pinnedToTheInstalledCommitPreviewChangesBefore', { value1: [takers.length > 0 && t('SkillsSettingsSection.supported', { value1: takers.join('、') }), others.length > 0 && t('SkillsSettingsSection.notSupportedYet', { value1: others.join('、') })].filter(Boolean).join('；') })}</p>
-      {managed && <div className="settings-skill-tabs"><span id={pageLabelId} hidden>{t('SkillsSettingsSection.skills')}</span><Segmented labelId={pageLabelId} value={page} options={[{ value: 'installed', label: installedLabel }, { value: 'discover', label: t('SkillsSettingsSection.discover') }]} onChange={setPage}/></div>}
-      <div hidden={managed && page !== 'installed'}>
-      <SettingsGroup title={managed ? undefined : installedLabel}>
-        {repos.length === 0 ? <p className="settings-empty">{t('SkillsSettingsSection.noSkillsInstalledChooseARecommendationBelowOr')}</p> : (
+    <div className="skills-library">
+      <div className="settings-skill-tabs">
+        <span id={tabLabelId} hidden>{t('SkillsSettingsSection.skills')}</span>
+        <Segmented<SkillTab> labelId={tabLabelId} value={active} options={[{ value: 'installed', label: installedLabel }, ...tabOptions]} onChange={setTab} />
+      </div>
+      <div hidden={active !== 'installed'}>
+      <SettingsGroup>
+        {repos.length === 0 ? <SettingsEmptyState icon={<BoltIcon />} title={t('SkillsSettingsSection.emptyTitle')} actions={<button type="button" className="button primary" onClick={() => setTab(tabs[0] ?? 'url')}>{tabOptions[0]?.label}</button>}>
+          {t('SkillsSettingsSection.emptyHint')}
+        </SettingsEmptyState> : (
+          <>
+          <div className="settings-list-toolbar"><input className="input" type="search" value={filter} onChange={(event) => setFilter(event.target.value)} placeholder={t('SkillsSettingsSection.filterInstalled')} aria-label={t('SkillsSettingsSection.filterInstalled')} /></div>
+          <p className="settings-list-count" role="status">{t('SkillsSettingsSection.filteredCount', { count: visible.length, total: repos.length })}</p>
           <ul className="settings-project-list">
-            {repos.map((repo) => <SkillRepoSettings key={repo.id} repo={repo} managed={managed} fallback={fallback} onConfigure={() => onManage(repo.id)} />)}
+            {visible.map((repo) => <SkillRepoSettings key={repo.id} repo={repo} managed={managed} fallback={fallback} onConfigure={() => onManage(repo.id)} />)}
           </ul>
+          {visible.length === 0 && <div className="settings-filter-empty"><p>{t('SkillsSettingsSection.noMatchingSkillsFound')}</p><button type="button" className="button ghost" onClick={() => setFilter('')}>{t('SidebarSearch.clear')}</button></div>}
+          </>
         )}
       </SettingsGroup>
-      {managed && repos.length === 0 && <button className="button" type="button" onClick={() => setPage('discover')}>{t('SkillsSettingsSection.discover')}</button>}
       </div>
-      <div hidden={managed && page !== 'discover'}>
-      <SettingsGroup title={managed ? undefined : tabs.length > 1 ? t('SkillsSettingsSection.addASkill') : t('SkillsSettingsSection.installFromAnotherRepository')}>
-        {tabs.length > 1 && (
-          <div className="settings-skill-tabs">
-            <Segmented<SkillAddTab> labelId={tabLabelId} value={active} options={tabOptions} onChange={setTab} />
-            <span id={tabLabelId} hidden>{t('SkillsSettingsSection.addASkill')}</span>
-          </div>
-        )}
+      <div hidden={active === 'installed'}>
+      <SettingsGroup>
         {active === 'recommended' && (
           <ul className="settings-project-list">
             {suggested.map((repo) => <RecommendedRow key={repo.url} repo={repo} installed={repos.find((each) => skillRepositoryUrl(each.url) === skillRepositoryUrl(repo.url))} canManage={managed} onManage={onManage} />)}
@@ -200,9 +205,13 @@ export function SkillsSettingsSection() {
             <p className="settings-note">{t('SkillsSettingsSection.onlyHttpsUrlsTheRepositoryMustContainSkills')}</p>
           </>
         )}
+        <p className="settings-note">{t('SkillsSettingsSection.installSafety')}</p>
       </SettingsGroup>
       </div>
+      <details className="settings-disclosure"><summary>{t('SkillsSettingsSection.activationHelp')}</summary>
+        <p className="settings-note">{tr('SkillsSettingsSection.pinnedToTheInstalledCommitPreviewChangesBefore', { value1: [takers.length > 0 && t('SkillsSettingsSection.supported', { value1: takers.join('、') }), others.length > 0 && t('SkillsSettingsSection.notSupportedYet', { value1: others.join('、') })].filter(Boolean).join('；') })}</p>
+      </details>
       {managed && current && <SkillActivationDialog key={current.id} repo={current} repos={repos} fallback={fallback} onClose={() => setManaging(null)} onManage={setManaging} />}
-    </>
+    </div>
   )
 }

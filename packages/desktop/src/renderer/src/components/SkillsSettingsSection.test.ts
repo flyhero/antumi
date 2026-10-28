@@ -28,10 +28,11 @@ beforeEach(() => {
 })
 
 describe('SkillsSettingsSection', () => {
-  it('puts installed skills and installing another repository in cards of their own', () => {
+  it('puts installed skills and installation routes in one navigation group', () => {
     useCore.setState({ skillRepos: [repo('https://github.com/kepano/obsidian-skills')] })
     const html = renderToStaticMarkup(createElement(SkillsSettingsSection))
     expect(html.match(/class="settings-card"/g)).toHaveLength(2)
+    expect(html.match(/role="radiogroup"/g)).toHaveLength(1)
     expect(html).toContain('已安装 · 1')
     expect(html).toContain('从其他仓库安装')
   })
@@ -39,7 +40,7 @@ describe('SkillsSettingsSection', () => {
   it('says where to start when nothing is installed', () => {
     const html = renderToStaticMarkup(createElement(SkillsSettingsSection))
     expect(html).toContain('>已安装<')
-    expect(html).toContain('还没有安装技能')
+    expect(html).toContain('为 Agent 安装技能')
   })
 
   it('offers a tab per way to add a skill, and only the address when that is the only way', () => {
@@ -50,20 +51,22 @@ describe('SkillsSettingsSection', () => {
     expect(activeSkillAddTab(['recommended', 'search', 'url'], 'url')).toBe('url')
   })
 
-  it('shows the add-a-skill tabs, opening on search when nothing is recommended', () => {
+  it('keeps installed and search routes alongside URL installation without activation support', () => {
     useCore.setState({ rpc: { features: ['skills-search'] } as never })
     const html = renderToStaticMarkup(createElement(SkillsSettingsSection))
     expect(html).toContain('role="radiogroup"')
     expect(html).toContain('搜索技能市场')
     expect(html).toContain('从其他仓库安装')
     expect(html).toContain('搜 skills.sh 上的技能')
-    expect(html).not.toContain('placeholder="https://github.com/')
+    expect(html).toContain('aria-checked="true">已安装</button>')
+    expect(html).not.toContain('发现技能')
   })
 
-  it('shows repository activation and discovery only when core supports them', () => {
+  it('shows activation when supported without introducing a second navigation level', () => {
     useCore.setState({ rpc: { features: ['skills-search', 'skills-activation'] } as never, skillRepos: [{ ...repo('https://github.com/team/skills'), skills: [{ name: 'review', description: 'Reviews code.', dir: 'skills/review', problem: null }], activation: { mode: 'selected', skills: ['review'], agents: null } }] })
     const html = renderToStaticMarkup(createElement(SkillsSettingsSection))
-    expect(html).toContain('发现技能')
+    expect(html).not.toContain('发现技能')
+    expect(html.match(/role="radiogroup"/g)).toHaveLength(1)
     expect(html).toContain('启用设置')
     expect(html).toContain('自选技能 · 全部兼容 Agent')
     expect(html).toContain('role="switch"')

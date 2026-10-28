@@ -1,23 +1,19 @@
 import { t } from '../i18n'
-import { useState, type FormEvent } from 'react'
+import { useCallback, useRef, useState, type FormEvent } from 'react'
 import { AGENT_KINDS, DEFAULT_ACCOUNT, accountUsage, accountsSupported, activeAccount, type AgentAccount, type AgentKind } from '@antumi/protocol'
 import { activateAccount, addAccount, removeAccount, renameAccount, setAccountAutoSwitch, signInAccount, useCore } from '../core-store'
 import { accountName, accountsOf } from '../agent-accounts'
 import { agentLabel } from '../labels'
-import { usePreferences } from '../preferences'
-import { percentText, windowLabel } from '../usage-format'
+import { SettingsQuotaReadout } from './SettingsQuotaReadout'
+import { SettingsEmptyState } from './SettingsEmptyState'
+import { ContextMenu, type MenuPoint } from './ContextMenu'
+import { AgentIcon, MoreIcon, PersonIcon } from './icons'
 import { SettingsGroup, SettingsRow, Toggle } from './SettingsControls'
 
 function UsageSummary({ account }: { account: AgentAccount }) {
   const usage = useCore((s) => accountUsage(s.accountUsage, account.agent, account.id))
-  const display = usePreferences((s) => s.usageDisplay)
-  const windows = usage?.windows.filter((window) => window.model === null) ?? []
   if (!account.signedIn) return null
-  return (
-    <p className="settings-row-description">
-      {windows.length === 0 ? t('AgentAccounts.noUsage') : windows.map((window) => `${windowLabel(window)} ${percentText(window, display)}`).join(' · ')}
-    </p>
-  )
+  return <SettingsQuotaReadout usage={usage} />
 }
 
 function AccountRow({ account, active }: { account: AgentAccount; active: boolean }) {
@@ -25,6 +21,9 @@ function AccountRow({ account, active }: { account: AgentAccount; active: boolea
   const [removing, setRemoving] = useState(false)
   const [busy, setBusy] = useState(false)
   const own = account.id === DEFAULT_ACCOUNT
+  const trigger = useRef<HTMLButtonElement>(null)
+  const [menu, setMenu] = useState<MenuPoint | null>(null)
+  const closeMenu = useCallback(() => setMenu(null), [])
   const act = async (action: () => Promise<void>) => {
     setBusy(true)
     try { await action() } finally { setBusy(false) }
@@ -36,8 +35,8 @@ function AccountRow({ account, active }: { account: AgentAccount; active: boolea
     setRenaming(null)
   }
   return (
-    <div className="plugin-row">
-      <div className="settings-row">
+    <article className="account-entry">
+      <div className="account-entry-main">
         <div className="settings-row-text">
           <div className="agent-row-head">
             <span className="settings-row-label">{accountName(account)}</span>
@@ -47,33 +46,36 @@ function AccountRow({ account, active }: { account: AgentAccount; active: boolea
           {(account.label && account.email) || account.plan ? (
             <p className="settings-row-description">{[account.label ? account.email : null, account.plan].filter(Boolean).join(' · ')}</p>
           ) : null}
-          <UsageSummary account={account} />
+
+        </div>
+        <div className="account-entry-actions">
+          {!account.signedIn ? <button type="button" className="button" disabled={busy} onClick={() => void act(() => signInAccount(account.agent, account.id))}>{t('AgentAccounts.signIn')}</button>
+            : !active && <button type="button" className="button" disabled={busy} onClick={() => void act(() => activateAccount(account.agent, account.id))}>{t('AgentAccounts.makeActive')}</button>}
+          <button type="button" className="icon-button" ref={trigger} disabled={busy} aria-label={t('SettingsPage.manageNamedAccount', { name: accountName(account) })} aria-haspopup="menu" aria-expanded={menu !== null} onClick={(event) => {
+            const box = event.currentTarget.getBoundingClientRect()
+            setMenu(menu ? null : { x: box.right, y: box.bottom + 4 })
+          }}><MoreIcon /></button>
+          {menu && <ContextMenu at={menu} align="end" trigger={trigger.current} label={t('SettingsPage.manageNamedAccount', { name: accountName(account) })} onClose={closeMenu}>
+            {account.signedIn && <button type="button" role="menuitem" className="menu-item" onClick={() => { closeMenu(); void act(() => signInAccount(account.agent, account.id)) }}>{t('AgentAccounts.signInAgain')}</button>}
+            <button type="button" role="menuitem" className="menu-item" onClick={() => { closeMenu(); setRenaming(account.label ?? '') }}>{t('AgentAccounts.rename')}</button>
+            {!own && <button type="button" role="menuitem" className="menu-item" onClick={() => { closeMenu(); setRemoving(true) }}>{t('ChatCommandSettings.delete')}</button>}
+          </ContextMenu>}
         </div>
       </div>
+      <UsageSummary account={account} />
       {renaming !== null && (
         <form className="chat-command-actions" onSubmit={(event) => void rename(event)}>
-          <input className="input" autoFocus value={renaming} maxLength={60} placeholder={t('AgentAccounts.namePlaceholder')} onChange={(event) => setRenaming(event.target.value)} />
+          <input className="input" aria-label={t('AgentAccounts.namePlaceholder')} autoFocus value={renaming} maxLength={60} placeholder={t('AgentAccounts.namePlaceholder')} onChange={(event) => setRenaming(event.target.value)} />
           <button type="button" className="button ghost" onClick={() => setRenaming(null)}>{t('ChatCommandSettings.cancel')}</button>
           <button type="submit" className="button primary" disabled={busy}>{t('FileEditor.save')}</button>
         </form>
       )}
-      <div className="plugin-actions">
-        {!active && account.signedIn && (
-          <button type="button" className="button" disabled={busy} onClick={() => void act(() => activateAccount(account.agent, account.id))}>{t('AgentAccounts.makeActive')}</button>
-        )}
-        <button type="button" className="button" disabled={busy} onClick={() => void act(() => signInAccount(account.agent, account.id))}>
-          {account.signedIn ? t('AgentAccounts.signInAgain') : t('AgentAccounts.signIn')}
-        </button>
-        {renaming === null && <button type="button" className="button" disabled={busy} onClick={() => setRenaming(account.label ?? '')}>{t('AgentAccounts.rename')}</button>}
-        {!own && (removing ? (
-          <>
-            <span className="settings-note">{t('AgentAccounts.removeWarning')}</span>
-            <button type="button" className="button" disabled={busy} onClick={() => void act(() => removeAccount(account.agent, account.id))}>{t('McpSettingsSection.confirmDeletion')}</button>
-            <button type="button" className="button ghost" onClick={() => setRemoving(false)}>{t('ChatCommandSettings.cancel')}</button>
-          </>
-        ) : <button type="button" className="button ghost" disabled={busy} onClick={() => setRemoving(true)}>{t('ChatCommandSettings.delete')}</button>)}
-      </div>
-    </div>
+      {removing && <div className="account-remove-confirm">
+        <p>{t('AgentAccounts.removeWarning')}</p>
+        <button type="button" className="button" disabled={busy} onClick={() => void act(() => removeAccount(account.agent, account.id))}>{t('McpSettingsSection.confirmDeletion')}</button>
+        <button type="button" className="button ghost" disabled={busy} onClick={() => setRemoving(false)}>{t('ChatCommandSettings.cancel')}</button>
+      </div>}
+    </article>
   )
 }
 
@@ -96,15 +98,15 @@ function AddAccount({ agent }: { agent: AgentKind }) {
   }
   if (label === null) {
     return (
-      <div className="chat-command-actions">
+      <div className="chat-command-actions account-add">
         {started && <span className="settings-note">{t('AgentAccounts.signInHint')}</span>}
         <button type="button" className="button" onClick={() => setLabel('')}>{t('AgentAccounts.add', { value1: agentLabel(agent) })}</button>
       </div>
     )
   }
   return (
-    <form className="chat-command-actions" onSubmit={(event) => void add(event)}>
-      <input className="input" autoFocus value={label} maxLength={60} placeholder={t('AgentAccounts.namePlaceholder')} onChange={(event) => setLabel(event.target.value)} />
+    <form className="chat-command-actions account-add" onSubmit={(event) => void add(event)}>
+      <input className="input" aria-label={t('AgentAccounts.namePlaceholder')} autoFocus value={label} maxLength={60} placeholder={t('AgentAccounts.namePlaceholder')} onChange={(event) => setLabel(event.target.value)} />
       <button type="button" className="button ghost" onClick={() => setLabel(null)}>{t('ChatCommandSettings.cancel')}</button>
       <button type="submit" className="button primary" disabled={busy}>{t('AgentAccounts.addAndSignIn')}</button>
     </form>
@@ -115,10 +117,9 @@ function AddAccount({ agent }: { agent: AgentKind }) {
 export function AgentAccountSettings() {
   const connected = useCore((s) => s.connection === 'connected')
   const accounts = useCore((s) => s.accounts)
-  if (!connected || !accounts) return <p className="settings-empty">{t('ChatCommandSettings.connectToAntumiCoreToView')}</p>
+  if (!connected || !accounts) return <SettingsEmptyState icon={<PersonIcon />} title={connected ? t('SettingsPage.accountsLoading') : t('SettingsPage.accountsDisconnected')}>{connected ? t('SettingsPage.accountsLoadingHint') : t('ChatCommandSettings.connectToAntumiCoreToView')}</SettingsEmptyState>
   return (
-    <>
-      <p className="settings-note">{t('AgentAccounts.intro')}</p>
+    <div className="account-settings">
       <SettingsGroup>
         <SettingsRow
           label={t('AgentAccounts.autoSwitch')}
@@ -126,14 +127,19 @@ export function AgentAccountSettings() {
           control={(labelId) => <Toggle labelId={labelId} checked={accounts.autoSwitch} onChange={(next) => void setAccountAutoSwitch(next)} />}
         />
       </SettingsGroup>
-      {AGENT_KINDS.filter(accountsSupported).map((agent) => (
-        <SettingsGroup key={agent} title={agentLabel(agent)}>
-          {accountsOf(accounts, agent).map((account) => (
-            <AccountRow key={account.id} account={account} active={activeAccount(accounts, agent) === account.id} />
-          ))}
-          <AddAccount agent={agent} />
-        </SettingsGroup>
-      ))}
-    </>
+      {AGENT_KINDS.filter(accountsSupported).map((agent) => {
+        const own = accountsOf(accounts, agent)
+        const active = activeAccount(accounts, agent)
+        return <section key={agent} className="account-agent-group" aria-label={agentLabel(agent)}>
+          <header className="account-agent-heading">
+            <h3><AgentIcon agent={agent} />{agentLabel(agent)}<span>{t('SettingsPage.accountCount', { count: own.length })}</span></h3>
+            <AddAccount agent={agent} />
+          </header>
+          {own.length ? own.sort((a, b) => Number(b.id === active) - Number(a.id === active)).map((account) => <AccountRow key={account.id} account={account} active={active === account.id} />)
+            : <p className="settings-quota-note">{t('SettingsPage.accountEmptyHint')}</p>}
+        </section>
+      })}
+      <details className="settings-disclosure"><summary>{t('SettingsPage.accountSwitchingHelp')}</summary><p>{t('AgentAccounts.intro')}</p></details>
+    </div>
   )
 }

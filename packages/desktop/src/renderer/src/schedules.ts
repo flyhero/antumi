@@ -74,6 +74,7 @@ export function scheduleState(run: ScheduledRun, now: number, tasks?: Readonly<R
       if (run.notBefore !== null && run.notBefore > now) return t('schedules.startAfter', { value1: scheduleTime(run.notBefore, now) })
       if (run.resetsAt !== null && run.resetsAt > now) return t('schedules.waitingForQuotaReset', { value1: scheduleTime(run.resetsAt, now) })
       if (run.attempts > 0) return t('schedules.couldNotStartRetryingLater', { value1: reasonText(run.error ?? '', run.error ?? '') })
+      if (run.heldBy) return t('schedules.waitingBehind', { value1: run.heldBy })
       return run.notBefore === null ? t('schedules.startWhenQuotaResets') : t('schedules.startingSoonSchedulesForTheSameAgentRun')
     case 'starting':
       return t('OverviewView.starting')

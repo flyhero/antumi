@@ -11052,6 +11052,10 @@ export const MESSAGES = {
     "zh": "没能开始，稍后再试（{value1}）",
     "en": "Could not start; retrying later ({value1})"
   },
+  "schedules.waitingBehind": {
+    "zh": "排在「{value1}」后面",
+    "en": "Waiting behind \"{value1}\""
+  },
   "schedules.startWhenQuotaResets": {
     "zh": "额度恢复后开始",
     "en": "Start when quota resets"

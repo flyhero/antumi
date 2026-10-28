@@ -5,6 +5,7 @@ import {
   limitOf,
   quotaVerdict,
   routineRunTitle,
+  usageLevel,
   ScheduledRun,
   ScheduledTarget,
   type AgentKind,
@@ -33,6 +34,9 @@ const BACKOFF_MS = [60_000, 5 * 60_000, 15 * 60_000, 30 * 60_000]
 const MAX_ATTEMPTS = 4
 // A run started this long ago no longer holds its agent's turn for the next one.
 const HOLD_MS = 24 * 60 * 60_000
+// How long after a used-up quota comes back runs still go one at a time, spare quota or not:
+// every run that waited for it is due at once.
+const REFILL_MS = 30 * 60_000
 // How long settled runs stay in the list, and at most how many; a resume, which nobody asked for,
 // is cleared sooner.
 const KEEP_SETTLED_MS = 7 * 24 * 60 * 60_000
@@ -45,7 +49,7 @@ const RELIMIT_MS = 2 * 60_000
 const TRANSIENT = new Set(['chat-busy', 'conversation-running', 'daemon-unavailable'])
 
 const SELECT = `SELECT id, target, title, agent, not_before AS notBefore, check_at AS checkAt, resets_at AS resetsAt,
-  position, status, conversation_id AS conversationId, attempts, error, created_at AS createdAt, settled_at AS settledAt,
+  held_by AS heldBy, position, status, conversation_id AS conversationId, attempts, error, created_at AS createdAt, settled_at AS settledAt,
   routine_id AS routineId, due_at AS dueAt, finished_at AS finishedAt, outcome, seen_at AS seenAt
   FROM scheduled_runs`
 const OPEN = "status IN ('waiting', 'starting')"
@@ -111,7 +115,7 @@ export type ScheduleDeps = {
 // user scheduled, carried out unattended; a conversation, going on with its plan or a message; or
 // a conversation whose turn the usage limit stopped, which core schedules by itself to resume as
 // it was. Runs of one agent go one at a time in list order, so a quota that has just reset is not
-// spent all at once. The plan lives in the database and is checked every minute: it outlasts the
+// spent all at once; with quota to spare they start side by side, one a pass. The plan lives in the database and is checked every minute: it outlasts the
 // window closing and core restarting, and a computer that slept goes on once it wakes.
 export class ScheduleService {
   private readonly db: DatabaseSync
@@ -119,6 +123,8 @@ export class ScheduleService {
   private stopped = false
   private ticking: Promise<void> | null = null
   private queued: Promise<void> | null = null
+  // When each agent's used-up quota came back, or is to; kept in memory only.
+  private readonly refilledAt = new Map<AgentKind, number>()
 
   constructor(
     file: string,
@@ -387,8 +393,12 @@ export class ScheduleService {
   // The user went on in the conversation themselves (a message, a stop): a resume from before
   // would now continue out of nowhere. One the user scheduled stays. A limit the user's own action
   // ran into comes after `since`, and stays.
+  // A run that started there before no longer holds its agent: the turns now are the user's.
   userActed(conversationId: string, since: number): void {
     this.cancelFor((run) => run.target.kind === 'resume' && run.target.conversationId === conversationId && run.createdAt < since, 'user-continued')
+    const released = this.db.prepare(`UPDATE scheduled_runs SET released_at = ?, updated_at = ?
+      WHERE status = 'started' AND released_at IS NULL AND conversation_id = ? AND settled_at < ?`).run(since, this.now(), conversationId, since).changes
+    if (released > 0) void this.tick()
   }
 
   // Handing off changes who answers; the old agent's limit is no longer the conversation's.
@@ -458,7 +468,7 @@ export class ScheduleService {
         if ((!quotaDelay && run.notBefore !== null && run.notBefore > now) || this.autoRunBlocked(run) || this.onProvider(run)) continue
         if (run.target.kind === 'task' && this.deps.tasks.scheduleBlocker(run.target.taskId)) continue
         const agent = this.agentOf(run)
-        if (agent && !checked.has(agent) && this.exhausted(agent) && !this.working(agent)) {
+        if (agent && !checked.has(agent) && this.exhausted(agent) && !this.holder(agent)) {
           checked.add(agent)
           await this.deps.beforeQuotaWait(agent)
           if (this.stopped) return
@@ -471,8 +481,9 @@ export class ScheduleService {
     // Only a reading taken now tells whether a quota has really reset.
     await this.deps.usage.refresh().catch(() => [])
     if (this.stopped) return
-    // An agent goes on with one run at a time.
-    const held = new Set<AgentKind>()
+    // An agent goes on with one run at a time, unless it has quota to spare; even then one starts
+    // a pass, so the next reading counts it. The run each agent's next waits behind:
+    const held = new Map<AgentKind, Row>()
     for (const run of due) {
       if (this.autoRunBlocked(run)) continue
       const agent = this.agentOf(run)
@@ -491,19 +502,25 @@ export class ScheduleService {
       const exhausted = this.onProvider(run) ? null : this.exhausted(agent)
       if (exhausted) {
         const resetsAt = exhausted.resetsAt
-        this.settle(run, { agent, resets_at: resetsAt, check_at: resetsAt !== null && resetsAt > this.now() ? resetsAt + GRACE_MS : this.now() + UNKNOWN_RESET_MS })
+        this.refilledAt.set(agent, Math.max(this.refilledAt.get(agent) ?? 0, resetsAt ?? this.now()))
+        this.settle(run, { agent, resets_at: resetsAt, held_by: null, check_at: resetsAt !== null && resetsAt > this.now() ? resetsAt + GRACE_MS : this.now() + UNKNOWN_RESET_MS })
         this.limitChanged(run)
         continue
       }
-      if (held.has(agent) || this.working(agent)) {
-        held.add(agent)
+      const holder = held.get(agent) ?? (this.spare(agent) ? null : this.holder(agent))
+      if (holder) {
+        held.set(agent, holder)
+        this.holdBehind(run, holder.title)
         continue
       }
       const conversationId = run.target.kind === 'task'
         ? this.deps.tasks.get(run.target.taskId)?.conversationId
         : run.target.kind === 'routine' ? run.conversationId : run.target.conversationId
-      if (!this.deps.conversations.capacityAvailable(agent, conversationId)) continue
-      held.add(agent)
+      if (!this.deps.conversations.capacityAvailable(agent, conversationId)) {
+        this.holdBehind(run, null)
+        continue
+      }
+      held.set(agent, run)
       // The row, not this copy, carries the agent chosen now: the start reads it back.
       const current = agent === run.agent ? run : (this.settle(run, { agent }), this.found(run.id))
       if (this.claim(current)) await this.attempt(current)
@@ -663,10 +680,25 @@ export class ScheduleService {
     return this.conversation(target.conversationId)?.agent ?? null
   }
 
-  // Whether a run of this agent is still at work: the next waits for its turn to end.
-  private working(agent: AgentKind): boolean {
-    return this.rows("WHERE status = 'started' AND agent = ? AND settled_at > ?", agent, this.now() - HOLD_MS)
-      .some((run) => run.conversationId !== null && this.conversation(run.conversationId)?.chat?.turn === 'running')
+  // The run of this agent still at work, if any: the next waits for its turn to end. Once the user
+  // carries its conversation on, the turns there are theirs and hold nothing.
+  private holder(agent: AgentKind): Row | null {
+    return this.rows("WHERE status = 'started' AND agent = ? AND settled_at > ? AND released_at IS NULL", agent, this.now() - HOLD_MS)
+      .find((run) => run.conversationId !== null && this.conversation(run.conversationId)?.chat?.turn === 'running') ?? null
+  }
+
+  // Whether the agent's quota has room for runs side by side: a fresh reading of it, well clear of
+  // the cap, and not just back from used up.
+  private spare(agent: AgentKind): boolean {
+    const now = this.now()
+    const verdict = quotaVerdict(this.deps.usage.list().find((usage) => usage.agent === agent), now)
+    if (verdict.state !== 'ok' || verdict.stale || !verdict.window || usageLevel(verdict.window.usedPercent) !== 'normal') return false
+    return now - (this.refilledAt.get(agent) ?? 0) >= REFILL_MS
+  }
+
+  // Says which run this one waits behind, writing only a change: the pass runs every minute.
+  private holdBehind(run: Row, title: string | null): void {
+    if ((run.heldBy ?? null) !== title) this.settle(run, { held_by: title })
   }
 
   // Whether the run goes to a model provider: its conversation runs on one, or the task it starts
@@ -696,7 +728,7 @@ export class ScheduleService {
   // Takes the run for one start; whoever loses the race (two clients, the timer) does nothing.
   private claim(run: Row): boolean {
     const claimed = this.db
-      .prepare("UPDATE scheduled_runs SET status = 'starting', updated_at = ? WHERE id = ? AND status = 'waiting'")
+      .prepare("UPDATE scheduled_runs SET status = 'starting', held_by = NULL, updated_at = ? WHERE id = ? AND status = 'waiting'")
       .run(this.now(), run.id).changes === 1
     if (claimed) {
       this.announce()

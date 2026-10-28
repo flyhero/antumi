@@ -360,7 +360,11 @@ export const MIGRATIONS = [
   // Pages the user keeps for the built-in browser, one row per address.
   `CREATE TABLE bookmarks (
      id TEXT PRIMARY KEY, title TEXT NOT NULL, url TEXT NOT NULL UNIQUE, folder TEXT, created_at INTEGER NOT NULL
-   );`
+   );`,
+  // A started run stops holding its agent once the user carries its conversation on; a waiting
+  // run names the run it waits behind.
+  `ALTER TABLE scheduled_runs ADD COLUMN released_at INTEGER;
+   ALTER TABLE scheduled_runs ADD COLUMN held_by TEXT;`
 ]
 
 

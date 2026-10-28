@@ -303,13 +303,57 @@ describe('ScheduleService', () => {
     expect(run(b.id)?.status).toBe('started')
     expect(run(a.id)?.status).toBe('waiting')
     await due()
-    expect(run(a.id)?.status).toBe('waiting')
+    expect(run(a.id)).toMatchObject({ status: 'waiting', heldBy: run(b.id)?.title })
 
     daemon.reply = answer
     const sessionId = conversations.get(second.id).sessionId ?? ''
     daemon.emit(sessionId, { type: 'result', subtype: 'success', is_error: false, result: 'done', terminal_reason: 'completed', duration_ms: 5 })
     await due()
     expect(run(a.id)?.status).toBe('started')
+  })
+
+  it('lets the next run go once the user carries the running one\'s conversation on themselves', async () => {
+    const first = await conversations.create('claude', [])
+    const second = await conversations.create('claude', [])
+    daemon.reply = () => {}
+    const a = schedules.create({ kind: 'conversation', conversationId: first.id, text: 'first' }, clock + HOUR)
+    const b = schedules.create({ kind: 'conversation', conversationId: second.id, text: 'second' }, clock + HOUR)
+    clock += HOUR
+    await due()
+    await due()
+    expect(run(b.id)?.status).toBe('waiting')
+
+    clock += 1
+    schedules.userActed(first.id, clock)
+    await due()
+    expect(run(b.id)).toMatchObject({ status: 'started', heldBy: null })
+  })
+
+  it('starts runs of an agent side by side while its quota has room, but not just after it came back', async () => {
+    const quota = (usedPercent: number): AgentUsage[] => [{ agent: 'claude', status: 'ok', plan: null, error: null, updatedAt: clock, resetCredits: null,
+      windows: [{ kind: 'session', model: null, usedPercent, windowMinutes: 300, resetsAt: clock + 4 * HOUR }] }]
+    const chats = await Promise.all([1, 2, 3].map(() => conversations.create('claude', [])))
+    daemon.reply = () => {}
+    usage = exhausted(clock + HOUR)
+    const [a, b, c] = chats.map((chat, index) => schedules.create({ kind: 'conversation', conversationId: chat.id, text: `run ${index}` }, null))
+    await due()
+    expect(run(a!.id)?.status).toBe('waiting')
+
+    clock += HOUR + 10_000
+    usage = quota(10)
+    await due()
+    await due()
+    expect([run(a!.id)?.status, run(b!.id)?.status]).toEqual(['started', 'waiting'])
+
+    clock += 30 * 60_000
+    usage = quota(70)
+    await due()
+    expect(run(b!.id)?.status).toBe('waiting')
+    usage = quota(20)
+    await due()
+    expect([run(b!.id)?.status, run(c!.id)?.status]).toEqual(['started', 'waiting'])
+    await due()
+    expect(run(c!.id)?.status).toBe('started')
   })
 
   it('starts a task carried out unattended, and drops it once the task is started by hand or deleted', async () => {

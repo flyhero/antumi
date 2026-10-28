@@ -65,6 +65,8 @@ export const ScheduledRun = z.object({
   notBefore: z.number().nullable(),
   // When the agent's quota is next known to reset, while it is used up; null otherwise.
   resetsAt: z.number().nullable(),
+  // The title of the run of the same agent this one waits behind; older cores leave it out.
+  heldBy: z.string().nullable().optional(),
   status: ScheduleStatus.catch('cancelled'),
   // The conversation the run went on in, once it started: where to look at what it did.
   conversationId: z.string().nullable(),

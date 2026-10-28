@@ -1,6 +1,6 @@
 import { t } from '../i18n'
 import { createContext, useContext } from 'react'
-import type { ChatItem, Conversation } from '@antumi/protocol'
+import type { AgentKind, ChatItem, Conversation } from '@antumi/protocol'
 import type { PlanItem } from '../chat-state'
 import { showBrowserPanel, showConversationChanges, showConversationPlan, showInspectorFile } from '../core-store'
 import { insideProjects, locateInspectorFile, type ChatEdit } from '../inspector-file'
@@ -36,8 +36,9 @@ export type ChatSurface = {
   savePlan: ((item: PlanItem) => Promise<void>) | null
   // A word on a plan the chat's owner kept, or null.
   planNote(item: PlanItem): string | null
-  // Opens the handoff to the other agent; null where the chat cannot be handed off now.
-  handoff: (() => void) | null
+  // Opens the handoff, to the agent named or else the other one; null where the chat cannot be
+  // handed off now.
+  handoff: ((agent?: AgentKind) => void) | null
   // Forks the conversation at a message into a new one; null where it cannot be (a task's, or
   // a core without forks).
   fork: ((item: ChatItem) => void) | null
@@ -52,7 +53,7 @@ export function useChatSurface(): ChatSurface {
 }
 
 // A free conversation: its own inspector, its projects' changes, and chat mode to continue in.
-export function conversationSurface(conversation: Conversation, handoff: (() => void) | null = null, fork: ((item: ChatItem) => void) | null = null): ChatSurface {
+export function conversationSurface(conversation: Conversation, handoff: ((agent?: AgentKind) => void) | null = null, fork: ((item: ChatItem) => void) | null = null): ChatSurface {
   return {
     inspector: 'conversation',
     showPlan: showConversationPlan,

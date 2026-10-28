@@ -2,7 +2,7 @@ import { t, tr } from '../i18n'
 import { useState } from 'react'
 import { quotaVerdict, type AgentKind, type ChatItem, type Conversation } from '@antumi/protocol'
 import { accountName, accountsOf } from '../agent-accounts'
-import { otherInstalledAgent, useInstalledAgents } from '../installed-agents'
+import { useInstalledAgents } from '../installed-agents'
 import { perform, setSchedulesOpen, useCore, useUsageLimitSupported } from '../core-store'
 import { scheduleTime, UNATTENDED_LABEL } from '../schedules'
 import { agentLabel } from '../labels'
@@ -61,8 +61,8 @@ export function ChatUsageLimitCard({ conversation, item }: { conversation: Conve
   const [busy, setBusy] = useState(false)
   // What the user just ticked, shown until core's word on it comes back with the item.
   const [wanted, setWanted] = useState<boolean | null>(null)
-  const other = otherInstalledAgent(conversation.agent, useInstalledAgents())
-  const otherUsage = useCore((s) => (other ? s.usage?.[other] : undefined))
+  const installed = useInstalledAgents()
+  const usage = useCore((s) => s.usage)
   // The run that continues it, as the schedule list has it; a run the user scheduled in this chat
   // may have taken the limit over: it continues at its time, in the unattended mode, and is the
   // user's to manage, so the checkbox (which would only cancel their run) gives way to a link.
@@ -71,9 +71,10 @@ export function ChatUsageLimitCard({ conversation, item }: { conversation: Conve
   const switchedTo = useSwitchedTo(item, conversation.agent)
   if (!supported) return null
   const takenOver = run?.target.kind === 'conversation' && item.status === 'waiting' && item.autoContinue ? run : null
-  const otherState = quotaVerdict(otherUsage, now).state
-  // Handing off goes to the other agent only while it has room to take the work.
-  const handoff = surface.handoff && other && (otherState === 'ok' || otherState === 'tight') ? surface.handoff : null
+  // Handing off is offered to the first other agent with room to take the work; the composer's
+  // picker then lets the user choose any of them.
+  const other = installed.find((agent) => agent !== conversation.agent && ['ok', 'tight'].includes(quotaVerdict(usage?.[agent], now).state)) ?? null
+  const handoff = surface.handoff && other ? () => surface.handoff?.(other) : null
   const target = { id: conversation.id, stageId: item.stageId, itemId: item.id }
   const retrying = busy || item.status === 'retrying'
   const toggle = async (autoContinue: boolean) => {
@@ -113,7 +114,7 @@ export function ChatUsageLimitCard({ conversation, item }: { conversation: Conve
         )}
         <span className="chat-dock-spacer" />
         {handoff && other && (
-          <button type="button" className="button" disabled={retrying} data-tooltip={t('ChatComposer.handOffTo', { value1: agentLabel(other) })} onClick={handoff}>{tr('ChatComposer.handOffTo', { value1: agentLabel(other) })}</button>
+          <button type="button" className="button" disabled={retrying} onClick={handoff}>{tr('ChatComposer.handOffTo', { value1: agentLabel(other) })}</button>
         )}
         <button type="button" className="button primary" disabled={retrying} onClick={() => void retry()}>
           {retrying ? t('ChatUsageLimit.retrying') : t('ChatUsageLimit.retryNow')}

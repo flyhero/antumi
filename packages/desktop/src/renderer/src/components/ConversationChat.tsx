@@ -575,7 +575,7 @@ function Block({ conversationId, block, task, replies, fresh }: { conversationId
 // A conversation whose latest stage runs in chat mode: every stage in order, then the composer.
 // What it does beyond itself comes from the surface it is shown on: a free conversation's own
 // unless another is given, as a task's chat does.
-export function ConversationChat({ conversation, surface, onHandoff, variant = 'full' }: { conversation: Conversation; surface?: ChatSurface; onHandoff?: () => void; variant?: 'full' | 'compact' }) {
+export function ConversationChat({ conversation, surface, onHandoff, variant = 'full' }: { conversation: Conversation; surface?: ChatSurface; onHandoff?: (agent?: AgentKind) => void; variant?: 'full' | 'compact' }) {
   const { id } = conversation
   const initialMessage = useInitialMessages((messages) => messages[id])
   const width = usePreferences((s) => s.chatWidth)

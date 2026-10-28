@@ -2,7 +2,7 @@ import { useAgentCallsSupported } from '../agent-calls'
 import { getLocale, t, tr } from '../i18n'
 import { useHelperSupported } from '../helper-conversations'
 import { useEffect, useMemo, useState } from 'react'
-import { checkChatResume, shortTaskId, type Squad, type Task } from '@antumi/protocol'
+import { checkChatResume, shortTaskId, type AgentKind, type Squad, type Task } from '@antumi/protocol'
 import { usePlans, type PlanItem } from '../chat-state'
 import { loadConversation, perform, showBrowserPanel, showInspectorFile, showTaskChanges, showTaskPlan, useChatOptionsSupported, useCore, useWireLogShown } from '../core-store'
 import { insideProjects, locateInspectorFile } from '../inspector-file'
@@ -39,7 +39,7 @@ function planNote(task: Task, item: PlanItem): string | null {
 // A message to a task's chat goes through the task first unless its agent is at work: the task checks
 // what it may do, lays its worktrees out and goes back to running. A planning agent is checked every
 // time, as the task's projects may change while it plans and it should follow them.
-function taskSurface(task: Task, dependencies: readonly Task[], planOnly: boolean, bypassable: boolean, handoff: (() => void) | null, squad: Squad | null): ChatSurface {
+function taskSurface(task: Task, dependencies: readonly Task[], planOnly: boolean, bypassable: boolean, handoff: ((agent?: AgentKind) => void) | null, squad: Squad | null): ChatSurface {
   const blocker = checkChatResume(task, dependencies)
   return {
     inspector: 'task',
@@ -136,7 +136,7 @@ export function TaskChat({ taskId }: { taskId: string }) {
   )
   const squad = useCore((s) => (task?.squadId ? s.squads[task.squadId] ?? null : null))
   const surface = useMemo(
-    () => (task ? taskSurface(task, dependencies, conversation?.planOnly ?? false, bypassable, handoffNow ? () => openHandoff() : null, squad) : null),
+    () => (task ? taskSurface(task, dependencies, conversation?.planOnly ?? false, bypassable, handoffNow ? (agent?: AgentKind) => openHandoff(agent) : null, squad) : null),
     [task, dependencies, conversation?.planOnly, bypassable, handoffNow, openHandoff, squad, getLocale()]
   )
   if (!task || !surface) {

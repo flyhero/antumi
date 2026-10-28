@@ -22,7 +22,7 @@ import { TitleEditor } from './TitleEditor'
 import { useOpenTodoCount, useTodosShown } from '../conversation-todos'
 import { CONVERSATION_DRAG_TYPE, draggedConversation } from '../conversation-drag'
 import type { ConversationPane } from './conversation-pane'
-import { canReuseConversation, type Conversation } from '@antumi/protocol'
+import { canReuseConversation, type AgentKind, type Conversation } from '@antumi/protocol'
 
 // Where a fork came from: a way back while the source is still here.
 function ForkOrigin({ id }: { id: string }) {
@@ -63,9 +63,9 @@ export function ConversationView({ id, pane }: { id: string; pane?: Conversation
   const helperSupported = useHelperSupported(conversation)
   const helper = useHelper(helperSupported ? id : null)
   // Stable, so the chat's surface is not rebuilt on every render.
-  const openHandoff = useCallback(() => {
+  const openHandoff = useCallback((agent?: AgentKind) => {
     const current = useCore.getState().conversations[id]
-    if (current) beginHandoff(current)
+    if (current) beginHandoff(current, agent)
   }, [id])
   const [renaming, setRenaming] = useState(false)
   const [busy, setBusy] = useState(false)

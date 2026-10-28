@@ -18,6 +18,13 @@ export function useQuotaForecasts(): UsageForecast[] {
   return forecasts
 }
 
+// When a window runs out before it resets, as the forecast has it, and how that was worked out;
+// null where it lasts, or there is too little to tell.
+export function forecastRunsOut(forecast: UsageForecast | undefined): { at: number; basis: string } | null {
+  if (!forecast?.beforeReset || forecast.runsOutAt === null || (forecast.basis !== 'recent' && forecast.basis !== 'window')) return null
+  return { at: forecast.runsOutAt, basis: forecast.basis === 'window' ? t('UsageAnalytics.windowAverage') : t('UsageAnalytics.recentRate') }
+}
+
 export function forecastText(forecast: UsageForecast): string {
   if (forecast.basis === 'stale') return t('UsageAnalytics.stale')
   if (forecast.basis === 'idle') return t('UsageAnalytics.idle')

@@ -9442,6 +9442,10 @@ export const MESSAGES = {
     "zh": "（数据停留在 {value1}）",
     "en": "(Data as of {value1})"
   },
+  "UsageBar.runsOutAt": {
+    "zh": "按目前速度，约{value1}用完",
+    "en": "At this rate, runs out around {value1}"
+  },
   "UsageBar.updatedAgo": {
     "zh": "{value1}前更新",
     "en": "Updated {value1} ago"

@@ -8,9 +8,10 @@ import { endConversationDrag, startConversationDrag } from '../conversation-drag
 import { hasPrimaryModifier } from '../shortcut-keys'
 import { conversationState, timeAgo } from '../conversation-state'
 import { agentLabel } from '../labels'
-import { CONVERSATION_GROUPS, CONVERSATION_SORTS, setPreference, usePreferences, type Preferences } from '../preferences'
+import { CONVERSATION_DENSITIES, CONVERSATION_GROUPS, CONVERSATION_SORTS, setPreference, usePreferences, type Preferences } from '../preferences'
 import { beginHandoff, ConversationContextMenu, newConversation, renameConversation } from './ConversationActions'
 import { ConversationStatus } from './ConversationStatus'
+import { ConversationPeek, useConversationPeek } from './ConversationPeek'
 import { conversationActivity } from '../work-activity'
 import { ContextMenu, MenuCheckboxItem, menuPoint, MenuRadioItem, MenuSubmenu, type MenuPoint } from './ContextMenu'
 import { AgentIcon, ChatIcon, ChevronDownIcon, PlusIcon, SlidersIcon } from './icons'
@@ -21,9 +22,11 @@ import { TitleEditor } from './TitleEditor'
 
 type GroupBy = Preferences['conversationGroup']
 type SortBy = Preferences['conversationSort']
+type Density = Preferences['conversationDensity']
 
 const GROUP_LABEL: Record<GroupBy, string> = localized(() => ({ none: t('ConversationList.noGrouping'), project: t('ChatMentionMenu.project'), agent: t('ConversationList.agent'), status: t('ConversationList.runStatus') }))
 const SORT_LABEL: Record<SortBy, string> = localized(() => ({ recent: t('ConversationList.recentActivity'), created: t('ConversationList.created'), title: t('ConversationList.title') }))
+const DENSITY_LABEL: Record<Density, string> = localized(() => ({ comfortable: t('ConversationList.comfortable'), compact: t('ConversationList.compact') }))
 
 const COMPARE: Record<SortBy, (a: Conversation, b: Conversation) => number> = {
   recent: (a, b) => b.updatedAt - a.updatedAt,
@@ -159,7 +162,8 @@ function ViewMenu({ at, trigger, archived, onClose }: { at: MenuPoint; trigger: 
   const groupBy = usePreferences((p) => p.conversationGroup)
   const sortBy = usePreferences((p) => p.conversationSort)
   const showArchived = usePreferences((p) => p.showArchivedConversations)
-  const [open, setOpen] = useState<'group' | 'sort' | null>(null)
+  const density = usePreferences((p) => p.conversationDensity)
+  const [open, setOpen] = useState<'group' | 'sort' | 'density' | null>(null)
   const closeSubmenu = () => setOpen(null)
   return (
     <ContextMenu at={at} align="end" trigger={trigger} label={t('ConversationList.groupAndSortConversations')} onClose={onClose}>
@@ -184,6 +188,19 @@ function ViewMenu({ at, trigger, archived, onClose }: { at: MenuPoint; trigger: 
             checked={value === sortBy}
             onSelect={() => {
               setPreference('conversationSort', value)
+              onClose()
+            }}
+          />
+        ))}
+      </MenuSubmenu>
+      <MenuSubmenu label={t('ConversationList.density')} value={DENSITY_LABEL[density]} open={open === 'density'} onOpen={() => setOpen('density')} onClose={closeSubmenu}>
+        {CONVERSATION_DENSITIES.map((value) => (
+          <MenuRadioItem
+            key={value}
+            label={DENSITY_LABEL[value]}
+            checked={value === density}
+            onSelect={() => {
+              setPreference('conversationDensity', value)
               onClose()
             }}
           />
@@ -255,6 +272,9 @@ export function ConversationList() {
   const viewButton = useRef<HTMLButtonElement>(null)
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const menuConversation = menu ? conversations[menu.id] : undefined
+  const density = usePreferences((p) => p.conversationDensity)
+  const { peek, rowProps } = useConversationPeek()
+  const peeked = peek && !menu && !renamingId ? conversations[peek.id] : undefined
 
   // heading: what the group the row is listed under is named after (its primary project, its agent).
   const row = (conversation: Conversation, heading: GroupBy = 'none') => {
@@ -273,6 +293,7 @@ export function ConversationList() {
           data-menu-open={menu?.id === conversation.id || undefined}
           aria-current={section === 'conversations' && selected === conversation.id}
           draggable={canSplit(conversation)}
+          {...rowProps(conversation.id)}
           onDragStart={(event) => startConversationDrag(event.dataTransfer, conversation.id)}
           onDragEnd={endConversationDrag}
           // ⌘-click opens it beside the one in front, as a link opens in a new tab.
@@ -283,18 +304,18 @@ export function ConversationList() {
           }}
         >
           <ConversationStatus conversation={conversation} />
-          <span className="task-row-title" title={conversation.title}>{conversation.title}</span>
+          <span className="task-row-title">{conversation.title}</span>
           {panes?.includes(conversation.id)
             ? <span className="pane-chip" data-active={selected === conversation.id} aria-label={t('ConversationList.inPane', { value1: panes.indexOf(conversation.id) + 1 })}>{panes.indexOf(conversation.id) + 1}</span>
             : <span className="conversation-age">{timeAgo(conversation.updatedAt, now)}</span>}
-          <span className="task-row-meta" title={conversation.projectPaths.join('\n')}><ConversationMeta conversation={conversation} heading={heading} /></span>
+          <span className="task-row-meta"><ConversationMeta conversation={conversation} heading={heading} /></span>
           {snippet && <span className="conversation-snippet"><Highlighted text={snippet} query={needle} /></span>}
         </button>}
     </li>
   }
 
   return (
-    <nav className="conversation-list" data-collapsed={collapsed} aria-label={t('ConversationList.conversations')}>
+    <nav className="conversation-list" data-collapsed={collapsed} data-density={density} aria-label={t('ConversationList.conversations')}>
       <header className="task-list-header">
         <SidebarCollapseButton icon={<ChatIcon />} label={t('sidebar.conversations')} count={visible.length} collapsed={collapsed} controls="sidebar-conversations" onToggle={() => setCollapsed((value) => !value)} />
         <SidebarSearchToggle
@@ -383,6 +404,7 @@ export function ConversationList() {
         </section>
       )}
       </div>
+      {peek && peeked && <ConversationPeek conversation={peeked} row={peek.row} />}
       {viewAt && <ViewMenu at={viewAt} trigger={viewButton.current} archived={archivedAll.length} onClose={closeView} />}
       {menu && menuConversation && (
         <ConversationContextMenu

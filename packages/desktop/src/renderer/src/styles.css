@@ -999,6 +999,33 @@ span.chat-translate .spinner { width: 12px; height: 12px; }
 /* The agent's mark at the head of a conversation's line, the size of the text beside it. */
 .conversation-agent { display: inline-flex; vertical-align: -2px; margin-right: 6px; }
 .conversation-agent .agent-mark { width: 12px; height: 12px; }
+/* Compact: a row is its status, title and age; the rest waits in the details on hover. */
+.conversation-list[data-density='compact'] .conversation-row { padding-block: 5px; }
+.conversation-list[data-density='compact'] .conversation-row .task-row-meta { display: none; }
+
+/* A conversation's details beside its row (ConversationPeek): read, never reached for. */
+.conversation-peek {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  width: 320px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 14%);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.5;
+  pointer-events: none;
+}
+.conversation-peek-title { margin-bottom: 8px; font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+.conversation-peek dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 12px; margin: 0; }
+.conversation-peek dt { color: var(--text-muted); }
+.conversation-peek dd { display: flex; flex-direction: column; gap: 2px; min-width: 0; margin: 0; }
+.conversation-peek .conversation-peek-agent { flex-direction: row; align-items: center; gap: 6px; }
+.conversation-peek-agent .agent-mark { width: 14px; height: 14px; flex-shrink: 0; }
+.conversation-peek-path { font-family: var(--mono); font-size: 11px; overflow-wrap: anywhere; }
 
 .task-row-tags {
   grid-column: 2;

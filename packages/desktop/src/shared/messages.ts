@@ -3277,6 +3277,20 @@ export const MESSAGES = {
     "zh": "会话的分组和排序",
     "en": "Group and sort conversations"
   },
+  "ConversationList.density": {"zh": "列表样式", "en": "Rows"},
+  "ConversationList.comfortable": {"zh": "标准", "en": "Comfortable"},
+  "ConversationList.compact": {"zh": "紧凑", "en": "Compact"},
+  "ConversationPeek.details": {"zh": "会话详情", "en": "Conversation details"},
+  "ConversationPeek.agent": {"zh": "Agent", "en": "Agent"},
+  "ConversationPeek.status": {"zh": "状态", "en": "Status"},
+  "ConversationPeek.projects": {"zh": "项目", "en": "Projects"},
+  "ConversationPeek.noProject": {"zh": "未选项目", "en": "No project"},
+  "ConversationPeek.workspace": {"zh": "工作目录", "en": "Works in"},
+  "ConversationPeek.branch": {"zh": "分支", "en": "Branch"},
+  "ConversationPeek.detached": {"zh": "未在分支上", "en": "Detached HEAD"},
+  "ConversationPeek.changes": {"zh": "{count} 处未提交改动", "en": "{count} uncommitted {count, plural, one {change} other {changes}}"},
+  "ConversationPeek.time": {"zh": "时间", "en": "Time"},
+  "ConversationPeek.createdUpdated": {"zh": "{created} 创建 · {updated}活动", "en": "Created {created} · active {updated}"},
   "ConversationList.groupBy": {
     "zh": "分组方式",
     "en": "Group by"

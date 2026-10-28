@@ -12,6 +12,7 @@ export const MAX_FILE_TREE_WIDTH = 600
 export const DEFAULT_FILE_TREE_WIDTH = 220
 export const CONVERSATION_GROUPS = ['none', 'project', 'agent', 'status'] as const
 export const CONVERSATION_SORTS = ['recent', 'created', 'title'] as const
+export const CONVERSATION_DENSITIES = ['comfortable', 'compact'] as const
 export const TASK_SORTS = ['recent', 'created', 'title'] as const
 
 // This window's UI preferences. They shape how the desktop looks and behaves,
@@ -98,6 +99,8 @@ const Preferences = z.object({
   // Conversation groups folded in the sidebar, by grouping and group ("project:group:antumi").
   foldedConversationGroups: z.array(z.string()).catch([]),
   conversationSort: z.enum(CONVERSATION_SORTS).catch('recent'),
+  // Compact, a conversation's row is its title alone; the rest is in the details its row shows on hover.
+  conversationDensity: z.enum(CONVERSATION_DENSITIES).catch('comfortable'),
   // Off, archived conversations and group chats stay out of the sidebar, found only by a search.
   showArchivedConversations: z.boolean().catch(false),
   showArchivedDiscussions: z.boolean().catch(false),

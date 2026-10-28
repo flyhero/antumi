@@ -126,7 +126,7 @@ function StatusLine({ head }: { head: ProjectHead }) {
     if (ahead > 0) parts.push(<span key="ahead" className="branch-status-stat" aria-label={t('BranchStatus.commitsAhead', { ahead: ahead })}><ArrowUpIcon />{ahead}</span>)
     if (behind > 0) parts.push(<span key="behind" className="branch-status-stat" aria-label={t('BranchStatus.commitsBehind', { behind: behind })}><ArrowDownIcon />{behind}</span>)
     if (ahead === 0 && behind === 0) parts.push(<span key="synced" className="branch-status-stat">{t('BranchStatus.upToDate')}</span>)
-    parts.push(<span key="upstream" className="branch-status-upstream mono">{head.upstream}</span>)
+    parts.push(<span key="upstream" className="branch-status-upstream mono" title={head.upstream}>{head.upstream}</span>)
   }
   if (parts.length === 0) return null
   return <div className="branch-status-line">{parts}</div>

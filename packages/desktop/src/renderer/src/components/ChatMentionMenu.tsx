@@ -61,7 +61,7 @@ function MentionOption({ entry, id, active, onHover, onPick }: {
       }}
       onClick={onPick}
     >
-      <span className="chat-mention-option-icon" aria-hidden="true">{entry.icon}</span>
+      <span className="chat-mention-option-icon" data-reference-kind={entry.target?.kind} aria-hidden="true">{entry.icon}</span>
       <span className={`chat-mention-option-name${entry.group === 'files' || entry.group === 'projects' ? ' mono' : ''}`}>{entry.name}{entry.target?.kind === 'directory' ? '/' : ''}</span>
       {entry.detail && <span className="chat-mention-option-description">{entry.detail}</span>}
     </li>

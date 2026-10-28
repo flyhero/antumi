@@ -25,6 +25,14 @@ button.chat-reference:disabled { color: var(--text-muted); cursor: default; }
 button.chat-reference:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .chat-reference-icon { display: inline-flex; flex-shrink: 0; color: var(--text-muted); }
 .chat-reference-icon > svg { width: 14px; height: 14px; }
+/* Which kind, at a glance: a hue each from the code colours, so each palette tints them its own way.
+   Agents and files bring their own colours. */
+[data-reference-kind='link'] > .chat-reference-icon,
+.chat-mention-option-icon[data-reference-kind='link'] { color: var(--code-title); }
+[data-reference-kind='conversation'] > .chat-reference-icon,
+.chat-mention-option-icon[data-reference-kind='conversation'] { color: var(--code-keyword); }
+[data-reference-kind='project'] > .chat-reference-icon,
+.chat-mention-option-icon[data-reference-kind='project'] { color: var(--code-type); }
 .chat-reference-icon .file-tree-icon { flex-basis: 14px; height: 14px; margin: 0; }
 .chat-reference-icon .file-tree-icon img { width: 14px; height: 14px; }
 .chat-reference-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

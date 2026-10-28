@@ -5,6 +5,7 @@ import { perform, useCore } from '../core-store'
 import { reasonText } from '../labels'
 import { shortRef } from '../task-starts'
 import { BranchStatusDetails } from './BranchStatus'
+import { folderName, HeldBranchNote, holderLabel } from './BranchHolder'
 import { CommitMessageButton } from './CommitMessageButton'
 import { ArrowUpIcon, BranchIcon, CheckIcon, CommitIcon, PlusIcon } from './icons'
 import { hasPrimaryModifier, PRIMARY_KEY_LABEL } from '../shortcut-keys'
@@ -34,17 +35,16 @@ function localName(ref: string): string {
   return ref.startsWith('refs/remotes/') ? shortRef(ref).split('/').slice(1).join('/') : shortRef(ref)
 }
 
-function folderName(folder: string): string {
-  return folder.split(/[\\/]/).filter(Boolean).at(-1) ?? folder
-}
-
 // The agent hears of the switch with the next message.
 function switchedNote(branch: string): string {
   return t('ConversationBranches.switchedToAgentWillBeNotifiedWithYour', { branch: branch })
 }
 
-function SwitchList({ option, onPick }: { option: ProjectBranches; onPick: (ref: string) => void }) {
+// A branch another folder holds is still listed and can be picked, to say whose it is and what
+// frees it, rather than sitting there greyed with its reason only on hover.
+function SwitchList({ option, onPick, onLeave }: { option: ProjectBranches; onPick: (ref: string) => void; onLeave: () => void }) {
   const [query, setQuery] = useState('')
+  const [held, setHeld] = useState<string | null>(null)
   const needle = query.trim().toLowerCase()
   const refs = needle ? option.refs.filter((ref) => shortRef(ref).toLowerCase().includes(needle)) : option.refs
   const current = option.branch ? `refs/heads/${option.branch}` : null
@@ -68,9 +68,10 @@ function SwitchList({ option, onPick }: { option: ProjectBranches; onPick: (ref:
           const holder = option.elsewhere[ref]
           return (
             <li key={ref} className="menu-row">
-              <button type="button" className="menu-item" disabled={!pickable(ref)} title={holder ? t('ConversationBranches.checkedOutIn', { holder: holder }) : undefined} onClick={() => onPick(ref)}>
+              <button type="button" className="menu-item" disabled={ref === current} data-held={holder ? true : undefined} aria-expanded={holder ? held === ref : undefined}
+                title={holder ? t('ConversationBranches.checkedOutIn', { holder: holder }) : undefined} onClick={() => (holder ? setHeld(held === ref ? null : ref) : onPick(ref))}>
                 <span className="menu-item-title mono">{shortRef(ref)}</span>
-                {holder && <span className="menu-item-path">{tr('ConversationBranches.in', { value1: folderName(holder) })}</span>}
+                {holder && <span className="menu-item-path">{holderLabel(holder, option.holders?.[ref])}</span>}
                 {ref === current && <span className="menu-check"><CheckIcon /></span>}
               </button>
             </li>
@@ -78,6 +79,7 @@ function SwitchList({ option, onPick }: { option: ProjectBranches; onPick: (ref:
         })}
       </ul>
       {refs.length === 0 && <p className="branch-action-note">{t('ConversationBranches.noMatchingBranches')}</p>}
+      {held && option.elsewhere[held] && <HeldBranchNote branch={shortRef(held)} folder={option.elsewhere[held]} holder={option.holders?.[held]} onLeave={onLeave} />}
     </div>
   )
 }
@@ -295,7 +297,7 @@ function ProjectActions({ conversation, head, option, onChanged }: {
       {open && (
         <BranchActionDialog action={open} head={head} onClose={() => setOpen(null)}>
           {open === 'switch' && (
-            <SwitchList option={option} onPick={(ref) => void run((rpc) => rpc.call('conversations.switchBranch', { ...project, ref }), localName(ref))} />
+            <SwitchList option={option} onPick={(ref) => void run((rpc) => rpc.call('conversations.switchBranch', { ...project, ref }), localName(ref))} onLeave={() => setOpen(null)} />
           )}
           {open === 'create' && <CreateForm onCreate={(name) => void run((rpc) => rpc.call('conversations.createBranch', { ...project, name }), name)} />}
           {open === 'commit' && <CommitForm target={target} steps={steps} busy={busy} onCommit={(message, alsoPush) => void commit(message, alsoPush)} />}

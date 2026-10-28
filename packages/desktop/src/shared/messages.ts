@@ -2749,6 +2749,38 @@ export const MESSAGES = {
     "zh": "在 {value1} 里",
     "en": "In {value1}"
   },
+  "BranchHolder.inMainFolder": {
+    "zh": "在主目录里",
+    "en": "In the main folder"
+  },
+  "BranchHolder.inConversation": {
+    "zh": "在会话「{title}」里",
+    "en": "In “{title}”"
+  },
+  "BranchHolder.inArchivedConversation": {
+    "zh": "在已归档的会话「{title}」里",
+    "en": "In archived “{title}”"
+  },
+  "BranchHolder.heldByConversation": {
+    "zh": "「{branch}」检出在会话「{title}」的 worktree 里，git 不允许同一个分支同时在两个地方检出。那个会话换了分支或不再需要这个 worktree 后，这里才能切过去。",
+    "en": "{branch} is checked out in the worktree of “{title}”, and git checks a branch out in one place at a time. Switch to it here once that conversation moves to another branch or its worktree goes."
+  },
+  "BranchHolder.heldByArchivedConversation": {
+    "zh": "「{branch}」检出在已归档会话「{title}」的 worktree 里。里面没有要留的改动的话，到 worktree 管理里把它清理掉，这里就能切过去。",
+    "en": "{branch} is checked out in the worktree of archived “{title}”. If nothing there needs keeping, clean it up in worktree management and switch to it here."
+  },
+  "BranchHolder.heldByMainFolder": {
+    "zh": "「{branch}」正在仓库主目录里检出，git 不允许同一个分支同时在两个地方检出。先在主目录切到别的分支，这里才能切过去。",
+    "en": "{branch} is checked out in the repository's main folder, and git checks a branch out in one place at a time. Switch the main folder to another branch first."
+  },
+  "BranchHolder.heldElsewhere": {
+    "zh": "「{branch}」检出在另一个 worktree 里：{folder}。它不是 Antumi 建的，用完后可以用 git worktree remove 删掉，这里就能切过去。",
+    "en": "{branch} is checked out in another worktree: {folder}. Antumi did not make it; once done with it, remove it with git worktree remove and switch to the branch here."
+  },
+  "BranchHolder.manageWorktrees": {
+    "zh": "去 worktree 管理",
+    "en": "Manage worktrees"
+  },
   "ConversationBranches.noMatchingBranches": {
     "zh": "没有匹配的分支",
     "en": "No matching branches"

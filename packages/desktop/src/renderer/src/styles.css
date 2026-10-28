@@ -8701,6 +8701,12 @@ div.inspector-empty > p { margin: 0 0 8px; }
 .branch-action-list { max-height: 200px; overflow-y: auto; }
 .branch-action-note { margin: 0; font-size: 11px; color: var(--text-muted); }
 .branch-action-note[data-warn] { color: var(--warning); }
+/* A branch another folder holds: greyed like one that cannot be picked, yet picking it says why. */
+.menu-item[data-held] { color: var(--text-muted); }
+.branch-held-note { margin: 0; padding: 8px 10px; border-radius: var(--radius-sm); background: var(--fill); font-size: 12px; line-height: 1.6; }
+.branch-held-note p { margin: 0; }
+.branch-held-actions { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; }
+.branch-held-actions .link-button { margin: 0; }
 .branch-action-done { color: var(--text); }
 /* A branch action opened from the popover: narrower than a form dialog, the list given more room. */
 .branch-dialog { width: min(440px, calc(100vw - 32px)); }

@@ -25,7 +25,7 @@ import { searchSnippet } from './conversation-search'
 import { buildHandoff } from './conversation-handoff'
 import { SCHEDULED_GO_TEXT, UNATTENDED_NOTE } from './agent-prompt'
 import { unattendedAnswer } from './unattended-answer'
-import { createProjectBranch, projectBranches, switchProjectBranch } from './project-branches'
+import { branchHolders, createProjectBranch, projectBranches, switchProjectBranch } from './project-branches'
 import { resolveStart } from './task-start'
 import { commitAll, commitAndPush, pushBranch } from './project-commit'
 import type { ProjectRegistry } from './project-registry'
@@ -438,23 +438,26 @@ export class ConversationService {
   }
   // A project's branches before any conversation has it: for a new one to start on.
   async projectBranchOptions(project: string): Promise<ProjectBranches> {
-    const live = this.store.list().filter((other) => other.sessionId !== null)
+    return this.projectBranchesFor(project, null)
+  }
+
+  // A project's branches, with who holds each one checked out elsewhere and which other
+  // conversations (not `id`) have an agent open in it.
+  private async projectBranchesFor(project: string, id: string | null): Promise<ProjectBranches> {
+    const { main, ...branches } = await projectBranches(project)
+    const all = this.store.list()
+    const live = all.filter((other) => other.id !== id && other.sessionId !== null)
     return {
       path: project,
-      ...await projectBranches(project),
+      ...branches,
+      holders: branchHolders(branches.elsewhere, main, all),
       sharedWith: live.filter((other) => other.projectPaths.includes(project)).map((other) => other.title)
     }
   }
 
   // Other conversations with an agent open in a folder see its files change with a switch.
   async branchOptions(id: string): Promise<ProjectBranches[]> {
-    const conversation = this.get(id)
-    const live = this.store.list().filter((other) => other.id !== id && other.sessionId !== null)
-    return Promise.all(conversation.projectPaths.map(async (project) => ({
-      path: project,
-      ...await projectBranches(project),
-      sharedWith: live.filter((other) => other.projectPaths.includes(project)).map((other) => other.title)
-    })))
+    return Promise.all(this.get(id).projectPaths.map((project) => this.projectBranchesFor(project, id)))
   }
 
   async switchBranch(id: string, project: string, ref: string): Promise<Conversation> {

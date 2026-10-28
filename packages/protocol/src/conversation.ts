@@ -175,6 +175,16 @@ export type PushResult = z.infer<typeof PushResult>
 
 // What a conversation's project could switch to, or start a branch from: its checkout is the
 // user's own, so a switch changes what everything else in that folder sees too.
+// Who has a branch checked out in another worktree: the repo's own folder, one of Antumi's
+// conversations (the worktree it made or works in), or a worktree something else made.
+export const BranchHolder = z.object({
+  kind: z.enum(['main', 'conversation', 'other']),
+  conversationId: z.string().optional(),
+  title: z.string().optional(),
+  archived: z.boolean().optional()
+})
+export type BranchHolder = z.infer<typeof BranchHolder>
+
 export const ProjectBranches = z.object({
   path: z.string(),
   git: z.boolean(),
@@ -187,6 +197,8 @@ export const ProjectBranches = z.object({
   // Branches another worktree has checked out, which git will not check out here as well: the
   // full name, and that worktree's folder.
   elsewhere: z.record(z.string(), z.string()),
+  // Who each of those is, by the same full name; absent from a core that does not say.
+  holders: z.record(z.string(), BranchHolder).optional(),
   // Other conversations with an agent open in this folder, by title: a switch moves their files too.
   sharedWith: z.array(z.string())
 })

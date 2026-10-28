@@ -1,5 +1,5 @@
 import path from 'node:path'
-import type { ProjectBranches } from '@antumi/protocol'
+import { shortTaskId, type BranchHolder, type Conversation, type ProjectBranches } from '@antumi/protocol'
 import { gitOrNull } from './git-changes'
 import { Rejection } from './rejection'
 import { execFileAsync } from './hidden-exec'
@@ -12,16 +12,33 @@ async function refsUnder(dir: string, prefix: string): Promise<string[]> {
   return (output?.split('\n') ?? []).filter((ref) => ref && !ref.endsWith('/HEAD'))
 }
 
-// Branches checked out in the repo's other worktrees, by full name, to the worktree's folder.
-async function checkedOutElsewhere(dir: string, topLevel: string): Promise<Record<string, string>> {
+// Branches checked out in the repo's other worktrees, by full name, to the worktree's folder; and
+// the repo's own folder, which git lists first.
+async function checkedOutElsewhere(dir: string, topLevel: string): Promise<{ elsewhere: Record<string, string>; main: string | null }> {
   const listing = (await gitOrNull(dir, ['worktree', 'list', '--porcelain'])) ?? ''
   const elsewhere: Record<string, string> = {}
-  for (const entry of listing.split('\n\n')) {
+  const entries = listing.split('\n\n')
+  for (const entry of entries) {
     const folder = /^worktree (.+)$/m.exec(entry)?.[1]
     const branch = /^branch (.+)$/m.exec(entry)?.[1]
     if (folder && branch && path.resolve(folder) !== path.resolve(topLevel)) elsewhere[branch] = folder
   }
-  return elsewhere
+  return { elsewhere, main: /^worktree (.+)$/m.exec(entries[0] ?? '')?.[1] ?? null }
+}
+
+// Who holds each branch checked out in another folder: the repo's own folder, a conversation
+// working there (the one that made the worktree, named by its folder's <id>/<repo>, else the one
+// last active in it), or something else. Archived conversations count: their worktrees stay.
+export function branchHolders(elsewhere: Record<string, string>, main: string | null, conversations: readonly Conversation[]): Record<string, BranchHolder> {
+  const same = (a: string, b: string) => path.resolve(a) === path.resolve(b)
+  return Object.fromEntries(Object.entries(elsewhere).map(([ref, folder]): [string, BranchHolder] => {
+    if (main && same(folder, main)) return [ref, { kind: 'main' }]
+    const users = conversations.filter((conversation) => same(conversation.workspacePath, folder) || conversation.projectPaths.some((project) => same(project, folder)))
+    const made = path.basename(path.dirname(folder))
+    const owner = users.find((conversation) => shortTaskId(conversation.id) === made || (conversation.taskId && shortTaskId(conversation.taskId) === made))
+      ?? [...users].sort((a, b) => b.updatedAt - a.updatedAt)[0]
+    return [ref, owner ? { kind: 'conversation', conversationId: owner.id, title: owner.title, archived: owner.archivedAt != null } : { kind: 'other' }]
+  }))
 }
 
 // Uncommitted changes to tracked files; untracked ones go along with a switch, as git does.
@@ -30,17 +47,17 @@ async function trackedChanges(dir: string): Promise<number> {
   return status ? status.split('\n').filter(Boolean).length : 0
 }
 
-export async function projectBranches(dir: string): Promise<Omit<ProjectBranches, 'path' | 'sharedWith'>> {
+export async function projectBranches(dir: string): Promise<Omit<ProjectBranches, 'path' | 'sharedWith' | 'holders'> & { main: string | null }> {
   const topLevel = await gitOrNull(dir, ['rev-parse', '--show-toplevel'])
-  if (!topLevel) return { git: false, branch: null, changes: 0, refs: [], elsewhere: {} }
-  const [branch, changes, local, remote, elsewhere] = await Promise.all([
+  if (!topLevel) return { git: false, branch: null, changes: 0, refs: [], elsewhere: {}, main: null }
+  const [branch, changes, local, remote, { elsewhere, main }] = await Promise.all([
     gitOrNull(dir, ['symbolic-ref', '--quiet', '--short', 'HEAD']),
     trackedChanges(dir),
     refsUnder(dir, 'refs/heads'),
     refsUnder(dir, 'refs/remotes'),
     checkedOutElsewhere(dir, topLevel)
   ])
-  return { git: true, branch, changes, refs: [...local, ...remote], elsewhere }
+  return { git: true, branch, changes, refs: [...local, ...remote], elsewhere, main }
 }
 
 async function exists(dir: string, ref: string): Promise<boolean> {
@@ -66,7 +83,7 @@ export async function switchProjectBranch(dir: string, ref: string): Promise<str
   if ((await trackedChanges(dir)) > 0) throw new Rejection('uncommitted-changes', 'commit or stash the changes first')
   // Asked of git's worktree list rather than read from its refusal, which speaks the user's language.
   const topLevel = await gitOrNull(dir, ['rev-parse', '--show-toplevel'])
-  const holder = topLevel ? (await checkedOutElsewhere(dir, topLevel))[`refs/heads/${local}`] : undefined
+  const holder = topLevel ? (await checkedOutElsewhere(dir, topLevel)).elsewhere[`refs/heads/${local}`] : undefined
   if (holder) throw new Rejection('branch-elsewhere', `${local} is checked out in ${holder}`)
   // Branch names never start with "-" (git refuses them), so none reads as an option.
   if (remote && !(await exists(dir, `refs/heads/${local}`))) await gitSwitch(dir, ['--track', `${remote[1]}/${local}`])

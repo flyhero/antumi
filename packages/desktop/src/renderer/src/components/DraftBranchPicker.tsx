@@ -1,9 +1,10 @@
-import { t, tr } from '../i18n'
+import { t } from '../i18n'
 import { useCallback, useEffect, useState, type KeyboardEvent } from 'react'
 import type { ProjectBranches } from '@antumi/protocol'
 import { useCore } from '../core-store'
 import { shortRef } from '../task-starts'
 import { BranchIcon, CheckIcon, ChevronDownIcon, WarningIcon } from './icons'
+import { holderLabel } from './BranchHolder'
 import { Popover } from './Popover'
 import { projectName } from './ProjectPicker'
 
@@ -99,7 +100,7 @@ export function DraftBranchPicker({ options, picked, worktree, locked, onOpen, o
                   <button type="button" className="menu-item" disabled={!pickable(ref)} title={holder && !worktree ? t('ConversationBranches.checkedOutIn', { holder: holder }) : undefined} onClick={() => pick(ref)}>
                     <span className="menu-item-title mono">{shortRef(ref)}</span>
                     {ref === current && <span className="menu-item-path">{t('DraftBranchPicker.current')}</span>}
-                    {holder && !worktree && <span className="menu-item-path">{tr('ConversationBranches.in', { value1: projectName(holder) })}</span>}
+                    {holder && !worktree && <span className="menu-item-path">{holderLabel(holder, options.holders?.[ref])}</span>}
                     {ref === chosen && <span className="menu-check"><CheckIcon /></span>}
                   </button>
                 </li>

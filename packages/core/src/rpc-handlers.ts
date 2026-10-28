@@ -3,6 +3,7 @@ import type { AgentCliMaintenance } from './agent-cli-maintenance'
 import { suggestForProject } from './project-config-suggest'
 import { EMPTY_BASELINE, type SmallModelStore } from './small-model-store'
 import { GitService } from './git-service'
+import type { GitFavoriteStore } from './git-favorite-store'
 import { agentDescriptor, CORE_FEATURES, PROTOCOL_VERSION, type ChatItem } from '@antumi/protocol'
 import packageJson from '../package.json' with { type: 'json' }
 import type { AgentRunStore } from './agent-run-store'
@@ -62,6 +63,7 @@ export function createRpcHandlers(
   service: TaskService,
   conversations: ConversationService,
   projects: ProjectRegistry,
+  gitFavorites: GitFavoriteStore,
   sessions: SessionHost,
   usage: UsageService,
   sources: SourceService,
@@ -111,7 +113,7 @@ export function createRpcHandlers(
     if (!cliMaintenance) throw new Rejection('agent-cli-maintenance-unavailable')
     return cliMaintenance
   }
-  const git = new GitService(service, conversations, gitChanged)
+  const git = new GitService(service, conversations, gitFavorites, gitChanged)
   const requireProjectConfigs = (): ProjectConfigStore => {
     if (!projectConfigs) throw new Rejection('project-config-unavailable')
     return projectConfigs
@@ -224,6 +226,7 @@ export function createRpcHandlers(
     'squads.dispatch': ({ id, memberId, instruction, capability, retryOf }) => squadService().dispatch(id, memberId, instruction, capability, retryOf),
     'squads.finish': async ({ id, summary }) => { await squadService().finish(id, summary); return OK },
     'git.status': (target) => git.status(target),
+    'git.favorite': async ({ ref, favorite, ...target }) => { await git.favorite(target, ref, favorite); return OK },
     'git.history': ({ ref, offset, query, tips, ...target }) => git.history(target, ref, offset, query, tips),
     'git.detail': ({ sha, parent, ...target }) => git.detail(target, sha, parent),
     'git.containing': ({ sha, ...target }) => git.containing(target, sha),

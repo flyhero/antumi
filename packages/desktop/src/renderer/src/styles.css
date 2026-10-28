@@ -9326,14 +9326,21 @@ summary.agent-group-head:focus-visible { outline: 2px solid var(--focus); outlin
 .git-manager > .git-message { overflow: auto; }
 .git-layout { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; border-top: 1px solid var(--border); }
 .git-branches { max-height: 35%; min-height: 100px; overflow: auto; border-bottom: 1px solid var(--border); padding: 8px; }
-.git-branch-tree > .input { width: 100%; margin-bottom: 8px; }
+.git-branch-search { display: flex; align-items: center; gap: 4px; margin-bottom: 8px; }
+.git-branch-search > .input { flex: 1; min-width: 0; width: 100%; }
 .git-branch-list details > summary, .git-commit-files details > summary { cursor: pointer; padding: 4px 8px; color: var(--text-muted); font-size: var(--chat-font-small, 12px); overflow-wrap: anywhere; }
 .git-branch-list details > details { padding-left: 12px; }
 .git-branch-folder { padding-left: 12px; }
 .git-branch-row { display: flex; align-items: center; border-radius: var(--radius-xs); min-height: 32px; }
-.git-branch-row > button:first-child { display: flex; align-items: center; gap: 4px; min-width: 0; flex: 1; padding: 4px 8px; background: transparent; border: 0; color: var(--text); font: inherit; font-size: var(--chat-font-small, 12px); cursor: pointer; text-align: left; }
-.git-branch-row > button:first-child > .mono { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.git-branch-pick { display: flex; align-items: center; gap: 4px; min-width: 0; flex: 1; padding: 4px 8px; background: transparent; border: 0; color: var(--text); font: inherit; font-size: var(--chat-font-small, 12px); cursor: pointer; text-align: left; }
+.git-branch-pick > .mono { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
 .git-branch-row svg { width: 12px; height: 12px; flex-shrink: 0; }
+.git-branch-star { flex-shrink: 0; border-radius: var(--radius-xs); }
+.git-branch-row > .git-branch-star { width: 24px; height: 24px; }
+.git-branch-star[aria-pressed='true'] { color: var(--text); }
+.git-branch-star[aria-pressed='true'] svg { fill: currentColor; }
+.git-branch-row > .git-branch-star[aria-pressed='false']:not(:focus-visible) svg { opacity: 0; }
+.git-branch-row:hover > .git-branch-star[aria-pressed='false'] svg, .git-branch-row:focus-within > .git-branch-star[aria-pressed='false'] svg { opacity: 1; }
 .git-branch-row:hover, .git-tree-filter:hover { background: var(--fill); }
 .git-branch-row[data-selected], .git-tree-filter[aria-pressed='true'] { background: var(--fill-2); }
 /* A push as IntelliJ shows it: branch → remote : target, then what goes. */

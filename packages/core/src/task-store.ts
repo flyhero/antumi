@@ -352,7 +352,11 @@ export const MIGRATIONS = [
    CREATE INDEX agent_calls_parent ON agent_calls(parent_id);
    ALTER TABLE conversations ADD COLUMN agent_profile TEXT;
    ALTER TABLE conversations ADD COLUMN parent_conversation_id TEXT;
-   ALTER TABLE conversations ADD COLUMN agent_call_id TEXT;`
+   ALTER TABLE conversations ADD COLUMN agent_call_id TEXT;`,
+  `CREATE TABLE git_favorites (
+     repository TEXT NOT NULL, ref TEXT NOT NULL, favorite INTEGER NOT NULL,
+     PRIMARY KEY (repository, ref)
+   );`
 ]
 
 

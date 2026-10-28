@@ -10,6 +10,7 @@ import { Rejection } from './rejection'
 import { checkoutKey, commitRef, committedDiff, conflictFiles, filesBetween, gitOperation, logCommits, repositoryKey, writeGit } from './git-repository'
 import { abortOperation, continueOperation, parseTrack, rebasing, updateBranch } from './git-update'
 import { outgoingCommits, pushBranch, trackBranch } from './git-push'
+import type { GitFavoriteStore } from './git-favorite-store'
 
 // A remote the repository has, never one that reads as an option.
 const remoteIn = (status: GitStatus) => (remote: string) => {
@@ -23,7 +24,7 @@ const validBranchName = (dir: string) => async (name: string) => {
 
 export class GitService {
   private readonly locked = new Set<string>()
-  constructor(private readonly tasks: Pick<TaskService, 'get' | 'list' | 'isLaunching'>, private readonly conversations: Pick<ConversationService, 'get' | 'listAll' | 'recordGitChange' | 'isGitPending'>, private readonly changed: () => void = () => {}) {}
+  constructor(private readonly tasks: Pick<TaskService, 'get' | 'list' | 'isLaunching'>, private readonly conversations: Pick<ConversationService, 'get' | 'listAll' | 'recordGitChange' | 'isGitPending'>, private readonly favorites: GitFavoriteStore, private readonly changed: () => void = () => {}) {}
 
   private directory(target: GitTarget): string {
     if (target.kind === 'conversation') {
@@ -107,6 +108,7 @@ export class GitService {
     const key = await repositoryKey(dir)
     const empty: GitStatus = { git: false, directory: dir, branch: null, head: null, upstream: null, ahead: 0, behind: 0, changes: 0, branches: [], remotes: [], blocker: null, operation: null, conflicts: [] }
     if (!key) return empty
+    const favorites = this.favorites.list(key)
     const [head, sha, listing, worktrees, remotes, protectedRefs, busy, operation, conflicts] = await Promise.all([
       projectHead(dir), gitOrNull(dir, ['rev-parse', 'HEAD']),
       git(dir, ['for-each-ref', '--sort=-committerdate', '--format=%(refname)%00%(objectname)%00%(upstream)%00%(upstream:track,nobracket)', 'refs/heads', 'refs/remotes']),
@@ -127,9 +129,19 @@ export class GitService {
         const [ref = '', sha = '', upstream = '', track = ''] = line.split('\0')
         const remote = /^refs\/remotes\/([^/]+)\/(.+)$/.exec(ref)
         if (remote?.[2] === 'HEAD') return []
-        return [{ ref, name: remote?.[2] ?? ref.slice('refs/heads/'.length), remote: remote?.[1] ?? null, sha, upstream: upstream || null, worktree: holders.get(ref) ?? null, protected: protectedRefs.has(ref), ...(upstream ? parseTrack(track) : {}) }]
+        return [{ ref, name: remote?.[2] ?? ref.slice('refs/heads/'.length), remote: remote?.[1] ?? null, sha, upstream: upstream || null, worktree: holders.get(ref) ?? null, protected: protectedRefs.has(ref), favorite: favorites.has(ref), ...(upstream ? parseTrack(track) : {}) }]
       })
     }
+  }
+
+  async favorite(target: GitTarget, ref: string, favorite: boolean): Promise<void> {
+    const dir = this.directory(target)
+    const key = await repositoryKey(dir)
+    if (!key) throw new Rejection('repo-not-git')
+    if (!/^refs\/(heads|remotes)\//.test(ref)) throw new Rejection('branch-not-found')
+    await commitRef(dir, ref)
+    this.favorites.set(key, ref, favorite)
+    this.changed()
   }
 
   async history(target: GitTarget, ref: string, offset: number, query: string, snapshot?: string[]): Promise<GitHistory> {
@@ -212,7 +224,7 @@ export class GitService {
       const blocker = checkGitOperation(target.kind, action, await this.busy(dir), status)
       if (blocker) throw new Rejection(blocker)
       if (target.kind === 'task' && status.branch !== this.tasks.get(target.id).repos.find((repo) => repo.path === target.project)?.branch) throw new Rejection('git-task-branch', 'worktree 的实际分支与任务绑定不符，请先在终端修复。')
-      const result = await this.perform(dir, status, action)
+      const result = await this.perform(dir, key, status, action)
       const after = await projectHead(dir)
       const moved = ['switch', 'detach', 'merge', 'pull', 'continue', 'abort', 'resolve'].includes(action.kind) || (action.kind === 'update' && action.ref === `refs/heads/${status.branch}`) || (action.kind === 'create' && action.checkout) || (action.kind === 'rename' && action.ref === `refs/heads/${status.branch}`)
       if (moved) {
@@ -232,7 +244,7 @@ export class GitService {
     }
   }
 
-  private async perform(dir: string, status: GitStatus, action: GitAction): Promise<GitResult> {
+  private async perform(dir: string, key: string, status: GitStatus, action: GitAction): Promise<GitResult> {
     const branchAt = (ref: string) => {
       const branch = status.branches.find((branch) => branch.ref === ref)
       if (!branch) throw new Rejection('branch-not-found')
@@ -282,12 +294,14 @@ export class GitService {
           if (branch.remote) throw new Rejection('git-operation-failed', '只支持重命名本地分支。')
           await validName(action.name)
           await writeGit(dir, ['branch', '-m', branch.name, action.name])
+          this.favorites.rename(key, branch.ref, `refs/heads/${action.name}`)
           return { state: 'done', branch: action.name }
         }
         if (branch.remote) {
           await writeGit(dir, ['push', remoteAt(branch.remote), '--delete', branch.name])
           if (await gitOrNull(dir, ['rev-parse', '--verify', branch.ref])) await writeGit(dir, ['update-ref', '-d', branch.ref, branch.sha])
         } else await writeGit(dir, ['branch', '-d', branch.name])
+        this.favorites.set(key, branch.ref, false)
         break
       }
       case 'fetch':

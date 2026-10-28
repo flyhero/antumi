@@ -31,6 +31,7 @@ import { DiscussionService } from './discussion-service'
 import { startRpcServer, type RpcServer } from './rpc-server'
 import { TaskService } from './task-service'
 import { ProjectRegistry } from './project-registry'
+import { GitFavoriteStore } from './git-favorite-store'
 import { TaskStore } from './task-store'
 import { UsageLimitResumes } from './usage-limit-resume'
 import { ScheduleService } from './schedule-service'
@@ -83,6 +84,7 @@ await mkdir(paths.skills, { recursive: true, mode: 0o700 })
 // TaskStore first: its migrations create every table the other stores read.
 const store = new TaskStore(paths.database)
 const projects = new ProjectRegistry(paths.database)
+const gitFavorites = new GitFavoriteStore(paths.database)
 const daemon = new DaemonClient(paths.daemonSocket)
 const conversationsStore = new ConversationStore(paths.database)
 const runs = new AgentRunStore(paths.database)
@@ -492,7 +494,7 @@ const token = randomBytes(32).toString('hex')
 server = await startRpcServer({
   port: Number(process.env.ANTUMI_PORT ?? 0),
   token,
-  handlers: createRpcHandlers(service, conversations, projects, daemon, usage, sources, {
+  handlers: createRpcHandlers(service, conversations, projects, gitFavorites, daemon, usage, sources, {
     store: attachments,
     uploads: new AttachmentUploads(attachments)
   }, terminals, worktrees, browser, awake, terminalCommands, limits, runs, turns, chatSettings, environment, schedules, chatCommands, routines, discussions, wire, () => server?.broadcast('git.changed', {}), squads, todos, plugins, skills, mcpServers, smallModels, projectConfigs, modelProviders, new SessionImports(conversationsStore, conversations, paths.home), accounts, cliMaintenance, analytics, automation, pets, new ProjectStar(sources), profiles)
@@ -553,6 +555,7 @@ async function shutdown(): Promise<void> {
   turns.close()
   smallModels.close()
   projects.close()
+  gitFavorites.close()
   process.exit(0)
 }
 process.on('SIGINT', () => void shutdown())

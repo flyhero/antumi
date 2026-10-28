@@ -7,7 +7,7 @@ const Ref = z.string().min(1).max(500)
 export const GitBranch = z.object({
   ref: Ref, name: z.string(), remote: z.string().nullable(), sha: z.string(), upstream: z.string().nullable(), worktree: z.string().nullable(), protected: z.boolean(),
   // A local branch's commits its upstream lacks, and the upstream's it lacks, as of the last fetch.
-  ahead: z.number().int().optional(), behind: z.number().int().optional()
+  ahead: z.number().int().optional(), behind: z.number().int().optional(), favorite: z.boolean().optional()
 })
 export type GitBranch = z.infer<typeof GitBranch>
 export const GitCommit = z.object({ sha: z.string(), parents: z.array(z.string()), subject: z.string(), author: z.string(), date: z.string(), refs: z.array(z.string()), side: z.enum(['current', 'target']).optional() })

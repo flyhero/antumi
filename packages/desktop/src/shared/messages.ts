@@ -4553,6 +4553,26 @@ export const MESSAGES = {
     "zh": "全部分支",
     "en": "All branches"
   },
+  "GitInspector.addFavorite": {
+    "zh": "添加收藏",
+    "en": "Add to favorites"
+  },
+  "GitInspector.removeFavorite": {
+    "zh": "取消收藏",
+    "en": "Remove from favorites"
+  },
+  "GitInspector.addFavoriteFor": {
+    "zh": "收藏分支 {name}",
+    "en": "Add branch {name} to favorites"
+  },
+  "GitInspector.removeFavoriteFor": {
+    "zh": "取消收藏分支 {name}",
+    "en": "Remove branch {name} from favorites"
+  },
+  "GitInspector.favoritesOnly": {
+    "zh": "仅显示收藏分支",
+    "en": "Show favorite branches only"
+  },
   "GitInspector.currentBranch": {
     "zh": "当前分支",
     "en": "Current branch"

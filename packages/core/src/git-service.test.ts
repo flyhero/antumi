@@ -7,6 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Conversation, Task, type GitTarget } from '@antumi/protocol'
 import { GitService } from './git-service'
 import { committedDiff, filesBetween } from './git-repository'
+import { GitFavoriteStore } from './git-favorite-store'
+import { TaskStore } from './task-store'
 
 const git = (dir: string, ...args: string[]) => execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
 describe('Git management', () => {
@@ -14,6 +16,8 @@ describe('Git management', () => {
   let repo: string
   let remote: string
   let service: GitService
+  let store: TaskStore
+  let favorites: GitFavoriteStore
   let target: GitTarget
   let conversations: Conversation[]
   let tasks: Task[]
@@ -31,12 +35,62 @@ describe('Git management', () => {
     git(repo, 'push', '-q', '-u', 'origin', 'main')
     conversations = [Conversation.parse({ id: randomUUID(), title: 'test', titleLocked: false, agent: 'claude', workspacePath: repo, projectPaths: [repo], managedWorkspace: false, sessionId: null, createdAt: 0, updatedAt: 0 })]
     tasks = []; launching = false; record.mockClear()
+    const database = path.join(root, 'antumi.db')
+    store = new TaskStore(database)
+    favorites = new GitFavoriteStore(database)
     service = new GitService({ get: (id) => { const task = tasks.find((task) => task.id === id); if (!task) throw new Error('task missing'); return task }, list: () => tasks, isLaunching: () => launching }, {
       get: (id) => { const conversation = conversations.find((conversation) => conversation.id === id); if (!conversation) throw new Error('conversation missing'); return conversation }, listAll: () => conversations, recordGitChange: record, isGitPending: () => false
-    })
+    }, favorites)
     target = { kind: 'conversation', id: conversations[0]!.id, project: repo }
   })
-  afterEach(() => rmSync(root, { recursive: true, force: true }))
+  afterEach(() => { favorites.close(); store.close(); rmSync(root, { recursive: true, force: true }) })
+
+  it('shares favorites across worktrees, keeping local and remote refs and independent clones separate', async () => {
+    const worktree = path.join(root, 'worktree')
+    git(repo, 'worktree', 'add', '-q', '-b', 'feature/topic', worktree)
+    const other = Conversation.parse({ ...conversations[0], id: randomUUID(), workspacePath: worktree, projectPaths: [worktree] })
+    conversations.push(other)
+    const otherTarget: GitTarget = { kind: 'conversation', id: other.id, project: worktree }
+    await service.favorite(target, 'refs/heads/feature/topic', true)
+    await service.favorite(target, 'refs/heads/main', false)
+    await service.favorite(target, 'refs/remotes/origin/main', true)
+    const branches = (await service.status(otherTarget)).branches
+    expect(branches.find((branch) => branch.ref === 'refs/heads/feature/topic')?.favorite).toBe(true)
+    expect(branches.find((branch) => branch.ref === 'refs/heads/main')?.favorite).toBe(false)
+    expect(branches.find((branch) => branch.ref === 'refs/remotes/origin/main')?.favorite).toBe(true)
+    const clone = path.join(root, 'clone')
+    git(root, 'clone', '-q', repo, clone)
+    conversations[0]!.projectPaths.push(clone)
+    const cloned = (await service.status({ ...target, project: clone })).branches
+    expect(cloned.find((branch) => branch.ref === 'refs/heads/main')?.favorite).toBe(true)
+    expect(cloned.find((branch) => branch.ref === 'refs/remotes/origin/main')?.favorite).toBe(false)
+    expect(record).not.toHaveBeenCalled()
+  })
+
+  it('can favorite while an agent runs without changing Git, and rejects missing or non-branch refs', async () => {
+    conversations[0]!.sessionId = 'agent'; conversations[0]!.chat = { turn: 'running' }
+    const before = git(repo, 'show-ref')
+    await service.favorite(target, 'refs/remotes/origin/main', true)
+    await service.favorite(target, 'refs/remotes/origin/main', true)
+    expect((await service.status(target)).branches.find((branch) => branch.ref === 'refs/remotes/origin/main')?.favorite).toBe(true)
+    expect(git(repo, 'show-ref')).toBe(before)
+    await expect(service.favorite(target, 'refs/heads/missing', true)).rejects.toMatchObject({ reason: 'branch-not-found' })
+    await expect(service.favorite(target, 'HEAD', true)).rejects.toMatchObject({ reason: 'branch-not-found' })
+    await expect(service.favorite({ ...target, project: root }, 'refs/heads/main', true)).rejects.toMatchObject({ reason: 'repo-not-found' })
+  })
+
+  it('keeps a favorite on rename and clears it on deletion', async () => {
+    git(repo, 'branch', 'feature')
+    await service.favorite(target, 'refs/heads/feature', true)
+    await service.execute(target, { kind: 'rename', ref: 'refs/heads/feature', name: 'renamed' })
+    expect((await service.status(target)).branches.find((branch) => branch.name === 'renamed')?.favorite).toBe(true)
+    await service.execute(target, { kind: 'delete', ref: 'refs/heads/renamed' })
+    git(repo, 'branch', 'renamed')
+    git(repo, 'branch', 'feature')
+    const branches = (await service.status(target)).branches
+    expect(branches.find((branch) => branch.name === 'renamed')?.favorite).toBe(false)
+    expect(branches.find((branch) => branch.name === 'feature')?.favorite).toBe(false)
+  })
 
   it('lists the local and remote branches holding a commit, leaving out a remote HEAD', async () => {
     const base = git(repo, 'rev-parse', 'HEAD')

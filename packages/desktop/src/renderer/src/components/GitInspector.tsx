@@ -5,6 +5,7 @@ import { checkGitOperation, RpcError, trackedBranch } from '@antumi/protocol'
 import { perform, openTerminal, useCore } from '../core-store'
 import { gitGraph } from '../git-graph'
 import { commitRefs } from '../git-refs'
+import { branchNodes, type BranchNode } from '../git-branches'
 import { openResolvedFile, showResolvedFile } from '../file-actions'
 import { useOccludesBrowser } from '../browser-occlusion'
 import { BranchStatusDetails, type BranchTarget } from './BranchStatus'
@@ -13,7 +14,7 @@ import { commitSubject, commitWithWrittenMessage, useCanWriteCommitMessage, useW
 import { GitRefLabel, GitRefName } from './GitRefLabel'
 import { ContextMenu, MenuItem, menuPoint, MenuRadioItem, MenuSubmenu, type MenuPoint } from './ContextMenu'
 import { FileDiffView, FileList, useFocusCount } from './Inspector'
-import { BranchIcon, LinkIcon, RefreshIcon, MoreIcon, MaximizeIcon, RestoreIcon, CheckIcon, ClockIcon, CommitIcon, CompareIcon, CopyIcon, DocumentIcon, FolderIcon, MergeIcon, PencilIcon, TagIcon, TrashIcon } from './icons'
+import { BranchIcon, LinkIcon, RefreshIcon, MoreIcon, MaximizeIcon, RestoreIcon, CheckIcon, ClockIcon, CommitIcon, CompareIcon, CopyIcon, DocumentIcon, FolderIcon, MergeIcon, PencilIcon, StarIcon, TagIcon, TrashIcon } from './icons'
 import { ChatPicker } from './ChatPicker'
 import { GitPushDialog, GitPushRejectedDialog } from './GitPushDialog'
 import { setPreference, usePreferences } from '../preferences'
@@ -167,9 +168,22 @@ function GitRepository({ target, updatedAt, refresh }: { target: GitTarget; upda
   const openPush = () => { retry(); setDialog({ kind: 'push' }) }
   const pick = (ref: string) => { setSelected(ref); setSelectedCommit(null); setComparison(null); setDetailView(false) }
   const can = (action: GitAction) => !disabled && checkGitOperation(target.kind, action, false, status) === null
+  const favoritesSupported = rpc?.features.includes('git-favorites') ?? false
+  const [favoriting, setFavoriting] = useState<Set<string>>(new Set())
+  const toggleFavorite = async (entry: GitBranch) => {
+    if (favoriting.has(entry.ref)) return
+    setFavoriting((refs) => new Set([...refs, entry.ref]))
+    try {
+      await perform((rpc) => rpc.call('git.favorite', { ...target, ref: entry.ref, favorite: !entry.favorite }))
+    } finally {
+      setFavoriting((refs) => new Set([...refs].filter((ref) => ref !== entry.ref)))
+      retry()
+    }
+  }
   const [trackOpen, setTrackOpen] = useState(false)
   const track = (entry: GitBranch, upstream: string | null, close: () => void) => { setTrackOpen(false); close(); void run({ kind: 'track', ref: entry.ref, upstream }) }
   const branchActions = (entry: GitBranch, close: () => void) => <>
+    {favoritesSupported && <MenuItem label={entry.favorite ? t('GitInspector.removeFavorite') : t('GitInspector.addFavorite')} icon={<StarIcon />} disabled={favoriting.has(entry.ref)} onSelect={() => { close(); void toggleFavorite(entry) }} />}
     <MenuItem label={t('GitInspector.viewHistory')} icon={<ClockIcon />} onSelect={() => { pick(entry.ref); close() }} />
     <MenuItem label={t('GitInspector.switchToThisBranch')} icon={<CheckIcon />} disabled={!can({ kind: 'switch', ref: entry.ref }) || entry.ref === `refs/heads/${status?.branch}` || Boolean(entry.worktree && entry.worktree !== status?.directory)} onSelect={() => { close(); void run({ kind: 'switch', ref: entry.ref }) }} />
     {updateSupported && !entry.remote && entry.upstream && <MenuItem label={t('GitInspector.updateFromRemote')} icon={<RefreshIcon />} disabled={!can({ kind: 'update', ref: entry.ref })} onSelect={() => { close(); update(entry) }} />}
@@ -231,7 +245,7 @@ function GitRepository({ target, updatedAt, refresh }: { target: GitTarget; upda
         </div>
       </div>}
       <div className="git-layout" data-detail={detailView || undefined}>
-        <div className="git-branches" data-collapsed={branchesCollapsed || undefined}><button className="git-tree-filter git-branch-toggle" aria-expanded={!branchesCollapsed} onClick={() => setBranchesCollapsed((value) => !value)}>{branchesCollapsed ? t('GitInspector.branches') : t('GitInspector.branches_1024')}</button><div className="git-branch-tree"><BranchTree branches={status.branches} selected={ref} current={status.branch} pick={pick} actions={branchActions} onMenuClose={() => setTrackOpen(false)} /></div></div>
+        <div className="git-branches" data-collapsed={branchesCollapsed || undefined}><button className="git-tree-filter git-branch-toggle" aria-expanded={!branchesCollapsed} onClick={() => setBranchesCollapsed((value) => !value)}>{branchesCollapsed ? t('GitInspector.branches') : t('GitInspector.branches_1024')}</button><div className="git-branch-tree"><BranchTree branches={status.branches} selected={ref} current={status.branch} pick={pick} actions={branchActions} toggleFavorite={favoritesSupported ? (entry) => void toggleFavorite(entry) : undefined} favoriting={favoriting} onMenuClose={() => setTrackOpen(false)} /></div></div>
         <div className="git-history">
           <div className="git-history-tools"><span className="mono" title={ref}>{ref === 'all' ? t('GitInspector.allBranches') : ref === 'HEAD' ? t('GitInspector.currentBranch') : ref.replace(/^refs\/(heads|remotes)\//, '')}</span>
             <input className="input" aria-label={t('GitInspector.searchCommits')} placeholder={t('GitInspector.subjectAuthorOrSha')} value={query} onChange={(event) => setQuery(event.target.value)} />
@@ -265,36 +279,29 @@ function ConflictRow({ target, directory, file, disabled, resolve }: { target: G
   </div>
 }
 
-function BranchTree({ branches, selected, current, pick, actions, onMenuClose }: { branches: GitBranch[]; selected: string; current: string | null; pick: (ref: string) => void; actions: (branch: GitBranch, close: () => void) => ReactNode; onMenuClose: () => void }) {
+function BranchTree({ branches, selected, current, pick, actions, toggleFavorite, favoriting, onMenuClose }: { branches: GitBranch[]; selected: string; current: string | null; pick: (ref: string) => void; actions: (branch: GitBranch, close: () => void) => ReactNode; toggleFavorite?: (branch: GitBranch) => void; favoriting: ReadonlySet<string>; onMenuClose: () => void }) {
   const [query, setQuery] = useState('')
+  const [favoritesOnly, setFavoritesOnly] = useState(false)
   const [menu, setMenu] = useState<{ branch: GitBranch; at: MenuPoint } | null>(null)
-  const filtered = branches.filter((branch) => `${branch.remote ?? ''}/${branch.name}`.toLowerCase().includes(query.toLowerCase()))
-  const row = (branch: GitBranch) => <div key={branch.ref} className="git-branch-row" onKeyDown={(event) => {
+  const filtered = branches.filter((branch) => (!favoritesOnly || !toggleFavorite || branch.favorite) && `${branch.remote ?? ''}/${branch.name}`.toLowerCase().includes(query.toLowerCase()))
+  const row = (branch: GitBranch, label: string) => <div key={branch.ref} className="git-branch-row" onKeyDown={(event) => {
     if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) {
       event.preventDefault(); const bounds = event.currentTarget.getBoundingClientRect(); setMenu({ branch, at: { x: bounds.left, y: bounds.bottom } })
     }
   }} data-selected={selected === branch.ref || undefined} onContextMenu={(event) => { event.preventDefault(); setMenu({ branch, at: menuPoint(event) }) }}>
-    <button title={`${branch.remote ? `${branch.remote}/` : ''}${branch.name}${branch.upstream ? ` → ${branch.upstream}` : ''}${branch.worktree ? `\nworktree: ${branch.worktree}` : ''}${branch.protected ? t('GitInspector.taskBoundBranch') : ''}`} onClick={() => pick(branch.ref)}>
-      <BranchIcon /><span className="mono">{query ? branch.name : branch.name.split('/').at(-1)}</span>
+    {toggleFavorite && <button className="tool-button git-branch-star" aria-label={t(branch.favorite ? 'GitInspector.removeFavoriteFor' : 'GitInspector.addFavoriteFor', { name: `${branch.remote ? `${branch.remote}/` : ''}${branch.name}` })} title={branch.favorite ? t('GitInspector.removeFavorite') : t('GitInspector.addFavorite')} aria-pressed={Boolean(branch.favorite)} disabled={favoriting.has(branch.ref)} onClick={() => toggleFavorite(branch)}><StarIcon /></button>}
+    <button className="git-branch-pick" title={`${branch.remote ? `${branch.remote}/` : ''}${branch.name}${branch.upstream ? ` → ${branch.upstream}` : ''}${branch.worktree ? `\nworktree: ${branch.worktree}` : ''}${branch.protected ? t('GitInspector.taskBoundBranch') : ''}`} onClick={() => pick(branch.ref)}>
+      <BranchIcon /><span className="mono">{label}</span>
       {!branch.remote && branch.name === current && <CheckIcon />}
       {((branch.behind ?? 0) > 0 || (branch.ahead ?? 0) > 0) && <span className="git-branch-track" title={t('GitInspector.aheadBehind', { behind: branch.behind ?? 0, ahead: branch.ahead ?? 0 })}>{(branch.behind ?? 0) > 0 && <span data-side="behind">↓{branch.behind}</span>}{(branch.ahead ?? 0) > 0 && <span data-side="ahead">↑{branch.ahead}</span>}</span>}
       {(branch.worktree || branch.protected) && <span className="git-branch-badge">{branch.protected ? t('GitInspector.task') : t('GitInspector.checkedOut')}</span>}
     </button>
     <button className="tool-button" aria-label={t('GitInspector.actionsFor', { value1: branch.name })} onClick={(event) => { const bounds = event.currentTarget.getBoundingClientRect(); setMenu({ branch, at: { x: bounds.left, y: bounds.bottom } }) }}><MoreIcon /></button>
   </div>
-  const tree = (entries: GitBranch[], prefix = ''): ReactNode => {
-    const folders = new Map<string, GitBranch[]>()
-    const leaves: GitBranch[] = []
-    for (const branch of entries) {
-      const remaining = branch.name.slice(prefix.length)
-      const slash = remaining.indexOf('/')
-      if (slash < 0 || query) leaves.push(branch)
-      else { const folder = remaining.slice(0, slash); folders.set(folder, [...folders.get(folder) ?? [], branch]) }
-    }
-    return <>{[...folders].sort(([a], [b]) => a.localeCompare(b)).map(([name, entries]) => <details key={name} open><summary>{name}</summary><div className="git-branch-folder">{tree(entries, `${prefix}${name}/`)}</div></details>)}{leaves.map(row)}</>
-  }
+  const nodes = (entries: BranchNode[]): ReactNode => entries.map((node) => node.kind === 'branch' ? row(node.branch, node.label) : <details key={node.name} open><summary>{node.name}</summary><div className="git-branch-folder">{nodes(node.children)}</div></details>)
+  const tree = (entries: GitBranch[]) => nodes(branchNodes(entries, current, Boolean(query)))
   return <>
-    <input className="input" aria-label={t('ConversationBranches.searchBranches')} placeholder={t('ConversationBranches.searchBranches')} value={query} onChange={(event) => setQuery(event.target.value)} />
+    <div className="git-branch-search"><input className="input" aria-label={t('ConversationBranches.searchBranches')} placeholder={t('ConversationBranches.searchBranches')} value={query} onChange={(event) => setQuery(event.target.value)} />{toggleFavorite && <button className="tool-button git-branch-star" aria-label={t('GitInspector.favoritesOnly')} title={t('GitInspector.favoritesOnly')} aria-pressed={favoritesOnly} onClick={() => setFavoritesOnly((value) => !value)}><StarIcon /></button>}</div>
     <div className="git-branch-list">
       <button className="git-tree-filter" aria-pressed={selected === 'HEAD'} onClick={() => pick('HEAD')}>{t('GitInspector.headCurrentBranch')}</button>
       <button className="git-tree-filter" aria-pressed={selected === 'all'} onClick={() => pick('all')}>{t('GitInspector.allBranches')}</button>
@@ -302,7 +309,7 @@ function BranchTree({ branches, selected, current, pick, actions, onMenuClose }:
       <details open><summary>{t('GitInspector.remote')}</summary>{[...new Set(filtered.flatMap((branch) => branch.remote ? [branch.remote] : []))].map((remote) => <details key={remote} open><summary>{remote}</summary>{tree(filtered.filter((branch) => branch.remote === remote))}</details>)}</details>
       {!filtered.length && <p className="git-message muted">{t('GitInspector.noMatchingBranches')}</p>}
     </div>
-    {menu && <ContextMenu at={menu.at} label={t('GitInspector.branchActions')} onClose={() => { setMenu(null); onMenuClose() }}>{actions(menu.branch, () => setMenu(null))}</ContextMenu>}
+    {menu && <ContextMenu at={menu.at} label={t('GitInspector.branchActions')} onClose={() => { setMenu(null); onMenuClose() }}>{actions(branches.find((branch) => branch.ref === menu.branch.ref) ?? menu.branch, () => setMenu(null))}</ContextMenu>}
   </>
 }
 

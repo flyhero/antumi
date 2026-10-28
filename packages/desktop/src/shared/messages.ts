@@ -1,5 +1,7 @@
 // Application-owned text. Values and external content are passed separately.
 export const MESSAGES = {
+  "ChatActivityStep.done": {"zh": "步骤已结束", "en": "Step finished"},
+  "ChatActivityStep.awaiting": {"zh": "等待你确认或回答", "en": "Waiting for your approval or answer"},
   "AgentTemplates.title": {"zh":"智能体模板","en":"Agent templates"},
   "AgentTemplates.chooseHint": {"zh":"选择一个起点，调整配置后保存为自己的智能体。","en":"Choose a starting point, customize it, and save your own agent."},
   "AgentTemplates.emptyHint": {"zh":"还没有使用中的智能体。可以从模板开始，也可以空白创建。","en":"No active agents yet. Start from a template or create one from scratch."},

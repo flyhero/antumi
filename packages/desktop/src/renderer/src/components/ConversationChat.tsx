@@ -50,6 +50,8 @@ import { TranslateButton, useTranslated } from './TranslateButton'
 import { ChatFind, useChatFindState, type ChatHistoryResult } from './ChatFind'
 import { ArrowDownIcon, ChevronDownIcon, ChevronRightIcon, FileChangesIcon, AgentIcon, ForkIcon } from './icons'
 import { StopBackground } from '../background-work'
+import { activityOf } from '../chat-activity'
+import { ChatActivityStep } from './ChatActivityStep'
 
 type ToolItem = Extract<ChatItem, { kind: 'tool' }>
 const NO_ITEMS: ChatItem[] = []
@@ -452,7 +454,7 @@ function TurnFold({ foldKey, conversationId, turn, blocks, task, replies, steps,
         </button>
         {open && (
           <div className="chat-fold-body">
-            {blocks.map((block) => <Block key={block.key} conversationId={conversationId} block={block} task={task} replies={replies} />)}
+            {blocks.map((block, index) => <ActivityBlock key={block.key} conversationId={conversationId} block={block} next={blocks[index + 1]} task={task} replies={replies} />)}
           </div>
         )}
       </div>
@@ -537,6 +539,11 @@ function TurnChanges({ conversationId, fold, files, turn, reply, collapsible }: 
       </div>
     </div>
   )
+}
+
+function ActivityBlock({ next, ...props }: Parameters<typeof Block>[0] & { next: ChatBlock | undefined }) {
+  const activity = activityOf(props.block)
+  return <ChatActivityStep activity={activity} connected={Boolean(activity && next && activityOf(next))}><Block {...props} /></ChatActivityStep>
 }
 
 // `fresh` is a block that arrived while the chat was open: it enters with a motion.
@@ -924,7 +931,7 @@ export function ConversationChat({ conversation, surface, onHandoff, variant = '
           const head = sentAt !== null && (next ? userAt(next) === null : live !== null)
           return (
             <Fragment key={block.key}>
-              <Block conversationId={id} block={block} task={Boolean(conversation.taskId)} replies={replies} fresh={entering} />
+              <ActivityBlock conversationId={id} block={block} next={next} task={Boolean(conversation.taskId)} replies={replies} fresh={entering} />
               {variant !== 'compact' && head && message && <div className="chat-entry" data-fresh={entering || undefined}><TurnHead at={message.at} stageId={message.stageId} messageKey={block.key} live={live} /></div>}
             </Fragment>
           )

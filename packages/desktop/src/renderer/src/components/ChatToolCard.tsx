@@ -166,7 +166,7 @@ function ToolLine({ tool }: { tool: ToolItem }) {
   const limit = status === 'running' ? limitAt(tool) : null
   return (
     <ChatCopyRegion text={copyTextForItem(tool)}>
-    <div className="chat-tool-line" data-status={status} data-finished={finished || undefined} data-stoppable={canStop(tool) || undefined} data-tool-key={itemKey(tool)}>
+    <div className="chat-tool-line" data-status={status} data-open={open || undefined} data-finished={finished || undefined} data-stoppable={canStop(tool) || undefined} data-tool-key={itemKey(tool)}>
       <button
         type="button"
         className="chat-tool-row"

@@ -5708,6 +5708,10 @@ export const MESSAGES = {
     "zh": "还有 {more} 项",
     "en": "{more} more"
   },
+  "OverviewView.remainingConversations": {
+    "zh": "其余 {value1} 个会话",
+    "en": "{value1} more {value1, plural, one {conversation} other {conversations}}"
+  },
   "OverviewView.now": {
     "zh": "现在",
     "en": "Now"

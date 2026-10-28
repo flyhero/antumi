@@ -299,6 +299,7 @@ function TodoLineView({ entry, line }: { entry: TodoEntry; line: TodoLine }) {
 }
 
 const SHOWN_TODOS = 3
+const SHOWN_TODO_CONVERSATIONS = 6
 
 function TodoEntryView({ entry, now }: { entry: TodoEntry; now: number }) {
   const more = entry.lines.length - SHOWN_TODOS
@@ -363,6 +364,7 @@ export function OverviewView() {
   const todosShown = useTodoOverviewShown()
   const allTodos = useAllTodos()
   const [withArchived, setWithArchived] = useState(false)
+  const [moreConversations, setMoreConversations] = useState(false)
   const [kept, setKept] = useState<ReadonlySet<string>>(new Set())
   const keep = useCallback((itemId: string) => setKept((current) => current.has(itemId) ? current : new Set(current).add(itemId)), [])
   const page = useRef<HTMLElement>(null)
@@ -380,6 +382,8 @@ export function OverviewView() {
   }), [data.running, tasks, conversations, runs, getLocale()])
   // What is left to do across conversations: not waiting on anyone, so apart from 等我.
   const todos = overviewTodos(allTodos, conversations, tasks, now, withArchived, kept)
+  const foldedConversations = Math.max(0, todos.entries.length - SHOWN_TODO_CONVERSATIONS)
+  const visibleTodos = moreConversations ? todos.entries : todos.entries.slice(0, SHOWN_TODO_CONVERSATIONS)
   const counts = { ...data.counts, todos: todos.mine + todos.agents }
   const ranges = [
     { value: 'mine', label: t('OverviewView.waitingOnMe') },
@@ -403,7 +407,9 @@ export function OverviewView() {
   const mine = shows('mine') && <Panel title={t('OverviewView.needsMe')} count={data.counts.mine}><Rows rows={data.mine} section="mine" /></Panel>
   const todoPanel = todosShown && (!filter || filter === 'todos') && (todos.entries.length > 0 || todos.archived > 0) && <Panel title={t('chatTools.toDos')} count={counts.todos}>
     {todos.entries.length > 0 && <KeepChecked.Provider value={keep}>
-      <ul className="overview-todos">{todos.entries.map((entry) => <TodoEntryView key={entry.conversationId} entry={entry} now={now} />)}</ul>
+      <ul className="overview-todos">{visibleTodos.map((entry) => <TodoEntryView key={entry.conversationId} entry={entry} now={now} />)}</ul>
+      {foldedConversations > 0 && <button type="button" className="overview-day overview-disclosure" aria-expanded={moreConversations}
+        onClick={() => setMoreConversations(!moreConversations)}>{t('OverviewView.remainingConversations', { value1: foldedConversations })}</button>}
     </KeepChecked.Provider>}
     {todos.archived > 0 && <button type="button" className="overview-day overview-disclosure" aria-expanded={withArchived}
       onClick={() => setWithArchived(!withArchived)}>{tr('OverviewView.itemsInArchivedConversations', { value1: withArchived ? t('OverviewView.hide') : t('OverviewView.include'), value2: todos.archived })}</button>}

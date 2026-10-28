@@ -223,6 +223,29 @@ describe('overview page', () => {
     expect(useCore.getState()).toMatchObject({ selectedConversationId: id(1), conversationInspectorOpen: true, conversationInspectorTab: 'todos' })
   })
 
+  it('shows six to-do conversations and folds the rest', () => {
+    const { rpc } = connect()
+    const conversations: Record<string, ReturnType<typeof chat>> = {}
+    for (let n = 1; n <= 7; n++) {
+      conversations[id(n)] = chat({ id: id(n), title: `会话${n}` })
+      receiveTodos(id(n), [{ id: 'g', title: '待办', note: null, createdAt: now - n, updatedAt: now, items: [
+        { id: 'a', text: `事项${n}`, owner: 'user', done: false, createdAt: now - n, doneAt: null }
+      ] }])
+    }
+    useCore.setState({ rpc: { ...rpc, features: ['todo-overview'] }, conversations })
+    const folded = render()
+    for (let n = 1; n <= 6; n++) expect(folded).toContain(`会话${n}`)
+    expect(folded).not.toContain('会话7')
+    expect(folded).toContain('其余 1 个会话')
+    expect(folded).toContain('aria-expanded="false"')
+    click('其余 1 个会话')
+    const open = render()
+    expect(open).toContain('会话7')
+    expect(open).toContain('aria-expanded="true"')
+    click('其余 1 个会话')
+    expect(render()).not.toContain('会话7')
+  })
+
   it('leaves to-dos out of the overview on a core that cannot gather them', () => {
     connect()
     useCore.setState({ conversations: { [id(1)]: chat() } })

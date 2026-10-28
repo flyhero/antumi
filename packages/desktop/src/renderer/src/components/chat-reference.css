@@ -23,6 +23,8 @@ button.chat-reference:disabled { color: var(--text-muted); cursor: default; }
 button.chat-reference:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .chat-reference-icon { display: inline-flex; flex-shrink: 0; color: var(--text-muted); }
 .chat-reference-icon > svg { width: 14px; height: 14px; }
+.chat-reference-icon .file-tree-icon { flex-basis: 14px; height: 14px; margin: 0; }
+.chat-reference-icon .file-tree-icon img { width: 14px; height: 14px; }
 .chat-reference-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cm-reference { display: inline; }
 .cm-reference .chat-reference { user-select: none; }

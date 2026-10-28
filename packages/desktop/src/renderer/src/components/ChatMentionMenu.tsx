@@ -6,7 +6,7 @@ import { useCore, useFileMentionsSupported } from '../core-store'
 import { fileTarget, insertMention, matchConversations, matchProjects, mentionQuery, placeMention, type MentionedText, type MentionTarget } from '../chat-mentions'
 import type { SetText } from './ChatMentionField'
 import { projectName } from './ProjectPicker'
-import { ChatIcon, FolderIcon, RobotIcon } from './icons'
+import { AgentIcon, ChatIcon, FolderIcon } from './icons'
 import { FileTypeIcon } from './FileTypeIcon'
 import { isDarkTheme, onThemeChange } from '../appearance'
 import { agentLabel } from '../labels'
@@ -161,7 +161,7 @@ export function useChatMentionMenu({ value, setText, setValue, roots, cwd, agent
     }))
     const profileRows = callable.filter((profile) => profile.name.toLocaleLowerCase().includes(query.toLocaleLowerCase())).map((profile): MentionEntry => ({
       key: `profile:${profile.id}`, group: 'profiles', target: { kind: 'agent', id: profile.id, name: profile.name }, name: profile.name, detail: profile.description || agentLabel(profile.agent), opens: null,
-      icon: <RobotIcon />
+      icon: <AgentIcon agent={profile.agent} />
     }))
     const conversationRows = references ? matchConversations(Object.values(conversations), query, conversationId).map((entry): MentionEntry => ({
       key: `conversation:${entry.id}`, group: 'conversations', target: { kind: 'conversation', id: entry.id, title: entry.title },

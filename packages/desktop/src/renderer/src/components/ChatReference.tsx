@@ -1,5 +1,6 @@
 import type { ChatReferenceTarget } from '@antumi/protocol'
-import type { MouseEventHandler, ReactNode } from 'react'
+import { useSyncExternalStore, type MouseEventHandler, type ReactNode } from 'react'
+import { isDarkTheme, onThemeChange } from '../appearance'
 import { mentionLabel } from '../chat-mentions'
 import { selectConversation, useCore } from '../core-store'
 import { revealFile } from '../desktop-bridge'
@@ -7,11 +8,18 @@ import { showChatFile } from '../file-actions'
 import { t } from '../i18n'
 import { useChatFiles } from './ChatContextMenu'
 import { openAgentProfile } from './AgentProfiles'
-import { ChatIcon, DocumentIcon, FolderIcon, RobotIcon } from './icons'
+import { FileTypeIcon } from './FileTypeIcon'
+import { AgentIcon, ChatIcon, FolderIcon } from './icons'
 import './chat-reference.css'
 
-export function ReferenceIcon({ kind }: { kind: ChatReferenceTarget['kind'] }) {
-  return kind === 'conversation' ? <ChatIcon /> : kind === 'agent' ? <RobotIcon /> : kind === 'file' ? <DocumentIcon /> : <FolderIcon />
+// The icon the mention menu showed for it: an agent's own mark, a file's type.
+export function ReferenceIcon({ target }: { target: ChatReferenceTarget }) {
+  const agent = useCore((state) => target.kind === 'agent' ? state.agentProfiles[target.id]?.agent ?? null : null)
+  const dark = useSyncExternalStore(onThemeChange, isDarkTheme, () => false)
+  if (target.kind === 'conversation') return <ChatIcon />
+  if (target.kind === 'agent') return <AgentIcon agent={agent} />
+  if (target.kind === 'project') return <FolderIcon />
+  return <FileTypeIcon path={target.path} directory={target.kind === 'directory'} dark={dark} />
 }
 
 export function ReferenceMark({ target, children, title, disabled, onClick, onMouseDown, tabIndex }: {
@@ -24,7 +32,7 @@ export function ReferenceMark({ target, children, title, disabled, onClick, onMo
   tabIndex?: number
 }) {
   const label = children ?? mentionLabel(target)
-  const content = <><span className="chat-reference-icon" aria-hidden="true"><ReferenceIcon kind={target.kind} /></span><span className="chat-reference-name">{label}</span></>
+  const content = <><span className="chat-reference-icon" aria-hidden="true"><ReferenceIcon target={target} /></span><span className="chat-reference-name">{label}</span></>
   const hint = title ?? (target.kind === 'conversation' ? target.title : target.kind === 'agent' ? target.name : target.path)
   return onClick ? <button type="button" className="chat-reference" data-reference-kind={target.kind}
     data-file-path={target.kind === 'file' || target.kind === 'directory' || target.kind === 'project' ? target.path : undefined}

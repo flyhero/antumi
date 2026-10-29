@@ -8,29 +8,29 @@ import { useInstalledAgents } from '../installed-agents'
 import { agentLabel } from '../labels'
 import { t } from '../i18n'
 import { timeAgo } from '../conversation-state'
-import { AgentIcon, PlusIcon } from './icons'
+import { AgentIcon, InfoIcon, PlusIcon } from './icons'
 import { AgentsPageHeader } from './AgentsPageHeader'
 import { AgentModelPicker } from './AgentModelPicker'
 import { ChatPicker } from './ChatPicker'
 import { ProviderPicker } from './ProviderPicker'
 import { SquadsView } from './Squads'
 import { Segmented } from './SettingsControls'
-import { AgentProfileTemplates } from './AgentProfileTemplates'
+import { AgentProfileTemplatesDialog } from './AgentProfileTemplates'
 import { usePreferences } from '../preferences'
 import './agent-profiles.css'
 
-const useProfileEditor = create<{ view: 'list' | 'templates' | 'editor'; profile: AgentProfile | null; seed: AgentProfileFields | null; template: AgentProfileTemplate | null; back: 'list' | 'templates' }>(() => ({ view: 'list', profile: null, seed: null, template: null, back: 'list' }))
+const useProfileEditor = create<{ view: 'list' | 'editor'; templatesOpen: boolean; profile: AgentProfile | null; seed: AgentProfileFields | null; template: AgentProfileTemplate | null }>(() => ({ view: 'list', templatesOpen: false, profile: null, seed: null, template: null }))
 export function openAgentProfile(id: string): void {
   const profile = useCore.getState().agentProfiles[id]
   if (!profile) return
   selectSquad(null)
   useCore.setState({ agentProfilesTab: 'profiles' })
-  useProfileEditor.setState({ view: 'editor', profile, seed: null, template: null, back: 'list' })
+  useProfileEditor.setState({ view: 'editor', templatesOpen: false, profile, seed: null, template: null })
 }
 export function editAgentProfile(seed: AgentProfileFields): void {
   selectSquad(null)
   useCore.setState({ agentProfilesTab: 'profiles' })
-  useProfileEditor.setState({ view: 'editor', profile: null, seed, template: null, back: 'list' })
+  useProfileEditor.setState({ view: 'editor', templatesOpen: false, profile: null, seed, template: null })
 }
 export function AgentsView() {
   const supported = useCore((state) => state.rpc?.features.includes('agent-profiles') ?? false)
@@ -53,18 +53,18 @@ function ProfilesView() {
   const profiles = useCore((state) => state.agentProfiles)
   const [tab, setTab] = useState<'active' | 'archived'>('active')
   const tabsId = useId()
-  const { view, profile, seed, template, back } = useProfileEditor()
+  const { view, templatesOpen, profile, seed, template } = useProfileEditor()
   const editing = view === 'editor'
   const all = Object.values(profiles).sort((a, b) => b.updatedAt - a.updatedAt)
   const archived = all.filter((item) => item.archivedAt !== null)
   const shown = tab === 'archived' ? archived : all.filter((item) => item.archivedAt === null)
   const [busy, setBusy] = useState(false)
   const now = Date.now()
-  const create = () => useProfileEditor.setState({ view: 'templates', profile: null, seed: null, template: null })
-  const blank = () => useProfileEditor.setState({ view: 'editor', profile: null, seed: null, template: null, back: 'templates' })
-  const pick = (template: AgentProfileTemplate) => useProfileEditor.setState({ view: 'editor', profile: null, seed: agentProfileTemplateSeed(template, installed), template, back: 'templates' })
-  const edit = (profile: AgentProfile) => useProfileEditor.setState({ view: 'editor', profile, seed: null, template: null, back: 'list' })
-  const leave = () => useProfileEditor.setState({ view: editing ? back : 'list' })
+  const create = () => useProfileEditor.setState({ templatesOpen: true })
+  const blank = () => useProfileEditor.setState({ view: 'editor', templatesOpen: false, profile: null, seed: null, template: null })
+  const pick = (template: AgentProfileTemplate) => useProfileEditor.setState({ view: 'editor', templatesOpen: false, profile: null, seed: agentProfileTemplateSeed(template, installed), template })
+  const edit = (profile: AgentProfile) => useProfileEditor.setState({ view: 'editor', templatesOpen: false, profile, seed: null, template: null })
+  const leave = () => useProfileEditor.setState({ view: 'list', templatesOpen: false })
   const archive = async (item: AgentProfile) => {
     setBusy(true)
     const saved = await perform((rpc) => rpc.call('agentProfiles.archive', { id: item.id, archived: item.archivedAt === null }))
@@ -72,15 +72,15 @@ function ProfilesView() {
     setBusy(false)
   }
   return <section className="worktrees-page agents-page agent-profiles-page" aria-label={t('AgentProfiles.roles')}>
-    <AgentsPageHeader title={editing ? t(profile ? 'AgentProfiles.configure' : 'AgentProfiles.create') : view === 'templates' ? t('AgentTemplates.title') : t('AgentProfiles.roles')} description={editing ? null : view === 'templates' ? t('AgentTemplates.chooseHint') : t('AgentProfiles.roleDescription')} back={view !== 'list' ? { label: t(editing && back === 'templates' ? 'AgentTemplates.back' : 'AgentProfiles.back'), onClick: leave } : undefined}
+    <AgentsPageHeader title={editing ? t(profile ? 'AgentProfiles.configure' : 'AgentProfiles.create') : t('AgentProfiles.roles')} description={editing ? null : t('AgentProfiles.roleDescription')} back={editing ? { label: t('AgentProfiles.back'), onClick: leave } : undefined}
       actions={view === 'list' && <button type="button" className="button primary" onClick={create}><PlusIcon />{t('AgentProfiles.create')}</button>} />
-    {editing ? <ProfileEditor key={profile?.id ?? JSON.stringify(seed)} profile={profile} seed={seed} template={template} onCancel={leave} onDone={() => { if (!profile) setTab('active'); useProfileEditor.setState({ view: 'list', template: null }) }} /> : view === 'templates' ? <AgentProfileTemplates onPick={pick} onBlank={blank} /> : <section className="agent-profiles-section" aria-label={t('AgentProfiles.roles')}>
+    {editing ? <ProfileEditor key={profile?.id ?? JSON.stringify(seed)} profile={profile} seed={seed} template={template} onCancel={leave} onDone={() => { if (!profile) setTab('active'); useProfileEditor.setState({ view: 'list', templatesOpen: false, template: null }) }} /> : <section className="agent-profiles-section" aria-label={t('AgentProfiles.roles')}>
       <div className="squads-tabs">
         <span id={tabsId} className="visually-hidden">{t('RoutinesSection.show')}</span>
         <Segmented labelId={tabsId} value={tab} options={[{ value: 'active', label: t('Squads.inUse', { value1: all.length - archived.length }) }, { value: 'archived', label: t('Squads.archived', { value1: archived.length }) }]} onChange={setTab} />
       </div>
       {tab === 'archived' && shown.length === 0 && <p className="worktrees-empty muted">{t('AgentProfiles.noArchived')}</p>}
-      {tab === 'active' && shown.length === 0 ? <><p className="agent-templates-empty muted">{t('AgentTemplates.emptyHint')}</p><AgentProfileTemplates onPick={pick} onBlank={blank} /></> : <ul className="squad-cards agent-profile-list">{shown.map((item) => <li key={item.id}>
+      {tab === 'active' && shown.length === 0 ? <p className="agent-templates-empty muted">{t('AgentTemplates.emptyHint')}</p> : <ul className="squad-cards agent-profile-list">{shown.map((item) => <li key={item.id}>
         <article className="squad-card agent-profile-card" data-archived={item.archivedAt !== null || undefined}>
           <button type="button" className="agent-profile-card-main" onClick={() => edit(item)}>
             <span className="squad-card-top"><span className="squad-card-icon"><AgentIcon agent={item.agent} /></span><span className="squad-card-name">{item.name}</span>{item.archivedAt !== null && <span className="squad-tag">{t('ConversationList.archived')}</span>}</span>
@@ -98,6 +98,7 @@ function ProfilesView() {
       {tab === 'active' && <li><button type="button" className="squad-card squad-card-new" onClick={create}><span className="squad-card-plus"><PlusIcon /></span>{t('AgentProfiles.create')}<span className="squad-card-new-hint">{t('AgentProfiles.createHint')}</span></button></li>}
       </ul>}
     </section>}
+    {templatesOpen && <AgentProfileTemplatesDialog onPick={pick} onBlank={blank} onClose={() => useProfileEditor.setState({ templatesOpen: false })} />}
   </section>
 }
 
@@ -134,28 +135,32 @@ function ProfileEditor({ profile, seed, template, onCancel, onDone }: { profile:
   const agents = installed.includes(fields.agent) ? installed : [fields.agent, ...installed]
   return <form className="squad-page-body agent-profile-form" onSubmit={(event) => { event.preventDefault(); void save() }}>
     <fieldset className="squad-fields" disabled={busy}>
+      {!profile && <p className="squad-block-hint muted">{t('AgentProfiles.createWithAgentHint')}<button type="button" className="link-button" onClick={() => openConversationDraft()}>{t('AgentsPageHeader.openNewConversation')}</button></p>}
       {template && <div className="agent-template-origin"><strong>{t('AgentTemplates.fromTemplate', { name: template.name })}</strong><p className="muted">{t('AgentTemplates.editHint')}</p></div>}
       <div className="squad-field"><label htmlFor={`${formId}-name`}>{t('AgentProfiles.name')}</label><input id={`${formId}-name`} className="input" required autoFocus maxLength={60} value={fields.name} onChange={(event) => setFields({ ...fields, name: event.target.value })} /></div>
       <div className="squad-field"><label htmlFor={`${formId}-description`}>{t('AgentProfiles.expertise')}</label><textarea id={`${formId}-description`} className="input" rows={2} maxLength={2000} value={fields.description ?? ''} onChange={(event) => setFields({ ...fields, description: event.target.value })} /></div>
       <div className="squad-field"><label htmlFor={`${formId}-instructions`}>{t('AgentProfiles.instructions')}</label><textarea id={`${formId}-instructions`} className="input" rows={6} maxLength={20000} value={fields.instructions ?? ''} onChange={(event) => setFields({ ...fields, instructions: event.target.value })} /></div>
-      <div className="squad-member-options"><div className="squad-field">{t('AgentProfiles.engine')}<ChatPicker label={t('AgentProfiles.engine')} value={fields.agent} placeholder="" size="field" placement="below" options={agents.map((agent) => ({ value: agent, label: agentLabel(agent), icon: <AgentIcon agent={agent} /> }))} onChange={(value) => { const agent = agents.find((item) => item === value); if (agent) { setFields({ ...fields, agent, model: null, effort: null, modelProvider: null }); setModelPending(Boolean(template)) } }} /></div>
-        <div className="squad-field">{t('AgentModelPicker.model')}<AgentModelPicker catalog={catalog} choice={{ model: fields.model ?? undefined, effort: fields.effort ?? undefined }} size="field" onChange={(choice) => { setModelPending(false); setFields({ ...fields, model: choice.model ?? null, effort: choice.effort ?? null }) }} /></div></div>
+      <div className="agent-profile-options"><div className="squad-field">{t('AgentProfiles.engine')}<ChatPicker label={t('AgentProfiles.engine')} value={fields.agent} placeholder="" size="field" placement="below" options={agents.map((agent) => ({ value: agent, label: agentLabel(agent), icon: <AgentIcon agent={agent} /> }))} onChange={(value) => { const agent = agents.find((item) => item === value); if (agent) { setFields({ ...fields, agent, model: null, effort: null, modelProvider: null }); setModelPending(Boolean(template)) } }} /></div>
+        <div className="squad-field">{t('AgentModelPicker.model')}<AgentModelPicker catalog={catalog} choice={{ model: fields.model ?? undefined, effort: fields.effort ?? undefined }} size="field" onChange={(choice) => { setModelPending(false); setFields({ ...fields, model: choice.model ?? null, effort: choice.effort ?? null }) }} /></div>
+        <div className="squad-field">{t('Squads.capability_1905')}<ChatPicker label={t('Squads.capability_1905')} value={fields.capability ?? 'readOnly'} placeholder="" size="field" placement="below" options={[{ value: 'readOnly', label: t('Squads.readOnlyAnalysis') }, { value: 'develop', label: t('Squads.developmentTesting') }]} onChange={(value) => setFields({ ...fields, capability: value === 'develop' ? 'develop' : 'readOnly' })} /></div>
+      </div>
       {template && <p className="squad-block-hint muted">{t('AgentTemplates.modelHint')}</p>}
       <ProviderPicker agent={fields.agent} value={fields.modelProvider ?? null} size="field" placement="below" onChange={(modelProvider) => { setFields({ ...fields, modelProvider, model: null, effort: null }); setModelPending(Boolean(template)) }} />
-      <ChatPicker label={t('Squads.capability_1905')} value={fields.capability ?? 'readOnly'} placeholder="" size="field" placement="below" options={[{ value: 'readOnly', label: t('Squads.readOnlyAnalysis') }, { value: 'develop', label: t('Squads.developmentTesting') }]} onChange={(value) => setFields({ ...fields, capability: value === 'develop' ? 'develop' : 'readOnly' })} />
       <p className="squad-block-hint muted" role={readOnlyUnsupported ? 'alert' : undefined}>{t(readOnlyUnsupported ? 'AgentTemplates.readOnlyUnsupported' : fields.capability === 'develop' ? 'AgentTemplates.developHint' : 'AgentTemplates.readOnlyHint')}</p>
-      <section className="squad-block"><h3>{t('AgentProfiles.callable')}</h3><p className="muted">{t('AgentProfiles.callableHint')}</p>
-        {Object.values(profiles).filter((item) => item.archivedAt === null && item.id !== profile?.id).map((item) => <label key={item.id} className="agent-profile-check"><input type="checkbox" checked={fields.callableProfiles?.includes(item.id) ?? false} onChange={(event) => setFields({ ...fields, callableProfiles: event.target.checked ? [...(fields.callableProfiles ?? []), item.id] : fields.callableProfiles?.filter((id) => id !== item.id) })} />{item.name}</label>)}
-      </section>
       <p className="squad-block-hint muted">{t('AgentTemplates.toolsHint')}</p>
-      <section className="squad-block"><h3>{t('AgentProfiles.skills')}</h3>
-        <label className="agent-profile-check"><input type="checkbox" checked={fields.skills == null} onChange={(event) => setFields({ ...fields, skills: event.target.checked ? null : [] })} />{t('AgentProfiles.inherit')}</label>
-        {fields.skills != null && repos.flatMap((repo) => repo.skills.filter((skill) => skill.problem === null).map((skill) => <label className="agent-profile-check" key={`${repo.id}/${skill.name}`}><input type="checkbox" checked={fields.skills?.some((ref) => ref.repo === repo.id && ref.skill === skill.name) ?? false} onChange={(event) => setFields({ ...fields, skills: event.target.checked ? [...(fields.skills ?? []), { repo: repo.id, skill: skill.name }] : fields.skills?.filter((ref) => ref.repo !== repo.id || ref.skill !== skill.name) })} />{skill.name}</label>))}
-      </section>
-      <section className="squad-block"><h3>MCP</h3>
-        <label className="agent-profile-check"><input type="checkbox" checked={fields.mcpServers == null} onChange={(event) => setFields({ ...fields, mcpServers: event.target.checked ? null : [] })} />{t('AgentProfiles.inherit')}</label>
-        {fields.mcpServers != null && servers.map((server) => <label className="agent-profile-check" key={server.name}><input type="checkbox" checked={fields.mcpServers?.includes(server.name) ?? false} onChange={(event) => setFields({ ...fields, mcpServers: event.target.checked ? [...(fields.mcpServers ?? []), server.name] : fields.mcpServers?.filter((name) => name !== server.name) })} />{server.name}</label>)}
-      </section>
+      <div className="agent-profile-resources">
+        <section className="squad-block"><h3 className="agent-profile-resource-heading">{t('AgentProfiles.callable')}<span className="agent-profile-info" tabIndex={0} aria-label={t('AgentProfiles.callableHint')} data-tooltip={t('AgentProfiles.callableHint')} data-tooltip-side="top"><InfoIcon /></span></h3>
+          {Object.values(profiles).filter((item) => item.archivedAt === null && item.id !== profile?.id).map((item) => <label key={item.id} className="agent-profile-check"><input type="checkbox" checked={fields.callableProfiles?.includes(item.id) ?? false} onChange={(event) => setFields({ ...fields, callableProfiles: event.target.checked ? [...(fields.callableProfiles ?? []), item.id] : fields.callableProfiles?.filter((id) => id !== item.id) })} />{item.name}</label>)}
+        </section>
+        <section className="squad-block"><h3>{t('AgentProfiles.skills')}</h3>
+          <label className="agent-profile-check"><input type="checkbox" checked={fields.skills == null} onChange={(event) => setFields({ ...fields, skills: event.target.checked ? null : [] })} />{t('AgentProfiles.inherit')}</label>
+          {fields.skills != null && repos.flatMap((repo) => repo.skills.filter((skill) => skill.problem === null).map((skill) => <label className="agent-profile-check" key={`${repo.id}/${skill.name}`}><input type="checkbox" checked={fields.skills?.some((ref) => ref.repo === repo.id && ref.skill === skill.name) ?? false} onChange={(event) => setFields({ ...fields, skills: event.target.checked ? [...(fields.skills ?? []), { repo: repo.id, skill: skill.name }] : fields.skills?.filter((ref) => ref.repo !== repo.id || ref.skill !== skill.name) })} />{skill.name}</label>))}
+        </section>
+        <section className="squad-block"><h3>MCP</h3>
+          <label className="agent-profile-check"><input type="checkbox" checked={fields.mcpServers == null} onChange={(event) => setFields({ ...fields, mcpServers: event.target.checked ? null : [] })} />{t('AgentProfiles.inherit')}</label>
+          {fields.mcpServers != null && servers.map((server) => <label className="agent-profile-check" key={server.name}><input type="checkbox" checked={fields.mcpServers?.includes(server.name) ?? false} onChange={(event) => setFields({ ...fields, mcpServers: event.target.checked ? [...(fields.mcpServers ?? []), server.name] : fields.mcpServers?.filter((name) => name !== server.name) })} />{server.name}</label>)}
+        </section>
+      </div>
     </fieldset>
     {error && <p className="modal-error" role="alert">{error}</p>}
     <footer className="squad-editor-footer"><button type="button" className="button ghost" disabled={busy} onClick={onCancel}>{t('ChatCommandSettings.cancel')}</button><button type="submit" className="button primary" disabled={busy || modelPending || readOnlyUnsupported}>{t('FileEditor.save')}</button></footer>

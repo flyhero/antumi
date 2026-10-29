@@ -2,7 +2,7 @@ import { t, tr } from '../i18n'
 import { useId, useState, type ReactNode } from 'react'
 import { AgentKind, SquadFields, type Squad, type SquadMember } from '@antumi/protocol'
 import { useAgentCatalog } from '../agent-models'
-import { perform, selectSquad, useCore, useSquadsSupported } from '../core-store'
+import { openConversationDraft, perform, selectSquad, useCore, useSquadsSupported } from '../core-store'
 import { useInstalledAgents } from '../installed-agents'
 import { agentLabel, reasonText } from '../labels'
 import { saveSquad } from '../squads'
@@ -280,6 +280,7 @@ function SquadEditor({ squad, onDone }: { squad: Squad | null; onDone: (saved: b
   return (
     <form className="squad-page-body squad-editor-form" onSubmit={(event) => { event.preventDefault(); void save() }}>
       <fieldset className="squad-fields" disabled={busy}>
+        {!squad && <p className="squad-block-hint muted">{t('Squads.createWithAgentHint')}<button type="button" className="link-button" onClick={() => openConversationDraft()}>{t('AgentsPageHeader.openNewConversation')}</button></p>}
         <label className="squad-field">{tr('Squads.squadName', { value1: <input className="input" autoFocus={!squad} value={name} maxLength={200} required placeholder={t('Squads.forExampleWebsiteTeam')} onChange={(event) => setName(event.target.value)} /> })}</label>
         <label className="squad-field">{tr('Squads.shortDescription', { value1: <input className="input" value={description} maxLength={2000} placeholder={t('Squads.whatThisSquadDoesShownInTheSquad')} onChange={(event) => setDescription(event.target.value)} /> })}</label>
       </fieldset>

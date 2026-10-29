@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import {
-  CORE_FEATURES, MANAGEMENT_READ_TOOLS, MANAGEMENT_TOOLS, SquadRun, Task, createRpcClient, rpcSchemas,
+  CORE_FEATURES, MANAGEMENT_EDIT_TOOLS, MANAGEMENT_READ_TOOLS, MANAGEMENT_TOOLS, SquadRun, Task, createRpcClient, rpcSchemas,
   type Conversation, type RpcConnection, type SkillRepo
 } from '@antumi/protocol'
 import { antumiReadTools } from './agent-command'
@@ -98,6 +98,10 @@ describe('Antumi management MCP', () => {
         }
         case 'squads.list': return squads.list()
         case 'squads.create': return squads.create(rpcSchemas['squads.create'].params.parse(raw))
+        case 'squads.update': {
+          const { id, ...fields } = rpcSchemas['squads.update'].params.parse(raw)
+          return squads.update(id, fields)
+        }
         case 'chatCommands.list': return commands.list()
         case 'chatCommands.save': return commands.save(rpcSchemas['chatCommands.save'].params.parse(raw))
         case 'schedules.list': return schedules.list()
@@ -105,8 +109,16 @@ describe('Antumi management MCP', () => {
           const { target, notBefore } = rpcSchemas['schedules.create'].params.parse(raw)
           return schedules.create(target, notBefore)
         }
+        case 'schedules.update': {
+          const { id, notBefore, text } = rpcSchemas['schedules.update'].params.parse(raw)
+          return schedules.update(id, { notBefore, text })
+        }
         case 'routines.list': return routines.list()
         case 'routines.create': return routines.create(rpcSchemas['routines.create'].params.parse(raw))
+        case 'routines.update': {
+          const { id, ...fields } = rpcSchemas['routines.update'].params.parse(raw)
+          return routines.update(id, fields)
+        }
         case 'skills.list': return skills.list()
         case 'skills.search': return [{ url: 'https://example.com/owner/skills', source: 'owner/skills', skills: ['notes'], installs: 12 }]
         case 'skills.install': return skills.install(rpcSchemas['skills.install'].params.parse(raw).url)
@@ -149,7 +161,9 @@ describe('Antumi management MCP', () => {
       const readOnly = MANAGEMENT_READ_TOOLS.includes(entry.spec.name)
       expect(antumiReadTools(true).includes(entry.spec.name)).toBe(readOnly)
       expect(entry.spec.annotations.readOnlyHint).toBe(readOnly)
-      expect(entry.spec.annotations.idempotentHint).toBe(readOnly || entry.spec.name === MANAGEMENT_TOOLS.skillSetActivation)
+      const edit = MANAGEMENT_EDIT_TOOLS.includes(entry.spec.name)
+      expect(entry.spec.annotations.idempotentHint).toBe(readOnly || edit || entry.spec.name === MANAGEMENT_TOOLS.skillSetActivation)
+      expect(entry.spec.annotations.destructiveHint).toBe(edit)
     }
     const called = await handler(JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: MANAGEMENT_TOOLS.profileCreate, arguments: { name: 'Reviewer', agent: 'claude' } } }))
     expect(called?.result).toMatchObject({ isError: false })
@@ -172,6 +186,45 @@ describe('Antumi management MCP', () => {
     expect(output(await use(MANAGEMENT_TOOLS.commandCreate, command))).toContain('已经有 /review')
     expect(commands.list()).toEqual([saved])
     expect((await use(MANAGEMENT_TOOLS.commandCreate, { ...command, projectPath: root })).isError).toBe(false)
+  })
+
+  it('edits profiles, teams and commands field by field, keeping what is left out', async () => {
+    expect((await use(MANAGEMENT_TOOLS.profileCreate, { name: 'Builder', agent: 'codex', capability: 'develop', model: 'gpt-5' })).isError).toBe(false)
+    const profile = profiles.list()[0]!
+    const edited = await use(MANAGEMENT_TOOLS.profileUpdate, { id: profile.id, description: 'Builds features' })
+    expect(edited.isError).toBe(false)
+    expect(profiles.list()).toMatchObject([{ id: profile.id, name: 'Builder', agent: 'codex', capability: 'develop', model: 'gpt-5', description: 'Builds features' }])
+    expect((await use(MANAGEMENT_TOOLS.profileCreate, { name: 'Reviewer', agent: 'claude' })).isError).toBe(false)
+    expect(output(await use(MANAGEMENT_TOOLS.profileUpdate, { id: profile.id, name: 'reviewer' }))).toContain('已有同名智能体')
+    expect(output(await use(MANAGEMENT_TOOLS.profileUpdate, { id: id(9), description: 'x' }))).toContain('找不到')
+    expect(profiles.list()).toHaveLength(2)
+
+    expect((await use(MANAGEMENT_TOOLS.squadCreate, { ...team, description: 'Ships work' })).isError).toBe(false)
+    const squad = squads.list()[0]!
+    expect((await use(MANAGEMENT_TOOLS.squadUpdate, { id: squad.id, name: 'Delivery team' })).isError).toBe(false)
+    expect(squads.list()[0]).toMatchObject({ name: 'Delivery team', description: 'Ships work', leaderId: team.leaderId, members: [{ name: 'Lead' }, { name: 'Developer' }] })
+    expect((await use(MANAGEMENT_TOOLS.squadUpdate, { id: squad.id, leaderId: id(2) })).isError).toBe(true)
+    expect(squads.list()[0]?.leaderId).toBe(team.leaderId)
+
+    expect((await use(MANAGEMENT_TOOLS.commandCreate, command)).isError).toBe(false)
+    const saved = commands.list()[0]!
+    expect((await use(MANAGEMENT_TOOLS.commandUpdate, { id: saved.id, prompt: 'Review carefully: $ARGUMENTS' })).isError).toBe(false)
+    expect(commands.list()).toMatchObject([{ id: saved.id, name: 'review', description: command.description, prompt: 'Review carefully: $ARGUMENTS', projectPath: null }])
+    expect((await use(MANAGEMENT_TOOLS.commandUpdate, { id: saved.id, name: '/bad' })).isError).toBe(true)
+    expect((await use(MANAGEMENT_TOOLS.commandUpdate, { prompt: 'No id' })).isError).toBe(true)
+  })
+
+  it('reschedules a waiting run and pauses a routine through the existing partial updates', async () => {
+    const notBefore = Date.now() + 86_400_000
+    expect((await use(MANAGEMENT_TOOLS.scheduleCreate, { target: { kind: 'conversation', conversationId, text: 'Later' }, notBefore })).isError).toBe(false)
+    const run = schedules.list()[0]!
+    const later = notBefore + 3_600_000
+    expect((await use(MANAGEMENT_TOOLS.scheduleUpdate, { id: run.id, notBefore: later, text: 'Even later' })).isError).toBe(false)
+    expect(schedules.list()[0]).toMatchObject({ id: run.id, notBefore: later, target: { text: 'Even later' } })
+    expect((await use(MANAGEMENT_TOOLS.routineCreate, routine)).isError).toBe(false)
+    const created = routines.list()[0]!
+    expect((await use(MANAGEMENT_TOOLS.routineUpdate, { id: created.id, enabled: false })).isError).toBe(false)
+    expect(routines.list()[0]).toMatchObject({ id: created.id, title: routine.title, schedule: routine.schedule, enabled: false, nextRunAt: null })
   })
 
   it('returns scheduled status and routine next-run time from the existing services', async () => {
@@ -291,7 +344,7 @@ describe('Antumi management MCP', () => {
     rpc = { ...rpc, features: ['chat-commands', 'skills-library'] }
     const supported = await managementToolsOverCore(withCore, conversationId)
     expect(supported.map((entry) => entry.spec.name)).toEqual([
-      MANAGEMENT_TOOLS.skillList, MANAGEMENT_TOOLS.skillInstall, MANAGEMENT_TOOLS.commandList, MANAGEMENT_TOOLS.commandCreate
+      MANAGEMENT_TOOLS.skillList, MANAGEMENT_TOOLS.skillInstall, MANAGEMENT_TOOLS.commandList, MANAGEMENT_TOOLS.commandCreate, MANAGEMENT_TOOLS.commandUpdate
     ])
     expect((await use(MANAGEMENT_TOOLS.profileCreate, { name: 'Forbidden', agent: 'claude' })).isError).toBe(true)
     expect(calls.some((call) => call.method === 'agentProfiles.save')).toBe(false)

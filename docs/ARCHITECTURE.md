@@ -468,19 +468,19 @@ Agent 可用之后、任务来源之前是「接着聊」一步：从零用一�
 
 | 工具 | 对应 RPC |
 | --- | --- |
-| `antumi_agent_profile_list` / `antumi_agent_profile_create` | `agentProfiles.list` / `agentProfiles.save` |
-| `antumi_squad_list` / `antumi_squad_create` | `squads.list` / `squads.create` |
-| `antumi_schedule_list` / `antumi_schedule_create` | `schedules.list` / `schedules.create` |
-| `antumi_routine_list` / `antumi_routine_create` | `routines.list` / `routines.create` |
+| `antumi_agent_profile_list` / `antumi_agent_profile_create` / `antumi_agent_profile_update` | `agentProfiles.list` / `agentProfiles.save` |
+| `antumi_squad_list` / `antumi_squad_create` / `antumi_squad_update` | `squads.list` / `squads.create` / `squads.update` |
+| `antumi_schedule_list` / `antumi_schedule_create` / `antumi_schedule_update` | `schedules.list` / `schedules.create` / `schedules.update` |
+| `antumi_routine_list` / `antumi_routine_create` / `antumi_routine_update` | `routines.list` / `routines.create` / `routines.update` |
 | `antumi_skill_list` / `antumi_skill_search` | `skills.list` / `skills.search` |
 | `antumi_skill_install` / `antumi_skill_set_activation` | `skills.install` / `skills.setActivation` |
-| `antumi_chat_command_list` / `antumi_chat_command_create` | `chatCommands.list` / `chatCommands.save` |
+| `antumi_chat_command_list` / `antumi_chat_command_create` / `antumi_chat_command_update` | `chatCommands.list` / `chatCommands.save` |
 
-智能体和聊天命令的创建参数不接受更新用的 `id`，其余沿用对应 RPC 的字段和默认值。智能体配置查询返回全部保存的配置（含归档状态），不改变 `antumi_agent_list` 按当前会话权限列出可委派智能体的行为；创建配置不会启动会话或团队任务。一次性预约的 `notBefore` 是 Unix 毫秒时间戳或 null，支持已有任务和会话目标；周期例程按 core 所在机器的本地时间执行，每次新开会话。安装技能仓库后默认不启用，通过独立的启用工具显式选择技能和适用 Agent；启用策略是完整替换，冲突和生效时机与设置页一致。不开放更新、归档、删除、取消或立即执行等其他管理操作。
+智能体和聊天命令的创建参数不接受更新用的 `id`，其余沿用对应 RPC 的字段和默认值；修改走单独的 `*_update` 工具，`id` 必填、只传要改的字段。智能体、团队和聊天命令的保存 RPC 是整体替换，修改工具先从对应的 list 读出当前值，把给出的字段盖上去再保存，没给的字段保持原值而不是回到新建时的默认值；数组和 `members` 仍整体替换。预约和例程的 update RPC 本身就是部分修改，直接转发：预约只能改还在等待的，任务预约不能改发送内容。智能体配置查询返回全部保存的配置（含归档状态），不改变 `antumi_agent_list` 按当前会话权限列出可委派智能体的行为；创建配置不会启动会话或团队任务。一次性预约的 `notBefore` 是 Unix 毫秒时间戳或 null，支持已有任务和会话目标；周期例程按 core 所在机器的本地时间执行，每次新开会话。安装技能仓库后默认不启用，通过独立的启用工具显式选择技能和适用 Agent；启用策略是完整替换，冲突和生效时机与设置页一致。不开放归档、删除、取消或立即执行等其他管理操作。
 
 只有未归档的普通主会话及单 Agent 任务会话可用；规划、只读模式和只读工作区仅提供查询工具。团队成员与队长（包括还未产生团队运行记录的规划阶段）、委派子会话、群聊成员、例程和小助手均不提供这些工具。服务器启动时根据会话范围、模式和 core 的 feature 列表筛选工具；每次调用在同一条 RPC 连接里重新检查范围和模式，再调用业务 RPC。切到规划或只读后，旧工具调用也会被拒绝；读取会话或检查权限失败时不继续操作。未开启的工具在下次启动 MCP 时重新确定。
 
-新增查询工具列入 `antumiReadTools`；创建、安装和启用不列入免审批清单，沿用各 Agent 既有审批行为。MCP annotations 分别标明只读、重复调用和外部访问：创建与安装不标幂等，技能启用标幂等，市场搜索与仓库安装标记访问外部资源。参数错误和 core 的业务拒绝以工具错误返回，不自动重试写操作。历史工具的读取开关独立，管理工具不额外提供任务或会话历史查询；预约目标须来自已知 ID 或用户允许读取的历史。
+新增查询工具列入 `antumiReadTools`；创建、修改、安装和启用不列入免审批清单，沿用各 Agent 既有审批行为。MCP annotations 分别标明只读、重复调用和外部访问：创建与安装不标幂等，技能启用和各修改工具标幂等，修改工具另标 `destructiveHint`（覆盖已有值），市场搜索与仓库安装标记访问外部资源。参数错误和 core 的业务拒绝以工具错误返回，不自动重试写操作。历史工具的读取开关独立，管理工具不额外提供任务或会话历史查询；预约目标须来自已知 ID 或用户允许读取的历史。
 
 ### 用户的 MCP 服务器
 

@@ -1,5 +1,5 @@
 import path from 'node:path'
-import type { AgentKind, GitTarget, GitAction, GitResult, GitStatus, GitHistory, GitDetail, GitComparison, GitOutgoing, FileDiff } from '@antumi/protocol'
+import type { AgentKind, GitTarget, GitAction, GitResult, GitStatus, GitHistory, GitDetail, GitComparison, GitOutgoing, GitProject, FileDiff } from '@antumi/protocol'
 import { checkGitOperation } from '@antumi/protocol'
 import type { TaskService } from './task-service'
 import type { ConversationService } from './conversation-service'
@@ -8,9 +8,10 @@ import { projectHead } from './workspace'
 import { commitAll } from './project-commit'
 import { Rejection } from './rejection'
 import { checkoutKey, commitRef, committedDiff, conflictFiles, filesBetween, gitOperation, logCommits, repositoryKey, writeGit } from './git-repository'
-import { abortOperation, continueOperation, parseTrack, rebasing, updateBranch } from './git-update'
+import { abortOperation, clearDirectRebase, continueOperation, parseTrack, rebaseBranch, rebasing, updateBranch } from './git-update'
 import { outgoingCommits, pushBranch, trackBranch } from './git-push'
 import type { GitFavoriteStore } from './git-favorite-store'
+import { gitWorkspaces } from './git-workspaces'
 
 // A remote the repository has, never one that reads as an option.
 const remoteIn = (status: GitStatus) => (remote: string) => {
@@ -27,6 +28,10 @@ export class GitService {
   constructor(private readonly tasks: Pick<TaskService, 'get' | 'list' | 'isLaunching'>, private readonly conversations: Pick<ConversationService, 'get' | 'listAll' | 'recordGitChange' | 'isGitPending'>, private readonly favorites: GitFavoriteStore, private readonly changed: () => void = () => {}) {}
 
   private directory(target: GitTarget): string {
+    if (target.kind === 'project') {
+      if (!path.isAbsolute(target.project)) throw new Rejection('invalid-params', '请选择项目的绝对路径。')
+      return path.normalize(target.project)
+    }
     if (target.kind === 'conversation') {
       const conversation = this.conversations.get(target.id)
       if (conversation.taskId) throw new Rejection('task-conversation', '请从任务的分支页管理 worktree。')
@@ -41,10 +46,40 @@ export class GitService {
 
   // Who writes a message for a target's changes, and where they are: its own agent, in its folder.
   writer(target: GitTarget): { agent: AgentKind; dir: string } {
+    if (target.kind === 'project') throw new Rejection('missing-agent', '项目提交需要填写提交信息。')
     const dir = this.directory(target)
     const agent = target.kind === 'conversation' ? this.conversations.get(target.id).agent : this.tasks.get(target.id).agent
     if (!agent) throw new Rejection('missing-agent')
     return { agent, dir }
+  }
+
+  private async taskAt(dir: string) {
+    const checkout = await checkoutKey(dir)
+    if (!checkout) return undefined
+    for (const task of this.tasks.list()) {
+      for (const repo of task.repos) {
+        if (repo.worktreePath && await checkoutKey(repo.worktreePath) === checkout) return { task, repo }
+      }
+    }
+    return undefined
+  }
+
+  async openProject(project: string): Promise<GitProject> {
+    const directory = await checkoutKey(this.directory({ kind: 'project', project }))
+    if (!directory) throw new Rejection('repo-not-git', '这个目录不是 Git 工作区。')
+    const workspaces = await gitWorkspaces(directory)
+    await Promise.all(workspaces.map(async (workspace) => {
+      workspace.taskId = (await this.taskAt(workspace.path))?.task.id
+      const checkout = await checkoutKey(workspace.path)
+      if (!checkout) return
+      for (const conversation of this.conversations.listAll()) {
+        if (conversation.taskId) continue
+        for (const project of conversation.projectPaths) {
+          if (await checkoutKey(project) === checkout) { workspace.conversationIds.push(conversation.id); break }
+        }
+      }
+    }))
+    return { project: workspaces[0]?.path ?? directory, directory, workspaces }
   }
 
   async guardAgent(dirs: readonly string[]): Promise<void> {
@@ -109,10 +144,12 @@ export class GitService {
     const empty: GitStatus = { git: false, directory: dir, branch: null, head: null, upstream: null, ahead: 0, behind: 0, changes: 0, branches: [], remotes: [], blocker: null, operation: null, conflicts: [] }
     if (!key) return empty
     const favorites = this.favorites.list(key)
-    const [head, sha, listing, worktrees, remotes, protectedRefs, busy, operation, conflicts] = await Promise.all([
+    const [head, sha, listing, worktrees, remotes, protectedRefs, busy, operation, conflicts, tags, reflog, binding] = await Promise.all([
       projectHead(dir), gitOrNull(dir, ['rev-parse', 'HEAD']),
       git(dir, ['for-each-ref', '--sort=-committerdate', '--format=%(refname)%00%(objectname)%00%(upstream)%00%(upstream:track,nobracket)', 'refs/heads', 'refs/remotes']),
-      git(dir, ['worktree', 'list', '--porcelain', '-z']), git(dir, ['remote']), this.protectedRefs(key), this.busy(dir), gitOperation(dir), conflictFiles(dir)
+      git(dir, ['worktree', 'list', '--porcelain', '-z']), git(dir, ['remote']), this.protectedRefs(key), this.busy(dir), gitOperation(dir), conflictFiles(dir),
+      git(dir, ['for-each-ref', '--format=%(refname)%00%(objectname)%00%(*objectname)%00%(objecttype)%00%(*objecttype)', 'refs/tags']),
+      gitOrNull(dir, ['reflog', 'show', '--format=%gs', '--max-count=500', 'HEAD']), this.taskAt(dir)
     ])
     const holders = new Map<string, string>()
     let folder = ''
@@ -120,11 +157,22 @@ export class GitService {
       if (field.startsWith('worktree ')) folder = field.slice(9)
       if (field.startsWith('branch ')) holders.set(field.slice(7), folder)
     }
+    const directory = await checkoutKey(dir) ?? dir
+    const localRefs = new Set(listing.split('\n').map((line) => line.split('\0')[0]).filter((ref) => ref?.startsWith('refs/heads/')))
     return {
-      ...empty, git: true, directory: await gitOrNull(dir, ['rev-parse', '--show-toplevel']) ?? dir, branch: head.detached ? null : head.branch, head: sha,
+      ...empty, git: true, directory, branch: head.detached ? null : head.branch, head: sha,
       upstream: head.upstream ?? null, ahead: head.ahead ?? 0, behind: head.behind ?? 0, changes: head.changes ?? 0,
       remotes: remotes.trim().split('\n').filter(Boolean), operation, conflicts, rebase: operation === 'other' && await rebasing(dir),
       blocker: busy ? 'Agent 正在处理、等待批准或启动，请等这一轮结束。' : this.locked.has(key) ? 'Git 操作进行中。' : null,
+      taskId: binding?.task.id, readOnly: directory.split(/[\\/]/).includes('.planning'),
+      tags: tags.split('\n').filter(Boolean).flatMap((line) => {
+        const [ref = '', sha = '', peeled = '', type = '', peeledType = ''] = line.split('\0')
+        return type === 'commit' || peeledType === 'commit' ? [{ ref, name: ref.slice('refs/tags/'.length), sha: peeled || sha }] : []
+      }),
+      recentBranches: [...new Set((reflog ?? '').split('\n').flatMap((line) => {
+        const match = /^checkout: moving from (.+) to (.+)$/.exec(line)
+        return match ? [match[2] ?? '', match[1] ?? ''] : []
+      }).filter((name) => name !== head.branch && localRefs.has(`refs/heads/${name}`)).map((name) => `refs/heads/${name}`))].slice(0, 5),
       branches: listing.split('\n').filter(Boolean).flatMap((line) => {
         const [ref = '', sha = '', upstream = '', track = ''] = line.split('\0')
         const remote = /^refs\/remotes\/([^/]+)\/(.+)$/.exec(ref)
@@ -223,10 +271,13 @@ export class GitService {
       const status = await this.status(target)
       const blocker = checkGitOperation(target.kind, action, await this.busy(dir), status)
       if (blocker) throw new Rejection(blocker)
-      if (target.kind === 'task' && status.branch !== this.tasks.get(target.id).repos.find((repo) => repo.path === target.project)?.branch) throw new Rejection('git-task-branch', 'worktree 的实际分支与任务绑定不符，请先在终端修复。')
+      const binding = await this.taskAt(dir)
+      const expectedBranch = target.kind === 'task' ? this.tasks.get(target.id).repos.find((repo) => repo.path === target.project)?.branch : binding?.repo.branch
+      if (expectedBranch && status.branch !== expectedBranch && !(status.rebase && ['resolve', 'continue', 'abort'].includes(action.kind))) throw new Rejection('git-task-branch', 'worktree 的实际分支与任务绑定不符，请先在终端修复。')
+      if (!status.operation) await clearDirectRebase(dir)
       const result = await this.perform(dir, key, status, action)
       const after = await projectHead(dir)
-      const moved = ['switch', 'detach', 'merge', 'pull', 'continue', 'abort', 'resolve'].includes(action.kind) || (action.kind === 'update' && action.ref === `refs/heads/${status.branch}`) || (action.kind === 'create' && action.checkout) || (action.kind === 'rename' && action.ref === `refs/heads/${status.branch}`)
+      const moved = ['switch', 'detach', 'merge', 'rebase', 'pull', 'continue', 'abort', 'resolve'].includes(action.kind) || (action.kind === 'update' && action.ref === `refs/heads/${status.branch}`) || (action.kind === 'create' && action.checkout) || (action.kind === 'rename' && action.ref === `refs/heads/${status.branch}`)
       if (moved) {
         for (const conversation of this.conversations.listAll()) {
           for (const project of conversation.projectPaths) {
@@ -335,6 +386,10 @@ export class GitService {
           throw error
         }
         break
+      }
+      case 'rebase': {
+        requireBranch()
+        return rebaseBranch(dir, await commitRef(dir, action.ref))
       }
       case 'resolve': {
         if (!status.conflicts.includes(action.file)) throw new Rejection('file-not-changed', '文件不在当前冲突列表中。')

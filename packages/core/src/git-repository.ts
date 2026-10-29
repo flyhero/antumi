@@ -32,7 +32,7 @@ export async function writeGit(dir: string, args: string[]): Promise<string> {
 }
 
 export async function commitRef(dir: string, ref: string): Promise<string> {
-  if (!(ref === 'HEAD' || /^refs\/(heads|remotes)\/[^\s]+$/.test(ref) || /^[0-9a-f]{40,64}$/.test(ref))) {
+  if (!(ref === 'HEAD' || /^refs\/(heads|remotes|tags)\/[^\s]+$/.test(ref) || /^[0-9a-f]{40,64}$/.test(ref))) {
     throw new Rejection('branch-not-found', '无效的 Git 引用。')
   }
   const sha = await gitOrNull(dir, ['rev-parse', '--verify', `${ref}^{commit}`])

@@ -157,6 +157,9 @@ export type CoreState = {
   inboxOpen: boolean
   // The inbox tab last shown, as an inboxKey; the tabs appear once two sources are signed in.
   inboxTab: string | null
+  // Project Git keeps its selected checkout while another page is open.
+  gitOpen: boolean
+  gitLocation: { project: string; workspace: string } | null
   // So does the page of worktrees, over whatever else was shown there.
   worktreesOpen: boolean
   // And the page of what runs later: its routines, or its reservations (预约).
@@ -274,6 +277,8 @@ export const useCore = create<CoreState>()(() => ({
   settingsSection: null,
   inboxOpen: false,
   inboxTab: null,
+  gitOpen: false,
+  gitLocation: null,
   worktreesOpen: false,
   routinesOpen: false,
   routinesTab: 'routines',
@@ -335,6 +340,7 @@ export function selectTask(id: string | null): void {
       inspectorFile: s.section === 'tasks' && s.selectedId === id ? s.inspectorFile : null,
       section: 'tasks',
       inboxOpen: false,
+      gitOpen: false,
       worktreesOpen: false,
       routinesOpen: false,
       overviewOpen: false,
@@ -612,7 +618,7 @@ export function toggleFilesPanel(): void {
 // What the user is looking at, which the files panel follows: a key that changes when they look
 // elsewhere, and the folders it has, null where it has none (a page, or nothing selected).
 export function filesContext(s: CoreState): { key: string; scope: FileScope | null } {
-  if (s.settingsOpen || s.overviewOpen || s.inboxOpen || s.worktreesOpen || s.routinesOpen) return { key: 'page', scope: null }
+  if (s.settingsOpen || s.overviewOpen || s.inboxOpen || s.gitOpen || s.worktreesOpen || s.routinesOpen) return { key: 'page', scope: null }
   if (s.section === 'discussions') {
     const discussion = s.selectedDiscussionId ? s.discussions[s.selectedDiscussionId] : undefined
     return { key: `discussion:${s.selectedDiscussionId ?? ''}`, scope: discussion?.projectPaths.length ? { conversationId: null, roots: discussion.projectPaths } : null }
@@ -671,7 +677,7 @@ export function selectConversation(id: string | null): void {
   setSplitPanes(panesAfterSelect(savedPanes(), current, id))
   useCore.setState((s) => {
     const { [id ?? '']: _seen, ...unseen } = s.unseen
-    return { selectedConversationId: id, section: 'conversations', inspectorFile: s.section === 'conversations' && s.selectedConversationId === id ? s.inspectorFile : null, settingsOpen: false, worktreesOpen: false, routinesOpen: false, overviewOpen: false, inboxOpen: false, conversationDraft: false, unseen }
+    return { selectedConversationId: id, section: 'conversations', inspectorFile: s.section === 'conversations' && s.selectedConversationId === id ? s.inspectorFile : null, settingsOpen: false, gitOpen: false, worktreesOpen: false, routinesOpen: false, overviewOpen: false, inboxOpen: false, conversationDraft: false, unseen }
   })
   if (id) markRoutineRunSeen(id)
 }
@@ -767,7 +773,7 @@ export type DraftIssue = { provider: string; instance: string; key: string; titl
 // `projects`: what the page starts with, as from a project's group; without, it starts with none.
 // `issue`: the inbox issue the conversation is opened to look into.
 export function openConversationDraft(projects?: readonly string[], issue: DraftIssue | null = null, from: CoreState['conversationDraftFrom'] = null): void {
-  useCore.setState({ selectedConversationId: null, section: 'conversations', settingsOpen: false, worktreesOpen: false, routinesOpen: false, overviewOpen: false, inboxOpen: false, conversationDraft: true, conversationDraftProjects: projects ? { paths: [...projects] } : null, conversationDraftIssue: issue, conversationDraftFrom: from, draftProfileId: null })
+  useCore.setState({ selectedConversationId: null, section: 'conversations', settingsOpen: false, gitOpen: false, worktreesOpen: false, routinesOpen: false, overviewOpen: false, inboxOpen: false, conversationDraft: true, conversationDraftProjects: projects ? { paths: [...projects] } : null, conversationDraftIssue: issue, conversationDraftFrom: from, draftProfileId: null })
 }
 
 export function useSourceInvestigateSupported(): boolean {
@@ -778,7 +784,7 @@ export function closeConversationDraft(): void {
   openOverview()
 }
 
-const PAGES_CLOSED = { settingsOpen: false, worktreesOpen: false, routinesOpen: false, overviewOpen: false, inboxOpen: false } as const
+const PAGES_CLOSED = { settingsOpen: false, gitOpen: false, worktreesOpen: false, routinesOpen: false, overviewOpen: false, inboxOpen: false } as const
 
 export function selectSquad(id: string | null, draft = false): void {
   useCore.setState({ section: 'squads', agentProfilesTab: 'squads', selectedSquadId: id, squadDraft: draft, ...PAGES_CLOSED })
@@ -866,6 +872,7 @@ export function setInboxOpen(open: boolean): void {
         selectedConversationId: null,
         conversationDraft: false,
         settingsOpen: false,
+        gitOpen: false,
         worktreesOpen: false,
         routinesOpen: false,
         overviewOpen: false
@@ -905,11 +912,19 @@ export function setNewTaskOpen(open: boolean, draft: NewTaskDraft | null = null)
 }
 
 export function setSettingsOpen(open: boolean, section: string | null = null): void {
-  useCore.setState({ settingsOpen: open, settingsSection: section, ...(open ? { overviewOpen: false } : {}) })
+  useCore.setState({ settingsOpen: open, settingsSection: section, ...(open ? { overviewOpen: false, gitOpen: false } : {}) })
+}
+
+export function openGit(workspace?: string): void {
+  useCore.setState({ ...PAGES_CLOSED, gitOpen: true, ...(workspace ? { gitLocation: { project: workspace, workspace } } : {}) })
+}
+
+export function setGitLocation(project: string, workspace: string): void {
+  useCore.setState({ gitLocation: { project, workspace } })
 }
 
 export function setWorktreesOpen(open: boolean): void {
-  useCore.setState(open ? { worktreesOpen: true, routinesOpen: false, overviewOpen: false, inboxOpen: false, settingsOpen: false } : OVERVIEW)
+  useCore.setState(open ? { gitOpen: false, worktreesOpen: true, routinesOpen: false, overviewOpen: false, inboxOpen: false, settingsOpen: false } : OVERVIEW)
 }
 
 // The reservations are a tab of the routines' page: what runs once, beside what runs again.
@@ -924,7 +939,7 @@ export function openUsageCard(agent: AgentKind | null): void {
 
 export function setRoutinesOpen(open: boolean, tab?: RoutinesTab): void {
   if (!open) return openOverview()
-  useCore.setState({ routinesOpen: true, ...(tab ? { routinesTab: tab } : {}), worktreesOpen: false, overviewOpen: false, inboxOpen: false, settingsOpen: false })
+  useCore.setState({ routinesOpen: true, ...(tab ? { routinesTab: tab } : {}), gitOpen: false, worktreesOpen: false, overviewOpen: false, inboxOpen: false, settingsOpen: false })
 }
 
 export function useSchedulesOpen(): boolean {
@@ -935,7 +950,7 @@ export function useSchedulesOpen(): boolean {
 // but a task, which goes back to the task board.
 const OVERVIEW = {
   overviewOpen: true, guideOpen: false, section: 'tasks', selectedId: null, selectedConversationId: null, conversationDraft: false, discussionDraft: false,
-  squadDraft: false, inboxOpen: false, worktreesOpen: false, routinesOpen: false, settingsOpen: false
+  squadDraft: false, inboxOpen: false, gitOpen: false, worktreesOpen: false, routinesOpen: false, settingsOpen: false
 } as const
 
 export function openOverview(): void {
@@ -1151,7 +1166,7 @@ export function useFileMentionsSupported(): boolean {
 
 // The task board stands where a task would: the tasks section with none open and no page over it.
 export function useTaskBoardOpen(): boolean {
-  return useCore((s) => s.section === 'tasks' && s.selectedId === null && !s.inboxOpen && !s.worktreesOpen
+  return useCore((s) => s.section === 'tasks' && s.selectedId === null && !s.inboxOpen && !s.gitOpen && !s.worktreesOpen
     && !s.routinesOpen && !s.overviewOpen && !s.settingsOpen)
 }
 

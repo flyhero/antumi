@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { Task, createRpcClient, type Conversation, type RpcConnection } from '@antumi/protocol'
 import { actionableItems } from './attention'
 import {
-  openAttentionItem, openConversationDraft, selectConversation, selectTask, openOverview, setOverviewFilter, setOverviewScroll, setOverviewView, setRoutinesOpen,
+  openAttentionItem, openConversationDraft, selectConversation, selectTask, openOverview, openGit, setGitLocation, setOverviewFilter, setOverviewScroll, setOverviewView, setRoutinesOpen,
   refreshAttentionSummaries, setInboxOpen, setTaskStarting, openChatWhileStarting, setSchedulesOpen, setSettingsOpen, setWorktreesOpen, useCore,
   clearInspectorFile, closeConversationDraft, closeDiscussionDraft, installAgentCli, openDiscussionDraft, showConversationChanges, showInspectorFile, showTaskChanges
 } from './core-store'
@@ -16,6 +16,25 @@ const chat: Conversation = {
 }
 
 beforeEach(() => useCore.setState(useCore.getInitialState(), true))
+
+describe('Git page navigation', () => {
+  it('opens an exact checkout, keeps its location, and closes when selecting other content', () => {
+    useCore.setState({ tasks: { [task.id]: task }, worktreesOpen: true, routinesOpen: true })
+    openGit('/repo/worktree')
+    expect(useCore.getState()).toMatchObject({ gitOpen: true, overviewOpen: false, worktreesOpen: false, routinesOpen: false, gitLocation: { project: '/repo/worktree', workspace: '/repo/worktree' } })
+    setGitLocation('/repo', '/repo/other')
+    selectTask(task.id)
+    expect(useCore.getState().gitOpen).toBe(false)
+    openGit()
+    expect(useCore.getState()).toMatchObject({ gitOpen: true, gitLocation: { project: '/repo', workspace: '/repo/other' } })
+    openOverview()
+    expect(useCore.getState().gitOpen).toBe(false)
+    openGit(); selectConversation('chat')
+    expect(useCore.getState().gitOpen).toBe(false)
+    openGit(); setWorktreesOpen(true)
+    expect(useCore.getState().gitOpen).toBe(false)
+  })
+})
 
 describe('CLI installation terminal', () => {
   it('keeps settings open while showing the daemon terminal without duplicating an announced tab', async () => {

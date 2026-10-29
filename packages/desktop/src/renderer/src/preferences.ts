@@ -94,6 +94,13 @@ const Preferences = z.object({
   // Creation order preserves the task list's original behavior.
   taskSort: z.enum(TASK_SORTS).catch('created'),
   // How the Git page takes in a remote that rejected a push before pushing again; ask leaves it to the user.
+  gitLastProject: z.string().catch(''),
+  gitBranchWidth: z.number().min(160).max(480).catch(240),
+  gitDetailWidth: z.number().min(240).max(640).catch(320),
+  gitGroupByDirectory: z.boolean().catch(true),
+  gitShowRecent: z.boolean().catch(true),
+  gitShowTags: z.boolean().catch(true),
+  gitFoldedGroups: z.record(z.string(), z.array(z.string())).catch({}),
   gitPushRejectedUpdate: z.enum(['ask', 'merge', 'rebase']).catch('ask'),
   conversationGroup: z.enum(CONVERSATION_GROUPS).catch('project'),
   // Conversation groups folded in the sidebar, by grouping and group ("project:group:antumi").

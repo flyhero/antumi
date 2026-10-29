@@ -18,7 +18,7 @@ describe('Git management', () => {
   let service: GitService
   let store: TaskStore
   let favorites: GitFavoriteStore
-  let target: GitTarget
+  let target: Extract<GitTarget, { id: string }>
   let conversations: Conversation[]
   let tasks: Task[]
   let launching: boolean
@@ -44,6 +44,121 @@ describe('Git management', () => {
     target = { kind: 'conversation', id: conversations[0]!.id, project: repo }
   })
   afterEach(() => { favorites.close(); store.close(); rmSync(root, { recursive: true, force: true }) })
+
+  it('opens a project and associates all linked worktrees with tasks and conversations', async () => {
+    const worktree = path.join(root, 'task worktree')
+    git(repo, 'worktree', 'add', '-q', '-b', 'task/topic', worktree)
+    git(repo, 'worktree', 'lock', worktree)
+    tasks.push(Task.parse({ id: 'task', title: 'topic', details: '', status: 'running', repos: [{ path: repo, worktreePath: worktree, branch: 'task/topic' }], dependsOn: [], agent: 'claude', createdAt: 0, updatedAt: 0 }))
+    const project = await service.openProject(worktree)
+    expect(project.project).toBe(repo)
+    expect(project.directory).toBe(worktree)
+    expect(project.workspaces).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: repo, branch: 'main', conversationIds: [target.id], missing: false }),
+      expect.objectContaining({ path: worktree, branch: 'task/topic', taskId: 'task', locked: true })
+    ]))
+    const direct: GitTarget = { kind: 'project', project: worktree }
+    expect((await service.status(direct)).taskId).toBe('task')
+    for (const action of [
+      { kind: 'switch', ref: 'refs/heads/main' }, { kind: 'detach', ref: 'HEAD' },
+      { kind: 'create', ref: 'HEAD', name: 'other', checkout: true }
+    ] as const) await expect(service.execute(direct, action)).rejects.toMatchObject({ reason: 'task-conversation' })
+    await expect(service.execute(direct, { kind: 'rebase', ref: 'refs/heads/main' })).rejects.toMatchObject({ reason: 'git-protected' })
+    await service.execute(direct, { kind: 'create', ref: 'HEAD', name: 'candidate', checkout: false })
+    expect(git(worktree, 'branch', '--show-current')).toBe('task/topic')
+  })
+
+  it('keeps project writes behind the agent guard and does not choose an agent for commit messages', async () => {
+    const direct: GitTarget = { kind: 'project', project: repo }
+    expect(() => service.writer(direct)).toThrow('项目提交需要填写提交信息')
+    conversations[0]!.sessionId = 'agent'; conversations[0]!.chat = { turn: 'running' }
+    expect((await service.status(direct)).blocker).toBeTruthy()
+    await expect(service.execute(direct, { kind: 'fetch' })).rejects.toMatchObject({ reason: 'chat-busy' })
+    await expect(service.openProject('relative')).rejects.toMatchObject({ reason: 'invalid-params' })
+    await expect(service.openProject(root)).rejects.toMatchObject({ reason: 'repo-not-git' })
+    await expect(service.openProject(remote)).rejects.toMatchObject({ reason: 'repo-not-git' })
+    mkdirSync(path.join(repo, 'nested'))
+    expect((await service.openProject(path.join(repo, 'nested'))).directory).toBe(repo)
+  })
+
+  it('lists lightweight and annotated commit tags and reads their history and comparisons', async () => {
+    const sha = git(repo, 'rev-parse', 'HEAD')
+    git(repo, 'tag', 'v1.0')
+    git(repo, 'tag', '-a', 'release/2', '-m', 'annotated')
+    const blob = git(repo, 'rev-parse', 'HEAD:file.txt')
+    git(repo, 'tag', 'blob', blob)
+    const direct: GitTarget = { kind: 'project', project: repo }
+    expect((await service.status(direct)).tags).toEqual([
+      { name: 'release/2', ref: 'refs/tags/release/2', sha }, { name: 'v1.0', ref: 'refs/tags/v1.0', sha }
+    ])
+    expect((await service.history(direct, 'refs/tags/release/2', 0, '')).commits[0]?.sha).toBe(sha)
+    expect((await service.compare(direct, 'refs/tags/v1.0', false)).files).toEqual([])
+    await service.execute(direct, { kind: 'create', name: 'from-tag', ref: 'refs/tags/release/2', checkout: false })
+    expect(git(repo, 'rev-parse', 'from-tag')).toBe(sha)
+  })
+
+  it('reads recent checkout history while excluding the current, deleted and detached refs', async () => {
+    for (let index = 0; index < 7; index++) git(repo, 'switch', '-q', '-c', `topic/${index}`)
+    git(repo, 'switch', '-q', '--detach', 'HEAD')
+    git(repo, 'switch', '-q', 'topic/6')
+    git(repo, 'branch', '-d', 'topic/5')
+    expect((await service.status({ kind: 'project', project: repo })).recentBranches).toEqual(['topic/4', 'topic/3', 'topic/2', 'topic/1', 'topic/0'].map((name) => `refs/heads/${name}`))
+  })
+
+  it('rebases a normal branch, preserving its work and notifying associated conversations', async () => {
+    git(repo, 'switch', '-q', '-c', 'topic')
+    const before = commit('topic.txt', 'topic\n', 'topic commit')
+    git(repo, 'branch', 'keep-original', before)
+    git(repo, 'config', 'rebase.updateRefs', 'true')
+    git(repo, 'switch', '-q', 'main'); const base = commit('main.txt', 'main\n')
+    git(repo, 'switch', '-q', 'topic')
+    const direct: GitTarget = { kind: 'project', project: repo }
+    await expect(service.execute(direct, { kind: 'rebase', ref: 'refs/heads/main', from: 'another' })).rejects.toMatchObject({ reason: 'git-branch-changed' })
+    expect(git(repo, 'rev-parse', 'HEAD')).toBe(before)
+    expect(await service.execute(direct, { kind: 'rebase', ref: 'refs/heads/main' })).toEqual({ state: 'done' })
+    expect(git(repo, 'rev-parse', 'HEAD^')).toBe(base)
+    expect(git(repo, 'rev-parse', 'HEAD')).not.toBe(before)
+    expect(git(repo, 'rev-parse', 'keep-original')).toBe(before)
+    expect(git(repo, 'show', 'HEAD:topic.txt')).toBe('topic')
+    expect(record).toHaveBeenCalledWith(target.id, repo, 'topic', false)
+    writeFileSync(path.join(repo, 'topic.txt'), 'unsaved')
+    await expect(service.execute(direct, { kind: 'rebase', ref: 'refs/heads/main' })).rejects.toMatchObject({ reason: 'uncommitted-changes' })
+  })
+
+  it('recovers rebase conflicts from Git and supports resolution, repeated continue, and abort', async () => {
+    git(repo, 'switch', '-q', '-c', 'topic')
+    const before = commit('file.txt', 'topic\n')
+    git(repo, 'switch', '-q', 'main'); commit('file.txt', 'main\n')
+    git(repo, 'switch', '-q', 'topic')
+    const direct: GitTarget = { kind: 'project', project: repo }
+    writeFileSync(path.join(repo, 'saved.txt'), 'saved before an earlier update\n')
+    git(repo, 'stash', 'push', '--include-untracked', '--message', 'antumi-update:topic')
+    const stash = git(repo, 'rev-parse', 'stash')
+    expect(await service.execute(direct, { kind: 'rebase', ref: 'refs/heads/main' })).toEqual({ state: 'conflicts' })
+    expect(await service.status(direct)).toMatchObject({ rebase: true, conflicts: ['file.txt'] })
+    await expect(service.execute(direct, { kind: 'continue' })).rejects.toMatchObject({ reason: 'git-conflicts' })
+    await service.execute(direct, { kind: 'abort' })
+    expect(git(repo, 'rev-parse', 'HEAD')).toBe(before)
+    expect(git(repo, 'rev-parse', 'stash')).toBe(stash)
+    await service.execute(direct, { kind: 'rebase', ref: 'refs/heads/main' })
+    writeFileSync(path.join(repo, 'file.txt'), 'resolved\n')
+    await service.execute(direct, { kind: 'resolve', file: 'file.txt' })
+    expect(await service.execute(direct, { kind: 'continue' })).toMatchObject({ state: 'done' })
+    expect(await service.status(direct)).toMatchObject({ branch: 'topic', rebase: false, conflicts: [], operation: null })
+    expect(git(repo, 'rev-parse', 'stash')).toBe(stash)
+  })
+
+  it('opens empty repositories and keeps planning checkouts read-only', async () => {
+    const empty = path.join(root, 'empty'); git(root, 'init', '-q', '-b', 'main', empty)
+    expect((await service.openProject(empty)).workspaces[0]?.path).toBe(empty)
+    expect(await service.status({ kind: 'project', project: empty })).toMatchObject({ head: null, tags: [], recentBranches: [] })
+    expect(await service.history({ kind: 'project', project: empty }, 'HEAD', 0, '')).toMatchObject({ commits: [] })
+    const planning = path.join(root, '.planning', 'repo')
+    git(repo, 'worktree', 'add', '-q', '--detach', planning)
+    const direct: GitTarget = { kind: 'project', project: planning }
+    expect((await service.status(direct)).readOnly).toBe(true)
+    await expect(service.execute(direct, { kind: 'tag', name: 'unsafe', ref: 'HEAD' })).rejects.toMatchObject({ reason: 'git-read-only' })
+  })
 
   it('shares favorites across worktrees, keeping local and remote refs and independent clones separate', async () => {
     const worktree = path.join(root, 'worktree')

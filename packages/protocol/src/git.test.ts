@@ -26,5 +26,24 @@ describe('Git operation policy', () => {
     expect(GitAction.safeParse({ kind: 'commit', message: ' ', push: false }).success).toBe(false)
     expect(GitAction.safeParse({ kind: 'reset', ref: 'HEAD' }).success).toBe(false)
     expect(GitTarget.safeParse({ kind: 'conversation', id: 'x', project: '' }).success).toBe(false)
+    expect(GitTarget.parse({ kind: 'project', project: '/repo' })).toEqual({ kind: 'project', project: '/repo' })
+    expect(GitTarget.safeParse({ kind: 'task', project: '/repo' }).success).toBe(false)
+    expect(GitAction.safeParse({ kind: 'rebase', ref: 'refs/heads/main' }).success).toBe(true)
+  })
+
+  it('enforces task policy for project targets, and requires a clean branch for rebase', () => {
+    const status = GitStatus.parse({ git: true, directory: '/repo', branch: 'feature', head: 'abc', upstream: null, ahead: 0, behind: 0, changes: 0, branches: [], remotes: [], blocker: null, operation: null, conflicts: [] })
+    const rebase = { kind: 'rebase', ref: 'refs/heads/main' } as const
+    expect(checkGitOperation('project', rebase, false, status)).toBeNull()
+    status.changes = 1
+    expect(checkGitOperation('project', rebase, false, status)).toBe('uncommitted-changes')
+    status.changes = 0; status.branch = null
+    expect(checkGitOperation('project', rebase, false, status)).toBe('git-no-branch')
+    status.branch = 'feature'; status.taskId = 'task'
+    expect(checkGitOperation('project', rebase, false, status)).toBe('git-protected')
+    expect(checkGitOperation('project', { kind: 'switch', ref: 'refs/heads/main' }, false, status)).toBe('task-conversation')
+    expect(checkGitOperation('project', { kind: 'create', name: 'new', ref: 'HEAD', checkout: true }, false, status)).toBe('task-conversation')
+    delete status.taskId; status.readOnly = true
+    expect(checkGitOperation('project', { kind: 'fetch' }, false, status)).toBe('git-read-only')
   })
 })

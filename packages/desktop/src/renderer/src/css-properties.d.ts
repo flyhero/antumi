@@ -9,5 +9,8 @@ declare module 'react' {
     '--sidebar-width'?: string
     '--chat-font-custom'?: string
     '--chat-font-cjk'?: string
+    '--git-depth'?: number
+    '--git-branch-width'?: string
+    '--git-detail-width'?: string
   }
 }

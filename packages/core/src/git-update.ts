@@ -1,4 +1,4 @@
-import { access } from 'node:fs/promises'
+import { access, unlink, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { GitResult, GitStatus } from '@antumi/protocol'
 import { git, gitOrNull } from './git-changes'
@@ -7,6 +7,30 @@ import { Rejection } from './rejection'
 
 // What an update stashes the checkout's changes under, so only its own stash is ever put back.
 const stashLabel = (branch: string) => `antumi-update:${branch}`
+
+async function rebaseOriginFile(dir: string): Promise<string> {
+  return path.resolve(dir, (await git(dir, ['rev-parse', '--git-path', 'antumi-direct-rebase'])).trim())
+}
+
+export async function clearDirectRebase(dir: string): Promise<void> {
+  await unlink(await rebaseOriginFile(dir)).catch((error: unknown) => {
+    if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error
+  })
+}
+
+export async function rebaseBranch(dir: string, sha: string): Promise<GitResult> {
+  // A direct rebase must never pop a stash kept by an earlier Update, including after restart.
+  await writeFile(await rebaseOriginFile(dir), '')
+  try {
+    await writeGit(dir, ['-c', 'rebase.autoStash=false', '-c', 'rebase.updateRefs=false', 'rebase', sha])
+    return { state: 'done' }
+  } catch (error) {
+    if (await rebasing(dir)) return { state: 'conflicts' }
+    throw error
+  } finally {
+    if (!await rebasing(dir)) await clearDirectRebase(dir)
+  }
+}
 
 export async function rebasing(dir: string): Promise<boolean> {
   for (const name of ['rebase-merge', 'rebase-apply']) {
@@ -45,6 +69,10 @@ export async function restoreUpdateStash(dir: string, branch: string | null): Pr
 // After a merge or rebase stopped on conflicts: whether it stopped again, else the branch's stash back.
 async function settled(dir: string): Promise<GitResult> {
   if (await gitOperation(dir) && (await conflictFiles(dir)).length) return { state: 'conflicts' }
+  if (await access(await rebaseOriginFile(dir)).then(() => true, () => false)) {
+    await clearDirectRebase(dir)
+    return { state: 'done' }
+  }
   const branch = await gitOrNull(dir, ['symbolic-ref', '--quiet', '--short', 'HEAD'])
   return { state: 'done', stash: await restoreUpdateStash(dir, branch) }
 }

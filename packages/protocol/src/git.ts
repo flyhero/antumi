@@ -1,9 +1,23 @@
 import { z } from 'zod'
 import { ChangedFile } from './changes'
 
-export const GitTarget = z.object({ kind: z.enum(['task', 'conversation']), id: z.string().min(1), project: z.string().min(1) })
+export const GitTarget = z.discriminatedUnion('kind', [
+  z.object({ kind: z.enum(['task', 'conversation']), id: z.string().min(1), project: z.string().min(1) }),
+  z.object({ kind: z.literal('project'), project: z.string().min(1) })
+])
 export type GitTarget = z.infer<typeof GitTarget>
+export const gitParams = <T extends z.ZodRawShape>(shape: T) => z.intersection(GitTarget, z.object(shape))
+export const gitTargetKey = (target: GitTarget): string => `${target.kind}:${target.kind === 'project' ? '' : target.id}:${target.project}`
 const Ref = z.string().min(1).max(500)
+export const GitTag = z.object({ ref: Ref, name: z.string(), sha: z.string() })
+export type GitTag = z.infer<typeof GitTag>
+export const GitWorkspace = z.object({
+  path: z.string(), branch: z.string().nullable(), detached: z.boolean(), locked: z.boolean(), missing: z.boolean(),
+  taskId: z.string().optional(), conversationIds: z.array(z.string()), planning: z.boolean()
+})
+export type GitWorkspace = z.infer<typeof GitWorkspace>
+export const GitProject = z.object({ project: z.string(), directory: z.string(), workspaces: z.array(GitWorkspace) })
+export type GitProject = z.infer<typeof GitProject>
 export const GitBranch = z.object({
   ref: Ref, name: z.string(), remote: z.string().nullable(), sha: z.string(), upstream: z.string().nullable(), worktree: z.string().nullable(), protected: z.boolean(),
   // A local branch's commits its upstream lacks, and the upstream's it lacks, as of the last fetch.
@@ -20,7 +34,7 @@ export const GitStatus = z.object({
   branches: z.array(GitBranch), remotes: z.array(z.string()), blocker: z.string().nullable(),
   operation: z.enum(['merge', 'other']).nullable(), conflicts: z.array(z.string()),
   // The 'other' operation is a rebase, which a core with git-update carries on like a merge.
-  rebase: z.boolean().optional()
+  rebase: z.boolean().optional(), tags: z.array(GitTag).optional(), recentBranches: z.array(Ref).optional(), taskId: z.string().optional(), readOnly: z.boolean().optional()
 })
 export type GitStatus = z.infer<typeof GitStatus>
 export const GitDetail = z.object({ commit: GitCommit, message: z.string(), parent: z.string().nullable(), files: z.array(ChangedFile) })
@@ -51,6 +65,7 @@ export const GitAction = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('track'), ref: Ref, upstream: Ref.nullable() }),
   z.object({ kind: z.literal('commit'), message: z.string().trim().min(1).max(10000), push: z.boolean() }),
   z.object({ kind: z.literal('merge'), ref: Ref }),
+  z.object({ kind: z.literal('rebase'), ref: Ref, from: Ref.optional() }),
   z.object({ kind: z.literal('resolve'), file: z.string().min(1) }),
   z.object({ kind: z.literal('continue') }),
   z.object({ kind: z.literal('abort') })
@@ -77,13 +92,22 @@ export function trackedBranch(branch: Pick<GitBranch, 'upstream'> | undefined): 
 // Task worktrees keep their binding even while their agent is idle.
 export function checkGitOperation(kind: GitTarget['kind'], action: GitAction, busy: boolean, status?: GitStatus): string | null {
   if (busy) return 'chat-busy'
-  if (kind === 'task' && (action.kind === 'switch' || action.kind === 'detach' || (action.kind === 'create' && action.checkout))) return 'task-conversation'
+  if ((kind === 'task' || status?.taskId) && (action.kind === 'switch' || action.kind === 'detach' || (action.kind === 'create' && action.checkout))) return 'task-conversation'
+  if (action.kind === 'rebase' && (kind === 'task' || status?.taskId || status?.branches.some((branch) => branch.protected && branch.ref === `refs/heads/${status.branch}`))) return 'git-protected'
   if (!status) return null
+  if (status.readOnly) return 'git-read-only'
+  if (action.kind === 'rebase' && action.from && action.from !== status.branch) return 'git-branch-changed'
   const mergeAction = ['resolve', 'continue', 'abort'].includes(action.kind)
   if (status.operation && !mergeAction) return 'git-in-progress'
   if (mergeAction && status.operation !== 'merge' && !status.rebase) return 'git-in-progress'
-  if (['switch', 'detach', 'pull', 'merge'].includes(action.kind) && status.changes > 0) return 'uncommitted-changes'
-  if (['commit', 'push', 'pull', 'merge'].includes(action.kind) && !status.branch) return 'git-no-branch'
+  if (['switch', 'detach', 'pull', 'merge', 'rebase'].includes(action.kind) && status.changes > 0) return 'uncommitted-changes'
+  if (['commit', 'push', 'pull', 'merge', 'rebase'].includes(action.kind) && !status.branch) return 'git-no-branch'
+  if (action.kind === 'switch') {
+    const branch = status.branches.find((branch) => branch.ref === action.ref)
+    const local = branch?.remote ? status.branches.find((entry) => entry.ref === `refs/heads/${branch.name}`) : branch
+    if (local?.worktree && local.worktree !== status.directory) return 'branch-elsewhere'
+    if (branch?.remote && local && local.upstream !== branch.ref) return 'git-tracking-conflict'
+  }
   // Git will not move a branch another worktree has checked out from here.
   if (action.kind === 'update' && status.branches.some((branch) => branch.ref === action.ref && branch.worktree && branch.worktree !== status.directory)) return 'branch-elsewhere'
   if (action.kind === 'rename' || action.kind === 'delete') {

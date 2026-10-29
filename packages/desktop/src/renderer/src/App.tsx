@@ -1,3 +1,4 @@
+import { GitPage, GitEntry } from './components/GitPage'
 import { AgentsView } from './components/AgentProfiles'
 import { t, useLocale } from './i18n'
 import { onBrowserShortcut } from './desktop-bridge'
@@ -48,7 +49,7 @@ import { AppPet } from './components/AppPet'
 function leavesTask(event: KeyboardEvent): boolean {
   const s = useCore.getState()
   if (event.defaultPrevented || s.section !== 'tasks' || s.selectedId === null) return false
-  if (s.settingsOpen || s.newTaskOpen || s.taskLaunchId || s.worktreesOpen || s.routinesOpen || s.overviewOpen || s.inboxOpen) return false
+  if (s.settingsOpen || s.newTaskOpen || s.taskLaunchId || s.gitOpen || s.worktreesOpen || s.routinesOpen || s.overviewOpen || s.inboxOpen) return false
   const typing = event.target instanceof Element && event.target.closest('input, textarea, select, [contenteditable="true"], .xterm, [role="menu"], dialog')
   return !typing && !document.querySelector('dialog[open]')
 }
@@ -75,6 +76,7 @@ export function App() {
   const newTaskOpen = useCore((s) => s.newTaskOpen)
   const taskLaunchId = useCore((s) => s.taskLaunchId)
   const settingsOpen = useCore((s) => s.settingsOpen)
+  const gitOpen = useCore((s) => s.gitOpen)
   const worktreesOpen = useCore((s) => s.worktreesOpen)
   const routinesOpen = useCore((s) => s.routinesOpen)
   const overviewOpen = useCore((s) => s.overviewOpen)
@@ -186,6 +188,7 @@ export function App() {
               <OverviewEntry />
               <InboxEntry />
               <RoutinesEntry />
+              <GitEntry />
               <SquadsEntry />
               <EnvironmentNotice />
               <SidebarTasks />
@@ -196,6 +199,8 @@ export function App() {
               guideOpen ? <GuideView /> : <OverviewView />
             ) : inboxOpen ? (
               <SourceInboxView />
+            ) : gitOpen ? (
+              <GitPage />
             ) : worktreesOpen ? (
               <WorktreeManager />
             ) : routinesOpen ? (

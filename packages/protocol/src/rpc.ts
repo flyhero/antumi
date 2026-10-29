@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { ChatReference } from './chat-reference'
 import { AgentProfile, AgentProfileFields, AgentCall } from './agent-profile'
-import { GitTarget, GitBranch, GitStatus, GitHistory, GitDetail, GitComparison, GitAction, GitResult, GitOutgoing } from './git'
+import { gitParams, GitProject, GitTarget, GitBranch, GitStatus, GitHistory, GitDetail, GitComparison, GitAction, GitResult, GitOutgoing } from './git'
 import { AgentKind, MAX_DETAILS_LENGTH, MAX_TASK_REPOS, RepoStartOptions, Task, TaskStatus } from './task'
 import { ATTACHMENT_CHUNK_BYTES, AttachmentId, AttachmentInfo, Base64Chunk, ImageRef, MAX_ATTACHMENT_BYTES, MAX_CHAT_IMAGES, MAX_TASK_IMAGES } from './attachments'
 import { LoginNotice, LoginPrompt, SourceDescriptor, SourceId, SourceInbox, SourceProblem } from './source'
@@ -96,6 +96,9 @@ const UsageParams = z.object({ windowKinds: z.array(z.string()).optional() })
 // git-push-target: git.outgoing lists what a push sends; push takes from and keeps an upstream it has;
 // git.execute takes track.
 // git-favorites: git.favorite saves branch favorites, included in git.status, across a repository's worktrees.
+// git-projects: git.openProject lists checkouts; git.* also accepts a project target without a chat.
+// git-branch-browser: status includes commit tags, recent checkouts and task bindings.
+// git-rebase: execute rebases the current ordinary branch onto a selected ref.
 // project-files: the files.* methods take project folders (roots) in place of a conversation, for the files panel
 //   browsing a project no conversation is on.
 // project-config: core copies files and runs setup in new worktrees and check before review, from a
@@ -104,7 +107,7 @@ const UsageParams = z.object({ windowKinds: z.array(z.string()).optional() })
 // suggests what to fill it with (projects.suggestConfig).
 // conversation-references: history_read resolves explicit antumi://conversation/<id> references.
 // chat-references: user messages and queues retain the composer's explicit reference targets.
-export const CORE_FEATURES = ['chat-references', 'conversation-references', 'agent-profiles', 'pets', 'plugins', 'plugin-recommendations', 'chat-options', 'chat-images', 'task-start', 'worktrees', 'conversation-branches', 'conversation-commit-push', 'find-file', 'conversation-projects', 'browser', 'keep-awake', 'terminal-commands', 'bookmarks', 'usage-limit', 'agent-stats', 'conversation-stats', 'prompt-suggestions', 'environment', 'conversation-pin', 'schedules', 'chat-commands', 'file-mentions', 'plan-modes', 'agent-terminals', 'schedule-images', 'dashboard', 'task-conversation-summaries', 'routines', 'ports', 'conversation-fork', 'conversation-configuration', 'conversation-commit-steps', 'conversation-worktrees', 'conversation-start-branch', 'wire-log', 'file-preview', 'deferred-conversation-start', 'agent-cli-installation', 'agent-cli-maintenance', 'task-launch-options', 'git-management', 'git-commit-branches', 'task-handoff', 'handoff-model', 'handoff-mode', 'task-launch', 'discussions', 'discussion-members', 'discussion-projects', 'discussion-topics', 'discussion-requirements', 'task-cancel', 'task-redo-in-place', 'conversation-archive', 'discussion-archive', 'translate', 'commit-message', 'squads', 'squad-leader-planning', 'conversation-todos', 'knowledge-base', 'knowledge-base-kind', 'skills-library', 'skills-search', 'skills-activation', 'mcp-servers', 'source-investigate', 'todo-overview', 'conversation-helper', 'small-model-stats', 'terminal-color-prompt', 'git-commit-actions', 'file-editor', 'project-config', 'project-config-edit', 'model-providers', 'git-update', 'git-push-target', 'task-auto-run', 'session-import', 'agent-accounts', 'usage-analytics', 'task-references', 'release-idle-chats', 'project-star', 'git-favorites', 'project-files'] as const
+export const CORE_FEATURES = ['chat-references', 'conversation-references', 'agent-profiles', 'pets', 'plugins', 'plugin-recommendations', 'chat-options', 'chat-images', 'task-start', 'worktrees', 'conversation-branches', 'conversation-commit-push', 'find-file', 'conversation-projects', 'browser', 'keep-awake', 'terminal-commands', 'bookmarks', 'usage-limit', 'agent-stats', 'conversation-stats', 'prompt-suggestions', 'environment', 'conversation-pin', 'schedules', 'chat-commands', 'file-mentions', 'plan-modes', 'agent-terminals', 'schedule-images', 'dashboard', 'task-conversation-summaries', 'routines', 'ports', 'conversation-fork', 'conversation-configuration', 'conversation-commit-steps', 'conversation-worktrees', 'conversation-start-branch', 'wire-log', 'file-preview', 'deferred-conversation-start', 'agent-cli-installation', 'agent-cli-maintenance', 'task-launch-options', 'git-management', 'git-commit-branches', 'task-handoff', 'handoff-model', 'handoff-mode', 'task-launch', 'discussions', 'discussion-members', 'discussion-projects', 'discussion-topics', 'discussion-requirements', 'task-cancel', 'task-redo-in-place', 'conversation-archive', 'discussion-archive', 'translate', 'commit-message', 'squads', 'squad-leader-planning', 'conversation-todos', 'knowledge-base', 'knowledge-base-kind', 'skills-library', 'skills-search', 'skills-activation', 'mcp-servers', 'source-investigate', 'todo-overview', 'conversation-helper', 'small-model-stats', 'terminal-color-prompt', 'git-commit-actions', 'file-editor', 'project-config', 'project-config-edit', 'model-providers', 'git-update', 'git-push-target', 'task-auto-run', 'session-import', 'agent-accounts', 'usage-analytics', 'task-references', 'release-idle-chats', 'project-star', 'git-favorites', 'project-files', 'git-projects', 'git-branch-browser', 'git-rebase'] as const
 // session-import: core lists the sessions agents ran outside Antumi and imports them as conversations (sessionImports.*).
 // agent-accounts: Claude and Codex sign in to several accounts, one active each, and a usage limit
 // moves the agent to the next with quota (accounts.*); usage readings name their account.
@@ -176,22 +179,23 @@ export const rpcMethods = {
   'squads.roster': { params: ConversationRef, result: SquadRun.nullable() },
   'squads.dispatch': { params: ConversationRef.extend({ memberId: z.string().uuid(), instruction: SquadWork.shape.instruction, capability: SquadWork.shape.capability, retryOf: z.string().uuid().optional() }), result: SquadWork },
   'squads.finish': { params: ConversationRef.extend({ summary: z.string().trim().min(1).max(20000) }), result: Ok },
+  'git.openProject': { params: z.object({ path: z.string().min(1) }), result: GitProject },
   'git.status': { params: GitTarget, result: GitStatus },
-  'git.favorite': { params: GitTarget.extend({ ref: GitBranch.shape.ref, favorite: z.boolean() }), result: Ok },
-  'git.history': { params: GitTarget.extend({ ref: z.string(), query: z.string().max(500).default(''), offset: z.number().int().nonnegative().default(0), tips: z.array(z.string()).optional() }), result: GitHistory },
-  'git.detail': { params: GitTarget.extend({ sha: z.string(), parent: z.string().optional() }), result: GitDetail },
+  'git.favorite': { params: gitParams({ ref: GitBranch.shape.ref, favorite: z.boolean() }), result: Ok },
+  'git.history': { params: gitParams({ ref: z.string(), query: z.string().max(500).default(''), offset: z.number().int().nonnegative().default(0), tips: z.array(z.string()).optional() }), result: GitHistory },
+  'git.detail': { params: gitParams({ sha: z.string(), parent: z.string().optional() }), result: GitDetail },
   // The local and remote branches holding a commit, apart from its detail: on a large repository
   // walking every branch takes a moment the detail need not wait for.
-  'git.containing': { params: GitTarget.extend({ sha: z.string() }), result: z.array(z.object({ name: z.string(), remote: z.boolean() })) },
-  'git.diff': { params: GitTarget.extend({ base: z.string().nullable(), sha: z.string(), file: z.string() }), result: FileDiff },
-  'git.compare': { params: GitTarget.extend({ ref: z.string(), direct: z.boolean().default(false) }), result: GitComparison },
-  'git.execute': { params: GitTarget.extend({ action: GitAction }), result: GitResult },
+  'git.containing': { params: gitParams({ sha: z.string() }), result: z.array(z.object({ name: z.string(), remote: z.boolean() })) },
+  'git.diff': { params: gitParams({ base: z.string().nullable(), sha: z.string(), file: z.string() }), result: FileDiff },
+  'git.compare': { params: gitParams({ ref: z.string(), direct: z.boolean().default(false) }), result: GitComparison },
+  'git.execute': { params: gitParams({ action: GitAction }), result: GitResult },
   // Needs git-push-target.
-  'git.outgoing': { params: GitTarget.extend({ remote: z.string().min(1).max(200), name: z.string().min(1).max(500) }), result: GitOutgoing },
+  'git.outgoing': { params: gitParams({ remote: z.string().min(1).max(200), name: z.string().min(1).max(500) }), result: GitOutgoing },
   // A message for committing everything the repo holds, written by the target's agent from the diff,
   // the project's commit rules and its last commits, as a quick request on the model picked (else
   // its cheapest). Needs commit-message.
-  'git.commitMessage': { params: GitTarget.extend({ model: z.string().trim().min(1).max(200).optional() }), result: z.object({ message: z.string(), model: z.string().nullable() }) },
+  'git.commitMessage': { params: gitParams({ model: z.string().trim().min(1).max(200).optional() }), result: z.object({ message: z.string(), model: z.string().nullable() }) },
   'system.hello': {
     params: z.object({ protocolVersion: z.number().int() }),
     result: z.object({

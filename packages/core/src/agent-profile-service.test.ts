@@ -3,7 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { type AgentProfile } from '@antumi/protocol'
-import { AgentProfileService } from './agent-profile-service'
+import { AgentProfileService, delegatedMode } from './agent-profile-service'
 import { AgentProfileStore } from './agent-profile-store'
 import { TaskStore } from './task-store'
 import { ConversationStore } from './conversation-store'
@@ -90,6 +90,19 @@ describe('reusable agent roles and delegated work', () => {
     conversations.setProfile(parentId, profiles.save({ name: 'Restricted', agent: 'claude', callableProfiles: [] }))
     expect(profiles.available(parentId)).toEqual([])
     await expect(profiles.dispatch(parentId, reviewer.id, 'Not allowed')).rejects.toMatchObject({ reason: 'agent-call-forbidden' })
+  })
+  it('lets a developing member work in the caller\'s mode, all-allowed included', async () => {
+    const developer = profiles.save({ name: 'Developer', agent: 'claude', capability: 'develop' })
+    expect((await profiles.dispatch(parentId, developer.id, 'Ask first')).permissionMode).toBe('ask')
+    await profiles.cancelForParent(parentId)
+    const repo = chats.get(parentId).projectPaths
+    const trusted = (await chats.create('claude', repo, true, { permissionMode: 'bypass' })).id
+    const call = await profiles.dispatch(trusted, developer.id, 'Implement it')
+    expect(call).toMatchObject({ permissionMode: 'bypass', readOnly: false })
+    await waitFor(() => store.call(call.id).state === 'running')
+    expect(chats.get(call.conversationId).chatOptions?.permissionMode).toBe('bypass')
+    expect(chats.allowsBypass(call.conversationId)).toBe(true)
+    expect((await profiles.dispatch(trusted, reviewer.id, 'Only read')).readOnly).toBe(true)
   })
   it('runs one developer at a time, prevents parent edits and cancels without deleting files', async () => {
     const developer = profiles.save({ name: 'Developer', agent: 'claude', capability: 'develop' })
@@ -231,5 +244,18 @@ describe('reusable agent roles and delegated work', () => {
     await chats.stop(call.conversationId)
     await profiles.reconcile()
     expect(store.call(call.id)).toMatchObject({ state: 'failed', delivered: true })
+  })
+})
+
+describe('delegatedMode', () => {
+  const all = ['ask', 'acceptEdits', 'plan', 'auto', 'readOnly', 'bypass']
+  it('keeps the caller\'s mode where the member has it', () => {
+    for (const mode of ['ask', 'acceptEdits', 'auto', 'bypass']) expect(delegatedMode(mode, true, all)).toBe(mode)
+    expect(delegatedMode(null, false, all)).toBe('ask')
+  })
+  it('falls to the next mode down the member has, never past what the caller was allowed', () => {
+    expect(delegatedMode('auto', false, ['ask', 'acceptEdits', 'bypass'])).toBe('acceptEdits')
+    expect(delegatedMode('bypass', true, ['ask', 'readOnly'])).toBe('ask')
+    expect(delegatedMode('bypass', false, all)).toBe('acceptEdits')
   })
 })

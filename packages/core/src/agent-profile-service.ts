@@ -1,12 +1,24 @@
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
+import { adapterOf } from './agents'
 import { agentCallOpen, agentDescriptor, AgentCall, type AgentProfile, type AgentProfileFields, type ChatItem, type Conversation, isHelper } from '@antumi/protocol'
 import type { ConversationService } from './conversation-service'
 import { AgentProfileStore } from './agent-profile-store'
 import { Rejection } from './rejection'
 
-type Chats = Pick<ConversationService, 'get' | 'listAll' | 'create' | 'continue' | 'resumeDelegation' | 'send' | 'stop' | 'interrupt' | 'chatPage' | 'messages' | 'capacityAvailable' | 'validateStartOptions' | 'turnOver' | 'agentIdle'>
+type Chats = Pick<ConversationService, 'get' | 'listAll' | 'create' | 'continue' | 'resumeDelegation' | 'send' | 'stop' | 'interrupt' | 'chatPage' | 'messages' | 'capacityAvailable' | 'validateStartOptions' | 'turnOver' | 'agentIdle' | 'allowsBypass'>
 const refOf = (call: AgentCall) => `agent-call:${call.id}`
+
+// Most to least left to the agent. Planning and read-only callers never get here: their members read.
+const DEVELOP_MODES = ['bypass', 'auto', 'acceptEdits', 'ask']
+
+// What a developing member works in: the caller's own mode, so delegating neither widens nor narrows
+// what the user allowed there. A mode the member's agent lacks falls to the next one down it has.
+export function delegatedMode(callerMode: string | null | undefined, callerAllowsBypass: boolean, memberModes: readonly string[]): string {
+  const mode = callerMode === 'bypass' && !callerAllowsBypass ? 'acceptEdits' : callerMode ?? 'ask'
+  const from = DEVELOP_MODES.indexOf(mode)
+  return DEVELOP_MODES.slice(from < 0 ? DEVELOP_MODES.length - 1 : from).find((each) => memberModes.includes(each)) ?? 'ask'
+}
 const busy = (conversation: Conversation) => conversation.starting || conversation.chat?.turn === 'running' || conversation.chat?.turn === 'awaiting'
 const failure = (error: unknown) => error instanceof Error ? error.message : String(error)
 // What an agent left running in the background, by name.
@@ -80,7 +92,8 @@ export class AgentProfileService {
       if (this.store.calls(id).filter(agentCallOpen).length >= 10) throw new Rejection('agent-call-limit', '请先等待已有委派完成')
       const readOnly = profile.capability === 'readOnly' || Boolean(parent.workspaceReadOnly || parent.planOnly)
         || ['plan', 'readOnly'].includes(parent.chatOptions?.permissionMode ?? '')
-      const permissionMode = readOnly ? agentDescriptor(profile.agent).readOnlyMode : 'ask'
+      const permissionMode = readOnly ? agentDescriptor(profile.agent).readOnlyMode
+        : delegatedMode(parent.chatOptions?.permissionMode, this.chats.allowsBypass(id), adapterOf(profile.agent).permissionModes)
       await this.chats.validateStartOptions(profile.agent, { permissionMode, model: profile.model, effort: profile.effort }, profile.modelProvider ?? undefined)
       const at = Date.now()
       const call = AgentCall.parse({ id: randomUUID(), parentId: id, conversationId: randomUUID(), profile, instruction,
@@ -219,7 +232,7 @@ export class AgentProfileService {
       this.patch(call.id, { state: 'starting' })
       try {
         const profile = call.profile
-        await this.chats.create(profile.agent, current.projectPaths.length ? current.projectPaths : [current.workspacePath], false,
+        await this.chats.create(profile.agent, current.projectPaths.length ? current.projectPaths : [current.workspacePath], call.permissionMode === 'bypass',
           { permissionMode: call.permissionMode, model: profile.model ?? undefined, effort: profile.effort ?? undefined,
             modelProvider: profile.modelProvider ?? undefined, profile, parentId: id, callId: call.id, readOnly: call.readOnly,
             referencePaths: current.referencePaths, deferStart: true }, null, call.conversationId)

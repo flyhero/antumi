@@ -671,6 +671,11 @@ export class ConversationService {
 
   // Validate before preparing a workspace or replacing a task's existing stage.
   // providerId: the provider the agent runs on, whose models it picks from.
+  // Whether the user let this conversation run with nothing asked and nothing sandboxed.
+  allowsBypass(id: string): boolean {
+    return this.store.chatOptions(id).allowBypass ?? false
+  }
+
   async validateStartOptions(agent: AgentKind, options: { permissionMode?: string; model?: string | null; effort?: string | null }, providerId?: string): Promise<void> {
     const { permissionMode, model, effort } = options
     if (permissionMode && !adapterOf(agent).permissionModes.includes(permissionMode)) {

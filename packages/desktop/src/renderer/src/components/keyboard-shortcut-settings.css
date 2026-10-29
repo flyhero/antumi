@@ -2,9 +2,10 @@
 .keyboard-shortcut-controls,
 .keyboard-shortcut-recording { display: flex; align-items: center; gap: 8px; }
 .keyboard-shortcut-toolbar { justify-content: space-between; flex-wrap: wrap; }
-.keyboard-shortcut-search { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 200px; }
-.keyboard-shortcut-search svg { width: 16px; height: 16px; flex-shrink: 0; color: var(--text-muted); }
-.keyboard-shortcut-search .input { width: 100%; }
+/* The icon sits inside the field, as in the settings sidebar's search. */
+.keyboard-shortcut-search { position: relative; display: flex; align-items: center; flex: 1; min-width: 200px; }
+.keyboard-shortcut-search svg { position: absolute; left: 10px; width: 15px; height: 15px; color: var(--text-muted); pointer-events: none; }
+.keyboard-shortcut-search .input { width: 100%; padding-left: 32px; }
 .keyboard-shortcut-count { margin: 12px 0 0; }
 .keyboard-shortcut-hint { margin: 12px 0 16px; }
 .keyboard-shortcut-error { color: var(--danger); margin: 12px 0; }

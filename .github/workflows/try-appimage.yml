@@ -1,0 +1,49 @@
+name: Try AppImage lifetime
+
+on:
+  push:
+    branches: [feat/appimage-update]
+
+permissions:
+  contents: read
+
+jobs:
+  appimage:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm dist:linux
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq libfuse2t64 xvfb > /dev/null
+      - name: Run the AppImage, quit it, probe what outlives it
+        continue-on-error: true
+        working-directory: packages/desktop/dist
+        run: |
+          note() { echo "::warning title=$1::$2"; }
+          chmod +x Antumi-*.AppImage
+          export ANTUMI_HOME="$RUNNER_TEMP/antumi-home"
+          xvfb-run -a ./Antumi-*.AppImage --no-sandbox > "$RUNNER_TEMP/app.log" 2>&1 &
+          for i in $(seq 1 60); do [ -f "$ANTUMI_HOME/core.json" ] && break; sleep 1; done
+          note started "core.json after ${i}s: $(test -f $ANTUMI_HOME/core.json && echo yes || echo no)"
+          note processes "$(pgrep -af 'mount_Antumi' | sed 's/--no-sandbox//' | cut -c1-160 | tr '\n' ';')"
+          daemon=$(pgrep -f 'backend/daemon.mjs' | head -1)
+          core=$(pgrep -f 'backend/core.mjs' | head -1)
+          exe=$(readlink /proc/$daemon/exe)
+          mount=$(dirname "$exe")
+          note before "daemon=$daemon core=$core exe=$exe"
+          pkill -TERM -f 'mount_Antumi[^ ]*/antumi --no-sandbox$' || note kill "no main process matched"
+          sleep 15
+          note after-quit "daemon alive: $(kill -0 $daemon 2>/dev/null && echo yes || echo no); core alive: $(kill -0 $core 2>/dev/null && echo yes || echo no)"
+          note mount "still mounted: $(grep -c "$mount" /proc/mounts); mcp.mjs readable: $(test -r $mount/resources/backend/mcp.mjs && echo yes || echo no)"
+          note run-as-node "$(ELECTRON_RUN_AS_NODE=1 $exe -e 'console.log("node-ok")' 2>&1 | tail -1 | cut -c1-200)"
+          note app-log "$(tail -5 $RUNNER_TEMP/app.log | tr '\n' ';' | cut -c1-400)"

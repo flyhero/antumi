@@ -187,6 +187,8 @@ describe('ACP without a dialect of its own', () => {
     const silent = turn(3, null)
     expect(silent).not.toHaveProperty('usage')
     expect(silent).not.toHaveProperty('metering')
+    // Token reporting does not mean the provider also reported a zero-dollar bill.
+    expect(turn(4, { inputTokens: 10, outputTokens: 2 })).toMatchObject({ metering: { reportedCostUsd: null, models: [{ costUsd: null }] } })
   })
 
   it('on a provider, offers only its models, keeps no cost, and fails rather than run another model', () => {

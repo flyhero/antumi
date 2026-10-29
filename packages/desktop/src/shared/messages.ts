@@ -11306,6 +11306,10 @@ export const MESSAGES = {
     "zh": "本月",
     "en": "This month"
   },
+  "usageFormat.thisDay": {
+    "zh": "今天",
+    "en": "Today"
+  },
   "usageFormat.thisWeek": {
     "zh": "本周",
     "en": "This week"

@@ -7,6 +7,7 @@ import { McpEnvKey, McpHeaderName, McpServerName, type AgentKind, type McpImport
 import { planLaunch, readJsonIfExists } from '@antumi/protocol/node'
 import type { ResolvedMcpServer } from './mcp-servers'
 import { Rejection } from './rejection'
+import { geminiHome } from './agents/gemini/gemini-cli'
 
 // A server as an agent's own configuration has it, values and all: read again at import, never
 // kept, never sent to a client.
@@ -22,6 +23,8 @@ const JsonEntry = z.looseObject({
   cwd: z.string().optional(),
   env: z.record(z.string(), z.string()).catch({}).optional(),
   url: z.string().optional(),
+  // Gemini's legacy name for a streamable HTTP endpoint.
+  httpUrl: z.string().optional(),
   // Antigravity's name for url.
   serverUrl: z.string().optional(),
   disabled: z.boolean().optional(),
@@ -38,7 +41,7 @@ function fromJson(source: AgentKind, name: string, raw: unknown): FoundMcpServer
   if (entry.bearerTokenEnvVar) return { source, name, transport: null, problem: '令牌从环境变量读取，请在 Antumi 里手动添加' }
   if (entry.type === 'sse') return { source, name, transport: null, problem: 'Antumi 不支持 SSE 传输' }
   if (entry.command) return { source, name, transport: { type: 'stdio', command: entry.command, args: entry.args ?? [], cwd: entry.cwd ?? null, env: entry.env ?? {} }, problem: null }
-  const url = entry.url ?? entry.serverUrl
+  const url = entry.httpUrl ?? entry.url ?? entry.serverUrl
   if (url) return { source, name, transport: { type: 'http', url, headers: entry.headers ?? {} }, problem: null }
   return { source, name, transport: null, problem: '既没有命令也没有地址' }
 }
@@ -106,7 +109,8 @@ export async function findAgentMcpServers({ env = process.env, homedir = os.home
   const found = await Promise.all([readJsonServers('claude', claudeFile), codexServers, readJsonServers('cursor', path.join(homedir, '.cursor', 'mcp.json')),
     readJsonServers('antigravity', path.join(env.GEMINI_HOME || path.join(homedir, '.gemini'), 'config', 'mcp_config.json')),
     readZCodeServers(env.ZCODE_CLI_SETTINGS_FILE?.trim() || path.join(homedir, '.zcode', 'cli', 'config.json')),
-    readJsonServers('kimi', path.join(env.KIMI_CODE_HOME || path.join(homedir, '.kimi-code'), 'mcp.json'))])
+    readJsonServers('kimi', path.join(env.KIMI_CODE_HOME || path.join(homedir, '.kimi-code'), 'mcp.json')),
+    readJsonServers('gemini', path.join(geminiHome(env, homedir), 'settings.json'))])
   return found.flat()
 }
 

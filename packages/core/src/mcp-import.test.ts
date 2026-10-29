@@ -18,6 +18,23 @@ const codexList = (home: string) => JSON.stringify([
 ])
 
 describe('the agents\' own MCP servers', () => {
+  it('reads Gemini settings from its relocated CLI home, leaving disabled and SSE servers unavailable', async () => {
+    const cliHome = path.join(home, 'custom-gemini')
+    mkdirSync(path.join(cliHome, '.gemini'), { recursive: true })
+    writeFileSync(path.join(cliHome, '.gemini', 'settings.json'), JSON.stringify({ mcpServers: {
+      local: { command: 'node', args: ['server.js'], env: { KEY: 'fixture-only' } },
+      legacyHttp: { httpUrl: 'https://example.com/mcp' },
+      off: { command: 'off', disabled: true },
+      streaming: { type: 'sse', url: 'https://example.com/events' }
+    } }))
+    const found = await findAgentMcpServers({ env: { GEMINI_CLI_HOME: cliHome }, homedir: home, codex: async () => '[]' })
+    expect(found).toEqual([
+      { source: 'gemini', name: 'local', transport: { type: 'stdio', command: 'node', args: ['server.js'], cwd: null, env: { KEY: 'fixture-only' } }, problem: null },
+      { source: 'gemini', name: 'legacyHttp', transport: { type: 'http', url: 'https://example.com/mcp', headers: {} }, problem: null },
+      { source: 'gemini', name: 'streaming', transport: null, problem: 'Antumi 不支持 SSE 传输' }
+    ])
+    expect(await findAgentMcpServers({ env: {}, homedir: home, codex: async () => '[]' })).toEqual([])
+  })
   it('reads Kimi Code’s mcp.json from its configured home without importing disabled servers', async () => {
     const kimiHome = path.join(home, 'custom-kimi')
     mkdirSync(kimiHome)

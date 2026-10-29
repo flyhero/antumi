@@ -90,6 +90,8 @@ export interface AgentAdapter {
   // own default stands.
   readonly fallbackMode?: ChatPermissionMode
   readonly session: {
+    // False where a provider's history cannot be loaded reliably: continue through a handoff.
+    nativeResume?: boolean
     // Antumi names the session before launch, so one that died before its first prompt left an id
     // the agent never saved: only a session that recorded messages is resumed.
     preassignedId: boolean

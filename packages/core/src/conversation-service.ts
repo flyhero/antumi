@@ -1038,7 +1038,7 @@ export class ConversationService {
     // behind by a move, and one opened on another route would reach another account: in each case
     // the agent starts afresh from a handoff.
     const { session } = adapterOf(agent)
-    const resumable = !(launch.moved && session.folderBound) && (lost === null || previous?.providerSessionId !== lost) && sameRoute(previous?.route, route)
+    const resumable = session.nativeResume !== false && !(launch.moved && session.folderBound) && (lost === null || previous?.providerSessionId !== lost) && sameRoute(previous?.route, route)
     const saved = resumable && previous?.providerSessionId && (!session.preassignedId || this.store.hasProviderMessages(id, previous.providerSessionId))
       ? previous.providerSessionId : null
     const providerSessionId = saved ?? (session.preassignedId ? randomUUID() : null)

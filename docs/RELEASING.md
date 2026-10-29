@@ -34,7 +34,7 @@ node -p 'require("./package.json").version'
 pnpm install
 pnpm dist:mac    # → packages/desktop/dist/Antumi-<版本>-arm64.dmg（Apple 芯片）
 pnpm dist:win    # → packages/desktop/dist/Antumi-Setup-<版本>-x64.exe（macOS 上也能打）
-pnpm dist:linux  # → packages/desktop/dist/Antumi-<版本>-x64.AppImage 和 .deb（只能在 Linux 上打，要有 C++ 编译器和 python3）
+pnpm dist:linux  # → packages/desktop/dist/Antumi-<版本>-x86_64.AppImage 和 -amd64.deb（只能在 Linux 上打，要有 C++ 编译器和 python3）
 ```
 
 `<版本>` 取自 `packages/desktop/package.json`。耗时约 1–3 分钟。日志里出现 `skipped macOS application code signing … 0 valid identities found` 是正常的：没有 Apple 证书，App 走 ad-hoc 签名。

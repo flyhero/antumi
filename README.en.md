@@ -38,18 +38,6 @@ https://github.com/user-attachments/assets/44398279-8f26-441f-ad24-fa1b1e344674
 
 Antumi runs the agent CLIs you have already installed and signed in to, so there is no setup or login to redo, and sessions you started in a terminal can be imported and continued.
 
-### No more copy and paste
-
-With several agents at once, much of the day goes into carrying things between them. In Antumi you no longer paste:
-
-- **Between agents**: a handoff brings the chat history, a [delegation](#agents-working-together)'s result comes back to the main conversation, and agents in a [group chat](#group-chat) answer each other; agents can also look up what you discussed with other agents before.
-- **Errors and output**: agents [see them for themselves](#agents-verify-their-own-work-you-just-review) in the built-in browser and terminal.
-- **Tasks and bugs**: issues [come in as tasks](#tasks-and-bugs-go-straight-into-the-ai-workflow); a group chat's conclusion becomes a task in one click.
-- **Code**: type @ in the composer to reference a file or project instead of pasting paths and snippets.
-- **Notes and to-dos**: agents write notes straight into your Markdown or Obsidian knowledge base, and record what you need to do later as [to-dos](#to-dos).
-- **Replies you don't follow**: select text and ask the [side assistant](#side-assistant), or [translate](#translation) it in one click.
-- **Prompts and config**: save instructions you repeat as an agent or a [routine](#routines-and-scheduling); set up MCP servers once and pick which agents get them.
-
 The four sections below follow the whole path from a task to finished work; the rest is under [More features](#more-features).
 
 ### Tasks and bugs go straight into the AI workflow
@@ -170,7 +158,8 @@ When an agent's reply mentions things for you to do later (before release, to ve
 - **Files, terminals, and browser**: edit files, manage development servers, and let agents verify pages you can take over; the built-in browser has console, network and download panels, and sends screenshots or selections straight into a chat.
 - **Model providers & multi-account**: connect third-party coding plans or custom endpoints; Claude Code and Codex support multi-account auto-switching on quota limits.
 - **Usage analytics**: 7/30/90-day ledgers by model, account, and source, with countdowns to quota exhaustion.
-- **Sources and extensions**: connect Jira, GitHub, Obsidian, Agent Skills, MCP servers, and import CLI sessions.
+- **References and knowledge base**: type @ in the composer to reference a file, a project or an earlier conversation instead of pasting paths and snippets; agents write notes straight into your Markdown or Obsidian knowledge base.
+- **Sources and extensions**: connect Jira, GitHub, Agent Skills, and import CLI sessions; set up MCP servers once and pick which agents get them.
 - **Local-first**: records stay on your machine, and background agents keep working when the window closes.
 
 </details>

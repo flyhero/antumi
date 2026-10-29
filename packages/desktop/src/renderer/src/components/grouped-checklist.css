@@ -1,0 +1,33 @@
+.grouped-checklist { display: flex; flex-direction: column; gap: 8px; min-width: 0; margin-top: 8px; }
+.grouped-checklist-picked { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.grouped-checklist-chip { display: inline-flex; align-items: center; gap: 2px; max-width: 100%; min-height: 24px; padding: 0 2px 0 8px; border-radius: var(--radius-xs); background: var(--fill-2); font-size: 12px; }
+.grouped-checklist-chip > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.grouped-checklist-chip > button { display: grid; place-items: center; flex-shrink: 0; width: 20px; height: 20px; padding: 0; border: 0; border-radius: var(--radius-xs); background: transparent; color: var(--text-muted); cursor: pointer; }
+.grouped-checklist-chip > button:hover, .grouped-checklist-chip > button:focus-visible { background: var(--fill-2); color: var(--text); }
+.grouped-checklist-chip svg { width: 12px; height: 12px; }
+.grouped-checklist-search { position: relative; display: block; }
+.grouped-checklist-search > svg { position: absolute; top: 50%; left: 8px; width: 14px; height: 14px; color: var(--text-3); transform: translateY(-50%); pointer-events: none; }
+.grouped-checklist-search > .input { width: 100%; padding-left: 28px; }
+/* The list scrolls in place, so a long one does not push the next field out of the form. */
+.grouped-checklist-list { max-height: 320px; overflow-y: auto; overscroll-behavior: contain; }
+.grouped-checklist-empty { margin: 8px 0; }
+.grouped-checklist-head { display: flex; align-items: center; gap: 8px; min-height: 28px; }
+.grouped-checklist-head > input { flex-shrink: 0; margin: 0; }
+.grouped-checklist-fold { display: flex; flex: 1; align-items: center; gap: 4px; min-width: 0; padding: 2px 4px; border: 0; border-radius: var(--radius-xs); background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.grouped-checklist-fold:hover:not(:disabled) { background: var(--fill); }
+.grouped-checklist-fold:disabled { cursor: default; }
+.grouped-checklist-chevron { display: grid; place-items: center; flex-shrink: 0; width: 14px; height: 14px; color: var(--text-muted); transition: transform 0.15s ease; }
+.grouped-checklist-chevron svg { width: 12px; height: 12px; }
+.grouped-checklist-fold[aria-expanded="true"] .grouped-checklist-chevron { transform: rotate(90deg); }
+.grouped-checklist-name { min-width: 0; overflow: hidden; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.grouped-checklist-count { flex-shrink: 0; margin-left: auto; color: var(--text-3); font-size: 12px; }
+.grouped-checklist-items { margin: 0; padding: 0; list-style: none; }
+.grouped-checklist-items[data-nested] { padding-left: 22px; }
+.grouped-checklist-item { display: flex; align-items: flex-start; gap: 8px; padding: 4px 0; }
+.grouped-checklist-item > input { flex-shrink: 0; margin: 3px 0 0; }
+.grouped-checklist-text { display: flex; flex-direction: column; min-width: 0; }
+.grouped-checklist-label { overflow-wrap: anywhere; }
+.grouped-checklist-detail { overflow: hidden; color: var(--text-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+@media (prefers-reduced-motion: reduce) {
+  .grouped-checklist-chevron { transition: none; }
+}

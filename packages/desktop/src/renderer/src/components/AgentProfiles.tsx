@@ -1,6 +1,6 @@
 import { useEffect, useId, useState } from 'react'
 import { create } from 'zustand'
-import { agentDescriptor, AgentProfileFields, type AgentProfile } from '@antumi/protocol'
+import { agentDescriptor, AgentProfileFields, type AgentProfile, type SkillRef, type SkillRepo } from '@antumi/protocol'
 import { useAgentCatalog } from '../agent-models'
 import { agentProfileTemplateModel, agentProfileTemplateSeed, type AgentProfileTemplate } from '../agent-profile-templates'
 import { openConversationDraft, perform, selectSquad, useCore } from '../core-store'
@@ -14,6 +14,8 @@ import { AgentModelPicker } from './AgentModelPicker'
 import { ChatPicker } from './ChatPicker'
 import { ProviderPicker } from './ProviderPicker'
 import { SquadsView } from './Squads'
+import { GroupedChecklist } from './GroupedChecklist'
+import type { ChecklistGroup } from '../grouped-checklist'
 import { Segmented } from './SettingsControls'
 import { AgentProfileTemplatesDialog } from './AgentProfileTemplates'
 import { usePreferences } from '../preferences'
@@ -102,6 +104,21 @@ function ProfilesView() {
   </section>
 }
 
+// A skill as the checklist names it, and the skills of each repository as its groups.
+const skillId = (ref: SkillRef) => `${ref.repo}/${ref.skill}`
+function skillGroups(repos: readonly SkillRepo[]): ChecklistGroup[] {
+  return repos.flatMap((repo) => {
+    const items = repo.skills.filter((skill) => skill.problem === null).map((skill) => ({ id: skillId({ repo: repo.id, skill: skill.name }), label: skill.name, detail: skill.description }))
+    return items.length > 0 ? [{ id: repo.id, label: repo.plugin?.name ?? repo.id, items }] : []
+  })
+}
+
+// The skills picked, back from the checklist's names: one no longer installed keeps its reference.
+function skillRefs(ids: readonly string[], repos: readonly SkillRepo[], current: readonly SkillRef[]): SkillRef[] {
+  const known = new Map([...current, ...repos.flatMap((repo) => repo.skills.map((skill) => ({ repo: repo.id, skill: skill.name })))].map((ref) => [skillId(ref), ref]))
+  return ids.flatMap((id) => known.get(id) ?? [])
+}
+
 function ProfileEditor({ profile, seed, template, onCancel, onDone }: { profile: AgentProfile | null; seed: AgentProfileFields | null; template: AgentProfileTemplate | null; onCancel: () => void; onDone: () => void }) {
   const formId = useId()
   const installed = useInstalledAgents()
@@ -154,11 +171,11 @@ function ProfileEditor({ profile, seed, template, onCancel, onDone }: { profile:
         </section>
         <section className="squad-block"><h3>{t('AgentProfiles.skills')}</h3>
           <label className="agent-profile-check"><input type="checkbox" checked={fields.skills == null} onChange={(event) => setFields({ ...fields, skills: event.target.checked ? null : [] })} />{t('AgentProfiles.inherit')}</label>
-          {fields.skills != null && repos.flatMap((repo) => repo.skills.filter((skill) => skill.problem === null).map((skill) => <label className="agent-profile-check" key={`${repo.id}/${skill.name}`}><input type="checkbox" checked={fields.skills?.some((ref) => ref.repo === repo.id && ref.skill === skill.name) ?? false} onChange={(event) => setFields({ ...fields, skills: event.target.checked ? [...(fields.skills ?? []), { repo: repo.id, skill: skill.name }] : fields.skills?.filter((ref) => ref.repo !== repo.id || ref.skill !== skill.name) })} />{skill.name}</label>))}
+          {fields.skills != null && <GroupedChecklist groups={skillGroups(repos)} selected={fields.skills.map(skillId)} searchLabel={t('AgentProfiles.searchSkills')} onChange={(ids) => setFields({ ...fields, skills: skillRefs(ids, repos, fields.skills ?? []) })} />}
         </section>
         <section className="squad-block"><h3>MCP</h3>
           <label className="agent-profile-check"><input type="checkbox" checked={fields.mcpServers == null} onChange={(event) => setFields({ ...fields, mcpServers: event.target.checked ? null : [] })} />{t('AgentProfiles.inherit')}</label>
-          {fields.mcpServers != null && servers.map((server) => <label className="agent-profile-check" key={server.name}><input type="checkbox" checked={fields.mcpServers?.includes(server.name) ?? false} onChange={(event) => setFields({ ...fields, mcpServers: event.target.checked ? [...(fields.mcpServers ?? []), server.name] : fields.mcpServers?.filter((name) => name !== server.name) })} />{server.name}</label>)}
+          {fields.mcpServers != null && <GroupedChecklist groups={[{ id: 'mcp', label: '', items: servers.map((server) => ({ id: server.name, label: server.name })) }]} selected={fields.mcpServers} searchLabel={t('AgentProfiles.searchMcp')} onChange={(mcpServers) => setFields({ ...fields, mcpServers })} />}
         </section>
       </div>
     </fieldset>

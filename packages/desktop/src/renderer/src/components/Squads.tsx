@@ -22,7 +22,7 @@ const LEADER_DUTY = () => t('Squads.readOnlyLeaderBreaksDownWorkAssignsMembers')
 export function SquadsEntry() {
   const supported = useSquadsSupported()
   const profilesSupported = useCore((state) => state.rpc?.features.includes('agent-profiles') ?? false)
-  const open = useCore((state) => state.section === 'squads' && !state.routinesOpen && !state.overviewOpen && !state.worktreesOpen)
+  const open = useCore((state) => state.section === 'squads' && !state.gitOpen && !state.routinesOpen && !state.overviewOpen && !state.worktreesOpen)
   if (!supported && !profilesSupported) return null
   return (
     <button type="button" className="inbox-entry sidebar-squads" aria-current={open} onClick={() => { selectSquad(null); if (profilesSupported) useCore.setState({ agentProfilesTab: 'profiles' }) }}>

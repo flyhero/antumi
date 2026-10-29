@@ -231,6 +231,11 @@ export function createRpcHandlers(
     'squads.roster': ({ id }) => squadService().roster(id),
     'squads.dispatch': ({ id, memberId, instruction, capability, retryOf }) => squadService().dispatch(id, memberId, instruction, capability, retryOf),
     'squads.finish': async ({ id, summary }) => { await squadService().finish(id, summary); return OK },
+    'git.openProject': async ({ path }) => {
+      const project = await git.openProject(path)
+      projects.remember([project.project])
+      return project
+    },
     'git.status': (target) => git.status(target),
     'git.favorite': async ({ ref, favorite, ...target }) => { await git.favorite(target, ref, favorite); return OK },
     'git.history': ({ ref, offset, query, tips, ...target }) => git.history(target, ref, offset, query, tips),
@@ -243,7 +248,7 @@ export function createRpcHandlers(
     'git.commitMessage': async ({ model, ...target }) => {
       const { agent, dir } = git.writer(target)
       const context = await commitContext(dir)
-      const conversationId = target.kind === 'conversation' ? target.id : service.get(target.id).conversationId
+      const conversationId = target.kind === 'conversation' ? target.id : target.kind === 'task' ? service.get(target.id).conversationId : null
       const answer = await quick.ask(agent, commitMessagePrompt(context), model, {
         kind: 'commitMessage', conversationId,
         baseline: () => conversationId ? conversations.costBaseline(conversationId) : EMPTY_BASELINE

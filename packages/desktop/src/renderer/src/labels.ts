@@ -98,6 +98,11 @@ const REASON_TEXT: Record<string, string> = localized(() => ({
   'worktree-not-found': t('labels.worktreeNotFoundItMayHaveBeenDeleted'),
   'worktree-in-use': t('labels.agentIsWorkingInThisDirectory'),
   'uncommitted-changes': t('labels.commitOrStashUncommittedChangesFirst'),
+  'git-protected': t('GitPage.protected'),
+  'git-in-progress': t('GitPage.operationInProgress'),
+  'git-read-only': t('GitPage.readOnlyReason'),
+  'git-task-branch': t('GitPage.keepTaskBranch'),
+  'git-branch-changed': t('GitPage.branchChanged'),
   'branch-elsewhere': t('labels.thisBranchIsCheckedOutInAnotherWorktree'),
   'branch-not-found': t('labels.branchNotFound'),
   'branch-switch-failed': t('labels.failedToSwitchBranch'),
@@ -242,7 +247,6 @@ const REASON_WITH_DETAIL: Record<string, string> = localized(() => ({
   'git-push-failed': t('labels.commitWasKeptLocallyButPushFailed'),
   // core's own words name the branches involved.
   'git-push-name-mismatch': t('labels.notPushed'),
-  'git-branch-changed': t('labels.notPushed'),
   'git-push-rejected': t('labels.pushRejected'),
   'git-operation-failed': t('labels.gitOperationFailed'),
   // Which file and what is wrong with it.

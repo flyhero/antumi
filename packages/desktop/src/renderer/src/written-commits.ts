@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { AgentKind, GitTarget } from '@antumi/protocol'
+import { gitTargetKey, type AgentKind, type GitTarget } from '@antumi/protocol'
 import { perform, useCommitMessageSupported, useCore, type CoreState } from './core-store'
 import { usePreferences } from './preferences'
 
@@ -7,10 +7,10 @@ import { usePreferences } from './preferences'
 // second commit must not start under one on its way.
 const useWriting = create<Record<string, true>>(() => ({}))
 
-const keyOf = (target: GitTarget) => `${target.kind}:${target.id}:${target.project}`
+const keyOf = gitTargetKey
 
 const agentOf = (state: CoreState, target: GitTarget): AgentKind | null =>
-  (target.kind === 'conversation' ? state.conversations[target.id]?.agent : state.tasks[target.id]?.agent) ?? null
+  (target.kind === 'conversation' ? state.conversations[target.id]?.agent : target.kind === 'task' ? state.tasks[target.id]?.agent : null) ?? null
 
 // Whether the target's own agent can write a message, so the user may leave it empty.
 export function useCanWriteCommitMessage(target: GitTarget): boolean {

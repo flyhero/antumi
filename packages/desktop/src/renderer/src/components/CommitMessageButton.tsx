@@ -11,7 +11,7 @@ import { Spinner } from './Spinner'
 // to read over before committing.
 export function CommitMessageButton({ target, disabled, onMessage }: { target: GitTarget; disabled?: boolean; onMessage: (message: string) => void }) {
   const supported = useCommitMessageSupported()
-  const agent = useCore((s) => (target.kind === 'conversation' ? s.conversations[target.id]?.agent : s.tasks[target.id]?.agent) ?? null)
+  const agent = useCore((s) => (target.kind === 'conversation' ? s.conversations[target.id]?.agent : target.kind === 'task' ? s.tasks[target.id]?.agent : null) ?? null)
   const model = usePreferences((p) => (agent ? p.quickModels[agent] : undefined))
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)

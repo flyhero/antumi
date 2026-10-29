@@ -19,7 +19,8 @@
     "verify:plugin-sdk": "node scripts/verify-plugin-sdk.mjs",
     "test:dsh-runtime": "node --import tsx scripts/smoke-dsh-runtime.mjs",
     "dist:mac": "pnpm --filter @antumi/desktop run dist:mac",
-    "dist:win": "pnpm --filter @antumi/desktop run dist:win"
+    "dist:win": "pnpm --filter @antumi/desktop run dist:win",
+    "dist:linux": "pnpm --filter @antumi/desktop run dist:linux"
   },
   "devDependencies": {
     "@types/node": "catalog:",

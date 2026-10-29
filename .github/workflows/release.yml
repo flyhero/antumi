@@ -61,7 +61,7 @@ jobs:
           const next = lines.findIndex((line, index) => index > start && line.startsWith('## '));
           const notes = lines.slice(start + 1, next === -1 ? undefined : next).join('\n').trim();
           if (!notes) throw new Error(`CHANGELOG.md entry for ${version} is empty`);
-          writeFileSync('release-notes.md', `${notes}\n\n### 安装包\n\n| 平台 | 文件 |\n| --- | --- |\n| macOS · Apple Silicon | Antumi-${version}-arm64.dmg |\n| Windows · x64 | Antumi-Setup-${version}-x64.exe |\n\nmacOS 若提示无法打开，到「系统设置 → 隐私与安全性」点「仍要打开」；Windows 被 SmartScreen 拦住时，点「更多信息 → 仍要运行」。\n`);
+          writeFileSync('release-notes.md', `${notes}\n\n### 安装包\n\n| 平台 | 文件 |\n| --- | --- |\n| macOS · Apple Silicon | Antumi-${version}-arm64.dmg |\n| Windows · x64 | Antumi-Setup-${version}-x64.exe |\n| Linux · x64 | Antumi-${version}-x86_64.AppImage、Antumi-${version}-amd64.deb |\n\nmacOS 若提示无法打开，到「系统设置 → 隐私与安全性」点「仍要打开」；Windows 被 SmartScreen 拦住时，点「更多信息 → 仍要运行」；Linux 的 AppImage 需先 \`chmod +x\`，Ubuntu 22.04 及以上还要装 libfuse2。\n`);
           const commit = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
           appendFileSync(process.env.GITHUB_OUTPUT, `commit=${commit}\nprerelease=${version.includes('-')}\n`);
           NODE
@@ -92,6 +92,13 @@ jobs:
             runner: windows-2025
             command: dist:win
             artifact: packages/desktop/dist/Antumi-Setup-*-x64.exe
+          # node-pty has no Linux prebuild: install compiles it here, with the runner's toolchain.
+          - platform: linux-x64
+            runner: ubuntu-24.04
+            command: dist:linux
+            artifact: |
+              packages/desktop/dist/Antumi-*.AppImage
+              packages/desktop/dist/Antumi-*.deb
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
     steps:
@@ -144,8 +151,8 @@ jobs:
               --title "Antumi $RELEASE_TAG" --notes-file release-files/release-notes.md
           fi
           # Lets an app that reads the releases feed (the API refused it) verify the installer.
-          (cd release-files && sha256sum *.dmg *.exe > SHA256SUMS)
-          gh release upload "$RELEASE_TAG" release-files/*.dmg release-files/*.exe release-files/SHA256SUMS --clobber
+          (cd release-files && sha256sum *.dmg *.exe *.AppImage *.deb > SHA256SUMS)
+          gh release upload "$RELEASE_TAG" release-files/*.dmg release-files/*.exe release-files/*.AppImage release-files/*.deb release-files/SHA256SUMS --clobber
           latest=true
           if [ "$PRERELEASE" = true ]; then latest=false; fi
           gh release edit "$RELEASE_TAG" --draft=false --prerelease="$PRERELEASE" --latest="$latest" \

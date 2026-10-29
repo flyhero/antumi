@@ -53,7 +53,9 @@ export const SHORTCUT_SCOPE_LABELS = {
 } as const
 
 // Keep the saved panel action IDs and preference field so existing customizations survive.
-const Overrides = z.partialRecord(ShortcutAction, ShortcutBinding.nullable().optional().catch(undefined))
+// An action since removed or renamed drops out, rather than failing the rest with it.
+const knownActions = (value: unknown) => value && typeof value === 'object' ? Object.fromEntries(Object.entries(value).filter(([action]) => action in SHORTCUTS)) : value
+const Overrides = z.preprocess(knownActions, z.partialRecord(ShortcutAction, ShortcutBinding.nullable().optional().catch(undefined)))
 export const ShortcutSettings = z.object({
   version: z.literal(1).default(1), darwin: Overrides.optional(), win32: Overrides.optional(), linux: Overrides.optional()
 })

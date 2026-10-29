@@ -39,6 +39,12 @@ describe.each(platforms)('application shortcuts on %s', (platform) => {
     expect(shortcutBindings(settings, platform, 'find-next')).toEqual(SHORTCUTS['find-next'].defaults(platform))
   })
 
+  it('drops an action since removed and keeps the rest', () => {
+    const binding: ShortcutBinding = { key: 'j', ctrl: true, meta: false, alt: false, shift: true }
+    const saved = ShortcutSettings.parse({ version: 1, [platform]: { 'removed-action': null, 'new-task': binding } })
+    expect(shortcutBindings(saved, platform, 'new-task')).toEqual([binding])
+  })
+
   it('keeps the three previously saved panel bindings and other platforms', () => {
     const binding: ShortcutBinding = { key: 'b', ctrl: true, meta: false, alt: false, shift: true }
     const legacy = ShortcutSettings.parse({ version: 1, [platform]: { 'toggle-files': binding, 'toggle-terminal': null } })

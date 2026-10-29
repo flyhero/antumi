@@ -279,8 +279,7 @@ describe('ZCode on a model provider', () => {
     const conversationId = store.list()[0]!.id
     expect(readLaunches(conversationId)).toHaveLength(1)
     service.handleExit('pipe-1', 0)
-    await settle()
-    expect(readLaunches(conversationId)).toEqual([])
+    await expect.poll(() => readLaunches(conversationId)).toEqual([])
   })
 
   it('stops, once the daemon is back, an agent no conversation holds, however core lost track of it', async () => {

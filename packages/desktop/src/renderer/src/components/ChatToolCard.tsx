@@ -271,11 +271,7 @@ export function ChatToolCard({ item }: { item: ToolItem }) {
         {details && <span className="chat-tool-chevron" aria-hidden="true"><ChevronRightIcon /></span>}
         <ToolStatus status={status} since={item.at} />
       </button>
-      {terminal && (
-        <div className="chat-tool-actions">
-          <button type="button" className="link-button" onClick={() => showTerminal(terminal)}>{t('ChatToolCard.viewInTerminalPanel')}</button>
-        </div>
-      )}
+      {terminal && <button type="button" className="link-button chat-tool-aside" onClick={() => showTerminal(terminal)}>{t('ChatToolCard.viewInTerminalPanel')}</button>}
       {open && <CommandExit tool={item} />}
       {open && item.diffs.length > 0 && <ChatDiffs diffs={item.diffs} />}
       {open && item.input && <ChatToolInput name={item.name} input={item.input} />}

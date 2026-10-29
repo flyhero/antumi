@@ -25,9 +25,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm dist:linux
       - name: List packages
-        run: ls -l packages/desktop/dist
-      - name: Check AppImage and deb names
-        run: ls packages/desktop/dist/Antumi-*-x64.AppImage packages/desktop/dist/Antumi-*-x64.deb
+        run: echo "::warning title=packages::$(cd packages/desktop/dist && ls *.AppImage *.deb | tr '\n' ' ')"
       - name: Extract AppImage
         working-directory: packages/desktop/dist
         run: |
@@ -38,7 +36,7 @@ jobs:
         working-directory: packages/desktop/dist/squashfs-root
         run: |
           exe=$(find . -maxdepth 1 -type f -executable -name 'antumi*' | head -1)
-          echo "executable: $exe"
+          echo "::warning title=executable::$exe"
           ELECTRON_RUN_AS_NODE=1 "$exe" -e "
             const pty = require('./resources/backend/node_modules/node-pty');
             let out = '';
@@ -57,7 +55,7 @@ jobs:
           ls -la "$ANTUMI_HOME"
           kill $pid || true
       - name: Inspect deb
-        run: dpkg-deb --info packages/desktop/dist/Antumi-*-x64.deb && dpkg-deb --contents packages/desktop/dist/Antumi-*-x64.deb | grep -E 'chrome-sandbox|node-pty|pty.node'
+        run: dpkg-deb --info packages/desktop/dist/*.deb && dpkg-deb --contents packages/desktop/dist/*.deb | grep -E 'chrome-sandbox|node-pty|pty.node'
       - uses: actions/upload-artifact@v7
         with:
           name: antumi-linux

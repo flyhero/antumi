@@ -518,16 +518,6 @@ type Section = {
 
 const SECTIONS: readonly Section[] = localized(() => ([
   {
-    id: 'keyboard-shortcuts',
-    group: t('SettingsPage.interface'),
-    title: t('KeyboardShortcuts.title'),
-    description: t('KeyboardShortcuts.description'),
-    keywords: ['keyboard', 'shortcut', 'hotkey', '快捷键', '键盘', '文件栏', '终端栏', '浏览器栏', 'Ctrl', 'Command', t('KeyboardShortcuts.files'), t('KeyboardShortcuts.terminal'), t('KeyboardShortcuts.browser')],
-    Icon: BoltIcon,
-    Body: KeyboardShortcutSettings,
-    grouped: true
-  },
-  {
     id: 'appearance',
     group: t('SettingsPage.interface'),
     title: t('SettingsPage.appearance'),
@@ -575,6 +565,16 @@ const SECTIONS: readonly Section[] = localized(() => ([
     keywords: [t('SettingsPage.notifications'), t('SettingsPage.alert'), t('SettingsPage.badge'), 'dock', t('SettingsPage.foreground'), t('chatTools.wait'), t('SettingsPage.confirm'), t('SettingsPage.finished'), t('SettingsPage.unexpectedExit'), t('SettingsPage.popup'), t('SettingsPage.card'), t('SettingsPage.top'), t('SettingsPage.approval'), t('approvalChoiceText.allow')],
     Icon: BellIcon,
     Body: NotificationSettings
+  },
+  {
+    id: 'keyboard-shortcuts',
+    group: t('SettingsPage.interface'),
+    title: t('KeyboardShortcuts.title'),
+    description: t('KeyboardShortcuts.description'),
+    keywords: ['keyboard', 'shortcut', 'hotkey', '快捷键', '键盘', '文件栏', '终端栏', '浏览器栏', 'Ctrl', 'Command', t('KeyboardShortcuts.files'), t('KeyboardShortcuts.terminal'), t('KeyboardShortcuts.browser')],
+    Icon: BoltIcon,
+    Body: KeyboardShortcutSettings,
+    grouped: true
   },
   {
     id: 'agents',

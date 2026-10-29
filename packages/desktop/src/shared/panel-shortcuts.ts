@@ -73,35 +73,6 @@ export function withPanelShortcut(settings: PanelShortcutSettings, platform: Sho
   return { ...settings, [platform]: overrides }
 }
 
-export function reservedShortcut(binding: ShortcutBinding, platform: ShortcutPlatform): boolean {
-  const { key, ctrl, meta, alt, shift } = binding
-  if ((!ctrl && !meta) || key === 'Escape' || key === 'Tab' || key === ' ' || (ctrl && meta)) return true
-  if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown', 'Backspace', 'Delete'].includes(key)) return true
-  if (platform !== 'darwin' && (meta || (ctrl && alt))) return true
-  if (platform === 'darwin' && meta && (key === 'Backquote' || (shift && ['3', '4', '5', '6', 'q'].includes(key)))) return true
-  // Preserve shell control characters, terminal clipboard keys and OS/menu actions.
-  if (ctrl && !meta && key !== 'Backquote' && (!shift || 'cvi'.includes(key))) return true
-  const primary = platform === 'darwin' ? meta : ctrl
-  if (!primary) return false
-  if (!alt && ['=', '+', '-', '0'].includes(key)) return true
-  if (!shift && !alt && ['a', 'c', 'd', 'f', 'g', 'h', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 'u', 'v', 'w', 'x', 'y', 'z', ',', '\\', '1', '2', '/', '=', '+', '-', '0', 'Enter'].includes(key)) return true
-  if (shift && !alt && ['a', 'c', 'd', 'f', 'g', 'i', 'k', 'l', 'n', 'p', 'r', 'v', 'w', 'z', '/', 'Enter'].includes(key)) return true
-  if (alt && ['c', 'd', 'h', 'i', 'j', 'm', 'w', 'Escape'].includes(key)) return true
-  return key === 'F4' || key === 'F11'
-}
-
-export function panelShortcutConflict(settings: PanelShortcutSettings, platform: ShortcutPlatform, action: PanelShortcutAction, binding: ShortcutBinding): PanelShortcutAction | null {
-  return PanelShortcutAction.options.find((other) => other !== action && sameShortcut(binding, panelShortcut(settings, platform, other))) ?? null
-}
-
-export function matchPanelShortcut(input: ShortcutInput, settings: PanelShortcutSettings, platform: ShortcutPlatform): PanelShortcutAction | null {
-  if (input.defaultPrevented) return null
-  const binding = shortcutBinding(input)
-  if (!binding || reservedShortcut(binding, platform)) return null
-  const matches = PanelShortcutAction.options.filter((action) => sameShortcut(binding, panelShortcut(settings, platform, action)))
-  return matches.length === 1 ? matches[0] ?? null : null
-}
-
 const KEY_LABELS: Readonly<Record<string, string>> = { Backquote: '`', Enter: 'Enter', Backspace: 'Backspace', Delete: 'Delete', ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', PageUp: 'PageUp', PageDown: 'PageDown' }
 export function formatShortcut(binding: ShortcutBinding | null, platform: ShortcutPlatform): string {
   if (!binding) return ''

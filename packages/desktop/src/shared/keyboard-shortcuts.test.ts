@@ -39,6 +39,13 @@ describe.each(platforms)('application shortcuts on %s', (platform) => {
     expect(shortcutBindings(settings, platform, 'find-next')).toEqual(SHORTCUTS['find-next'].defaults(platform))
   })
 
+  it('reads the terminal key by its physical place, whatever the layout prints there', () => {
+    const terminal = SHORTCUTS['toggle-terminal'].defaults(platform).find((binding) => binding.key === 'Backquote')!
+    for (const key of ['~', '`', '²']) {
+      expect(matchesShortcut('toggle-terminal', { ...input(terminal), key, code: 'Backquote' }, { version: 1 }, platform)).toBe(true)
+    }
+  })
+
   it('drops an action since removed and keeps the rest', () => {
     const binding: ShortcutBinding = { key: 'j', ctrl: true, meta: false, alt: false, shift: true }
     const saved = ShortcutSettings.parse({ version: 1, [platform]: { 'removed-action': null, 'new-task': binding } })

@@ -1,69 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { PanelShortcutAction, PanelShortcutSettings, defaultPanelShortcut, formatShortcut, matchPanelShortcut, panelShortcut, panelShortcutConflict, reservedShortcut, shortcutBinding, withPanelShortcut, type ShortcutBinding, type ShortcutInput, type ShortcutPlatform } from './panel-shortcuts'
+import { PanelShortcutSettings, defaultPanelShortcut, formatShortcut, panelShortcut, shortcutBinding, withPanelShortcut, type ShortcutBinding, type ShortcutInput } from './panel-shortcuts'
 
-const platforms: ShortcutPlatform[] = ['darwin', 'win32', 'linux']
 const settings = PanelShortcutSettings.parse({})
 const custom: ShortcutBinding = { key: 'b', ctrl: true, meta: false, alt: false, shift: true }
 const input = (binding: ShortcutBinding, extra: Partial<ShortcutInput> = {}): ShortcutInput => ({ key: binding.key === 'Backquote' ? '`' : binding.key, code: binding.key === 'Backquote' ? 'Backquote' : undefined, ctrlKey: binding.ctrl, metaKey: binding.meta, altKey: binding.alt, shiftKey: binding.shift, ...extra })
-
-describe.each(platforms)('panel shortcuts on %s', (platform) => {
-  it('retains the three defaults and matches exact modifiers', () => {
-    for (const action of PanelShortcutAction.options) {
-      const binding = defaultPanelShortcut(action, platform)
-      expect(reservedShortcut(binding, platform)).toBe(false)
-      expect(matchPanelShortcut(input(binding), settings, platform)).toBe(action)
-      expect(matchPanelShortcut(input(binding, { altKey: !binding.alt }), settings, platform)).not.toBe(action)
-    }
-  })
-
-  it('uses the physical backquote consistently despite shifted keyboard layouts', () => {
-    const binding = defaultPanelShortcut('toggle-browser', platform)
-    for (const key of ['~', '`', '²']) {
-      expect(matchPanelShortcut(input(binding, { key, code: 'Backquote' }), settings, platform)).toBe('toggle-browser')
-    }
-  })
-
-  it('releases old bindings on rebind and disable, and restores defaults', () => {
-    const previous = input(defaultPanelShortcut('toggle-terminal', platform))
-    const rebound = withPanelShortcut(settings, platform, 'toggle-terminal', custom)
-    expect(matchPanelShortcut(previous, rebound, platform)).toBeNull()
-    expect(matchPanelShortcut(input(custom), rebound, platform)).toBe('toggle-terminal')
-    const disabled = withPanelShortcut(rebound, platform, 'toggle-terminal', null)
-    expect(panelShortcut(disabled, platform, 'toggle-terminal')).toBeNull()
-    expect(matchPanelShortcut(input(custom), disabled, platform)).toBeNull()
-    const restored = withPanelShortcut(disabled, platform, 'toggle-terminal', undefined)
-    expect(matchPanelShortcut(previous, restored, platform)).toBe('toggle-terminal')
-  })
-
-  it('rejects conflicting overrides instead of dispatching an arbitrary action', () => {
-    const fileBinding = defaultPanelShortcut('toggle-files', platform)
-    expect(panelShortcutConflict(settings, platform, 'toggle-browser', fileBinding)).toBe('toggle-files')
-    const conflict = withPanelShortcut(settings, platform, 'toggle-browser', fileBinding)
-    expect(matchPanelShortcut(input(fileBinding), conflict, platform)).toBeNull()
-    expect(panelShortcutConflict(withPanelShortcut(settings, platform, 'toggle-files', null), platform, 'toggle-browser', fileBinding)).toBeNull()
-  })
-
-  it('ignores IME, AltGraph and events already consumed by a control', () => {
-    const key = input(defaultPanelShortcut('toggle-files', platform))
-    for (const extra of [{ isComposing: true }, { keyCode: 229 }, { defaultPrevented: true }, { getModifierState: (name: string) => name === 'AltGraph' }]) {
-      expect(matchPanelShortcut({ ...key, ...extra }, settings, platform)).toBeNull()
-    }
-  })
-
-  it('preserves text, system, existing app and terminal controls even in edited storage', () => {
-    const primary = { ctrl: platform !== 'darwin', meta: platform === 'darwin', alt: false, shift: false }
-    const bindings = [
-      ...['c', 'n', 'p', ',', 's', 'w', '1', '\\', 'Enter', 'ArrowLeft', 'Backspace'].map((key) => ({ ...primary, key })),
-      ...['ArrowRight', 'Home', 'k', '+'].map((key) => ({ ...primary, shift: true, key })),
-      ...['c', 'j', 'k', 'n', 'p', 'w'].map((key) => ({ key, ctrl: true, meta: false, alt: false, shift: false })),
-      { key: 'b', ctrl: false, meta: false, alt: false, shift: false }
-    ]
-    for (const binding of bindings) {
-      expect(reservedShortcut(binding, platform)).toBe(true)
-      expect(matchPanelShortcut(input(binding), withPanelShortcut(settings, platform, 'toggle-browser', binding), platform)).toBeNull()
-    }
-  })
-})
 
 describe('panel shortcut preferences', () => {
   it('round trips disabled and custom bindings without changing another platform', () => {

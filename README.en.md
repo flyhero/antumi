@@ -4,12 +4,12 @@
 
 **Keep using Claude Code, Codex and your other agents. Antumi takes over the copying and pasting between windows.**
 
-See your quota · Keep working when it runs out · Run tasks in parallel · Let agents delegate
+Issues straight to work · Agents working together · Self-verification · No quota stalls
 
 [![Version](https://img.shields.io/github/package-json/v/flyhero/antumi?label=version&color=blue)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
-![Platform](https://img.shields.io/badge/platform-macOS%20%C2%B7%20Windows-lightgrey)
-![Agents](https://img.shields.io/badge/agents-9%20supported-8A2BE2)
+![Platform](https://img.shields.io/badge/platform-macOS%20%C2%B7%20Windows%20%C2%B7%20Linux-lightgrey)
+![Agents](https://img.shields.io/badge/agents-10%20supported-8A2BE2)
 
 [Download](https://github.com/flyhero/antumi/releases) · [Why not just the terminal](#why-not-just-the-terminal) · [More features](#more-features) · [Getting started](#getting-started) · [Docs](#docs) · [Changelog](CHANGELOG.md) · [Feedback](https://github.com/flyhero/antumi/issues)
 
@@ -24,7 +24,7 @@ See your quota · Keep working when it runs out · Run tasks in parallel · Let 
   <a href="#supported-agents" title="DeepSeek Harness"><img src="docs/assets/agents/dsh.svg" alt="DeepSeek Harness" width="32" height="32" /></a>&nbsp;&nbsp;
   <a href="#supported-agents" title="Antigravity"><img src="docs/assets/agents/antigravity.svg" alt="Antigravity" width="32" height="32" /></a>&nbsp;&nbsp;
   <a href="#supported-agents" title="ZCode"><img src="docs/assets/agents/zcode.svg" alt="ZCode" width="32" height="32" /></a>&nbsp;&nbsp;
-  <a href="#supported-agents" title="Kimi Code"><img src="docs/assets/agents/kimi.svg" alt="Kimi Code" width="32" height="32" /></a>
+  <a href="#supported-agents" title="Kimi Code"><img src="docs/assets/agents/kimi.svg" alt="Kimi Code" width="32" height="32" /></a>&nbsp;&nbsp;
   <a href="#supported-agents" title="Gemini CLI"><img src="docs/assets/agents/gemini.svg" alt="Gemini CLI" width="32" height="32" /></a>
 </p>
 
@@ -42,47 +42,58 @@ Antumi runs the agent CLIs you have already installed and signed in to, so there
 
 With several agents at once, much of the day goes into carrying things between them. In Antumi you no longer paste:
 
-- **Between agents**: a handoff brings the chat history, a [delegation](#let-agents-delegate-to-each-other)'s result comes back to the main conversation, and agents in a [group chat](#group-chat) answer each other; agents can also look up what you discussed with other agents before.
-- **Errors and output**: agents look at pages, read the console and take screenshots in the built-in browser, and read dev server output in the built-in terminal.
-- **Tasks and bugs**: issues from GitHub, Jira, Linear and ZenTao come in as tasks; a group chat's conclusion becomes a task in one click.
+- **Between agents**: a handoff brings the chat history, a [delegation](#agents-working-together)'s result comes back to the main conversation, and agents in a [group chat](#group-chat) answer each other; agents can also look up what you discussed with other agents before.
+- **Errors and output**: agents [see them for themselves](#agents-verify-their-own-work-you-just-review) in the built-in browser and terminal.
+- **Tasks and bugs**: issues [come in as tasks](#tasks-and-bugs-go-straight-into-the-ai-workflow); a group chat's conclusion becomes a task in one click.
 - **Code**: type @ in the composer to reference a file or project instead of pasting paths and snippets.
 - **Notes and to-dos**: agents write notes straight into your Markdown or Obsidian knowledge base, and record what you need to do later as [to-dos](#to-dos).
 - **Replies you don't follow**: select text and ask the [side assistant](#side-assistant), or [translate](#translation) it in one click.
 - **Prompts and config**: save instructions you repeat as an agent or a [routine](#routines-and-scheduling); set up MCP servers once and pick which agents get them.
 
-Below are the four things that get in the way most often in a terminal; the rest is under [More features](#more-features).
+The four sections below follow the whole path from a task to finished work; the rest is under [More features](#more-features).
 
-### See your quota
+### Tasks and bugs go straight into the AI workflow
 
-In a terminal you find out your quota is gone when you hit the limit. Antumi's status bar keeps Claude Code, Codex, Cursor, Antigravity and ZCode usage in view; hover for each agent's quota windows and reset times. It also paces your usage against the next reset: plenty left just before a reset, and it tells you to use it; on track to run out early, and it suggests a lighter model or another agent for the small jobs.
+In a terminal, taking on a bug means copying the issue text to an agent, creating a branch and explaining what to do. In Antumi, issues from GitHub, Jira, Linear and ZenTao sync into the sidebar **Inbox** and become tasks in one click. When a task starts, it gets its own worktree and a branch named after the issue; the agent reads the code and proposes a plan, and only changes code once you approve it. A bug whose cause is unclear can be investigated in a conversation first, until the root cause is found. A group chat's conclusion becomes a task in one click too, and tasks can depend on each other, so the next one unlocks only once the previous one passes review.
 
-<img src="docs/assets/features/quota.webp" alt="Quota: zoom into the status bar, hover each agent for usage and reset times, then show remaining percentages" width="100%" />
+<img src="docs/assets/features/intake.webp" alt="Intake: import a GitHub issue from the inbox as a task, start it, and the agent reads the code and proposes a plan for you to approve" width="100%" />
+
+### Agents working together
+
+Five agents in five terminal windows means switching between them to find out which one is waiting for approval and which one is done, and getting a second agent to review the work means copying between windows. In Antumi:
+
+- **Delegation**: save the roles you call on often as agents, such as a code reviewer or a test verifier, each with its own external agent, model, skills and MCP servers, or start from a template; type @ to name one, and the main agent also calls one on its own when it needs to. A delegated agent works in its own sub-conversation and its result comes back to the main conversation; read-only analysis runs in parallel, delegations that change code run one at a time.
+- **[Teams](#teams) and [group chat](#group-chat)**: hand a task to a lead who brings in developers and reviewers, or let several agents discuss an approach before anyone writes code.
+- **Handoff**: click the agent name at the bottom left of the composer, and another agent carries on in the same folder with the chat history.
+- **In parallel, without collisions**: each task gets its own worktree; whatever waits for your approval, answer or review is gathered in the overview, and you get a notification when an agent finishes or needs you.
+
+<img src="docs/assets/features/delegate.webp" alt="Delegation: type @ to name the code reviewer, the card shows it working, and the review comes back to the main conversation" width="100%" />
+
+### Agents verify their own work, you just review
+
+In a terminal, when an agent says it's done you still open a browser to click through it, then paste the errors back. In Antumi, agents open pages in the built-in browser, click around, read the console and network requests, take screenshots, and read dev server output in the built-in terminal, then fix what they find. You can take over a page at any time, or add a selected element or a screenshot straight into the chat. When it's done, inspect the whole task branch's diff, run the project checks, and merge when you're satisfied.
+
+<img src="docs/assets/features/verify.webp" alt="Self-verification: the agent screenshots the page and sees an overdue to-do not marked, reads the console error, fixes it, and screenshots again to confirm" width="100%" />
 
 ### Keep working when quota runs out
 
-In a terminal, a turn that hits the limit just stops and waits for you. In Antumi, with several Claude Code or Codex accounts it switches account and goes on in the same session; with none to switch to, it continues by itself when the quota resets; or click the agent name at the bottom left of the composer to hand the work to another agent, which picks up the chat history in the same folder.
+In a terminal, a turn that hits the limit just stops and waits for you. In Antumi, with several Claude Code or Codex accounts it switches account and goes on in the same session; with none to switch to, it continues by itself when the quota resets; or hand the work to another agent in one click. The status bar keeps each agent's usage and reset times in view: plenty left just before a reset, and it tells you to use it; on track to run out early, and it suggests another model or agent.
 
 <img src="docs/assets/features/handoff.webp" alt="Handoff: switch the composer from Claude Code to Codex, add a note, and Codex continues with tests" width="100%" />
-
-### Run agents on tasks in parallel
-
-Five agents in five terminal windows means switching between them to find out which one is waiting for approval and which one is done. In Antumi each task gets its own worktree, so they never touch each other's code; whatever waits for your approval, answer or review is gathered in the overview, and you get a notification when an agent finishes or needs you.
-
-<img src="docs/assets/overview.png" alt="Overview: four tasks by Claude Code, Codex and Cursor waiting for a reply or review, with upcoming reservations on the right" width="100%" />
-
-### Let agents delegate to each other
-
-In a terminal, getting a second agent to review the work means copying between windows and pasting its findings back. In Antumi, save the roles you call on often as agents, such as a code reviewer or a test verifier, each with its own external agent, model, skills, and MCP servers, or start from a template; type @ in a conversation to name one, and the main agent also calls one on its own when it needs to. A delegated agent works in its own sub-conversation, a card shows its progress, and its result comes back to the main conversation. Read-only analysis runs in parallel; delegations that change code run one at a time, each step approved.
-
-<img src="docs/assets/features/delegate.webp" alt="Delegation: type @ to name the code reviewer, the card shows it working, and the review comes back to the main conversation" width="100%" />
 
 <sub>I built Antumi after half a year of heavy use of several agents, to fix these pain points of my own.</sub>
 
 ## More features
 
-[Side assistant](#side-assistant) · [Translation](#translation) · [Split view](#split-view) · [Group chat](#group-chat) · [Teams](#teams) · [Routines and scheduling](#routines-and-scheduling) · [To-dos](#to-dos)
+[See your quota](#see-your-quota) · [Side assistant](#side-assistant) · [Translation](#translation) · [Split view](#split-view) · [Group chat](#group-chat) · [Teams](#teams) · [Routines and scheduling](#routines-and-scheduling) · [To-dos](#to-dos)
 
 <sub>Looping demos use real UI components with sample data: the pointer makes real clicks, and small areas are zoomed in. The interface shown is in Chinese.</sub>
+
+### See your quota
+
+Antumi's status bar keeps Claude Code, Codex, Cursor, Antigravity and ZCode usage in view; hover for each agent's quota windows and reset times. It also paces your usage against the next reset: plenty left, and it tells you to use it; on track to run out early, and it suggests a lighter model or another agent for the small jobs.
+
+<img src="docs/assets/features/quota.webp" alt="Quota: zoom into the status bar, hover each agent for usage and reset times, then show remaining percentages" width="100%" />
 
 ### Side assistant
 
@@ -116,7 +127,7 @@ Assign external agents, models, and responsibilities to a team lead, developers,
 
 ### Routines and scheduling
 
-Under **Routines** in the sidebar, schedule Claude Code, Codex, OpenCode, Pi, DeepSeek Harness, or ZCode to work daily, on weekdays, or weekly; the clock beside the composer reserves a message for a set time or for when quota resets, and tasks and plan approvals can be reserved too. Routines can choose an agent with available quota; unattended runs answer prompts automatically based on permission modes. The computer must stay awake; Cursor and Antigravity are not supported for routines.
+Under **Routines** in the sidebar, schedule Claude Code, Codex, OpenCode, Pi, DeepSeek Harness, ZCode, Kimi Code, or Gemini CLI to work daily, on weekdays, or weekly; the clock beside the composer reserves a message for a set time or for when quota resets, and tasks and plan approvals can be reserved too. Routines can choose an agent with available quota; unattended runs answer prompts automatically based on permission modes. The computer must stay awake; Cursor and Antigravity are not supported for routines.
 
 <img src="docs/assets/features/schedule.webp" alt="Scheduling: open routines and reservations from the sidebar, then reserve a message with the composer clock" width="100%" />
 
@@ -131,8 +142,8 @@ When an agent's reply mentions things for you to do later (before release, to ve
 
 - **Overview**: bring approvals, questions, and reviews together, with what is running and what comes next in view.
 - **Task board**: isolated worktrees, multi-project tasks, and dependencies that unlock after acceptance.
-- **Review and Git**: inspect the entire task branch, run project checks, and update from remote with fast-forward/rebase.
-- **Files, terminals, and browser**: edit files, manage development servers, and let agents verify pages you can take over.
+- **Review and Git**: inspect the entire task branch, run project checks, and update from remote with fast-forward/rebase; a separate Git page manages branches and tags per project and worktree.
+- **Files, terminals, and browser**: edit files, manage development servers, and let agents verify pages you can take over; the built-in browser has console, network and download panels, and sends screenshots or selections straight into a chat.
 - **Model providers & multi-account**: connect third-party coding plans or custom endpoints; Claude Code and Codex support multi-account auto-switching on quota limits.
 - **Usage analytics**: 7/30/90-day ledgers by model, account, and source, with countdowns to quota exhaustion.
 - **Sources and extensions**: connect Jira, GitHub, Obsidian, Agent Skills, MCP servers, and import CLI sessions.
@@ -161,7 +172,7 @@ Antumi drives the agent CLIs you already have installed and signed in to.
 
 ## Getting started
 
-**Prerequisite**: At least one agent ready (install CLI for Claude Code, Codex, Cursor, OpenCode, Pi, or DeepSeek Harness, and the ZCode desktop app or `zcode-app-cli` for ZCode; Antigravity can be downloaded directly in Settings).
+**Prerequisite**: At least one agent ready (install CLI for Claude Code, Codex, Cursor, OpenCode, Pi, DeepSeek Harness, Kimi Code, or Gemini CLI, and the ZCode desktop app or `zcode-app-cli` for ZCode; Antigravity can be downloaded directly in Settings).
 
 **Run from source**, with Node ≥ 22.13 and pnpm 12:
 
@@ -259,7 +270,7 @@ ANTUMI_HOME=~/.antumi-demo pnpm dev
 
 ## Status
 
-Antumi is currently in **development preview** (0.21.x), developed and tested mainly on macOS (Windows runs and packages). Next, in order:
+Antumi is currently in **development preview** (0.21.x), developed and tested mainly on macOS (Windows and Linux run and package). Next, in order:
 
 - **Windows testing**: Polishing auto-updates, real-machine installation and CI.
 - **Remote execution**: Let agents work on repositories over SSH / WSL while the board stays local.

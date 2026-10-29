@@ -2792,8 +2792,8 @@ export const MESSAGES = {
     "en": "{value1} interrupted"
   },
   "ChatToolCard.viewInTerminalPanel": {
-    "zh": "在终端面板里看",
-    "en": "View in terminal panel"
+    "zh": "在终端查看",
+    "en": "View in terminal"
   },
   "ChatUsageLimit.quotaExhaustedResuming": {
     "zh": "额度已用完 · 正在继续…",

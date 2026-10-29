@@ -24,7 +24,7 @@ class FakePage extends EventEmitter {
   go(href: string, name: string) {
     this.href = href
     this.name = name
-    this.emit('request', { isNavigationRequest: () => true, frame: () => this })
+    this.emit('request', { isNavigationRequest: () => true, frame: () => this, method: () => 'GET', url: () => href, resourceType: () => 'document' })
     this.emit('framenavigated', this)
     this.emit('load')
   }
@@ -90,4 +90,22 @@ describe('TabRegistry', () => {
     registry.setViewport(tab, null)
     expect(registry.describe(tab).viewport).toBeNull()
   })
+  it('keeps a native page through a debugger disconnect and reconnects it under the same owner and id', () => {
+    const registry = new TabRegistry(() => {})
+    const original = new FakePage('https://example.com/', 'Checkout')
+    const tab = registry.add(null, original.asPage(), attachment)
+    registry.share(tab, 'conv')
+    registry.setDebugging(tab, true)
+    original.close()
+    expect(registry.get(tab.id)).toBe(tab)
+    const resumed = new FakePage('https://example.com/', 'Checkout')
+    registry.replacePage(tab, resumed.asPage())
+    expect(registry.describe(tab)).toMatchObject({ id: tab.id, conversationId: 'conv', userOwned: true, debugging: false })
+    registry.share(tab, null)
+    expect(registry.ofConversation('conv')).toEqual([])
+    expect(registry.get(tab.id).page).toBe(resumed.asPage())
+    resumed.close()
+    expect(registry.size).toBe(0)
+  })
+
 })

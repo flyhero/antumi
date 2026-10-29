@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { RpcError, type BrowserTab, type RpcConnection, type RpcMethod, type RpcParams } from '@antumi/protocol'
+import { RpcError, type BrowserConsole, type BrowserTab, type RpcConnection, type RpcMethod, type RpcParams } from '@antumi/protocol'
 import { AttachmentStore } from './attachment-store'
 import { browserToolsOverCore, BROWSER_ARGUMENTS } from './mcp-browser-tools'
 
@@ -17,6 +17,7 @@ describe('browser tools over core', () => {
   let tabs: BrowserTab[]
   let outcome: 'done' | 'awaiting-host' | 'denied'
   let failWith: RpcError | null
+  let diagnostics: BrowserConsole | null
 
   // A core that answers from the tabs the test set up.
   const rpc = {
@@ -30,7 +31,7 @@ describe('browser tools over core', () => {
         case 'browser.open': return { tab: tab(TAB_B, 'http://localhost:5173/'), outcome, snapshot: '- heading [ref=e1]' }
         case 'browser.navigate': return { tab: current, outcome, snapshot: outcome === 'done' ? '- link [ref=e2]' : null }
         case 'browser.screenshot': return { tab: current, image: { id: `${'d'.repeat(64)}.jpg`, width: 4, height: 2 } }
-        case 'browser.console': return { messages: [{ level: 'warn', text: 'careful', at: 1 }], errors: ['boom'], failedRequests: [{ method: 'GET', url: 'http://x/', failure: 'net::ERR' }] }
+        case 'browser.console': return diagnostics ?? { messages: [{ level: 'warn', text: 'careful', at: 1 }], errors: ['boom'], failedRequests: [{ method: 'GET', url: 'http://x/', failure: 'net::ERR' }] }
         case 'browser.close': return { ok: true }
         default: return { tab: current, snapshot: `${method} done` }
       }
@@ -45,6 +46,7 @@ describe('browser tools over core', () => {
     tabs = []
     outcome = 'done'
     failWith = null
+    diagnostics = null
   })
 
   afterEach(() => rmSync(dir, { recursive: true, force: true }))
@@ -108,4 +110,19 @@ describe('browser tools over core', () => {
     expect(BROWSER_ARGUMENTS.wait.safeParse({}).success).toBe(false)
     expect(BROWSER_ARGUMENTS.tabs.parse({})).toEqual({ action: 'list' })
   })
+  it('reports HTTP errors and forwards the request id when inspecting network details', async () => {
+    tabs = [tab(TAB_A, 'http://localhost/')]
+    diagnostics = {
+      messages: [], errors: [], failedRequests: [],
+      network: [{ id: 'req-1', method: 'POST', url: 'http://localhost/api', resourceType: 'fetch', status: 500, statusText: 'Server Error', startedAt: 1, durationMs: 42, failure: null }],
+      request: { id: 'req-1', requestHeaders: {}, requestBody: '{"name":"test"}', responseHeaders: {}, responseBody: '{"error":"failed"}', bodyNote: null }
+    }
+    const tools = browserToolsOverCore(withCore, CONV, new AttachmentStore(dir))
+    const result = await tools.call('console', { requestId: 'req-1' })
+    expect(result.text).toContain('500')
+    expect(result.text).toContain('req-1')
+    expect(result.text).toContain('failed')
+    expect(calls.at(-1)).toMatchObject({ method: 'browser.console', params: { requestId: 'req-1' } })
+  })
+
 })

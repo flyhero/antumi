@@ -58,7 +58,7 @@
 
 - 客户端 ↔ core：JSON-RPC 2.0 over WebSocket，只绑定 `127.0.0.1`，并要求 `core.json` 里的 token，因为任何网页都能连本机的 WebSocket。
 - core ↔ daemon：NDJSON over Unix socket（Windows 上是 named pipe）。只有连接被拒绝才说明 daemon 的 socket 已失效，超时或 EPERM 不能证明什么。
-- `packages/protocol` 是唯一的类型来源：RPC 方法和通知都先在这里定义 zod schema，再在 `core/src/rpc-handlers.ts` 实现。客户端和 core 可以是不同版本；增加可选字段是安全的，破坏性改动要提升 `PROTOCOL_VERSION`（daemon 线路是 `DAEMON_PROTOCOL_VERSION`）。当前 core RPC 协议版本为 14，daemon 协议版本为 3，浏览器宿主协议版本为 2。桌面端和 core 跨越 RPC 版本时应一起升级。
+- `packages/protocol` 是唯一的类型来源：RPC 方法和通知都先在这里定义 zod schema，再在 `core/src/rpc-handlers.ts` 实现。客户端和 core 可以是不同版本；增加可选字段是安全的，破坏性改动要提升 `PROTOCOL_VERSION`（daemon 线路是 `DAEMON_PROTOCOL_VERSION`）。当前 core RPC 协议版本为 14，daemon 协议版本为 3，浏览器宿主协议版本为 3。桌面端和 core 跨越 RPC 版本时应一起升级。
 - 启动 Agent 用 argv 数组，prompt 前加 `--`，从不经过 shell。
 
 ## 2. 任务模型
@@ -536,14 +536,17 @@ Claude Code 和 Codex 可以登录多个账号（描述符的 `capabilities.acco
 ## 5. 内置浏览器
 
 
-聊天界面里的 Agent 可以用 Antumi 托管的浏览器看页面：Antumi 的 MCP 服务给每个聊天会话提供一组 `browser_*` 工具——`browser_navigate` 打开页面，`browser_snapshot` 读无障碍树快照（每个可交互元素带 ref），`browser_click` / `browser_type` / `browser_press` / `browser_hover` / `browser_scroll` / `browser_select` 按 ref 操作，`browser_wait` 等待，`browser_screenshot` 截图，`browser_console` 读控制台和失败的请求，`browser_tabs` 管标签页，`browser_bookmarks` 在用户的收藏里找地址。截图会显示在对话的卡片里。
+聊天界面里的 Agent 可以用 Antumi 托管的浏览器看页面：Antumi 的 MCP 服务给每个聊天会话提供一组 `browser_*` 工具——`browser_navigate` 打开页面，`browser_snapshot` 读无障碍树快照（每个可交互元素带 ref），`browser_click` / `browser_type` / `browser_press` / `browser_hover` / `browser_scroll` / `browser_select` 按 ref 操作，`browser_wait` 等待，`browser_screenshot` 截图，`browser_console` 读控制台、失败的请求和最近网络记录（含 HTTP 4xx/5xx，可传 `requestId` 按需读取请求和响应详情），`browser_tabs` 管标签页，`browser_bookmarks` 在用户的收藏里找地址。截图会显示在对话的卡片里。
 
 - **运行位置**：浏览器就是 Antumi 应用自带的 Chromium，标签页由桌面端主进程持有：关窗口、刷新界面都不影响它，退出应用才结束。应用没开时，Agent 的浏览器工具会提示先打开 Antumi。不用下载任何东西。
-- **隔离与登录态**：所有标签页共用一份持久会话（Electron 的 `persist:antumi-browser` 分区），所以登录态在所有会话间共享；标签页按会话隔离，Agent 只看到自己会话的标签页，删除会话时它的标签页一并关闭。
+- **隔离与登录态**：所有标签页共用一份持久会话（Electron 的 `persist:antumi-browser` 分区），所以登录态在所有会话间共享；标签页按会话隔离，Agent 只看到自己会话的标签页，删除会话时关闭 Agent 创建的标签页，用户共享的标签页撤销共享后保留。
 - **User-Agent**：这个会话的 User-Agent 换成本机 Chrome 会发的样子（同样的平台，`Chrome/<主版本>.0.0.0`），去掉 Electron 默认带的应用名和 `Electron/…`（`user-agent.ts`）。否则 Google 登录会把它当作内嵌在应用里的浏览器而拒绝，用 Google 账号登录的网站就进不去。客户端提示（`Sec-CH-UA`）仍是 Chromium 自己的。
 - **站点确认**：`localhost`、`127.0.0.1`、`[::1]`、`*.localhost`、`*.test` 直接打开；其他站点在一个会话里第一次访问时，对话里弹出确认卡：允许一次、本会话允许或拒绝。25 秒没有回答时 Agent 会收到「等待用户确认」，你回答后它再试一次就能打开。门禁拦的是顶层导航（Agent 的打开、你在画面里点的链接、重定向都算），页面自己加载的资源不拦。
 - **浏览器面板**：状态栏右下角的浏览器按钮（或 Ctrl+Shift+`）打开右侧的浏览器面板，和终端面板一样可以拖宽、最大化。它列出所有会话的标签页（标签上带会话名），也能用「＋」开你自己的标签页：这种标签页不属于任何会话，Agent 看不到，打开什么站点也不会问你。Agent 用浏览器时，对话里出现一个浏览器示意窗（这一回合访问过的标签页、当前页的地址和「打开」），浏览器在后台跑，点标签或「打开」才展开面板并选中那个标签页；标签页关闭后示意窗保留最后一次成功操作的标题和地址，「打开」改为不可点击的「已关闭」，关闭的标签仍可在卡片内切换回看；当前聊天订阅自身标签列表，其他回合或浏览器面板中的关闭操作也会同步到历史卡片（工具结果的格式见 `describeClosedTab`）；在 设置 → 集成 → 浏览器 里可以改成 Agent 第一次用浏览器时自动打开。
 - **页面**：面板里直接显示选中的标签页本身，铺满面板，和普通浏览器一样可以点击、输入（Esc 回到应用，Shift+Esc 把 Esc 发给页面）、改地址、后退刷新，也能关标签页、截图存成图片。地址栏右侧可以把页面固定成手机、平板等尺寸，固定尺寸的页面在面板里等比居中显示；Agent 调用 `browser_navigate` 或 `browser_tabs new` 时也可以传 `viewport`，之后一直保持到再改。你操作时标签页标为「你在操作」，Agent 对它的调用会被拒绝并被告知等待，5 秒没动作或点「交还给 Agent」后恢复。
+- **引用到会话**：地址栏的「发送到会话」可以引用选中文字、选取元素（文字、选择器、HTML、计算样式及局部截图）、截取整个可见页面或框选区域。选取时暂停 Agent 操作，Esc 或「取消」退出。内容和图片追加到当前会话草稿，保留已有输入，不自动发送；没有当前会话时打开新会话草稿。图片走 core 的附件存储，页面脚本不接触 Electron 或文件系统。
+- **共享页面**：自己打开的标签页可以通过「共享给 Agent」授权给一个指定会话。用户原始所有权保留，Agent 仅能看到本会话获得授权的标签页；共享当前站点不放宽其他标签页或其他站点的导航权限。停止共享不关闭、不刷新页面；会话删除时共享页回到用户名下，Agent 创建的页面仍关闭。修改共享要等正在执行的 Agent 操作完成。
+- **诊断**：地址栏的「开发者工具」提供控制台与网络面板，最近 100 条请求记录方法、状态、耗时和传输错误，详情按需读取；请求正文最多 8 KiB、响应正文最多 16 KiB，跳过二进制和已知超过 128 KiB 的响应。常见密钥字段在请求头、响应头、JSON 和表单正文中隐藏；发送到会话前可在草稿中查看。原生 DevTools 使用独立窗口；Electron 调试连接会被其占用，因此打开前暂停 Agent 并断开 Playwright，关闭后重新建立每页 CDP 代理与导航权限拦截，保持原标签页、登录态和页面输入。原生 DevTools 打开期间的请求与控制台输出以其自身面板为准。
 - **升级**：早期版本下载到 `~/.antumi/browser/` 的 Chromium 和 profile，在新版 core 第一次启动时自动删除；网站需要重新登录。
 - **收藏**：地址栏的星标收藏或取消收藏当前页，旁边的收藏按钮列出全部收藏，可搜索；点一条在当前标签页打开，按住 ⌘（Windows 上 Ctrl）在新标签页打开。收藏存在 core 的 `bookmarks` 表，一个地址只存一条，最多 5000 条，变动经 `bookmarks.changed` 同步到所有窗口。只收 http(s) 网址，书签小程序（`javascript:`）和 `chrome://` 之类的页面导入时跳过。
 - **导入收藏**：收藏菜单里的「从其他浏览器导入」由桌面端主进程读文件（`bookmark-import.ts`），渲染进程分批（每批 500 条）交给 core 的 `bookmarks.import`，已有的地址跳过。Chromium 系浏览器（Chrome、Edge、Brave、Arc（仅 macOS）、Vivaldi、Chromium）直接读各 profile 的 `Bookmarks` 文件，profile 名取自 `Local State`，所在文件夹记成「书签栏 / 工作」这样的路径。Safari、Firefox 的收藏库要额外权限或被浏览器锁着，所以走它们导出的 HTML 收藏文件（Netscape 格式，各浏览器都能导出）。只读收藏，不碰 cookie 和密码。

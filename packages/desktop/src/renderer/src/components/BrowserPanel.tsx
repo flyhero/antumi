@@ -8,6 +8,7 @@ import { BookmarksButton, BookmarkStar } from './BrowserBookmarks'
 import { ChatPicker } from './ChatPicker'
 import { ArrowLeftIcon, ArrowRightIcon, CameraIcon, CloseIcon, GlobeIcon, PlusIcon, RefreshIcon } from './icons'
 import { Spinner } from './Spinner'
+import { BrowserCaptureButton, BrowserDeveloperButton, BrowserShareButton } from './BrowserActions'
 
 // The hostname a tab shows in its strip, or what it has while it has no page.
 function tabName(tab: BrowserTab): string {
@@ -55,6 +56,7 @@ export function BrowserTabStrip() {
 
 // What is happening on the tab, in a word, for the line under the page.
 function tabState(tab: BrowserTab, focused: boolean): string {
+  if (tab.debugging) return t('BrowserActions.debugging')
   if (tab.userDriving) return t('BrowserPanel.youAreInControl')
   if (tab.agentActing) return t('BrowserPanel.agentIsInControl')
   if (tab.loading) return t('BrowserPanel.loadingPage')
@@ -84,7 +86,7 @@ function ViewportPicker({ tab }: { tab: BrowserTab }) {
     const viewport = match ? { width: Number(match[1]), height: Number(match[2]) } : null
     void perform((rpc) => rpc.call('browser.userViewport', { tabId: tab.id, viewport }))
   }
-  return <ChatPicker label={t('BrowserPanel.pageSize')} value={current} placeholder={t('BrowserPanel.matchPanel')} options={options} onChange={choose} align="end" placement="below" />
+  return <ChatPicker label={t('BrowserPanel.pageSize')} value={current} placeholder={t('BrowserPanel.matchPanel')} options={options} onChange={choose} align="end" placement="below" disabled={tab.debugging} />
 }
 
 // How long the per-frame watch keeps measuring after the rectangle last moved, so a drag or a
@@ -174,6 +176,7 @@ function useOwnerNames(): (tab: BrowserTab) => string | null {
 // the usual buttons, and a word on who is driving. The strip of tabs is the panel's top bar.
 export function BrowserPanel() {
   const status = useCore((s) => s.browser)
+  const collaboration = useCore((state) => state.rpc?.features.includes('browser-collaboration') ?? false)
   const { tabs, selectedId } = useWatchAllBrowser()
   const tab = tabs.find((each) => each.id === selectedId) ?? null
   const [address, setAddress] = useState('')
@@ -209,11 +212,12 @@ export function BrowserPanel() {
       {tab ? (
         <>
           <form className="browser-address" onSubmit={go}>
-            <button type="button" className="tool-button" aria-label={t('BrowserPanel.back')} data-tooltip={t('BrowserPanel.back')} onClick={() => history('back')}><ArrowLeftIcon /></button>
-            <button type="button" className="tool-button" aria-label={t('BrowserPanel.forward')} data-tooltip={t('BrowserPanel.forward')} onClick={() => history('forward')}><ArrowRightIcon /></button>
-            <button type="button" className="tool-button" aria-label={t('BrowserPanel.reload')} data-tooltip={t('BrowserPanel.reload')} onClick={() => history('reload')}><RefreshIcon /></button>
+            <button type="button" className="tool-button" disabled={tab.debugging} aria-label={t('BrowserPanel.back')} data-tooltip={t('BrowserPanel.back')} onClick={() => history('back')}><ArrowLeftIcon /></button>
+            <button type="button" className="tool-button" disabled={tab.debugging} aria-label={t('BrowserPanel.forward')} data-tooltip={t('BrowserPanel.forward')} onClick={() => history('forward')}><ArrowRightIcon /></button>
+            <button type="button" className="tool-button" disabled={tab.debugging} aria-label={t('BrowserPanel.reload')} data-tooltip={t('BrowserPanel.reload')} onClick={() => history('reload')}><RefreshIcon /></button>
             <input
               className="input browser-url mono"
+              disabled={tab.debugging}
               value={address}
               aria-label={t('BrowserPanel.address')}
               spellCheck={false}
@@ -227,8 +231,9 @@ export function BrowserPanel() {
             />
             <BookmarkStar tab={tab} />
             <BookmarksButton tab={tab} />
+            <div className="browser-page-actions">
             <ViewportPicker tab={tab} />
-            <button
+            {collaboration ? <><BrowserCaptureButton key={`capture:${tab.id}`} tab={tab} /><BrowserShareButton key={`share:${tab.id}`} tab={tab} /><BrowserDeveloperButton key={`developer:${tab.id}`} tab={tab} /></> : <button
               type="button"
               className="tool-button"
               aria-label={t('BrowserPanel.attachScreenshotToChat')}
@@ -236,7 +241,8 @@ export function BrowserPanel() {
               onClick={() => void perform((rpc) => rpc.call('browser.userScreenshot', { tabId: tab.id }))}
             >
               <CameraIcon />
-            </button>
+            </button>}
+            </div>
           </form>
           <NativeStage key={tab.id} tab={tab} />
           <div className="browser-status">

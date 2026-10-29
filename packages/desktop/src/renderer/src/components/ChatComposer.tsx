@@ -1,3 +1,5 @@
+import { useComposerInsertions } from '../composer-insertions'
+import { mergeComposerImages } from '../browser-context'
 import { getLocale, t, tr } from '../i18n'
 import { HelperStartOptions } from './HelperModelPicker'
 import { useCallback, useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
@@ -280,6 +282,10 @@ export function ChatComposer({ conversation, state, compact = false }: { convers
   const scheduleImagesSupported = useScheduleImagesSupported()
   const mentionsSupported = useFileMentionsSupported()
   const attached = useComposerImages(draft.images)
+  useComposerInsertions(id, (insertion) => {
+    setText((current) => [current, insertion.text].filter(Boolean).join('\n\n'))
+    attached.setImages((current) => mergeComposerImages(current, insertion.images))
+  })
   useEffect(() => saveComposerDraft(id, { ...value, images: attached.images }), [id, value, attached.images])
   // A message left here for the user, as a fork leaves the message it stopped before.
   useEffect(() => {

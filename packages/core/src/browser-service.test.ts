@@ -182,4 +182,96 @@ describe('BrowserService', () => {
     await expect(service.closeTab(panel, own.id)).rejects.toMatchObject({ reason: 'browser-not-watching' })
   })
 
+  it('shares a user tab with exactly one conversation and revokes access without reloading or closing it', async () => {
+    const user = fakeConnection()
+    await service.watchAll(user)
+    const opened = await service.newTab(user, null, 'http://localhost:5173/checkout')
+    expect(opened.userOwned).toBe(true)
+    await service.shareTab(user, opened.id, CONV_A)
+    expect(service.tabsOf(CONV_A).map((tab) => tab.id)).toContain(opened.id)
+    await expect(service.snapshot(CONV_A, opened.id)).resolves.toHaveProperty('snapshot')
+    await expect(service.snapshot(CONV_B, opened.id)).rejects.toMatchObject({ reason: 'browser-tab-not-found' })
+    await service.shareTab(user, opened.id, null)
+    await expect(service.snapshot(CONV_A, opened.id)).rejects.toMatchObject({ reason: 'browser-tab-not-found' })
+    expect(service.tabOf(opened.id)).toMatchObject({ conversationId: null, userOwned: true, url: 'http://localhost:5173/checkout' })
+    expect(host.calls.filter((call) => call.method === 'navigate')).toHaveLength(0)
+  })
+
+  it('does not allow a conversation client to share tabs or reassign an agent-owned page', async () => {
+    const user = fakeConnection()
+    await service.watchAll(user)
+    const own = await service.newTab(user, null, undefined)
+    const agent = fakeConnection()
+    service.watch(agent, CONV_A)
+    await expect(service.shareTab(agent, own.id, CONV_A)).rejects.toMatchObject({ reason: 'browser-not-watching' })
+    const opened = await service.open(CONV_A)
+    await expect(service.shareTab(user, opened.tab.id, CONV_B)).rejects.toMatchObject({ reason: 'browser-tab-owned' })
+  })
+
+  it('returns a shared user page when its conversation is removed, while closing agent-created tabs', async () => {
+    const user = fakeConnection()
+    await service.watchAll(user)
+    const own = await service.newTab(user, null, 'http://localhost:5173/')
+    await service.shareTab(user, own.id, CONV_A)
+    const agent = await service.open(CONV_A)
+    await service.closeForConversation(CONV_A)
+    expect(service.tabOf(own.id)).toMatchObject({ conversationId: null, userOwned: true })
+    expect(service.tabOf(agent.tab.id)).toBeNull()
+  })
+
+  it('holds agent interaction while the user selects context and stores captures as chat attachments', async () => {
+    const user = fakeConnection()
+    await service.watchAll(user)
+    const opened = await service.open(CONV_A)
+    let release = () => {}
+    const waiting = new Promise<void>((resolve) => { release = resolve })
+    const original = host.link.request
+    host.link.request = async (method, params) => { if (method === 'capture') await waiting; return original(method, params) }
+    const operation = service.capture(user, opened.tab.id, 'region')
+    await until(() => service.tabOf(opened.tab.id)?.userDriving)
+    await expect(service.click(CONV_A, opened.tab.id, { ref: 'e1' })).rejects.toMatchObject({ reason: 'browser-user-driving' })
+    release()
+    const context = await operation
+    expect(context?.image).toMatchObject({ width: 16, height: 9 })
+    expect(service.tabOf(opened.tab.id)?.userDriving).toBe(false)
+  })
+
+  it('pauses agent access for DevTools and restores it after closing', async () => {
+    const user = fakeConnection()
+    await service.watchAll(user)
+    const opened = await service.open(CONV_A)
+    await service.devtools(user, opened.tab.id)
+    expect(service.tabOf(opened.tab.id)?.debugging).toBe(true)
+    await expect(service.snapshot(CONV_A, opened.tab.id)).rejects.toMatchObject({ reason: 'browser-debugging' })
+    await service.devtools(user, opened.tab.id)
+    await expect(service.snapshot(CONV_A, opened.tab.id)).resolves.toHaveProperty('snapshot')
+    await service.console(CONV_A, opened.tab.id, false, 'request-1')
+    expect(host.calls.at(-1)).toMatchObject({ method: 'console', params: { requestId: 'request-1' } })
+  })
+
+  it('blocks agent actions while ownership is changing and refuses control changes during an agent action', async () => {
+    const user = fakeConnection()
+    service.watchAll(user)
+    const own = await service.newTab(user, null, 'http://localhost/')
+    await service.shareTab(user, own.id, CONV_A)
+    let release = () => {}
+    const waiting = new Promise<void>((resolve) => { release = resolve })
+    const original = host.link.request
+    host.link.request = async (method, params) => { if (method === 'tabs.share') await waiting; return original(method, params) }
+    const revoke = service.shareTab(user, own.id, null)
+    await until(() => service.tabOf(own.id)?.userDriving)
+    await expect(service.click(CONV_A, own.id, { ref: 'e1' })).rejects.toMatchObject({ reason: 'browser-user-driving' })
+    release()
+    await revoke
+    await service.shareTab(user, own.id, CONV_A)
+    const nextWait = new Promise<void>((resolve) => { release = resolve })
+    host.link.request = async (method, params) => { if (method === 'click') await nextWait; return original(method, params) }
+    const action = service.click(CONV_A, own.id, { ref: 'e1' })
+    await until(() => service.tabOf(own.id)?.agentActing)
+    await expect(service.shareTab(user, own.id, null)).rejects.toMatchObject({ reason: 'browser-tab-busy' })
+    await expect(service.devtools(user, own.id)).rejects.toMatchObject({ reason: 'browser-tab-busy' })
+    release()
+    await action
+  })
+
 })

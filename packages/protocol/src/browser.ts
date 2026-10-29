@@ -18,6 +18,9 @@ export const BrowserTab = z.object({
   // Whose tab it is: a conversation's, for its agent to drive, or null for one the user opened
   // themselves in the browser panel, which no agent sees.
   conversationId: z.string().uuid().nullable(),
+  // A user's tab can be lent to one conversation, and returned without closing its page.
+  userOwned: z.boolean().optional(),
+  debugging: z.boolean().optional(),
   url: z.string().max(4096),
   title: z.string().max(500),
   loading: z.boolean(),
@@ -96,9 +99,29 @@ export type BrowserScreenshot = z.infer<typeof BrowserScreenshot>
 export const BrowserConsole = z.object({
   messages: z.array(z.object({ level: z.string().max(20), text: z.string().max(4000), at: z.number() })),
   errors: z.array(z.string().max(4000)),
-  failedRequests: z.array(z.object({ method: z.string().max(10), url: z.string().max(4096), failure: z.string().max(500) }))
+  failedRequests: z.array(z.object({ method: z.string().max(10), url: z.string().max(4096), failure: z.string().max(500) })),
+  network: z.array(z.object({
+    id: z.string().max(80), method: z.string().max(20), url: z.string().max(4096), resourceType: z.string().max(50),
+    status: z.number().nullable(), statusText: z.string().max(200), startedAt: z.number(), durationMs: z.number().nullable(), failure: z.string().max(500).nullable()
+  })).optional(),
+  request: z.object({
+    id: z.string().max(80), requestHeaders: z.record(z.string(), z.string()), requestBody: z.string().max(8192).nullable(),
+    responseHeaders: z.record(z.string(), z.string()), responseBody: z.string().max(16384).nullable(), bodyNote: z.enum(['unavailable', 'binary', 'large', 'pending', 'truncated']).nullable()
+  }).optional()
 })
 export type BrowserConsole = z.infer<typeof BrowserConsole>
+export type BrowserNetworkRequest = NonNullable<BrowserConsole['network']>[number]
+export type BrowserNetworkDetail = NonNullable<BrowserConsole['request']>
+
+export const BrowserCaptureMode = z.enum(['page', 'selection', 'element', 'region'])
+export type BrowserCaptureMode = z.infer<typeof BrowserCaptureMode>
+export const BrowserCaptureOptions = z.object({ mode: BrowserCaptureMode, accent: z.string().max(100).optional() })
+export const BrowserPageContext = z.object({
+  url: z.string().max(4096), title: z.string().max(500), text: z.string().max(16000),
+  selector: z.string().max(2000).nullable(), html: z.string().max(16000), styles: z.record(z.string(), z.string()),
+  image: ChatImage.optional()
+})
+export type BrowserPageContext = z.infer<typeof BrowserPageContext>
 
 // How long a navigation to a site the user has not cleared waits for their answer before the
 // agent is told to try again later. Under the agents' own tool timeouts.

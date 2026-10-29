@@ -22,7 +22,7 @@ import { ChatCommandFields, SavedChatCommand } from './chat-commands'
 import { ProjectFileMatch } from './project-files'
 import { DirectoryListing, FileRead, FileWrite, MAX_FILE_PREVIEW_BYTES, ResolvedFile } from './files'
 import { ManagedWorktree, WorktreeCleanResult } from './worktree'
-import { browserActions, BrowserAction, BrowserConsole, BrowserNavigateTo, BrowserNavigation, BrowserScreenshot, BrowserScreenshotOptions, BrowserSnapshot, BrowserStatus, BrowserTab, BrowserTabId, BrowserUrl, BrowserViewport } from './browser'
+import { browserActions, BrowserAction, BrowserCaptureOptions, BrowserConsole, BrowserPageContext, BrowserNavigateTo, BrowserNavigation, BrowserScreenshot, BrowserScreenshotOptions, BrowserSnapshot, BrowserStatus, BrowserTab, BrowserTabId, BrowserUrl, BrowserViewport } from './browser'
 import { ComputerAwakeMode, ComputerAwakeStatus } from './awake'
 import { AgentCliStatus, AgentCliUpgrade } from './agent-cli'
 import { Environment } from './environment'
@@ -104,7 +104,7 @@ const UsageParams = z.object({ windowKinds: z.array(z.string()).optional() })
 // suggests what to fill it with (projects.suggestConfig).
 // conversation-references: history_read resolves explicit antumi://conversation/<id> references.
 // chat-references: user messages and queues retain the composer's explicit reference targets.
-export const CORE_FEATURES = ['chat-references', 'conversation-references', 'agent-profiles', 'pets', 'plugins', 'plugin-recommendations', 'chat-options', 'chat-images', 'task-start', 'worktrees', 'conversation-branches', 'conversation-commit-push', 'find-file', 'conversation-projects', 'browser', 'keep-awake', 'terminal-commands', 'bookmarks', 'usage-limit', 'agent-stats', 'conversation-stats', 'prompt-suggestions', 'environment', 'conversation-pin', 'schedules', 'chat-commands', 'file-mentions', 'plan-modes', 'agent-terminals', 'schedule-images', 'dashboard', 'task-conversation-summaries', 'routines', 'ports', 'conversation-fork', 'conversation-configuration', 'conversation-commit-steps', 'conversation-worktrees', 'conversation-start-branch', 'wire-log', 'file-preview', 'deferred-conversation-start', 'agent-cli-installation', 'agent-cli-maintenance', 'task-launch-options', 'git-management', 'git-commit-branches', 'task-handoff', 'handoff-model', 'handoff-mode', 'task-launch', 'discussions', 'discussion-members', 'discussion-projects', 'discussion-topics', 'discussion-requirements', 'task-cancel', 'task-redo-in-place', 'conversation-archive', 'discussion-archive', 'translate', 'commit-message', 'squads', 'squad-leader-planning', 'conversation-todos', 'knowledge-base', 'knowledge-base-kind', 'skills-library', 'skills-search', 'skills-activation', 'mcp-servers', 'source-investigate', 'todo-overview', 'conversation-helper', 'small-model-stats', 'terminal-color-prompt', 'git-commit-actions', 'file-editor', 'project-config', 'project-config-edit', 'model-providers', 'git-update', 'git-push-target', 'task-auto-run', 'session-import', 'agent-accounts', 'usage-analytics', 'task-references', 'release-idle-chats', 'project-star', 'git-favorites', 'project-files'] as const
+export const CORE_FEATURES = ['chat-references', 'conversation-references', 'agent-profiles', 'pets', 'plugins', 'plugin-recommendations', 'chat-options', 'chat-images', 'task-start', 'worktrees', 'conversation-branches', 'conversation-commit-push', 'find-file', 'conversation-projects', 'browser', 'browser-collaboration', 'keep-awake', 'terminal-commands', 'bookmarks', 'usage-limit', 'agent-stats', 'conversation-stats', 'prompt-suggestions', 'environment', 'conversation-pin', 'schedules', 'chat-commands', 'file-mentions', 'plan-modes', 'agent-terminals', 'schedule-images', 'dashboard', 'task-conversation-summaries', 'routines', 'ports', 'conversation-fork', 'conversation-configuration', 'conversation-commit-steps', 'conversation-worktrees', 'conversation-start-branch', 'wire-log', 'file-preview', 'deferred-conversation-start', 'agent-cli-installation', 'agent-cli-maintenance', 'task-launch-options', 'git-management', 'git-commit-branches', 'task-handoff', 'handoff-model', 'handoff-mode', 'task-launch', 'discussions', 'discussion-members', 'discussion-projects', 'discussion-topics', 'discussion-requirements', 'task-cancel', 'task-redo-in-place', 'conversation-archive', 'discussion-archive', 'translate', 'commit-message', 'squads', 'squad-leader-planning', 'conversation-todos', 'knowledge-base', 'knowledge-base-kind', 'skills-library', 'skills-search', 'skills-activation', 'mcp-servers', 'source-investigate', 'todo-overview', 'conversation-helper', 'small-model-stats', 'terminal-color-prompt', 'git-commit-actions', 'file-editor', 'project-config', 'project-config-edit', 'model-providers', 'git-update', 'git-push-target', 'task-auto-run', 'session-import', 'agent-accounts', 'usage-analytics', 'task-references', 'release-idle-chats', 'project-star', 'git-favorites', 'project-files'] as const
 // session-import: core lists the sessions agents ran outside Antumi and imports them as conversations (sessionImports.*).
 // agent-accounts: Claude and Codex sign in to several accounts, one active each, and a usage limit
 // moves the agent to the next with quota (accounts.*); usage readings name their account.
@@ -536,7 +536,7 @@ export const rpcMethods = {
   'browser.select': { params: BrowserTabRef.extend(browserActions.select.shape), result: BrowserAction },
   'browser.wait': { params: BrowserTabRef.extend(browserActions.wait.shape), result: BrowserAction },
   // The page's console, errors and failed requests, since the tab opened or its last navigation.
-  'browser.console': { params: BrowserTabRef.extend({ sinceNavigation: z.boolean().optional() }), result: BrowserConsole },
+  'browser.console': { params: BrowserTabRef.extend({ sinceNavigation: z.boolean().optional(), requestId: z.string().max(80).optional() }), result: BrowserConsole },
   'browser.close': { params: BrowserTabRef, result: Ok },
   // The user's side, from the app. status answers from the app's host, connecting when it is not.
   'browser.status': { params: z.object({}), result: BrowserStatus },
@@ -557,6 +557,11 @@ export const rpcMethods = {
   'browser.closeTab': { params: z.object({ tabId: BrowserTabId }), result: Ok },
   'browser.handBack': { params: z.object({ tabId: BrowserTabId }), result: Ok },
   'browser.userScreenshot': { params: z.object({ tabId: BrowserTabId }), result: AttachmentInfo },
+  'browser.shareTab': { params: z.object({ tabId: BrowserTabId, conversationId: z.string().uuid().nullable() }), result: BrowserTab },
+  'browser.capture': { params: z.object({ tabId: BrowserTabId }).extend(BrowserCaptureOptions.shape), result: BrowserPageContext.nullable() },
+  'browser.cancelCapture': { params: z.object({ tabId: BrowserTabId }), result: Ok },
+  'browser.devtools': { params: z.object({ tabId: BrowserTabId }), result: Ok },
+  'browser.userConsole': { params: z.object({ tabId: BrowserTabId, requestId: z.string().max(80).optional() }), result: BrowserConsole },
   // An upload in chunks; core checks and stores the image on commit.
   'attachments.begin': {
     params: z.object({ size: z.number().int().min(1).max(MAX_ATTACHMENT_BYTES) }),

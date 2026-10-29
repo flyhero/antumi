@@ -6,6 +6,8 @@ import {
   type AttachmentInfo,
   type BrowserAction,
   type BrowserConsole,
+  type BrowserCaptureMode,
+  type BrowserPageContext,
   type BrowserNavigateTo,
   type BrowserNavigation,
   type BrowserScreenshot,
@@ -74,6 +76,7 @@ export class BrowserService {
   private readonly drivingUntil = new Map<string, number>()
   private readonly drivingTimers = new Map<string, NodeJS.Timeout>()
   private readonly acting = new Set<string>()
+  private readonly userBusy = new Set<string>()
 
   constructor(
     private readonly paths: BrowserPaths,
@@ -147,6 +150,7 @@ export class BrowserService {
     this.drivingTimers.clear()
     this.drivingUntil.clear()
     this.acting.clear()
+    this.userBusy.clear()
     const owners = new Set([...this.tabs.values()].map((tab) => tab.conversationId))
     this.tabs = new Map()
     for (const conversationId of owners) this.emitTabs(conversationId)
@@ -204,6 +208,8 @@ export class BrowserService {
     if (conversationId === null) return 'done'
     if (this.allowed.get(conversationId)?.has(hostName) || this.allowOnce.get(conversationId)?.has(hostName)) return 'done'
     if (tabId && this.isDriving(tabId)) return 'done'
+    const shared = tabId ? this.tabs.get(tabId) : null
+    if (shared?.userOwned && shared.conversationId === conversationId && browserHostOf(shared.url) === hostName) return 'done'
     // Asking can fail at once (no chat is running to ask in): that is a refusal, not a crash.
     const asked = Promise.resolve().then(() => this.askHost(conversationId, hostName, url)).then(
       (decision) => {
@@ -295,6 +301,53 @@ export class BrowserService {
     return this.attachments.put(Buffer.from(shot.jpeg, 'base64'))
   }
 
+  private panelTab(connection: Connection, tabId: string): Promise<HostLink> {
+    if (!connection.browsing.has(WATCH_ALL)) throw new Rejection('browser-not-watching', '请先打开浏览器面板')
+    return this.userTab(connection, tabId)
+  }
+
+  private async controlTab<T>(connection: Connection, tabId: string, run: (link: HostLink) => Promise<T>): Promise<T> {
+    const link = await this.panelTab(connection, tabId)
+    if (this.acting.has(tabId) || this.userBusy.has(tabId)) throw new Rejection('browser-tab-busy', '请等待当前操作完成后再操作此标签页')
+    this.userBusy.add(tabId)
+    this.tabChanged(tabId)
+    try { return await run(link) }
+    finally { this.userBusy.delete(tabId); this.tabChanged(tabId) }
+  }
+
+  async shareTab(connection: Connection, tabId: string, conversationId: string | null): Promise<BrowserTab> {
+    const shared = await this.controlTab(connection, tabId, async (link) => {
+      if (!this.checkWatching(connection, tabId).userOwned) throw new Rejection('browser-tab-owned', '只能共享你自己打开的标签页')
+      const shared = await link.request('tabs.share', { tabId, conversationId })
+      this.stopDriving(tabId)
+      return shared
+    })
+    return this.describe(shared)
+  }
+
+  async capture(connection: Connection, tabId: string, mode: BrowserCaptureMode, accent?: string): Promise<BrowserPageContext | null> {
+    return this.controlTab(connection, tabId, async (link) => {
+      const captured = await link.request('capture', { tabId, mode, accent })
+      if (!captured) return null
+      const { jpeg, ...context } = captured
+      if (!jpeg) return context
+      const info = await this.attachments.put(Buffer.from(jpeg, 'base64'))
+      return { ...context, image: { id: info.id, width: info.width, height: info.height } }
+    })
+  }
+
+  async cancelCapture(connection: Connection, tabId: string): Promise<void> {
+    await (await this.panelTab(connection, tabId)).request('capture.cancel', { tabId })
+  }
+
+  async devtools(connection: Connection, tabId: string): Promise<void> {
+    await this.controlTab(connection, tabId, async (link) => { await link.request('devtools', { tabId }) })
+  }
+
+  async userConsole(connection: Connection, tabId: string, requestId?: string): Promise<BrowserConsole> {
+    return (await this.panelTab(connection, tabId)).request('console', { tabId, requestId })
+  }
+
   private checkWatching(connection: Connection, tabId: string): HostTab {
     const tab = this.tabs.get(tabId)
     if (!tab) throw new Rejection('browser-tab-not-found', '标签页已经关闭')
@@ -358,7 +411,7 @@ export class BrowserService {
   // was rather than on an error page. A viewport given holds the tab at it from here on.
   async navigate(conversationId: string, tabId: string, to: BrowserNavigateTo, viewport?: BrowserViewport | null): Promise<BrowserNavigation> {
     const link = await this.agentTab(conversationId, tabId)
-    return this.whileActing(tabId, async () => {
+    return this.whileActing(conversationId, tabId, async () => {
       const target = 'url' in to ? to.url : null
       const hostName = target === null ? null : browserHostOf(target)
       if (hostName && target !== null) {
@@ -376,7 +429,7 @@ export class BrowserService {
   // Holds the tab at a size for the agent's layout, or lets it follow the panel again.
   async setViewport(conversationId: string, tabId: string, viewport: BrowserViewport | null): Promise<BrowserTab> {
     const link = await this.agentTab(conversationId, tabId)
-    return this.whileActing(tabId, async () => {
+    return this.whileActing(conversationId, tabId, async () => {
       await link.request('viewport', { tabId, viewport })
       return this.tabs.get(tabId)
     }, (tab) => {
@@ -419,21 +472,21 @@ export class BrowserService {
 
   async screenshot(conversationId: string, tabId: string, options: { fullPage?: boolean; ref?: string }): Promise<BrowserScreenshot> {
     const link = await this.agentTab(conversationId, tabId)
-    return this.whileActing(tabId, async () => {
+    return this.whileActing(conversationId, tabId, async () => {
       const shot = await link.request('screenshot', { tabId, ...options })
       const info = await this.attachments.put(Buffer.from(shot.jpeg, 'base64'))
       return { tab: shot.tab, image: { id: info.id, width: info.width, height: info.height } }
     }, (shot) => ({ tab: this.describe(shot.tab), image: shot.image }))
   }
 
-  async console(conversationId: string, tabId: string, sinceNavigation: boolean): Promise<BrowserConsole> {
+  async console(conversationId: string, tabId: string, sinceNavigation: boolean, requestId?: string): Promise<BrowserConsole> {
     const link = await this.agentTab(conversationId, tabId)
-    return link.request('console', { tabId, sinceNavigation })
+    return this.whileActing(conversationId, tabId, () => link.request('console', { tabId, sinceNavigation, requestId }), (result) => result)
   }
 
   async close(conversationId: string, tabId: string): Promise<void> {
     const link = await this.agentTab(conversationId, tabId)
-    await link.request('tabs.close', { tabId })
+    await this.whileActing(conversationId, tabId, () => link.request('tabs.close', { tabId }), () => undefined)
   }
 
   // A conversation deleted takes its tabs and what it was allowed with it.
@@ -446,18 +499,25 @@ export class BrowserService {
 
   private async action<M extends 'snapshot' | keyof typeof browserActions>(conversationId: string, method: M, params: BrowserHostParams<M>): Promise<BrowserAction> {
     const link = await this.agentTab(conversationId, params.tabId)
-    return this.whileActing(params.tabId, () => link.request(method, params), (result) => ({ tab: this.describe(result.tab), snapshot: clip(result.snapshot, MAX_SNAPSHOT_CHARS) }))
+    return this.whileActing(conversationId, params.tabId, () => link.request(method, params), (result) => ({ tab: this.describe(result.tab), snapshot: clip(result.snapshot, MAX_SNAPSHOT_CHARS) }))
+  }
+
+  private checkAgentTab(conversationId: string, tabId: string): void {
+    const tab = this.tabs.get(tabId)
+    if (!tab || tab.conversationId !== conversationId) throw new Rejection('browser-tab-not-found', '标签页不存在，先用 browser_tabs 看一下')
+    if (tab.debugging) throw new Rejection('browser-debugging', '用户正在使用开发者工具，关闭后再继续操作此标签页')
+    if (this.isDriving(tabId) || this.userBusy.has(tabId)) throw new Rejection('browser-user-driving', '用户正在操作这个标签页，请等待，或向用户确认再继续')
   }
 
   private agentTab(conversationId: string, tabId: string): Promise<HostLink> {
-    const tab = this.tabs.get(tabId)
-    if (!tab || tab.conversationId !== conversationId) throw new Rejection('browser-tab-not-found', '标签页不存在，先用 browser_tabs 看一下')
-    if (this.isDriving(tabId)) throw new Rejection('browser-user-driving', '用户正在操作这个标签页，请等待，或向用户确认再继续')
+    this.checkAgentTab(conversationId, tabId)
     return this.ensureLink()
   }
 
   // The tab reads as the agent's while the call runs; the result describes it once it is done.
-  private async whileActing<T, R>(tabId: string, run: () => Promise<T>, finish: (result: T) => R): Promise<R> {
+  private async whileActing<T, R>(conversationId: string, tabId: string, run: () => Promise<T>, finish: (result: T) => R): Promise<R> {
+    this.checkAgentTab(conversationId, tabId)
+    if (this.acting.has(tabId)) throw new Rejection('browser-tab-busy', '此标签页正在执行另一个操作，请稍后重试')
     this.acting.add(tabId)
     this.tabChanged(tabId)
     let result: T
@@ -475,6 +535,6 @@ export class BrowserService {
   }
 
   private describe(tab: HostTab): BrowserTab {
-    return { ...tab, userDriving: this.isDriving(tab.id), agentActing: this.acting.has(tab.id) }
+    return { ...tab, userDriving: this.isDriving(tab.id) || this.userBusy.has(tab.id), agentActing: this.acting.has(tab.id) }
   }
 }

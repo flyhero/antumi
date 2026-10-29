@@ -456,7 +456,7 @@ export function createRpcHandlers(
     'browser.scroll': ({ conversationId, tabId, ...params }) => browser.scroll(conversationId, tabId, params),
     'browser.select': ({ conversationId, tabId, ...params }) => browser.select(conversationId, tabId, params),
     'browser.wait': ({ conversationId, tabId, ...params }) => browser.wait(conversationId, tabId, params),
-    'browser.console': ({ conversationId, tabId, sinceNavigation }) => browser.console(conversationId, tabId, sinceNavigation ?? false),
+    'browser.console': ({ conversationId, tabId, sinceNavigation, requestId }) => browser.console(conversationId, tabId, sinceNavigation ?? false, requestId),
     'browser.close': async ({ conversationId, tabId }) => {
       await browser.close(conversationId, tabId)
       return OK
@@ -485,6 +485,17 @@ export function createRpcHandlers(
       return OK
     },
     'browser.userScreenshot': ({ tabId }, connection) => browser.userScreenshot(connection, tabId),
+    'browser.shareTab': ({ tabId, conversationId }, connection) => {
+      if (conversationId) {
+        const target = conversations.get(conversationId)
+        if (target.archivedAt != null) throw new Rejection('conversation-archived', '请先恢复会话再共享标签页')
+      }
+      return browser.shareTab(connection, tabId, conversationId)
+    },
+    'browser.capture': ({ tabId, mode, accent }, connection) => browser.capture(connection, tabId, mode, accent),
+    'browser.cancelCapture': async ({ tabId }, connection) => { await browser.cancelCapture(connection, tabId); return OK },
+    'browser.devtools': async ({ tabId }, connection) => { await browser.devtools(connection, tabId); return OK },
+    'browser.userConsole': ({ tabId, requestId }, connection) => browser.userConsole(connection, tabId, requestId),
     'attachments.begin': ({ size }, connection) => ({ uploadId: attachments.uploads.begin(connection, size) }),
     'attachments.append': ({ uploadId, offset, data }, connection) => {
       attachments.uploads.append(connection, uploadId, offset, data)

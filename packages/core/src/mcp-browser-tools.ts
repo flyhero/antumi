@@ -54,7 +54,7 @@ export const BROWSER_ARGUMENTS: Record<BrowserToolKind, z.ZodType<Record<string,
     .extend({ tabId: TabId })
     .refine((args) => args.text !== undefined || args.textGone !== undefined || args.seconds !== undefined, { message: 'text、textGone、seconds 至少给一个' }),
   tabs: z.object({ action: z.enum(['list', 'new', 'switch', 'close']).default('list'), tabId: TabId, url: BrowserUrl.optional(), viewport: Viewport }),
-  console: z.object({ tabId: TabId, sinceNavigation: z.boolean().optional() })
+  console: z.object({ tabId: TabId, sinceNavigation: z.boolean().optional(), requestId: z.string().max(80).optional() })
 }
 
 const tabIdProperty = { tabId: { type: 'string', description: '标签页 id，可选；不给就用当前标签页' } }
@@ -245,10 +245,10 @@ export const BROWSER_TOOL_SPECS: ReadonlyArray<ToolSpec & { kind: BrowserToolKin
     kind: 'console',
     name: browserToolName('console'),
     title: '读取控制台',
-    description: '读取当前标签页的 console 输出、页面错误和失败的网络请求，验证改动有没有报错时用。',
+    description: '读取 console、页面错误及 HTTP 网络请求（含 4xx/5xx）。可用 requestId 查看对应请求和响应详情。',
     inputSchema: {
       type: 'object',
-      properties: { sinceNavigation: { type: 'boolean', description: '只看最后一次导航之后的' }, ...tabIdProperty },
+      properties: { sinceNavigation: { type: 'boolean', description: '只看最后一次导航之后的控制台输出' }, requestId: { type: 'string', description: '网络列表返回的请求 ID，读取请求参数和响应详情' }, ...tabIdProperty },
       additionalProperties: false
     },
     annotations: readOnly
@@ -280,7 +280,9 @@ function consoleText(output: BrowserConsole): string {
   const messages = output.messages.map((entry) => `[${entry.level}] ${entry.text}`)
   const errors = output.errors.map((error) => `[error] ${error}`)
   const failed = output.failedRequests.map((request) => `[request] ${request.method} ${request.url} — ${request.failure}`)
-  const lines = [...messages, ...errors, ...failed]
+  const network = (output.network ?? []).filter((request) => (request.status ?? 0) >= 400 || request.failure || ['xhr', 'fetch'].includes(request.resourceType)).slice(-30).map((request) => `[network ${request.id}] ${request.method} ${request.url.slice(0, 1000)} — ${request.status ?? request.failure ?? 'pending'} ${request.statusText}`)
+  const detail = output.request ? ['[request details]', JSON.stringify(output.request, null, 2)] : []
+  const lines = [...messages, ...errors, ...failed, ...network, ...detail]
   return lines.length ? lines.join('\n') : '（没有控制台输出、页面错误或失败的请求）'
 }
 
@@ -414,8 +416,8 @@ export function browserToolsOverCore(
         return { text: tabs.map((tab) => `- ${tab.id}${tab.id === currentTab ? '（当前）' : ''} ${tab.title || '(无标题)'} ${tab.url}`).join('\n') }
       }
       case 'console': {
-        const { tabId, sinceNavigation } = args
-        const output = await rpc.call('browser.console', { conversationId, tabId: await tabFor(rpc, tabId), sinceNavigation: sinceNavigation === true })
+        const { tabId, sinceNavigation, requestId } = args
+        const output = await rpc.call('browser.console', { conversationId, tabId: await tabFor(rpc, tabId), sinceNavigation: sinceNavigation === true, ...(typeof requestId === 'string' ? { requestId } : {}) })
         return { text: consoleText(output) }
       }
     }

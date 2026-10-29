@@ -1,3 +1,5 @@
+import { useComposerInsertions } from '../composer-insertions'
+import { mergeComposerImages } from '../browser-context'
 import { useShortcutLabel } from '../keyboard-shortcuts'
 import { getLocale, t, tr } from '../i18n'
 import { useEffect, useMemo, useState } from 'react'
@@ -92,6 +94,10 @@ export function ConversationDraft() {
   useEffect(() => setBranch(null), [primary])
   const startBranch = branches.options?.git ? branch : null
   const attached = useComposerImages(draft.images)
+  useComposerInsertions(composerId, (insertion) => {
+    setText((current) => [current, insertion.text].filter(Boolean).join('\n\n'))
+    attached.setImages((current) => mergeComposerImages(current, insertion.images))
+  })
   useEffect(() => saveComposerDraft(composerId, { ...value, images: attached.images }), [composerId, value, attached.images])
   const width = usePreferences((s) => s.chatWidth)
   const typeface = useChatTypeface()

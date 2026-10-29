@@ -57,7 +57,7 @@ export function fakeBrowserHost() {
     status: () => ({ state: 'ready', running: true }),
     'tabs.list': () => ({ tabs: [...tabs.values()] }),
     'tabs.open': async ({ conversationId, url, viewport }) => {
-      const opened: HostTab = { id: randomUUID(), conversationId: conversationId ?? null, url: 'about:blank', title: '', loading: false, active: true, viewport: viewport ?? null, createdAt: Date.now() }
+      const opened: HostTab = { id: randomUUID(), conversationId: conversationId ?? null, userOwned: !conversationId, url: 'about:blank', title: '', loading: false, active: true, viewport: viewport ?? null, createdAt: Date.now() }
       tabs.set(opened.id, opened)
       activate(opened.id)
       tabsEvent()
@@ -70,10 +70,20 @@ export function fakeBrowserHost() {
       return { ok: true }
     },
     'tabs.closeAll': ({ conversationId }) => {
-      for (const each of [...tabs.values()]) if (each.conversationId === conversationId) tabs.delete(each.id)
+      for (const each of [...tabs.values()]) if (each.conversationId === conversationId) { if (each.userOwned) each.conversationId = null; else tabs.delete(each.id) }
       tabsEvent()
       return { ok: true }
     },
+    'tabs.share': ({ tabId, conversationId }) => {
+      const current = tab(tabId)
+      if (!current.userOwned) throw new Rejection('browser-tab-owned')
+      current.conversationId = conversationId
+      tabsEvent()
+      return current
+    },
+    capture: ({ tabId, mode }) => ({ url: tab(tabId).url, title: tab(tabId).title, text: mode === 'selection' ? 'selected text' : '', selector: null, html: '', styles: {}, ...(mode === 'selection' ? {} : { jpeg: Buffer.from(pngBytes(16, 9)).toString('base64') }) }),
+    'capture.cancel': () => ({ ok: true }),
+    devtools: ({ tabId }) => { const current = tab(tabId); current.debugging = !current.debugging; tabsEvent(); return { ok: true } },
     navigate: ({ tabId, to, viewport }) => {
       activate(tabId)
       if (viewport !== undefined) tab(tabId).viewport = viewport

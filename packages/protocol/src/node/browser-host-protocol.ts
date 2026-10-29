@@ -1,10 +1,10 @@
 import { z } from 'zod'
-import { browserActions, BrowserConsole, BrowserNavigateTo, BrowserNavigationOutcome, BrowserScreenshotOptions, BrowserStatus, BrowserTab, BrowserTabId, BrowserUrl, BrowserViewport } from '../browser'
+import { browserActions, BrowserCaptureOptions, BrowserConsole, BrowserNavigateTo, BrowserNavigationOutcome, BrowserPageContext, BrowserScreenshotOptions, BrowserStatus, BrowserTab, BrowserTabId, BrowserUrl, BrowserViewport } from '../browser'
 
 // JSON-RPC-shaped lines over a loopback WebSocket between core and the browser host, which the
 // desktop app runs in its main process. The app writes where to connect to the host file
 // (paths.browserHostFile, owner-only) while it is up, and removes it as it quits.
-export const BROWSER_HOST_PROTOCOL_VERSION = 2
+export const BROWSER_HOST_PROTOCOL_VERSION = 3
 
 export const BrowserHostEndpoint = z.object({
   port: z.number().int(),
@@ -35,6 +35,10 @@ export const browserHostMethods = {
   'tabs.open': { params: z.object({ conversationId: z.string().uuid().optional(), url: BrowserUrl.optional(), viewport: BrowserViewport.nullable().optional() }), result: NavigationResult },
   'tabs.close': { params: TabRef, result: Ok },
   'tabs.closeAll': { params: z.object({ conversationId: z.string().uuid() }), result: Ok },
+  'tabs.share': { params: TabRef.extend({ conversationId: z.string().uuid().nullable() }), result: HostTab },
+  capture: { params: TabRef.extend(BrowserCaptureOptions.shape), result: BrowserPageContext.omit({ image: true }).extend({ jpeg: z.string().optional() }).nullable() },
+  'capture.cancel': { params: TabRef, result: Ok },
+  devtools: { params: TabRef, result: Ok },
   navigate: { params: TabRef.extend({ to: BrowserNavigateTo, viewport: BrowserViewport.nullable().optional() }), result: NavigationResult },
   // Holds the tab at a size, or lets it follow the panel again (null).
   viewport: { params: TabRef.extend({ viewport: BrowserViewport.nullable() }), result: Ok },
@@ -48,7 +52,7 @@ export const browserHostMethods = {
   scroll: { params: TabRef.extend(browserActions.scroll.shape), result: ActionResult },
   select: { params: TabRef.extend(browserActions.select.shape), result: ActionResult },
   wait: { params: TabRef.extend(browserActions.wait.shape), result: ActionResult },
-  console: { params: TabRef.extend({ sinceNavigation: z.boolean().optional() }), result: BrowserConsole },
+  console: { params: TabRef.extend({ sinceNavigation: z.boolean().optional(), requestId: z.string().max(80).optional() }), result: BrowserConsole },
   // Core's answer to a hostCheck event.
   'host.resolve': { params: z.object({ checkId: z.string(), allow: z.boolean() }), result: Ok },
   shutdown: { params: z.object({}), result: Ok }

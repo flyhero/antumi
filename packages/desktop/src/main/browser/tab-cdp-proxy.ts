@@ -115,9 +115,12 @@ export async function startTabProxy(webContents: WebContents): Promise<TabProxy>
     server.once('error', reject)
     server.listen(0, '127.0.0.1', () => resolve())
   })
+  let closed = false
   return {
     endpoint: `http://127.0.0.1:${addressOf(server).port}`,
     close: () => {
+      if (closed) return
+      closed = true
       debug.off('message', onMessage)
       client?.close()
       wss.close()

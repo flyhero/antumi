@@ -3,6 +3,7 @@ import type { Page } from 'playwright-core'
 import type { HostTab } from '@antumi/protocol/node'
 import type { BrowserConsole, BrowserViewport } from '@antumi/protocol'
 import { HostError } from './host-error'
+import { BrowserNetwork } from './browser-network'
 
 type ConsoleEntry = BrowserConsole['messages'][number]
 type FailedRequest = BrowserConsole['failedRequests'][number]
@@ -13,11 +14,16 @@ const CONSOLE_LIMIT = 200
 export type TabAttachment = {
   close(): Promise<void>
   setViewport(viewport: BrowserViewport | null): Promise<void>
+  devtools?(): Promise<void>
+  cancelCapture?(): Promise<void>
 }
 
 export type Tab = {
   id: string
   conversationId: string | null
+  userOwned: boolean
+  debugging: boolean
+  network: BrowserNetwork
   page: Page
   attachment: TabAttachment
   title: string
@@ -40,10 +46,13 @@ export class TabRegistry {
 
   constructor(private readonly changed: () => void) {}
 
-  add(conversationId: string | null, page: Page, attachment: TabAttachment, viewport: BrowserViewport | null = null): Tab {
+  add(conversationId: string | null, page: Page, attachment: TabAttachment, viewport: BrowserViewport | null = null, userOwned = conversationId === null): Tab {
     const tab: Tab = {
       id: randomUUID(),
       conversationId,
+      userOwned,
+      debugging: false,
+      network: new BrowserNetwork(),
       page,
       attachment,
       title: '',
@@ -57,6 +66,13 @@ export class TabRegistry {
     }
     this.tabs.set(tab.id, tab)
     this.activeByConversation.set(owner(conversationId), tab.id)
+    this.listen(tab, page)
+    this.changed()
+    return tab
+  }
+
+  private listen(tab: Tab, page: Page): void {
+    tab.network.attach(page)
     page.on('request', (request) => {
       if (request.isNavigationRequest() && request.frame() === page.mainFrame()) {
         tab.loading = true
@@ -79,9 +95,34 @@ export class TabRegistry {
     page.on('requestfailed', (request) => {
       push(tab, tab.failedRequests, { method: request.method(), url: request.url().slice(0, 4096), failure: request.failure()?.errorText.slice(0, 500) ?? '' }, 'failedRequests')
     })
-    page.on('close', () => this.remove(tab.id))
+    page.on('close', () => { if (tab.page === page && !tab.debugging) this.remove(tab.id) })
+  }
+
+  replacePage(tab: Tab, page: Page): void {
+    tab.page = page
+    this.listen(tab, page)
+    tab.debugging = false
     this.changed()
-    return tab
+    void this.refreshTitle(tab)
+  }
+
+  setDebugging(tab: Tab, active: boolean): void {
+    tab.debugging = active
+    this.changed()
+  }
+
+  share(tab: Tab, conversationId: string | null): HostTab {
+    if (!tab.userOwned) throw new HostError('browser-tab-owned', '只能共享你自己打开的标签页')
+    const previous = owner(tab.conversationId)
+    tab.conversationId = conversationId
+    if (this.activeByConversation.get(previous) === tab.id) {
+      const next = this.all().find((each) => each.id !== tab.id && owner(each.conversationId) === previous)
+      if (next) this.activeByConversation.set(previous, next.id)
+      else this.activeByConversation.delete(previous)
+    }
+    this.activeByConversation.set(owner(conversationId), tab.id)
+    this.changed()
+    return this.describe(tab)
   }
 
   // The tab is gone, from whichever side noticed first (the page closing, the view destroyed).
@@ -100,7 +141,7 @@ export class TabRegistry {
 
   get(tabId: string): Tab {
     const tab = this.tabs.get(tabId)
-    if (!tab || tab.page.isClosed()) throw new HostError('browser-tab-not-found', '标签页不存在')
+    if (!tab || (tab.page.isClosed() && !tab.debugging)) throw new HostError('browser-tab-not-found', '标签页不存在')
     return tab
   }
 
@@ -142,6 +183,8 @@ export class TabRegistry {
     return {
       id: tab.id,
       conversationId: tab.conversationId,
+      userOwned: tab.userOwned,
+      debugging: tab.debugging,
       url: tab.page.url().slice(0, 4096),
       title: tab.title.slice(0, 500),
       loading: tab.loading,

@@ -218,6 +218,7 @@ const REASON_TEXT: Record<string, string> = localized(() => ({
   'task-started': t('labels.taskHasAlreadyStarted'),
   'task-finished': t('labels.taskIsNoLongerRunning'),
   'user-continued': t('labels.youResumedThisConversationYourself'),
+  'plan-answered': t('labels.planAnsweredBeforeItsTime'),
   'agent-changed': t('labels.conversationHandedOffToAnotherAgent'),
   superseded: t('labels.quotaLimitReachedAgainUsingTheLatestLimit'),
   'auto-continue-off': t('labels.autoResumeAfterQuotaResetWasDisabled'),

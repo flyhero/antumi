@@ -1809,6 +1809,14 @@ export const MESSAGES = {
     "zh": "管理预约",
     "en": "Manage schedule"
   },
+  "ChatDock.handlePlanNow": {
+    "zh": "现在处理",
+    "en": "Handle now"
+  },
+  "ChatDock.handlePlanNowHint": {
+    "zh": "取消预约，现在确认计划",
+    "en": "Cancel the schedule and answer the plan now"
+  },
   "ChatDock.cancelSchedule": {
     "zh": "取消预约",
     "en": "Cancel schedule"
@@ -10730,6 +10738,10 @@ export const MESSAGES = {
   "labels.taskIsNoLongerRunning": {
     "zh": "任务已经不在执行了",
     "en": "Task is no longer running"
+  },
+  "labels.planAnsweredBeforeItsTime": {
+    "zh": "计划在预约时间前已经处理",
+    "en": "The plan was answered before its time"
   },
   "labels.youResumedThisConversationYourself": {
     "zh": "你自己继续了这条会话",

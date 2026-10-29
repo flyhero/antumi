@@ -114,6 +114,13 @@ export function openRunsForConversation(runs: readonly ScheduledRun[], conversat
 }
 
 // What a run does when it starts, in a few words.
+// A waiting run that is to approve the plan its conversation waits on: an empty message, as the
+// plan card schedules it. While it waits, the plan card gives way to it.
+export function approvesPlan(run: ScheduledRun): boolean {
+  const { target } = run
+  return run.status === 'waiting' && target.kind === 'conversation' && !target.text && !target.images?.length && !target.resumes
+}
+
 export function runAction(run: Pick<ScheduledRun, 'target'>): string {
   const { target } = run
   if (target.kind === 'task') return target.afterDependencies ? t('schedules.executeAfterDependencies') : t('schedules.executeTask')

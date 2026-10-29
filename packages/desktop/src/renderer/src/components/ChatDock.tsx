@@ -3,8 +3,8 @@ import { useContext, useState } from 'react'
 import { focusPaneInput, selectConversation, setSchedulesOpen, useCore } from '../core-store'
 import { composerDraft } from '../composer-drafts'
 import { useShortcutLabel } from '../keyboard-shortcuts'
-import { cancelSchedule, openRunsForConversation, runAction, scheduleState } from '../schedules'
-import { helperAllowsMode, isHelper, isPlanApproval, type ChatItem, type Conversation } from '@antumi/protocol'
+import { approvesPlan, cancelSchedule, openRunsForConversation, runAction, scheduleState } from '../schedules'
+import { helperAllowsMode, isHelper, isPlanApproval, type ChatItem, type Conversation, type ScheduledRun } from '@antumi/protocol'
 import { itemKey } from '../chat-state'
 import { toolLabel } from '../chat-tools'
 import { useChatSurface } from './chat-surface'
@@ -95,9 +95,9 @@ export function PendingRequests({ conversation, pending, tools, modes }: { conve
   )
 }
 
-// What is scheduled to go on in this chat later, above the composer, each to manage or cancel.
-function ChatSchedules({ conversationId }: { conversationId: string }) {
-  const runs = openRunsForConversation(useCore((s) => s.schedules), conversationId)
+// What is scheduled to go on in this chat later, above the composer, each to manage or cancel. A
+// run that is to approve the waiting plan stands in for the plan card, so it offers the way back.
+function ChatSchedules({ runs, planWaiting }: { runs: readonly ScheduledRun[]; planWaiting: boolean }) {
   if (runs.length === 0) return null
   const now = Date.now()
   return (
@@ -107,6 +107,9 @@ function ChatSchedules({ conversationId }: { conversationId: string }) {
           <span className="chat-queue-label">{tr('ChatDock.scheduled', { value1: scheduleState(run, now) })}</span>
           <span className="chat-queued-text" title={runAction(run)}>{runAction(run)}</span>
           <span className="chat-queued-actions">
+            {planWaiting && approvesPlan(run) && (
+              <button type="button" className="link-button" title={t('ChatDock.handlePlanNowHint')} onClick={() => void cancelSchedule(run.id)}>{t('ChatDock.handlePlanNow')}</button>
+            )}
             <button type="button" className="chat-queued-action" aria-label={t('ChatDock.manageSchedule')} data-tooltip={t('ChatDock.manageSchedule')} data-tooltip-side="top-end" onClick={() => setSchedulesOpen(true)}><ClockIcon /></button>
             <button type="button" className="chat-queued-action" aria-label={t('ChatDock.cancelSchedule')} data-tooltip={t('ChatDock.cancelSchedule')} data-tooltip-side="top-end" onClick={() => void cancelSchedule(run.id)}><CloseIcon /></button>
           </span>
@@ -143,8 +146,12 @@ export function ChatDock({ conversation, state, pending, tools, finishedCalls, o
   onJump: (key: string) => void
 }) {
   const inspectable = useChatSurface().changes !== null
+  const runs = openRunsForConversation(useCore((s) => s.schedules), conversation.id)
   const running = conversation.sessionId !== null
   const waiting = running && pending.length > 0
+  const planWaiting = pending.some(isPlanApproval)
+  // A plan whose approval is scheduled waits on that, not on the user: its card steps aside.
+  const answerable = runs.some(approvesPlan) ? pending.filter((item) => !isPlanApproval(item)) : pending
   const archived = conversation.archivedAt != null
   // The column not in front keeps its composer, draft and all, behind a one-line way back to it.
   const pane = useConversationPane()
@@ -162,8 +169,8 @@ export function ChatDock({ conversation, state, pending, tools, finishedCalls, o
           <ArrowUpIcon />
         </button>
       </div>}
-      <ChatSchedules conversationId={conversation.id} />
-      {waiting && <PendingRequests conversation={conversation} pending={pending} tools={tools} modes={(state?.permissionModes ?? []).filter((mode) => !isHelper(conversation) || helperAllowsMode(mode))} />}
+      <ChatSchedules runs={runs} planWaiting={planWaiting} />
+      {waiting && answerable.length > 0 && <PendingRequests conversation={conversation} pending={answerable} tools={tools} modes={(state?.permissionModes ?? []).filter((mode) => !isHelper(conversation) || helperAllowsMode(mode))} />}
       {archived && <ArchivedBar what={t('BrowserPanel.conversation')} onRestore={() => archiveConversation(conversation.id, false)} />}
       {/* The composer stays mounted while a request or the archive takes its place, so a draft is not lost. */}
       <div className="chat-dock-composer" hidden={waiting || archived || resting || Boolean(conversation.parentConversationId)}>

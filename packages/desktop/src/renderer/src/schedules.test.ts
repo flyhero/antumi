@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { Task, type ScheduledRun } from '@antumi/protocol'
-import { fromLocalInput, nextNight, openRunsForConversation, runAction, scheduleNoticesBetween, scheduleState, scheduleTime, toLocalInput } from './schedules'
+import { approvesPlan, fromLocalInput, nextNight, openRunsForConversation, runAction, scheduleNoticesBetween, scheduleState, scheduleTime, toLocalInput } from './schedules'
 
 const at = (year: number, month: number, day: number, hour: number, minute = 0) => new Date(year, month - 1, day, hour, minute).getTime()
 
@@ -111,5 +111,13 @@ describe('runs in a conversation', () => {
     const waiting = run({ target: { kind: 'resume', conversationId, ...limit } })
     const failed = { ...waiting, status: 'failed' as const, error: 'chat-start-failed' }
     expect(scheduleNoticesBetween([waiting], [failed])[0]?.body).toMatch(/^额度恢复后没能继续：/)
+  })
+
+  it('takes an empty waiting message for the plan approval, and nothing that says or resumes something', () => {
+    const conversation = (target: Record<string, unknown>) => run({ target: { kind: 'conversation', conversationId: '00000000-0000-4000-8000-000000000001', text: '', ...target } })
+    expect(approvesPlan(conversation({}))).toBe(true)
+    expect(approvesPlan(conversation({ text: 'and add tests' }))).toBe(false)
+    expect(approvesPlan(conversation({ resumes: { stageId: 's', itemId: 'i' } }))).toBe(false)
+    expect(approvesPlan({ ...conversation({}), status: 'started' })).toBe(false)
   })
 })

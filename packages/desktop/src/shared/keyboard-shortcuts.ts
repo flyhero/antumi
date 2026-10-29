@@ -34,7 +34,8 @@ export const SHORTCUTS = {
   'find-previous': { label: 'KeyboardShortcuts.findPrevious', group: 'chat', scope: 'content', defaults: findKeys(true) },
   'save-file': { label: 'KeyboardShortcuts.saveFile', group: 'files', scope: 'file', defaults: primary('s') },
   'toggle-files': { label: 'KeyboardShortcuts.files', group: 'panels', scope: 'app', defaults: (platform: ShortcutPlatform) => [defaultPanelShortcut('toggle-files', platform)], browser: true },
-  'toggle-terminal': { label: 'KeyboardShortcuts.terminal', group: 'panels', scope: 'app', defaults: (platform: ShortcutPlatform) => [defaultPanelShortcut('toggle-terminal', platform)], browser: true },
+  // On macOS ⌘J too, as editors toggle their bottom panel; elsewhere Ctrl+J is the shell's.
+  'toggle-terminal': { label: 'KeyboardShortcuts.terminal', group: 'panels', scope: 'app', defaults: (platform: ShortcutPlatform) => [...(platform === 'darwin' ? primary('j')(platform) : []), defaultPanelShortcut('toggle-terminal', platform)], browser: true },
   'toggle-browser': { label: 'KeyboardShortcuts.browser', group: 'panels', scope: 'app', defaults: (platform: ShortcutPlatform) => [defaultPanelShortcut('toggle-browser', platform)], browser: true },
   'submit-form': { label: 'KeyboardShortcuts.submitForm', group: 'forms', scope: 'form', defaults: primary('Enter') }
 } as const

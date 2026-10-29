@@ -218,9 +218,9 @@ pnpm dist:linux   # 产物在 packages/desktop/dist/Antumi-<版本>-x86_64.AppIm
 |---|---|
 | <kbd>N</kbd>（看板上） | 在「未执行」列顶部快速记一个任务 |
 | <kbd>⌘</kbd> <kbd>N</kbd> | 打开完整的新建任务对话框 |
-| <kbd>Ctrl</kbd> <kbd>`</kbd> | 打开 / 关闭终端面板 |
-| <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>`</kbd> | 打开 / 关闭浏览器面板 |
-| <kbd>⌘</kbd> <kbd>Shift</kbd> <kbd>E</kbd> | 打开 / 关闭文件面板 |
+| <kbd>⌘</kbd> <kbd>E</kbd> | 打开 / 关闭文件面板 |
+| <kbd>⌘</kbd> <kbd>J</kbd> 或 <kbd>Ctrl</kbd> <kbd>`</kbd> | 打开 / 关闭终端面板 |
+| <kbd>⌘</kbd> <kbd>L</kbd> | 打开浏览器面板并跳到地址栏；在地址栏里再按一次关闭 |
 | <kbd>⌘</kbd> <kbd>K</kbd> | 搜索会话、任务、智能体和文件 |
 | <kbd>⌘</kbd> <kbd>,</kbd> | 设置 |
 | <kbd>⌘</kbd> <kbd>F</kbd> | 搜索当前聊天 |

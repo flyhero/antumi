@@ -27,8 +27,9 @@ describe('panel shortcut preferences', () => {
   })
 
   it('shows the actual platform modifiers and no hint when unbound', () => {
-    expect(formatShortcut(defaultPanelShortcut('toggle-files', 'darwin'), 'darwin')).toBe('⇧⌘E')
-    expect(formatShortcut(defaultPanelShortcut('toggle-browser', 'win32'), 'win32')).toBe('Ctrl+Shift+`')
+    expect(formatShortcut(defaultPanelShortcut('toggle-files', 'darwin'), 'darwin')).toBe('⌘E')
+    expect(formatShortcut(defaultPanelShortcut('toggle-browser', 'win32'), 'win32')).toBe('Ctrl+L')
+    expect(formatShortcut(defaultPanelShortcut('toggle-terminal', 'linux'), 'linux')).toBe('Ctrl+`')
     expect(formatShortcut(null, 'linux')).toBe('')
   })
 })

@@ -27,12 +27,16 @@ function press(patch: Partial<Input>) {
 beforeEach(() => { captured.handlers.length = 0 })
 const platforms: ShortcutPlatform[] = ['darwin', 'win32', 'linux']
 describe.each(platforms)('browser shortcuts on %s', (platform) => {
-  it('forwards all panel defaults, including physical Ctrl on macOS', () => {
+  it('forwards all panel defaults, including physical Ctrl on macOS, and hands the address bar its focus', () => {
     const slot = new WindowSlot()
     const send = vi.spyOn(slot, 'sendToRenderer')
     bindBrowserShortcuts(new WebContentsView().webContents, 'tab', slot, platform)
-    expect(press({ shift: true, key: '~' }).preventDefault).toHaveBeenCalled()
+    const focus = vi.spyOn(slot, 'focusApp')
+    const browser = defaultPanelShortcut('toggle-browser', platform)
+    expect(press({ key: 'l', code: 'KeyL', control: browser.ctrl, meta: browser.meta, shift: false }).preventDefault).toHaveBeenCalled()
     expect(send).toHaveBeenLastCalledWith('antumi:browser-shortcut', { kind: 'toggle-browser' })
+    // The address bar it goes to is the app's, so the page gives the focus back.
+    expect(focus).toHaveBeenCalledTimes(1)
     press({})
     expect(send).toHaveBeenLastCalledWith('antumi:browser-shortcut', { kind: 'toggle-terminal' })
     const files = defaultPanelShortcut('toggle-files', platform)

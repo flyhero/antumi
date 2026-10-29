@@ -205,8 +205,9 @@ A machine with the app installed needs neither Node nor pnpm. The builds are uns
 |---|---|
 | <kbd>N</kbd> (on the board) | Quick-add a task at the top of the Pending column |
 | <kbd>⌘</kbd> <kbd>N</kbd> | Open the full new-task dialog |
-| <kbd>Ctrl</kbd> <kbd>`</kbd> | Toggle the terminal panel |
-| <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>`</kbd> | Toggle the browser panel |
+| <kbd>⌘</kbd> <kbd>E</kbd> | Toggle the files panel |
+| <kbd>⌘</kbd> <kbd>J</kbd> or <kbd>Ctrl</kbd> <kbd>`</kbd> | Toggle the terminal panel |
+| <kbd>⌘</kbd> <kbd>L</kbd> | Open the browser panel at its address bar; again from there to close it |
 | <kbd>⌘</kbd> <kbd>,</kbd> | Settings |
 | <kbd>⌘</kbd> <kbd>F</kbd> | Search the current chat |
 | <kbd>⌘</kbd> <kbd>S</kbd> | Save the file open in the inspector |

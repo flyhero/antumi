@@ -11,6 +11,8 @@ export function bindBrowserShortcuts(contents: WebContents, tabId: string, slot:
     const action = ShortcutAction.options.find((candidate) => shortcutWorksInBrowser(candidate) && matchesShortcut(candidate, key, slot.getPanelShortcuts(), platform))
     if (action) {
       event.preventDefault()
+      // The browser's key goes to its address bar, in the app's window rather than the page.
+      if (action === 'toggle-browser') slot.focusApp()
       if (!input.isAutoRepeat) slot.sendToRenderer('antumi:browser-shortcut', { kind: action })
       return
     }

@@ -17,6 +17,22 @@ export function recordingPanelShortcut(): boolean {
   return recordingShortcut()
 }
 
+// As ⌘L does in a browser: the panel opens on its address bar, and closes only from there.
+function browserKey(): void {
+  const address = document.querySelector<HTMLInputElement>('.browser-url')
+  const open = useCore.getState().browserPanelOpen
+  if (open && (!address || address.disabled || document.activeElement === address)) { toggleBrowserPanel(); return }
+  if (!open) toggleBrowserPanel()
+  // The bar shows once the panel has its tabs, which may take a moment: look for it a few times,
+  // by timer rather than by frame, which a window in the background never draws.
+  const focus = (tries: number) => {
+    const bar = document.querySelector<HTMLInputElement>('.browser-url')
+    if (bar) bar.focus()
+    else if (tries > 0) setTimeout(() => focus(tries - 1), 50)
+  }
+  setTimeout(() => focus(20), 0)
+}
+
 function runAppShortcut(action: ShortcutAction): boolean {
   const state = useCore.getState()
   if (action === 'toggle-sidebar') { toggleSidebar(); return true }
@@ -24,7 +40,7 @@ function runAppShortcut(action: ShortcutAction): boolean {
   if (state.settingsOpen) return false
   if (action === 'toggle-files') toggleFilesPanel()
   else if (action === 'toggle-terminal') void toggleTerminalPanel()
-  else if (action === 'toggle-browser') toggleBrowserPanel()
+  else if (action === 'toggle-browser') browserKey()
   else if (action === 'new-task') setNewTaskOpen(true)
   else if (action === 'search') openSearch()
   else if (action === 'focus-left' || action === 'focus-right') return focusSplitPane(action === 'focus-left' ? 0 : 1)

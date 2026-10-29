@@ -56,9 +56,10 @@ export function sameShortcut(left: ShortcutBinding | null, right: ShortcutBindin
 }
 
 export function defaultPanelShortcut(action: PanelShortcutAction, platform: ShortcutPlatform): ShortcutBinding {
-  return action === 'toggle-files'
-    ? { key: 'e', ctrl: platform !== 'darwin', meta: platform === 'darwin', alt: false, shift: true }
-    : { key: 'Backquote', ctrl: true, meta: false, alt: false, shift: action === 'toggle-browser' }
+  // Two keys each, none with Shift, which Chinese input methods take to switch language: E for
+  // the explorer, L for the address bar as in a browser, Ctrl+` for the terminal as in editors.
+  if (action === 'toggle-terminal') return { key: 'Backquote', ctrl: true, meta: false, alt: false, shift: false }
+  return { key: action === 'toggle-files' ? 'e' : 'l', ctrl: platform !== 'darwin', meta: platform === 'darwin', alt: false, shift: false }
 }
 
 export function panelShortcut(settings: PanelShortcutSettings, platform: ShortcutPlatform, action: PanelShortcutAction): ShortcutBinding | null {

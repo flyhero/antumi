@@ -2,6 +2,7 @@ import { agentToolsOverCore } from './mcp-agent-tools'
 import { bookmarkToolsOverCore } from './mcp-bookmark-tools'
 import { squadToolsOverCore, type SquadTools } from './mcp-squad-tools'
 import { todoToolsOverCore } from './mcp-todo-tools'
+import { managementToolsOverCore } from './mcp-management-tools'
 import readline from 'node:readline'
 import { stat } from 'node:fs/promises'
 import { extname, isAbsolute } from 'node:path'
@@ -69,6 +70,7 @@ export type McpTools = {
   history?: HistoryTools
   agents?: ReturnType<typeof agentToolsOverCore>
   squad?: SquadTools
+  management?: Awaited<ReturnType<typeof managementToolsOverCore>>
   // The conversation's to-dos, there when the server was started for one.
   todo?: ReturnType<typeof todoToolsOverCore>
 }
@@ -99,7 +101,7 @@ const describe = (error: unknown) => (error instanceof Error ? error.message : S
 // arguments are the model's to fix, so they come back as a tool error it can read.
 type ToolEntry = { spec: object & { name: string }; run(args: Record<string, unknown>): Promise<McpResult> }
 
-function toolTable({ preview, browser, bookmarks, terminal, history, squad, agents, todo, planOnly }: McpTools): ToolEntry[] {
+function toolTable({ preview, browser, bookmarks, terminal, history, squad, agents, management, todo, planOnly }: McpTools): ToolEntry[] {
   const entries: ToolEntry[] = [
     {
       spec: PREVIEW_TOOL,
@@ -158,6 +160,7 @@ function toolTable({ preview, browser, bookmarks, terminal, history, squad, agen
   }
   if (squad) entries.push(...squad)
   if (agents) entries.push(...agents)
+  if (management) entries.push(...management.filter((entry) => !planOnly || entry.spec.annotations.readOnlyHint))
   // Antumi's list, not the checkout: a planning agent writes to it too.
   if (todo) entries.push(...todo)
   return entries
@@ -253,6 +256,7 @@ export async function serveMcp(home: string | undefined, conversationId?: string
   }) : null
   const handle = createMcpHandler({
     planOnly: planOnly || scope?.readOnly,
+    ...(conversationId ? { management: await managementToolsOverCore(withCore, conversationId, planOnly) } : {}),
     ...(conversationId && scope?.run ? { squad: squadToolsOverCore(withCore, conversationId, scope.run) } : {}),
     ...(conversationId && scope?.delegate ? { agents: agentToolsOverCore(withCore, conversationId) } : {}),
     initialized,

@@ -459,6 +459,26 @@ Agent 可用之后、任务来源之前是「接着聊」一步：从零用一�
 
 交给 Agent 的是**bundle**（`bundles/<key>/`）：`SkillsLibrary.bundleForAgent` 按仓库策略、兼容能力和目标 Agent 选技能，再复制技能自己的目录（仓库本身是技能时就是整个仓库；跳过软链接和 `.git`，限 32 MiB），同时写成 Claude Code 插件（`.claude-plugin/plugin.json` + `skills/`）和 `.agents/skills/` 两种布局；`key` 是技能及其提交的哈希，同样的选择得到同一个目录，提示词缓存得以保温，更新或回退后自然换新目录。descriptor 的 `capabilities.skills` 说明这个 Agent 能否接收 bundle，adapter 决定怎么交（`AgentLaunch.skills`）：Claude Code 用 `--plugin-dir`，Cursor 用 `--add-dir`，OpenCode 写进 `OPENCODE_CONFIG_CONTENT` 的 `skills`，Pi 用 `--skill`，DeepSeek Harness 写入运行配置；Codex、Antigravity 暂不支持。损坏或手动修改的锁若含重名，启动时跳过冲突名并记日志，仍加载其他技能；bundle 建不出来只记进 wire log，不阻止 Agent 启动。
 
+### Antumi 管理工具
+
+内置 MCP 的管理工具（`mcp-management-tools.ts`）把现有 core RPC 开放给聊天 Agent，名称集中在 protocol 的 `mcp-management.ts`。工具只解析参数、检查调用会话并转发 RPC；校验、持久化和变更通知仍由原服务负责，桌面端照常收到配置变化。不新增数据库结构或 RPC，不改变协议版本。
+
+| 工具 | 对应 RPC |
+| --- | --- |
+| `antumi_agent_profile_list` / `antumi_agent_profile_create` | `agentProfiles.list` / `agentProfiles.save` |
+| `antumi_squad_list` / `antumi_squad_create` | `squads.list` / `squads.create` |
+| `antumi_schedule_list` / `antumi_schedule_create` | `schedules.list` / `schedules.create` |
+| `antumi_routine_list` / `antumi_routine_create` | `routines.list` / `routines.create` |
+| `antumi_skill_list` / `antumi_skill_search` | `skills.list` / `skills.search` |
+| `antumi_skill_install` / `antumi_skill_set_activation` | `skills.install` / `skills.setActivation` |
+| `antumi_chat_command_list` / `antumi_chat_command_create` | `chatCommands.list` / `chatCommands.save` |
+
+智能体和聊天命令的创建参数不接受更新用的 `id`，其余沿用对应 RPC 的字段和默认值。智能体配置查询返回全部保存的配置（含归档状态），不改变 `antumi_agent_list` 按当前会话权限列出可委派智能体的行为；创建配置不会启动会话或团队任务。一次性预约的 `notBefore` 是 Unix 毫秒时间戳或 null，支持已有任务和会话目标；周期例程按 core 所在机器的本地时间执行，每次新开会话。安装技能仓库后默认不启用，通过独立的启用工具显式选择技能和适用 Agent；启用策略是完整替换，冲突和生效时机与设置页一致。不开放更新、归档、删除、取消或立即执行等其他管理操作。
+
+只有未归档的普通主会话及单 Agent 任务会话可用；规划、只读模式和只读工作区仅提供查询工具。团队成员与队长（包括还未产生团队运行记录的规划阶段）、委派子会话、群聊成员、例程和小助手均不提供这些工具。服务器启动时根据会话范围、模式和 core 的 feature 列表筛选工具；每次调用在同一条 RPC 连接里重新检查范围和模式，再调用业务 RPC。切到规划或只读后，旧工具调用也会被拒绝；读取会话或检查权限失败时不继续操作。未开启的工具在下次启动 MCP 时重新确定。
+
+新增查询工具列入 `antumiReadTools`；创建、安装和启用不列入免审批清单，沿用各 Agent 既有审批行为。MCP annotations 分别标明只读、重复调用和外部访问：创建与安装不标幂等，技能启用标幂等，市场搜索与仓库安装标记访问外部资源。参数错误和 core 的业务拒绝以工具错误返回，不自动重试写操作。历史工具的读取开关独立，管理工具不额外提供任务或会话历史查询；预约目标须来自已知 ID 或用户允许读取的历史。
+
 ### 用户的 MCP 服务器
 
 设置 → 任务 → MCP 维护一份全局的 MCP 服务器列表（`mcp-servers.ts`）：本地命令（stdio）或远程地址（streamable HTTP，远程只接受 https），每个选好交给哪些 Agent，可以单独停用。设置存在 `mcp-servers.json`；环境变量和请求头的值都当密钥，存进 `credentials.json`（`mcp/<名字>`），客户端只看得到键名。名字 `antumi` 留给 Antumi 自己的服务器（工具名靠它识别）。

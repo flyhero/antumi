@@ -17,13 +17,12 @@
 .file-quick-open-detail { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
 .file-quick-open-empty { padding: 12px; font-size: 12px; }
 
-/* Its status bar button, in the right-hand group between ports and the browser: first of the group
+/* Its status bar button, before the browser in the right-hand group: first of the group
    it takes the auto margin, and the one after it gives that up. */
 .statusbar .statusbar-files { display: inline-flex; align-items: center; width: auto; height: 24px; margin-left: auto; padding: 0 6px; }
 .statusbar .statusbar-files svg { width: 15px; height: 15px; }
 .statusbar .statusbar-schedules + .statusbar-files,
 .statusbar .statusbar-worktrees + .statusbar-files,
-.statusbar .statusbar-ports + .statusbar-files,
 .statusbar .statusbar-files + .statusbar-browser,
 .statusbar .statusbar-files + .statusbar-terminal { margin-left: 0; }
 .statusbar .statusbar-files[aria-pressed='true'] { background: var(--fill); color: var(--text); }

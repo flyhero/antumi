@@ -266,10 +266,10 @@ export function StatusBar() {
       <UsageBar />
       <ScheduleButton />
       <WorktreeButton />
-      <PortsButton />
       <FilesButton />
       <BrowserButton />
       <TerminalButton />
+      <PortsButton />
       <AwakeButton />
     </footer>
   )

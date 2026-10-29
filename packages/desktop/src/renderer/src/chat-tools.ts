@@ -1,6 +1,7 @@
 import { localized, t } from './i18n'
 import { BROWSER_HOST_TOOL, browserToolKind, isBrowserBookmarksTool, CODEX_IMAGE_GENERATION, historyToolKind, isPreviewTool, isTerminalRunTool, terminalToolKind, todoToolKind, type TodoToolKind, type BrowserToolKind, type ChatDiff, type ChatItem, type ChatToolStatus, type TerminalToolKind } from '@antumi/protocol'
 import { browserOperation } from './browser-activity'
+import { antumiToolPresentation } from './antumi-tool-presentation'
 
 type ToolItem = Extract<ChatItem, { kind: 'tool' }>
 
@@ -74,6 +75,8 @@ function mcpToolLabel(name: string, display: ToolDisplay | null | undefined): st
 const TODO_LABEL: Record<TodoToolKind, string> = localized(() => ({ list: t('chatTools.listToDos'), add: t('chatTools.addToDo'), check: t('chatTools.completeToDo') }))
 
 export function toolLabel(name: string, display?: ToolDisplay | null): string {
+  const antumi = antumiToolPresentation(name)
+  if (antumi) return t(antumi.label)
   if (isPreviewTool(name)) return t('chatTools.preview')
   if (isBrowserBookmarksTool(name)) return t('chatTools.findBookmarks')
   const todo = todoToolKind(name)
@@ -100,6 +103,8 @@ const TOOL_ICONS: Record<string, ToolIconKind> = {
 }
 
 export function toolIconKind(name: string, display?: ToolDisplay | null): ToolIconKind {
+  const antumi = antumiToolPresentation(name)
+  if (antumi) return antumi.icon
   if (isTerminalRunTool(name) || terminalToolKind(name)) return 'terminal'
   if (browserToolKind(name) === 'screenshot' || isPreviewTool(name)) return 'image'
   if (browserOperation(name, display) !== null) return 'browser-control'

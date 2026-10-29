@@ -18,6 +18,43 @@ const tool = (id: string, changes: Partial<ToolItem> = {}): ToolItem => ({
 })
 const run = (tools: ToolItem[]) => renderToStaticMarkup(createElement(ChatToolRun, { tools }))
 
+describe('Antumi MCP cards', () => {
+  it('shows readable action and resolved object in both card paths, preserving raw details', () => {
+    const item = tool('mcp', { name: 'mcp__antumi__antumi_agent_profile_update', title: 'profile-id',
+      status: 'done', execution: undefined, input: '{"id":"profile-id","description":"New role"}', output: '{"id":"profile-id","name":"Reviewer"}' })
+    opened.add('call:stage/mcp')
+    opened.add('card:stage/mcp')
+    for (const html of [run([item]), renderToStaticMarkup(createElement(ChatToolCard, { item }))]) {
+      expect(html).toContain('修改智能体')
+      expect(html).toContain('title="Reviewer"')
+      expect(html).toContain('data-kind="agent"')
+      expect(html).toContain('New role')
+      expect(html).toContain('profile-id')
+      expect(html).not.toContain('antumi · antumi_agent_profile_update')
+    }
+  })
+
+  it('preserves failed status and does not present an error output as a result count', () => {
+    const html = renderToStaticMarkup(createElement(ChatToolCard, { item: tool('bad-mcp', {
+      name: 'antumi.antumi_skill_list', status: 'failed', execution: undefined, output: 'Connection failed'
+    }) }))
+    expect(html).toContain('查看技能')
+    expect(html).toContain('data-status="failed"')
+    expect(html).not.toContain('0 项')
+  })
+
+  it('uses the parsed object beside a running grouped summary too', () => {
+    const html = run([
+      tool('first', { name: 'antumi.antumi_skill_list', status: 'done', execution: undefined }),
+      tool('search', { name: 'antumi.antumi_skill_search', status: 'running', at: Date.now(), execution: undefined,
+        title: 'raw driver title', input: '{"query":"design"}' })
+    ])
+    expect(html).toContain('搜索技能 1 次')
+    expect(html).toContain('title="design"')
+    expect(html).not.toContain('raw driver title')
+  })
+})
+
 describe('command cards', () => {
   it('exposes full output only while searching for both grouped and standalone calls', () => {
     const command = tool('long', { output: 'x'.repeat(5000) + 'unique tail' })

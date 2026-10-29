@@ -16,6 +16,7 @@ import { copyTextForItem } from '../message-copy'
 import { fileReference } from '../file-links'
 import { canStop, isBackgroundCommand, limitAt, limitText, stoppedAtLimitText } from '../background-work'
 import { BackgroundStopButton } from './BackgroundStopButton'
+import { antumiToolTitle } from '../antumi-tool-presentation'
 
 type ToolItem = Extract<ChatItem, { kind: 'tool' }>
 
@@ -161,6 +162,7 @@ function ToolLine({ tool }: { tool: ToolItem }) {
   const code = commandExitCode(tool)
   const details = Boolean(tool.input || tool.output || (code !== null && code !== 0))
   const status = toolDisplayStatus(tool)
+  const title = antumiToolTitle(tool) ?? tool.title
   const finished = useJustFinished(status === 'running')
   const background = isBackgroundCommand(tool)
   const limit = status === 'running' ? limitAt(tool) : null
@@ -181,7 +183,7 @@ function ToolLine({ tool }: { tool: ToolItem }) {
         ) : (
           <>
             <span className="chat-tool-name">{toolLabel(tool.name, tool.display)}</span>
-            <span className="chat-tool-title mono" data-file-path={fileReference(tool.title)?.path} title={tool.title}>{shorten(tool.title)}</span>
+            <span className="chat-tool-title mono" data-file-path={fileReference(title)?.path} title={title}>{shorten(title)}</span>
           </>
         )}
         {details && <span className="chat-tool-chevron" aria-hidden="true"><ChevronRightIcon /></span>}
@@ -209,6 +211,7 @@ export function ChatToolRun({ tools, summary }: { tools: readonly ToolItem[]; su
   const [open, setOpen] = useDisclosure(`run:${only ? itemKey(only) : ''}`)
   const shorten = useContext(ChatPaths)
   const running = tools.find((tool) => tool.status === 'running')
+  const runningTitle = running ? antumiToolTitle(running) ?? running.title : ''
   const finished = useJustFinished(Boolean(running))
   if (tools.length === 1 && only && summary === undefined) return <ToolLine tool={only} />
   const outcome = toolRunStatus(tools)
@@ -221,7 +224,7 @@ export function ChatToolRun({ tools, summary }: { tools: readonly ToolItem[]; su
         <ChatToolIcon name={running?.name ?? only?.name ?? ''} display={(running ?? only)?.display} status={outcome.status} />
         <span className="chat-tool-summary" title={headline.described ? running?.title : undefined}>{headline.text}</span>
         <span className="chat-tool-chevron" aria-hidden="true"><ChevronRightIcon /></span>
-        {running && !headline.described && <span className="chat-tool-title mono" title={running.title}>{shorten(running.title)}</span>}
+        {running && !headline.described && <span className="chat-tool-title mono" title={runningTitle}>{shorten(runningTitle)}</span>}
         {running && <ToolStatus status="running" since={running.at} />}
         {outcome.failed > 0 && <span className="chat-tool-status" data-status="failed">{tr('ChatToolCard.errors', { value1: outcome.failed })}</span>}
         {outcome.denied > 0 && <span className="chat-tool-status" data-status="denied">{tr('ChatToolCard.denied', { value1: outcome.denied })}</span>}
@@ -247,6 +250,7 @@ export function ChatToolCard({ item }: { item: ToolItem }) {
   const code = commandExitCode(item)
   const details = Boolean(item.diffs.length || item.input || item.output || (code !== null && code !== 0))
   const status = toolDisplayStatus(item)
+  const title = antumiToolTitle(item) ?? item.title
   // A command the agent runs in a terminal of its own: the card opens the panel on it.
   const terminal = terminalToolKind(item.name) === 'run' ? TERMINAL_ID.exec(item.output ?? '')?.[1] ?? null : null
   const finished = useJustFinished(status === 'running')
@@ -262,7 +266,7 @@ export function ChatToolCard({ item }: { item: ToolItem }) {
         <ChatToolIcon name={item.name} display={item.display} status={status} />
         <span className="chat-tool-name">{toolLabel(item.name, item.display)}:</span>
         {item.diffs.length > 0 && <FileExt path={item.diffs[0]?.path ?? item.title} />}
-        <span className="chat-tool-title" data-file-path={item.diffs[0]?.path ?? fileReference(item.title)?.path} title={item.title}>{shorten(item.title)}</span>
+        <span className="chat-tool-title" data-file-path={item.diffs[0]?.path ?? fileReference(title)?.path} title={title}>{shorten(title)}</span>
         <DiffCount diffs={item.diffs} />
         {details && <span className="chat-tool-chevron" aria-hidden="true"><ChevronRightIcon /></span>}
         <ToolStatus status={status} since={item.at} />

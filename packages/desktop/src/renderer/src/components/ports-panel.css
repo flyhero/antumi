@@ -27,6 +27,5 @@
 .statusbar .statusbar-ports svg { width: 16px; height: 16px; }
 .statusbar .statusbar-worktrees + .statusbar-ports,
 .statusbar .statusbar-schedules + .statusbar-ports,
-.statusbar .statusbar-ports + .statusbar-browser,
-.statusbar .statusbar-ports + .statusbar-terminal { margin-left: 0; }
+.statusbar .statusbar-terminal + .statusbar-ports { margin-left: 0; }
 .statusbar .statusbar-ports[aria-pressed='true'] { background: var(--fill); color: var(--text); }

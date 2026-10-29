@@ -2,31 +2,15 @@ import { readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { z } from 'zod'
 import { BookmarkUrl, MAX_BOOKMARKS, type BookmarkFields } from '@antumi/protocol'
+import { browserDataRoot, CHROMIUM_BROWSERS, validBrowserProfileDir, type BrowserPlaces } from './browser-profiles'
 
 // A browser profile on this machine whose bookmarks can be brought in.
 export type BookmarkSource = { id: string; browser: string; profile: string; count: number }
 
-// Chromium's browsers all keep bookmarks the same way, under a folder of their own per platform.
-const BROWSERS: ReadonlyArray<{ id: string; name: string; dirs: Partial<Record<NodeJS.Platform, string>> }> = [
-  { id: 'chrome', name: 'Google Chrome', dirs: { darwin: 'Google/Chrome', win32: 'Google/Chrome/User Data', linux: 'google-chrome' } },
-  { id: 'edge', name: 'Microsoft Edge', dirs: { darwin: 'Microsoft Edge', win32: 'Microsoft/Edge/User Data', linux: 'microsoft-edge' } },
-  { id: 'brave', name: 'Brave', dirs: { darwin: 'BraveSoftware/Brave-Browser', win32: 'BraveSoftware/Brave-Browser/User Data', linux: 'BraveSoftware/Brave-Browser' } },
-  { id: 'arc', name: 'Arc', dirs: { darwin: 'Arc/User Data' } },
-  { id: 'vivaldi', name: 'Vivaldi', dirs: { darwin: 'Vivaldi', win32: 'Vivaldi/User Data', linux: 'vivaldi' } },
-  { id: 'chromium', name: 'Chromium', dirs: { darwin: 'Chromium', win32: 'Chromium/User Data', linux: 'chromium' } }
-]
-
 // A bookmarks file is a few MB at most; anything far bigger is not one.
 const MAX_FILE_BYTES = 64 * 1024 * 1024
 
-export type BookmarkPlaces = { platform: NodeJS.Platform; home: string; env: NodeJS.ProcessEnv }
-
-// Where the platform keeps applications' data: what each browser's folder is under.
-function dataRoot({ platform, home, env }: BookmarkPlaces): string | null {
-  if (platform === 'darwin') return path.join(home, 'Library', 'Application Support')
-  if (platform === 'win32') return env.LOCALAPPDATA ?? null
-  return env.XDG_CONFIG_HOME ?? path.join(home, '.config')
-}
+export type BookmarkPlaces = BrowserPlaces
 
 const LocalState = z.object({ profile: z.object({ info_cache: z.record(z.string(), z.object({ name: z.string().catch('') }).catch({ name: '' })) }) })
 
@@ -54,19 +38,19 @@ async function readSmall(file: string): Promise<string | null> {
 
 function locate(id: string, places: BookmarkPlaces): { file: string; browser: string } | null {
   const [browserId, profileDir] = id.split('/', 2)
-  const browser = BROWSERS.find((each) => each.id === browserId)
+  const browser = CHROMIUM_BROWSERS.find((each) => each.id === browserId)
   const dir = browser?.dirs[places.platform]
-  const root = dataRoot(places)
+  const root = browserDataRoot(places)
   // The profile is a folder name from Local State, never a path of its own.
-  if (!browser || !dir || !root || !profileDir || profileDir.includes('..') || /[\\/]/.test(profileDir)) return null
+  if (!browser || !dir || !root || !profileDir || !validBrowserProfileDir(profileDir)) return null
   return { file: path.join(root, dir, profileDir, 'Bookmarks'), browser: browser.name }
 }
 
 // The profiles on this machine that have bookmarks, browser by browser.
 export async function findBookmarkSources(places: BookmarkPlaces): Promise<BookmarkSource[]> {
-  const root = dataRoot(places)
+  const root = browserDataRoot(places)
   if (!root) return []
-  const found = await Promise.all(BROWSERS.map(async (browser) => {
+  const found = await Promise.all(CHROMIUM_BROWSERS.map(async (browser) => {
     const dir = browser.dirs[places.platform]
     if (!dir) return []
     const userData = path.join(root, dir)

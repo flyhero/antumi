@@ -547,6 +547,7 @@ Claude Code 和 Codex 可以登录多个账号（描述符的 `capabilities.acco
 - **升级**：早期版本下载到 `~/.antumi/browser/` 的 Chromium 和 profile，在新版 core 第一次启动时自动删除；网站需要重新登录。
 - **收藏**：地址栏的星标收藏或取消收藏当前页，旁边的收藏按钮列出全部收藏，可搜索；点一条在当前标签页打开，按住 ⌘（Windows 上 Ctrl）在新标签页打开。收藏存在 core 的 `bookmarks` 表，一个地址只存一条，最多 5000 条，变动经 `bookmarks.changed` 同步到所有窗口。只收 http(s) 网址，书签小程序（`javascript:`）和 `chrome://` 之类的页面导入时跳过。
 - **导入收藏**：收藏菜单里的「从其他浏览器导入」由桌面端主进程读文件（`bookmark-import.ts`），渲染进程分批（每批 500 条）交给 core 的 `bookmarks.import`，已有的地址跳过。Chromium 系浏览器（Chrome、Edge、Brave、Arc（仅 macOS）、Vivaldi、Chromium）直接读各 profile 的 `Bookmarks` 文件，profile 名取自 `Local State`，所在文件夹记成「书签栏 / 工作」这样的路径。Safari、Firefox 的收藏库要额外权限或被浏览器锁着，所以走它们导出的 HTML 收藏文件（Netscape 格式，各浏览器都能导出）。只读收藏，不碰 cookie 和密码。
+- **新标签页**：用户点「新建标签页」时，桌面端主进程通过系统 URL 处理程序识别默认浏览器，`browser-homepage.ts` 只读该浏览器的主页设置。Chromium 系读取 `Local State` 的最近使用 profile 及其 `Preferences` / `Secure Preferences`，优先取网页新标签页地址、其次自定义主页；使用内置新标签页时取搜索服务的网页地址，Chrome / Chromium、Edge、Brave 的默认回退分别为 Google、Bing、Brave Search。Firefox 读取默认 profile 的 `prefs.js` 主页（多个地址只取第一个），Safari 读取 macOS 的主页配置。浏览器专用页面和扩展不迁移，未知浏览器、配置不可读时保留空白页；启动页列表、已有标签页、cookie 和密码不读取。地址通过桌面桥交给现有 `browser.newTab`，不改变 Agent 或带指定地址的新标签页，也不改变 core 的站点权限规则。
 - **Agent 查收藏**：`browser_bookmarks` 按关键词在收藏里找地址（标题、网址、文件夹都匹配，多个词要同时出现），用户说「去后台看看」却没给地址时用。它是只读工具，和浏览器工具一起提供，只读工作区和群聊成员也有。
 - **Codex**：Codex 对 Antumi 的 MCP 工具不弹自己的确认，所以站点确认是它唯一的闸；Claude Code 对打开页面和点击、输入会弹它自己的确认，只读的快照、截图、滚动、等待、控制台、标签页列表和查收藏已放行。
 

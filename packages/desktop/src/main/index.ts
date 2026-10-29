@@ -12,6 +12,7 @@ import { popupWindowOptions, RequestPopup } from './request-popup'
 import { startBrowserHost, type BrowserHost } from './browser/browser-host'
 import { WindowSlot } from './browser/window-slot'
 import { findBookmarkSources, htmlBookmarks, readBookmarkSource, type BookmarkPlaces } from './browser/bookmark-import'
+import { defaultBrowserHomepage } from './browser/browser-homepage'
 import { installedApps, openWith, type InstalledApp } from './open-with'
 import { AppUpdater, InstallBlocked } from './app-update'
 import { bundleOf, leftovers, stageFromDmg, swapBlocked, swapInto } from './app-bundle-swap'
@@ -214,6 +215,9 @@ ipcMain.handle('antumi:pick-folder', async (event, defaultPath: unknown, title: 
 // Bookmarks to bring into the built-in browser: from another browser's profile on this machine, or
 // from a page of them a browser exported. Read here, where the user's files are; core keeps them.
 const bookmarkPlaces = (): BookmarkPlaces => ({ platform: process.platform, home: homedir(), env: process.env })
+ipcMain.handle('antumi:browser-homepage', async () => {
+  try { return await defaultBrowserHomepage(app.getApplicationNameForProtocol('https://'), bookmarkPlaces()) } catch { return null }
+})
 ipcMain.handle('antumi:bookmark-sources', () => findBookmarkSources(bookmarkPlaces()))
 ipcMain.handle('antumi:bookmark-read', (_event, id: unknown) => (typeof id === 'string' ? readBookmarkSource(id, bookmarkPlaces()) : []))
 ipcMain.handle('antumi:bookmark-pick-html', async (event) => {

@@ -1,7 +1,7 @@
 import { localized, t, tr } from '../i18n'
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react'
 import type { BrowserTab, BrowserViewport } from '@antumi/protocol'
-import { ALL_TABS, focusBrowserTab, selectBrowserTab, useBrowserTabs, useWatchAllBrowser } from '../browser-state'
+import { ALL_TABS, openUserBrowserTab, selectBrowserTab, useBrowserTabs, useWatchAllBrowser } from '../browser-state'
 import { perform, useCore } from '../core-store'
 import { canShowNativeBrowser, onBrowserFocused, reportBrowserBounds, showNativeBrowserTab } from '../desktop-bridge'
 import { BookmarksButton, BookmarkStar } from './BrowserBookmarks'
@@ -27,11 +27,6 @@ export function BrowserTabStrip() {
   const ownerName = useOwnerNames()
   const { tabs, selectedId } = useBrowserTabs((s) => s[ALL_TABS]) ?? { tabs: [], selectedId: null }
   const strip = useRef<HTMLDivElement>(null)
-  // A tab opened here is the one the user wants to see, as in any browser.
-  const newTab = async () => {
-    const opened = await perform((rpc) => rpc.call('browser.newTab', {}))
-    if (opened) focusBrowserTab(opened.id)
-  }
   // The shown tab is scrolled into the strip when there are more than fit.
   useEffect(() => {
     if (!selectedId) return
@@ -53,7 +48,7 @@ export function BrowserTabStrip() {
         </div>
       ))}
     </div>
-    <button type="button" className="tool-button browser-tab-add" aria-label={t('BrowserPanel.newTab')} data-tooltip={t('BrowserPanel.newTab')} onClick={() => void newTab()}><PlusIcon /></button>
+    <button type="button" className="tool-button browser-tab-add" aria-label={t('BrowserPanel.newTab')} data-tooltip={t('BrowserPanel.newTab')} onClick={() => void openUserBrowserTab()}><PlusIcon /></button>
     </div>
   )
 }
@@ -198,7 +193,6 @@ export function BrowserPanel() {
   const history = (step: 'back' | 'forward' | 'reload') => {
     if (tab) void perform((rpc) => rpc.call('browser.userNavigate', { tabId: tab.id, to: { history: step } }))
   }
-  const newTab = () => void perform((rpc) => rpc.call('browser.newTab', {}))
 
   if (status && status.state !== 'ready' && tabs.length === 0) {
     return (
@@ -257,7 +251,7 @@ export function BrowserPanel() {
       ) : (
         <div className="browser-empty">
           <p>{t('BrowserPanel.noTabsOpenYet')}</p>
-          <button type="button" className="button" onClick={newTab}>{t('BrowserPanel.newTab')}</button>
+          <button type="button" className="button" onClick={() => void openUserBrowserTab()}>{t('BrowserPanel.newTab')}</button>
         </div>
       )}
     </div>

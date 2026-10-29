@@ -4,6 +4,7 @@ import { isBrowserTool, type BrowserTab, type RpcConnection } from '@antumi/prot
 import { perform, showBrowserPanel, useCore } from './core-store'
 import { urlPath } from './file-links'
 import { usePreferences } from './preferences'
+import { browserHomepage } from './desktop-bridge'
 
 // Browser tabs as core reports them while a view watches: a conversation's under its id, the
 // user's own under USER_TABS, every tab there is under ALL_TABS (the browser panel's scope); and
@@ -118,6 +119,13 @@ export function focusBrowserConversation(conversationId: string): void {
 
 export function focusBrowserTab(tabId: string): void {
   focus({ tabId })
+}
+
+// Only tabs the user starts without an address inherit the local browser's homepage.
+export async function openUserBrowserTab(): Promise<void> {
+  const url = await browserHomepage()
+  const opened = await perform((rpc) => rpc.call('browser.newTab', url ? { url } : {}))
+  if (opened) focusBrowserTab(opened.id)
 }
 
 // A file URL for an absolute path.

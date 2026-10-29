@@ -32,6 +32,7 @@ declare global {
       openFromRequestPopup?(target: unknown): Promise<unknown>
       // The built-in browser's tab on show, a native view main places over the panel.
       browserShow?(tabId: string | null): Promise<unknown>
+      browserHomepage?(): Promise<unknown>
       browserBounds?(bounds: { x: number; y: number; width: number; height: number }): void
       browserOccluded?(occluded: boolean): Promise<unknown>
       // Bookmarks to import, read by main; absent from a main older than the renderer.
@@ -178,6 +179,15 @@ export function openFromRequestPopup(target: ActionableTarget): void {
 // Whether main shows browser tabs natively: in Electron, and one new enough.
 export function canShowNativeBrowser(): boolean {
   return window.antumi?.browserShow !== undefined
+}
+
+export async function browserHomepage(): Promise<string | null> {
+  const result = await window.antumi?.browserHomepage?.().catch(() => null)
+  if (result === 'about:blank') return result
+  const url = z.url().max(4096).safeParse(result)
+  if (!url.success) return null
+  const parsed = new URL(url.data)
+  return ['http:', 'https:'].includes(parsed.protocol) && !parsed.username && !parsed.password ? parsed.href : null
 }
 
 // Which tab main puts over the panel; null takes it down.

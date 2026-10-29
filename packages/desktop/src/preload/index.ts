@@ -35,6 +35,7 @@ contextBridge.exposeInMainWorld('antumi', {
   openFromRequestPopup: (target: unknown): Promise<unknown> => ipcRenderer.invoke('antumi:request-popup-open', target),
   // The built-in browser's tab on show, placed over the panel by main.
   browserShow: (tabId: string | null): Promise<unknown> => ipcRenderer.invoke('antumi:browser-show', tabId),
+  browserHomepage: (): Promise<unknown> => ipcRenderer.invoke('antumi:browser-homepage'),
   browserBounds: (bounds: { x: number; y: number; width: number; height: number }): void => ipcRenderer.send('antumi:browser-bounds', bounds),
   browserOccluded: (occluded: boolean): Promise<unknown> => ipcRenderer.invoke('antumi:browser-occluded', occluded),
   bookmarkSources: (): Promise<unknown> => ipcRenderer.invoke('antumi:bookmark-sources'),

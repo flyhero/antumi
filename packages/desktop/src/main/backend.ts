@@ -1,4 +1,4 @@
-import { execFile, spawn } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import { mkdirSync, openSync } from 'node:fs'
 import net from 'node:net'
 import { homedir } from 'node:os'
@@ -11,6 +11,7 @@ import { antumiPaths, daemonSchemas, readCoreEndpoint } from '@antumi/protocol/n
 // Where CLIs land that a Finder-launched app's minimal PATH misses.
 const EXTRA_PATH_DIRS = ['/opt/homebrew/bin', '/usr/local/bin', join(homedir(), '.local/bin')]
 const START_WAIT_MS = 15_000
+const PATH_MARK = '__ANTUMI_PATH__'
 
 // A GUI app inherits launchd's PATH, which has no homebrew or ~/.local: the agents and the
 // user's shell live there, so ask the login shell once and pass the result down.
@@ -24,15 +25,31 @@ function loginShellPath(): Promise<string> {
     }
     return Promise.resolve(parts.join(';'))
   }
-  const shell = process.env.SHELL || '/bin/zsh'
+  const linux = process.platform === 'linux'
+  const shell = process.env.SHELL || (linux ? '/bin/sh' : '/bin/zsh')
+  // Linux's default bash reads ~/.bashrc, where nvm and the like add themselves, only when
+  // interactive; such a shell may print its own lines too, so the PATH comes between markers.
+  const args = linux ? ['-i', '-l', '-c', `printf '${PATH_MARK}%s${PATH_MARK}' "$PATH"`] : ['-l', '-c', 'echo -n "$PATH"']
+  return shellOutput(shell, args, linux).then(({ stdout, ok }) => {
+    const found = linux ? stdout.split(PATH_MARK)[1] : ok ? stdout : undefined
+    const parts = (found ?? process.env.PATH ?? '').split(':').filter(Boolean)
+    for (const dir of EXTRA_PATH_DIRS) {
+      if (!parts.includes(dir)) parts.push(dir)
+    }
+    return parts.join(':')
+  })
+}
+
+// An interactive shell runs in a session of its own, so it cannot take over the terminal the app
+// was started from.
+function shellOutput(shell: string, args: string[], interactive: boolean): Promise<{ stdout: string, ok: boolean }> {
   return new Promise((resolve) => {
-    execFile(shell, ['-l', '-c', 'echo -n "$PATH"'], { timeout: 3000 }, (error, stdout) => {
-      const parts = (error ? (process.env.PATH ?? '') : stdout).split(':').filter(Boolean)
-      for (const dir of EXTRA_PATH_DIRS) {
-        if (!parts.includes(dir)) parts.push(dir)
-      }
-      resolve(parts.join(':'))
-    })
+    let stdout = ''
+    const child = spawn(shell, args, { stdio: ['ignore', 'pipe', 'ignore'], detached: interactive })
+    const timer = setTimeout(() => child.kill('SIGKILL'), 3000)
+    child.stdout.setEncoding('utf8').on('data', (chunk: string) => { stdout += chunk })
+    child.on('error', () => { clearTimeout(timer); resolve({ stdout, ok: false }) })
+    child.on('close', (code) => { clearTimeout(timer); resolve({ stdout, ok: code === 0 }) })
   })
 }
 

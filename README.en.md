@@ -184,7 +184,13 @@ pnpm dist:mac     # output: packages/desktop/dist/Antumi-<version>-arm64.dmg
 pnpm dist:win     # output: packages/desktop/dist/Antumi-Setup-<version>-x64.exe
 ```
 
-A machine with the app installed needs neither Node nor pnpm. The builds are unsigned: on another Mac, right-click → Open the first time; on Windows, SmartScreen stops it once, so choose More info → Run anyway.
+**Build a Linux app** (x64; it builds on Linux only, since node-pty is compiled there and needs `build-essential` and `python3`):
+
+```bash
+pnpm dist:linux   # output: packages/desktop/dist/Antumi-<version>-x64.AppImage and .deb
+```
+
+A machine with the app installed needs neither Node nor pnpm. The builds are unsigned: on another Mac, right-click → Open the first time; on Windows, SmartScreen stops it once, so choose More info → Run anyway. On Debian or Ubuntu, install the deb with `sudo apt install ./Antumi-<version>-x64.deb`; elsewhere, `chmod +x` the AppImage and run it (Ubuntu 22.04 and later need `sudo apt install libfuse2` first). If Ubuntu 23.10 or later reports a sandbox error, use the deb or start it with `--no-sandbox`. The Linux app does not update itself yet: download each new version.
 
 <p align="center">
   <img src="docs/assets/agents.png" alt="Settings → Agents: Claude Code, Codex and Cursor installed and signed in" width="720" />

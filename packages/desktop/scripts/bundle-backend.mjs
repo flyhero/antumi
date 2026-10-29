@@ -42,23 +42,25 @@ for (const [name, entry] of [
 
 // The prebuilt binding next to the bundles, where `import 'node-pty'` resolves it. Only the target
 // platform's prebuilds (--platform, this machine's by default): the rest is 50MB of others. Debug
-// symbols stay behind too.
+// symbols stay behind too. node-pty ships no Linux prebuild, so there install compiled one into
+// build/Release: only the binding is taken, so Linux builds on Linux, for this machine's arch.
 const platformFlag = process.argv.indexOf('--platform')
 const platform = platformFlag === -1 ? process.platform : process.argv[platformFlag + 1]
-const PREBUILDS = { darwin: ['darwin-arm64', 'darwin-x64'], win32: ['win32-x64'] }
+const PREBUILDS = { darwin: ['prebuilds/darwin-arm64', 'prebuilds/darwin-x64'], win32: ['prebuilds/win32-x64'], linux: ['build/Release/pty.node'] }
 const prebuilds = PREBUILDS[platform]
 if (!prebuilds) throw new Error(`[bundle-backend] no package for platform ${platform}`)
+if (platform === 'linux' && process.platform !== 'linux') throw new Error('[bundle-backend] the Linux package builds on Linux: node-pty is compiled there')
 const requireDaemon = createRequire(path.join(repo, 'packages/daemon/package.json'))
 const ptyRoot = path.dirname(requireDaemon.resolve('node-pty/package.json'))
 const ptyOut = path.join(out, 'node_modules', 'node-pty')
-for (const piece of ['package.json', 'lib', ...prebuilds.map((each) => `prebuilds/${each}`)]) {
+for (const piece of ['package.json', 'lib', ...prebuilds]) {
   const from = path.join(ptyRoot, piece)
   if (!existsSync(from)) throw new Error(`[bundle-backend] node-pty has no ${piece}`)
   cpSync(from, path.join(ptyOut, piece), { recursive: true, filter: (file) => !file.endsWith('.pdb') })
 }
 // node-pty ships its spawn-helper without the exec bit (see scripts/fix-node-pty-spawn-helper.mjs).
-for (const arch of prebuilds) {
-  const helper = path.join(ptyOut, 'prebuilds', arch, 'spawn-helper')
+for (const piece of prebuilds) {
+  const helper = path.join(ptyOut, piece, 'spawn-helper')
   if (existsSync(helper)) chmodSync(helper, 0o755)
 }
 

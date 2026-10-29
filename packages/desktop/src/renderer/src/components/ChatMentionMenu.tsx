@@ -177,7 +177,10 @@ export function useChatMentionMenu({ value, setText, setValue, roots, cwd, agent
     { id: 'projects', label: t('ChatMentionMenu.projects'), loading: projects === null },
     ...(references ? [{ id: 'conversations' as const, label: t('ChatMentionMenu.conversations'), loading: false }] : [])
   ]
-  const selectedGroup = tabs.some((tab) => tab.id === group) && group !== null ? group : delegates && callable.length ? 'profiles' : rootsKey ? 'files' : 'projects'
+  const preferred: MentionGroup = delegates && callable.length ? 'profiles' : rootsKey ? 'files' : 'projects'
+  // Until the user picks a category, one with something for what they typed rather than an empty one.
+  const fallback = !query || entries[preferred].length > 0 ? preferred : tabs.find((tab) => entries[tab.id].length > 0)?.id ?? preferred
+  const selectedGroup = tabs.some((tab) => tab.id === group) && group !== null ? group : fallback
   const shown = entries[selectedGroup]
   const loading = tabs.find((tab) => tab.id === selectedGroup)?.loading ?? false
   const open = range !== null && text !== closedAt
@@ -213,6 +216,11 @@ export function useChatMentionMenu({ value, setText, setValue, roots, cwd, agent
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       const step = event.key === 'ArrowDown' ? 1 : -1
       if (shown.length) setHighlight((active + step + shown.length) % shown.length)
+    } else if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && !event.shiftKey) {
+      // The query is a few letters: the arrows go between categories, Esc gives them back to the text.
+      const at = tabs.findIndex((tab) => tab.id === selectedGroup)
+      const next = tabs[(at + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length]
+      if (next) chooseGroup(next.id)
     } else if (event.key === 'Escape') {
       setClosedAt(text)
     } else if ((event.key === 'Enter' && !event.shiftKey) || (event.key === 'Tab' && !event.shiftKey)) {
@@ -256,7 +264,7 @@ export function useChatMentionMenu({ value, setText, setValue, roots, cwd, agent
         </ul>
         {shown.length === 0 && <p className="chat-mention-empty" role="status">{loading ? t('ChatMentionMenu.searching') : selectedGroup === 'files' && !rootsKey ? t('ChatMentionMenu.noProject') : selectedGroup === 'profiles' && !query ? t('AgentProfiles.noAvailable') : t('ChatMentionMenu.noMatches')}</p>}
       </div>
-      <div className="chat-mention-keys" aria-hidden="true">{tr('ChatMentionMenu.navigateReferenceOpenFolderClose', { value1: <kbd>↑↓</kbd>, value2: <kbd>Enter</kbd>, value3: <kbd>Tab</kbd>, value4: <kbd>Esc</kbd> })}</div>
+      <div className="chat-mention-keys" aria-hidden="true">{tr('ChatMentionMenu.navigateReferenceOpenFolderClose', { value1: <kbd>↑↓</kbd>, value2: <kbd>Enter</kbd>, value3: <kbd>Tab</kbd>, value4: <kbd>Esc</kbd>, value5: <kbd>←→</kbd> })}</div>
     </div>
   ) : null
 

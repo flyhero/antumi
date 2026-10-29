@@ -2076,8 +2076,8 @@ export const MESSAGES = {
     "en": "Project"
   },
   "ChatMentionMenu.navigateReferenceOpenFolderClose": {
-    "zh": "{value1} 选择 {value2} 引用 {value3} 打开文件夹 {value4} 关闭",
-    "en": "{value1} Navigate {value2} Reference {value3} Open folder {value4} Close"
+    "zh": "{value1} 选择 {value5} 切换分类 {value2} 引用 {value3} 打开文件夹 {value4} 关闭",
+    "en": "{value1} Navigate {value5} Category {value2} Reference {value3} Open folder {value4} Close"
   },
   "ChatMessageList.yourSentMessages": {
     "zh": "你发过的消息",

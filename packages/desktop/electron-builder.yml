@@ -45,3 +45,19 @@ nsis:
   perMachine: false
   allowToChangeInstallationDirectory: true
   artifactName: ${productName}-Setup-${version}-${arch}.${ext}
+# AppImage runs without installing; the deb sets up chrome-sandbox, which Electron needs where
+# unprivileged user namespaces are off (Ubuntu 23.10 and later). Built on Linux: see bundle-backend.
+linux:
+  executableName: antumi
+  icon: build/icon-win.png
+  category: Development
+  maintainer: flyhero
+  synopsis: Task-first multi-agent manager
+  artifactName: ${productName}-${version}-${arch}.${ext}
+  target:
+    - target: AppImage
+      arch:
+        - x64
+    - target: deb
+      arch:
+        - x64

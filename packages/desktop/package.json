@@ -17,7 +17,8 @@
     "typecheck": "tsc -p tsconfig.node.json && tsc -p tsconfig.web.json",
     "bundle:backend": "node scripts/bundle-backend.mjs",
     "dist:mac": "electron-vite build && node scripts/bundle-backend.mjs --platform darwin && electron-builder --mac --publish never",
-    "dist:win": "electron-vite build && node scripts/bundle-backend.mjs --platform win32 && electron-builder --win --publish never"
+    "dist:win": "electron-vite build && node scripts/bundle-backend.mjs --platform win32 && electron-builder --win --publish never",
+    "dist:linux": "electron-vite build && node scripts/bundle-backend.mjs --platform linux && electron-builder --linux --publish never"
   },
   "dependencies": {
     "@fontsource-variable/geist-mono": "5.3.0",

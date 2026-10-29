@@ -51,7 +51,7 @@ linux:
   executableName: antumi
   icon: build/icon-win.png
   category: Development
-  maintainer: flyhero <qfwang666@163.com>
+  maintainer: flyhero
   synopsis: Task-first multi-agent manager
   artifactName: ${productName}-${version}-${arch}.${ext}
   target:

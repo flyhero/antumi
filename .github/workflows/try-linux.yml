@@ -55,7 +55,7 @@ jobs:
           ls -la "$ANTUMI_HOME"
           kill $pid || true
       - name: Inspect deb
-        run: dpkg-deb --info packages/desktop/dist/*.deb && dpkg-deb --contents packages/desktop/dist/*.deb | grep -E 'chrome-sandbox|node-pty|pty.node'
+        run: echo "::warning title=maintainer::$(dpkg-deb --field packages/desktop/dist/*.deb Maintainer)" && dpkg-deb --info packages/desktop/dist/*.deb && dpkg-deb --contents packages/desktop/dist/*.deb | grep -E 'chrome-sandbox|node-pty|pty.node'
       - uses: actions/upload-artifact@v7
         with:
           name: antumi-linux

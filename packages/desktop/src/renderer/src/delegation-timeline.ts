@@ -18,8 +18,9 @@ function dispatched(item: ChatItem, call: AgentCall): boolean {
   } catch { return false }
 }
 
-// Place one persistent card beside its dispatch, outside folded steps. A partial history may only
-// contain the returned result; keep that card beside the return until its older dispatch is loaded.
+// Place each call's card beside its dispatch, outside folded steps, and those dispatched at the same
+// place together, as one fan-out. A partial history may only contain the returned result; keep that
+// card beside the return until its older dispatch is loaded.
 export function withDelegations(blocks: readonly ChatBlock[], calls: readonly AgentCall[], hasOlder: boolean): ChatBlock[] {
   const items = blocks.map(itemsOf)
   const earliest = Math.min(...items.flatMap((group) => group.map((item) => item.at)))
@@ -42,6 +43,9 @@ export function withDelegations(blocks: readonly ChatBlock[], calls: readonly Ag
     }
     slots.set(anchor, [...(slots.get(anchor) ?? []), call])
   }
-  const cards = (index: number): ChatBlock[] => (slots.get(index) ?? []).map((call) => ({ kind: 'delegation', key: `delegation:${call.id}`, call }))
+  const cards = (index: number): ChatBlock[] => {
+    const calls = slots.get(index)
+    return calls?.length ? [{ kind: 'delegation', key: `delegation:${calls[0]!.id}`, calls }] : []
+  }
   return [...cards(-1), ...blocks.flatMap((block, index) => [block, ...cards(index)])]
 }

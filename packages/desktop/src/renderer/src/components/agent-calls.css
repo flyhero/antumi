@@ -17,6 +17,8 @@
 .delegation-timeline-item:last-child { padding-bottom: 0; }
 .delegation-timeline-item:last-child::before { display: none; }
 .delegation-timeline-item[data-active] { --delegation-node-tone: var(--status-running); }
+/* The one a chat card's 详情 named: a tint and the accent down its side. */
+.delegation-timeline-item[data-focused] .delegation-record { margin: -8px -10px; padding: 8px 10px; border-radius: var(--radius); background: var(--fill); box-shadow: inset 2px 0 0 var(--accent); }
 .delegation-timeline-item[data-state='completed'] { --delegation-node-tone: var(--status-done); }
 .delegation-timeline-item[data-state='awaiting'] { --delegation-node-tone: var(--warning); }
 .delegation-timeline-item[data-state='failed'] { --delegation-node-tone: var(--danger); }
@@ -38,7 +40,6 @@
 .delegation-instruction { margin: 12px 0; }
 .delegation-instruction summary { position: relative; padding-left: 12px; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; line-height: 1.6; cursor: pointer; }
 .delegation-instruction summary::before { content: ''; position: absolute; top: 6px; left: 0; width: 4px; height: 4px; border-right: 1px solid var(--text-3); border-bottom: 1px solid var(--text-3); transform: rotate(-45deg); transition: transform 120ms ease; }
-.delegation-instruction[open] summary { -webkit-line-clamp: unset; }
 .delegation-instruction[open] summary::before { transform: rotate(45deg); }
 .delegation-instruction p { margin: 10px 0 0; color: var(--text-muted); }
 .delegation-result { margin: 12px 0; border: 1px solid var(--border); border-radius: var(--radius-sm); }

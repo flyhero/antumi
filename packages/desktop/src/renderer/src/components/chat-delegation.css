@@ -1,4 +1,4 @@
-.chat-delegation { --delegation-tone: var(--text-3); position: relative; width: min(100%, 560px); margin: 4px auto; border: 1px solid var(--border-2); border-radius: var(--radius-lg); overflow: hidden; font-size: var(--chat-font-small); }
+.chat-delegation { --delegation-tone: var(--text-3); position: relative; width: 100%; background: var(--surface); border: 1px solid var(--border-2); border-radius: var(--radius-lg); overflow: hidden; font-size: var(--chat-font-small); }
 .chat-delegation[data-active] { --delegation-tone: var(--status-running); }
 .chat-delegation[data-state='completed'] { --delegation-tone: var(--status-done); }
 .chat-delegation[data-state='awaiting'] { --delegation-tone: var(--warning); }
@@ -10,24 +10,12 @@
 .chat-delegation-heading { color: var(--text-muted); }
 .chat-delegation-heading > svg, .chat-delegation-state > svg { width: 14px; height: 14px; }
 .chat-delegation-state { color: var(--delegation-tone); }
-.chat-delegation-route { display: grid; grid-template-columns: minmax(0, 1fr) 96px minmax(0, 1.4fr); align-items: center; gap: 12px; padding: 16px 24px 12px; }
-.chat-delegation-origin, .chat-delegation-recipient { display: flex; align-items: center; gap: 12px; min-width: 0; }
-.chat-delegation-origin { color: var(--text-muted); }
+.chat-delegation-recipient { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 12px 16px 8px; }
 .chat-delegation-recipient strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; font-size: var(--chat-font-size); }
 .chat-delegation-avatar { display: grid; place-items: center; width: 32px; height: 32px; flex-shrink: 0; border: 1px solid var(--border); border-radius: var(--radius); }
 .chat-delegation-avatar > svg { width: 20px; height: 20px; }
 .chat-delegation-recipient .chat-delegation-avatar { position: relative; }
 .chat-delegation[data-active] .chat-delegation-recipient .chat-delegation-avatar::after { content: ''; position: absolute; inset: -4px; border: 1px solid var(--delegation-tone); border-radius: var(--radius-lg); animation: delegation-breathe 2.4s ease-out infinite; pointer-events: none; }
-.chat-delegation-bridge { position: relative; align-self: stretch; min-height: 32px; }
-.chat-delegation-bridge svg { position: absolute; inset: 0; width: 100%; height: 24px; overflow: visible; }
-.chat-delegation-bridge path { fill: none; stroke-width: 1.2; vector-effect: non-scaling-stroke; }
-.chat-delegation-track { stroke: var(--border-2); stroke-dasharray: 3 4; }
-.chat-delegation-arrow { stroke: var(--delegation-tone); stroke-linecap: round; stroke-linejoin: round; }
-.chat-delegation-packet { stroke: var(--delegation-tone); stroke-width: 2; stroke-dasharray: 12 84; stroke-linecap: round; opacity: 0; }
-.chat-delegation[data-active] .chat-delegation-packet { opacity: 0.85; animation: delegation-flow 1.8s linear infinite; }
-.chat-delegation[data-state='completed'] .chat-delegation-track { stroke: var(--delegation-tone); opacity: 0.45; stroke-dasharray: none; }
-.chat-delegation[data-returned] .chat-delegation-bridge svg { transform: scaleX(-1); }
-.chat-delegation-route-label { position: absolute; top: 24px; left: 0; right: 0; text-align: center; font-size: var(--chat-font-small); color: var(--text-3); }
 .chat-delegation-goal { margin: 4px 16px 12px; font-size: var(--chat-font-size); line-height: 1.6; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
 .chat-delegation-preview { display: flex; align-items: flex-start; gap: 8px; margin: 0 16px 12px; padding-top: 12px; border-top: 1px solid var(--border); color: var(--text-muted); }
 .chat-delegation-preview > svg { width: 14px; height: 14px; margin-top: 2px; flex-shrink: 0; color: var(--delegation-tone); }
@@ -39,18 +27,63 @@
 .chat-delegation-time { font-variant-numeric: tabular-nums; }
 .chat-delegation-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .chat-delegation-actions .link-button { font-size: inherit; }
-.chat-delegation-expand { display: inline-flex; align-items: center; gap: 4px; color: var(--text-muted); }
-.chat-delegation-expand svg { width: 12px; height: 12px; transition: transform 120ms ease; }
-.chat-delegation-expand[aria-expanded='true'] svg { transform: rotate(180deg); }
-.chat-delegation-details { display: grid; gap: 16px; padding: 16px; border-top: 1px solid var(--border); }
-.chat-delegation-details h4 { margin: 0 0 8px; font-size: inherit; font-weight: 500; color: var(--text-muted); }
-.chat-delegation-instruction { padding: 12px; border-radius: var(--radius-sm); background: var(--fill); white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.7; }
 .chat-delegation[data-fresh] { animation: delegation-arrive 240ms ease-out both; }
 .chat-delegation[data-finished] .chat-delegation-state > svg { animation: delegation-settle 480ms ease-out both; }
-@keyframes delegation-flow { to { stroke-dashoffset: -96; } }
 @keyframes delegation-scan { 0%, 100% { transform: translateX(-80%); opacity: 0; } 40%, 60% { opacity: 0.6; } 100% { transform: translateX(80%); } }
 @keyframes delegation-breathe { 0% { opacity: 0.4; transform: scale(0.95); } 100% { opacity: 0; transform: scale(1.16); } }
 @keyframes delegation-arrive { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes delegation-settle { 0% { transform: scale(0.7); opacity: 0; } 65% { transform: scale(1.15); } 100% { transform: scale(1); opacity: 1; } }
-@container (max-width: 440px) { .chat-delegation-route { grid-template-columns: minmax(0, 1fr) 48px minmax(0, 1.4fr); gap: 8px; padding: 12px 16px; } .chat-delegation-origin, .chat-delegation-recipient { gap: 8px; } }
-@media (prefers-reduced-motion: reduce) { .chat-delegation[data-fresh], .chat-delegation[data-finished] .chat-delegation-state > svg, .chat-delegation[data-active]::before, .chat-delegation[data-active] .chat-delegation-packet, .chat-delegation[data-active] .chat-delegation-recipient .chat-delegation-avatar::after { animation: none; } .chat-delegation[data-active]::before, .chat-delegation[data-active] .chat-delegation-recipient .chat-delegation-avatar::after { opacity: 0; } .chat-delegation-expand svg { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .chat-delegation[data-fresh], .chat-delegation[data-finished] .chat-delegation-state > svg, .chat-delegation[data-active]::before, .chat-delegation[data-active] .chat-delegation-recipient .chat-delegation-avatar::after { animation: none; } .chat-delegation[data-active]::before, .chat-delegation[data-active] .chat-delegation-recipient .chat-delegation-avatar::after { opacity: 0; } }
+
+/* The calls a turn sent out, as one fan-out (ChatDelegationGroup): the caller on the left as a
+   glowing orb ringed like a HUD core, a line to each member's card, lights along the lines drawn on
+   a canvas over the whole. Deliberately livelier than the rest of the chat, at the user's choice. */
+.chat-delegation-group { --fanout-tone: var(--status-running); position: relative; display: grid; grid-template-columns: 104px minmax(40px, 120px) minmax(0, 480px); justify-content: center; align-items: center; margin: 4px auto; }
+.chat-delegation-lines { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2; }
+.chat-delegation-cards { grid-column: 3; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.chat-delegation-group[data-single] { align-items: start; }
+.chat-delegation[data-focused] { border-color: color-mix(in srgb, var(--accent) 45%, var(--border-2)); }
+.chat-delegation-details-link { color: var(--text-muted); }
+
+.chat-delegation-caller { grid-column: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; text-align: center; }
+.chat-delegation-caller[data-mood='awaiting'] { --fanout-tone: var(--warning); }
+.chat-delegation-caller[data-mood='completed'] { --fanout-tone: var(--status-done); }
+.chat-delegation-caller[data-mood='failed'] { --fanout-tone: var(--danger); }
+.chat-delegation-caller-name { margin-top: 2px; color: var(--text-muted); }
+.chat-delegation-caller-meta { color: var(--text-3); font-size: var(--chat-font-small); white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* An earlier day's time carries its date: it may take two lines rather than spill past the column. */
+time.chat-delegation-caller-meta { white-space: normal; max-width: 100%; text-wrap: balance; }
+.chat-delegation-core { position: relative; display: grid; place-items: center; width: 84px; height: 84px; margin: -20px 0 -2px; }
+.chat-delegation-orb { position: relative; width: 44px; height: 44px; border-radius: 50%;
+  background:
+    radial-gradient(circle at 34% 30%, rgb(255 255 255 / 95%) 0 7%, rgb(255 255 255 / 0) 30%),
+    radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--fanout-tone) 25%, #fff) 0%, color-mix(in srgb, var(--fanout-tone) 70%, #fff) 35%, var(--fanout-tone) 75%, color-mix(in srgb, var(--fanout-tone) 88%, #000) 100%);
+  box-shadow: 0 0 8px 2px color-mix(in srgb, var(--fanout-tone) 60%, transparent), 0 0 24px 8px color-mix(in srgb, var(--fanout-tone) 25%, transparent), inset 0 0 6px rgb(255 255 255 / 45%);
+  transition: box-shadow 0.6s ease; animation: fanout-breathe 3.6s ease-in-out infinite; }
+.chat-delegation-orb::before { content: ''; position: absolute; inset: 3px; border-radius: 50%; background: conic-gradient(from 0deg, transparent 0 55%, rgb(255 255 255 / 40%) 70%, transparent 85%); mix-blend-mode: soft-light; animation: fanout-turn 6s linear infinite; }
+.chat-delegation-caller[data-flash] .chat-delegation-orb { box-shadow: 0 0 16px 4px color-mix(in srgb, var(--fanout-tone) 75%, transparent), 0 0 44px 14px color-mix(in srgb, var(--fanout-tone) 35%, transparent), inset 0 0 6px rgb(255 255 255 / 45%); }
+/* Broken rings round the orb: they turn while work runs, hold still while a member waits on you,
+   slow to a crawl once all is back, and open out for a moment when work goes out or returns. */
+.chat-delegation-rings { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.chat-delegation-rings circle { fill: none; stroke: var(--fanout-tone); stroke-linecap: round; transform-origin: 42px 42px; transition: stroke 0.6s; }
+.chat-delegation-rings .outer { stroke-width: 1.2; stroke-dasharray: 46 18 10 18 26 18; opacity: 0.55; animation: fanout-turn 6s linear infinite; }
+.chat-delegation-rings .inner { stroke-width: 1.6; stroke-dasharray: 22 30 40 30; opacity: 0.75; animation: fanout-turn 3.8s linear infinite reverse; }
+.chat-delegation-rings .ticks { stroke-width: 3; stroke-dasharray: 1 13.4; opacity: 0.35; animation: fanout-turn 24s linear infinite; }
+.chat-delegation-caller[data-mood='awaiting'] .chat-delegation-rings circle { animation-play-state: paused; }
+.chat-delegation-caller[data-mood='awaiting'] .chat-delegation-rings .inner { animation: fanout-blink 1.8s ease-in-out infinite; }
+.chat-delegation-caller:is([data-mood='completed'], [data-mood='failed']) .chat-delegation-rings :is(.outer, .inner) { animation-duration: 22s; }
+.chat-delegation-caller[data-flash] .chat-delegation-rings { transform: scale(1.18); }
+@keyframes fanout-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.04); } }
+@keyframes fanout-turn { to { transform: rotate(360deg); } }
+@keyframes fanout-blink { 0%, 100% { opacity: 0.8; } 50% { opacity: 0.3; } }
+
+/* A chat too narrow for the caller and its lines shows the cards alone. */
+@container (max-width: 520px) {
+  .chat-delegation-group { grid-template-columns: minmax(0, 1fr); }
+  .chat-delegation-caller, .chat-delegation-lines { display: none; }
+  .chat-delegation-cards { grid-column: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chat-delegation-orb, .chat-delegation-orb::before, .chat-delegation-rings circle { animation: none; }
+  .chat-delegation-rings, .chat-delegation-orb { transition: none; }
+}

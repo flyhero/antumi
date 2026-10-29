@@ -60,9 +60,10 @@ export function isAgentCallResult(item: Pick<ChatItem, 'kind' | 'id'>): boolean 
   return item.kind === 'user' && /^u:agent-result:[0-9a-f-]{36}$/.test(item.id)
 }
 
-export function showAgentCalls(inspector: 'task' | 'conversation'): void {
-  if (inspector === 'task') useCore.setState({ inspectorOpen: true, taskInspectorTab: 'delegation' })
-  else useCore.setState({ conversationInspectorOpen: true, conversationInspectorTab: 'delegation' })
+// The inspector on its 委派 page; with a call, on that one, picked out and open.
+export function showAgentCalls(inspector: 'task' | 'conversation', callId: string | null = null): void {
+  if (inspector === 'task') useCore.setState({ inspectorOpen: true, taskInspectorTab: 'delegation', agentCallFocus: callId })
+  else useCore.setState({ conversationInspectorOpen: true, conversationInspectorTab: 'delegation', agentCallFocus: callId })
 }
 
 export function useAgentCallsSupported(conversation: Conversation | undefined): boolean {

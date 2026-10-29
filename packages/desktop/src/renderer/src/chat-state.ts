@@ -264,7 +264,8 @@ type TurnReply = { key: string; text: string }
 // edits to one file one after another as one card, and a finished turn's work folded behind one
 // line, leaving its answer in view with the files it changed under it.
 export type ChatBlock =
-  | { kind: 'delegation'; key: string; call: AgentCall }
+  // The calls one turn dispatched at the same place, drawn as one fan-out from the caller.
+  | { kind: 'delegation'; key: string; calls: AgentCall[] }
   | { kind: 'entry'; key: string; entry: TimelineEntry }
   | { kind: 'tools'; key: string; tools: ToolItem[] }
   | { kind: 'browser'; key: string; tools: ToolItem[] }

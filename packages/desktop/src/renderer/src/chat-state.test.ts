@@ -189,7 +189,7 @@ describe('chatBlocks', () => {
       : block.kind === 'agents' ? `agents:${block.tools.map((each) => each.id).join('+')}`
       : block.kind === 'fold' ? { fold: shape(block.blocks) }
       : block.kind === 'changes' ? { changes: block.files }
-      : block.kind === 'delegation' ? { delegation: block.call.id }
+      : block.kind === 'delegation' ? { delegation: block.calls.map((call) => call.id) }
       : block.entry.kind === 'item' ? block.entry.item.id : block.key)
 
   it('runs calls made one after another together, a change to files on its own card', () => {

@@ -132,6 +132,8 @@ export type CoreState = {
   // A conversation's, which the user opens, or a plan the agent proposes; on the tab last shown.
   conversationInspectorOpen: boolean
   conversationInspectorTab: InspectorTab
+  // The delegation a card's 详情 named, picked out on the inspector's 委派 page; null for none.
+  agentCallFocus: string | null
   // The plan its plan tab shows, by item key; null for the newest.
   conversationPlan: string | null
   gitRevision: number
@@ -265,6 +267,7 @@ export const useCore = create<CoreState>()(() => ({
   taskInspectorPlan: null,
   conversationInspectorOpen: false,
   conversationInspectorTab: 'changes',
+  agentCallFocus: null,
   conversationPlan: null,
   gitRevision: 0,
   inspectorFile: null,

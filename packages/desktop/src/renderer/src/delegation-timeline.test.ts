@@ -23,7 +23,7 @@ describe('delegation placement', () => {
       const index = shown.findIndex((block) => block.kind === 'delegation')
       expect(shown[index - 1]?.kind).toBe('fold')
       expect(shown[index + 1]).toMatchObject({ kind: 'entry', entry: { item: { id: 'answer' } } })
-      expect(cards(shown)).toEqual([{ kind: 'delegation', key: `delegation:${call.id}`, call: { ...call, state } }])
+      expect(cards(shown)).toEqual([{ kind: 'delegation', key: `delegation:${call.id}`, calls: [{ ...call, state }] }])
     }
   })
 
@@ -47,7 +47,9 @@ describe('delegation placement', () => {
     const tool = dispatch(other.id)
     const blocks = grouped([user('u', 0), { ...tool, kind: 'tool', input: null }, reply('a', 20)])
     const shown = withDelegations(blocks, [other, call], false)
-    expect(cards(shown).map((block) => block.call.id)).toEqual([call.id, other.id])
+    expect(cards(shown).flatMap((block) => block.calls.map((each) => each.id))).toEqual([call.id, other.id])
+    // Dispatched in the same turn, they are one fan-out, not a card each.
+    expect(cards(shown)).toHaveLength(1)
     expect(cards(withDelegations([], [call], false))).toHaveLength(1)
     expect(cards(withDelegations([], [call], true))).toHaveLength(0)
   })

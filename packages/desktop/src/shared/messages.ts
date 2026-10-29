@@ -12333,4 +12333,11 @@ export const MESSAGES = {
   "GitPage.dateColumn": {"zh": "日期", "en": "Date"},
   "GitPage.workspaceGone": {"zh": "所选工作区已不存在，请重新选择工作区。", "en": "The selected working tree is no longer available. Select another working tree."},
   "GitPage.newBranchFromTag": {"zh": "从此标签新建分支", "en": "New branch from tag"},
+  "AgentProfiles.delegatedAgent": {"zh": "委派智能体", "en": "Delegated agent"},
+  "AgentProfiles.groupLabel": {"zh": "委派 {count} 个智能体", "en": "{count} delegated agents"},
+  "AgentProfiles.dispatchedAt": {"zh": "{time} 派发", "en": "Sent {time}"},
+  "AgentProfiles.summaryWorking": {"zh": "工作中 {count}", "en": "{count} working"},
+  "AgentProfiles.summaryAwaiting": {"zh": "等你 {count}", "en": "{count} need you"},
+  "AgentProfiles.summaryDone": {"zh": "完成 {count}", "en": "{count} done"},
+  "AgentProfiles.summaryFailed": {"zh": "失败 {count}", "en": "{count} failed"},
 } as const

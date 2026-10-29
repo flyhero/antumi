@@ -21,7 +21,7 @@ import { ChatDock } from './ChatDock'
 import { AgentDelegationResult } from './AgentDelegation'
 import { isAgentCallResult, useAgentCalls, useAgentCallsSupported } from '../agent-calls'
 import { withDelegations } from '../delegation-timeline'
-import { ChatDelegationCard } from './ChatDelegationCard'
+import { ChatDelegationGroup } from './ChatDelegationGroup'
 import { ProjectRunNotice } from './ProjectRunNotice'
 import { ChatImageStrip } from './ChatImages'
 import { ChatMarkdown, ChatRoots } from './ChatMarkdown'
@@ -550,7 +550,7 @@ function ActivityBlock({ next, ...props }: Parameters<typeof Block>[0] & { next:
 function Block({ conversationId, block, task, replies, fresh }: { conversationId: string; block: ChatBlock; task: boolean; replies: ReadonlyMap<string, number>; fresh?: boolean }) {
   const compact = useContext(ChatVariant) === 'compact'
   const entering = fresh || undefined
-  if (block.kind === 'delegation') return <div className="chat-entry" data-entry-key={block.key}><ChatDelegationCard call={block.call} fresh={fresh} /></div>
+  if (block.kind === 'delegation') return <div className="chat-entry" data-entry-key={block.key}><ChatDelegationGroup calls={block.calls} fresh={fresh} /></div>
   if (compact && block.kind === 'changes') return null
   if (block.kind === 'browser') return <ChatCopyRegion text={block.tools.map(copyTextForItem).join('\n\n')}><div className="chat-entry" data-fresh={entering}><ChatBrowserRun tools={block.tools} /></div></ChatCopyRegion>
   if (block.kind === 'tools') return <ChatCopyRegion text={block.tools.map(copyTextForItem).join('\n\n')}><div className="chat-entry" data-fresh={entering}><ChatToolRun tools={block.tools} /></div></ChatCopyRegion>

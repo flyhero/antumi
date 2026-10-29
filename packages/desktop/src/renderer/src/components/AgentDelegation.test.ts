@@ -12,6 +12,7 @@ import { ConversationInspector } from './ConversationInspector'
 import { TaskInspector } from './TaskInspector'
 import { TaskToolbar } from './TaskActions'
 import { ChatDelegationCard } from './ChatDelegationCard'
+import { ChatDelegationGroup } from './ChatDelegationGroup'
 import { ConversationView } from './ConversationView'
 
 vi.mock('../agent-calls', async (importOriginal) => ({
@@ -42,6 +43,7 @@ function connect(features = ['agent-profiles']) {
 }
 const renderButton = (conversation = parent) => renderToStaticMarkup(createElement(ChatSurfaceContext.Provider, { value: conversationSurface(conversation) }, createElement(AgentDelegation, { conversation })))
 const call = AgentCall.parse({ result: null, error: null, delivered: false, id: '33333333-3333-4333-8333-333333333333', parentId: parent.id, conversationId: '44444444-4444-4444-8444-444444444444', profile: { id: '55555555-5555-4555-8555-555555555555', name: '审查员', agent: 'codex', archivedAt: null, createdAt: 0, updatedAt: 0 }, instruction: '检查变更', state: 'queued', readOnly: true, permissionMode: 'readOnly', createdAt: 10, updatedAt: 20 })
+const renderGroup = (calls: AgentCall[]) => renderToStaticMarkup(createElement(ChatSurfaceContext.Provider, { value: conversationSurface(parent) }, createElement(ChatDelegationGroup, { calls })))
 const renderCard = (patch: Partial<AgentCall>) => renderToStaticMarkup(createElement(ChatSurfaceContext.Provider, { value: conversationSurface(parent) }, createElement(ChatDelegationCard, { call: { ...call, ...patch } })))
 
 beforeEach(() => {
@@ -61,12 +63,34 @@ describe('delegation surfaces', () => {
     expect(awaiting).toContain('取消委派')
   })
 
-  it('keeps the goal and final outcome readable, with details and conversation links', () => {
+  it('keeps the goal and final outcome readable, leaving the rest of the record to the inspector', () => {
     const html = renderCard({ state: 'completed', result: 'Everything passed', delivered: true })
-    for (const text of ['审查员', '检查变更', 'Everything passed', '结果返回', '委派记录', '查看会话']) expect(html).toContain(text)
-    expect(html).not.toContain('取消委派')
-    expect(html).toContain('aria-expanded="false"')
+    for (const text of ['委派智能体', '审查员', '检查变更', 'Everything passed', '详情']) expect(html).toContain(text)
+    // No date, no second history link, nothing that opens inside the card and makes it taller.
+    for (const text of ['委派记录', '取消委派', '主会话', 'aria-expanded', '<time']) expect(html).not.toContain(text)
     expect(renderCard({ state: 'failed', error: 'Agent exited unexpectedly' })).toContain('Agent exited unexpectedly')
+  })
+
+  it('opens the inspector on the very call a card names, and marks that card', () => {
+    showAgentCalls('conversation', call.id)
+    expect(useCore.getState()).toMatchObject({ conversationInspectorOpen: true, conversationInspectorTab: 'delegation', agentCallFocus: call.id })
+    expect(renderCard({ state: 'running' })).toContain('data-focused="true"')
+    showAgentCalls('conversation')
+    expect(useCore.getState().agentCallFocus).toBeNull()
+  })
+
+  it('draws a batch as one fan-out from the caller, counting how it stands only when there are several', () => {
+    const other = { ...call, id: '66666666-6666-4666-8666-666666666666', state: 'awaiting' as const, createdAt: 12 }
+    const batch = renderGroup([{ ...call, state: 'running' }, other])
+    expect(batch).toContain('aria-label="委派 2 个智能体"')
+    expect(batch).toContain('主会话')
+    expect(batch).toContain('data-mood="awaiting"')
+    expect(batch).toContain('工作中 1 · 等你 1')
+    expect(batch.match(/class="chat-delegation"/g)).toHaveLength(2)
+    const one = renderGroup([{ ...call, state: 'running' }])
+    expect(one).toContain('data-single="true"')
+    expect(one).toContain('派发')
+    expect(one).not.toContain('工作中 1')
   })
 
   it('offers a dialog trigger for parent chats, but never for delegated or special-purpose chats or old cores', () => {

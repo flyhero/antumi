@@ -1,6 +1,6 @@
 {
   "name": "antumi",
-  "version": "0.21.2-beta.3",
+  "version": "0.21.2-beta.4",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@12.5.1",

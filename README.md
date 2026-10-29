@@ -221,7 +221,7 @@ pnpm dist:linux   # 产物在 packages/desktop/dist/Antumi-<版本>-x86_64.AppIm
 | <kbd>Ctrl</kbd> <kbd>`</kbd> | 打开 / 关闭终端面板 |
 | <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>`</kbd> | 打开 / 关闭浏览器面板 |
 | <kbd>⌘</kbd> <kbd>Shift</kbd> <kbd>E</kbd> | 打开 / 关闭文件面板 |
-| <kbd>⌘</kbd> <kbd>P</kbd> | 按名称转到文件 |
+| <kbd>⌘</kbd> <kbd>K</kbd> | 搜索会话、任务、智能体和文件 |
 | <kbd>⌘</kbd> <kbd>,</kbd> | 设置 |
 | <kbd>⌘</kbd> <kbd>F</kbd> | 搜索当前聊天 |
 | <kbd>⌘</kbd> <kbd>S</kbd> | 保存文件面板里正在编辑的文件 |

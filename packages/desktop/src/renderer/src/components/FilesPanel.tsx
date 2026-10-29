@@ -1,8 +1,7 @@
 import { t } from '../i18n'
 import { useEffect, useMemo, useState } from 'react'
-import { perform, setFileQuickOpen, setFilesMaximized, showFilesPanel, toggleFilesPanel, useCore, useFilesContextScope, useFilesScope } from '../core-store'
+import { openSearch, perform, setFilesMaximized, showFilesPanel, toggleFilesPanel, useCore, useFilesContextScope, useFilesScope } from '../core-store'
 import { fileScopeKey, type FileScope } from '../file-tabs'
-import { useShortcutLabel } from '../keyboard-shortcuts'
 import { usePanelShortcut } from '../panel-shortcuts'
 import { useProjectHeads } from './BranchStatus'
 import { ChatPicker, type PickerOption } from './ChatPicker'
@@ -22,7 +21,6 @@ function useScopeBranch(scope: FileScope | null, updatedAt: number): string | nu
 
 // The files of what the user looks at, or of a project they pick here: the dock's 文件.
 export function FilesPanel() {
-  const quickOpenKey = useShortcutLabel('quick-open-file')
   const shortcut = usePanelShortcut('toggle-files')
   const maximized = useCore((s) => s.filesMaximized)
   const contextScope = useFilesContextScope()
@@ -55,7 +53,7 @@ export function FilesPanel() {
             : <span className="files-panel-name">{scope?.roots.length ? projectNames(scope.roots) : t('FilesPanel.files')}</span>}
           {branch && following && <span className="files-panel-branch mono" title={branch}>{branch}</span>}
         </div>
-        {readable && scope.roots.length > 0 && <button type="button" className="tool-button" aria-label={t('FilesPanel.goToFile')} data-tooltip={[t('FilesPanel.goToFile'), quickOpenKey].filter(Boolean).join(' · ')} onClick={() => setFileQuickOpen(true)}><SearchIcon /></button>}
+        {readable && scope.roots.length > 0 && <button type="button" className="tool-button" aria-label={t('FilesPanel.goToFile')} data-tooltip={t('FilesPanel.goToFile')} onClick={() => openSearch('files')}><SearchIcon /></button>}
         <button type="button" className="tool-button" aria-label={maximized ? t('BrowserSidePanel.restore') : t('BrowserSidePanel.maximize')} data-tooltip={maximized ? t('BrowserSidePanel.restore') : t('BrowserSidePanel.maximize')} onClick={() => setFilesMaximized(!maximized)}>{maximized ? <RestoreIcon /> : <MaximizeIcon />}</button>
         <button type="button" className="tool-button" aria-label={t('FilesPanel.hideFiles')} data-tooltip={[t('FilesPanel.hideFiles'), shortcut].filter(Boolean).join(' ')} onClick={toggleFilesPanel}><CloseIcon /></button>
       </header>

@@ -21,7 +21,7 @@ import { ConversationDraft } from './components/ConversationDraft'
 import { EnvironmentNotice } from './components/EnvironmentNotice'
 import { StatusBar } from './components/StatusBar'
 import { UtilityPanelDock } from './components/UtilityPanelDock'
-import { FileQuickOpen } from './components/FileQuickOpen'
+import { SearchPalette } from './components/SearchPalette'
 import { WorktreeManager } from './components/WorktreeManager'
 import { RoutinesView } from './components/RoutinesView'
 import { RoutinesEntry } from './components/RoutinesEntry'
@@ -86,7 +86,7 @@ export function App() {
   const portsMaximized = useCore((s) => s.portsMaximized)
   const filesPanelOpen = useCore((s) => s.filesPanelOpen)
   const filesMaximized = useCore((s) => s.filesMaximized)
-  const fileQuickOpen = useCore((s) => s.fileQuickOpen)
+  const search = useCore((s) => s.search)
   const utilityPanelOrder = useCore((s) => s.utilityPanelOrder)
   const sidebarHidden = usePreferences((s) => s.sidebarHidden)
   const maximizedUtility = browserPanelOpen && browserMaximized
@@ -185,7 +185,7 @@ export function App() {
           pane headers under it are drag regions. */}
       {!settingsOpen && !maximizedUtility && <WindowBrand />}
       <StatusBar />
-      {fileQuickOpen && <FileQuickOpen />}
+      {search && <SearchPalette initial={search} />}
       {newTaskOpen && <NewTaskDialog />}
       {taskLaunchId && <TaskLaunchDialog key={taskLaunchId} taskId={taskLaunchId} />}
       {loginOpen && <SourceLoginDialog />}

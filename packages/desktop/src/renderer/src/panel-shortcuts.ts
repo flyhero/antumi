@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import type { PanelShortcutAction } from '../../shared/panel-shortcuts'
 import { ShortcutAction, SHORTCUTS } from '../../shared/keyboard-shortcuts'
 import { onBrowserShortcut, syncPanelShortcuts } from './desktop-bridge'
-import { focusSplitPane, setFileQuickOpen, setNewTaskOpen, toggleSplit, toggleBrowserPanel, toggleFilesPanel, toggleTerminalPanel, setSettingsOpen, useCore } from './core-store'
+import { focusSplitPane, openSearch, setNewTaskOpen, toggleSplit, toggleBrowserPanel, toggleFilesPanel, toggleTerminalPanel, setSettingsOpen, useCore } from './core-store'
 import { toggleSidebar } from './components/WindowBrand'
 import { usePreferences } from './preferences'
 import { isShortcut, recordingShortcut, useShortcutLabel } from './keyboard-shortcuts'
@@ -26,7 +26,7 @@ function runAppShortcut(action: ShortcutAction): boolean {
   else if (action === 'toggle-terminal') void toggleTerminalPanel()
   else if (action === 'toggle-browser') toggleBrowserPanel()
   else if (action === 'new-task') setNewTaskOpen(true)
-  else if (action === 'quick-open-file') setFileQuickOpen(true)
+  else if (action === 'search') openSearch()
   else if (action === 'focus-left' || action === 'focus-right') return focusSplitPane(action === 'focus-left' ? 0 : 1)
   else if (action === 'toggle-split' && state.section === 'conversations') toggleSplit()
   else return false

@@ -1,4 +1,5 @@
 import type { AgentProfile } from '@antumi/protocol'
+import type { SearchCategory } from './search-palette'
 import { mergeCliStatuses } from './agent-cli-state'
 import { getLocale, t } from './i18n'
 import { accountsSupported, activeAccount, isHelper, usageAccount, type AgentAccounts } from '@antumi/protocol'
@@ -202,7 +203,8 @@ export type CoreState = {
   // (the context it was picked in); null to follow it.
   filesFolders: { scope: FileScope; context: string } | null
   // The go-to-file box over the files panel's folders (⌘P).
-  fileQuickOpen: boolean
+  // The ⌘K search, open on this category; null while closed.
+  search: SearchCategory | null
   // The browser panel in the shared utility dock: every tab there is, the user's own included.
   browserPanelOpen: boolean
   browserMaximized: boolean
@@ -302,7 +304,7 @@ export const useCore = create<CoreState>()(() => ({
   filesPanelOpen: false,
   filesMaximized: false,
   filesFolders: null,
-  fileQuickOpen: false,
+  search: null,
   browserPanelOpen: false,
   browserMaximized: false,
   utilityPanelOrder: [],
@@ -650,8 +652,12 @@ export function useFilesContextScope(): FileScope | null {
   return useScope((s) => filesContext(s).scope)
 }
 
-export function setFileQuickOpen(open: boolean): void {
-  useCore.setState({ fileQuickOpen: open })
+export function openSearch(category: SearchCategory = 'all'): void {
+  useCore.setState({ search: category })
+}
+
+export function closeSearch(): void {
+  useCore.setState({ search: null })
 }
 
 // Opens the files panel, on `scope` when given (null: follow what the user looks at).

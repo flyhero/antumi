@@ -7,14 +7,16 @@ import { setPreference, usePreferences } from '../preferences'
 import { ChatPicker } from './ChatPicker'
 import { GitRepository } from './GitRepository'
 import { useFocusCount } from './Inspector'
+import { useSidebarEntryMenu } from './SidebarEntryMenu'
 import { GitIcon, CloseIcon, FolderIcon, RefreshIcon } from './icons'
 import { projectName } from './ProjectPicker'
 
 export function GitEntry() {
   const supported = useCore((s) => s.rpc?.features.includes('git-projects'))
   const open = useCore((s) => s.gitOpen)
+  const { onContextMenu, menu } = useSidebarEntryMenu('git')
   if (!supported) return null
-  return <button className="inbox-entry" aria-current={open} onClick={() => openGit()}><GitIcon /><span>Git</span></button>
+  return <><button className="inbox-entry" aria-current={open} onClick={() => openGit()} onContextMenu={onContextMenu}><GitIcon /><span>Git</span></button>{menu}</>
 }
 
 export function GitPage() {

@@ -9,6 +9,7 @@ import { ContextMenu, MenuCheckboxItem, MenuItem, menuPoint, type MenuPoint } fr
 import { AgentIcon, ArchiveIcon, ChevronDownIcon, GroupChatIcon, PencilIcon, PinIcon, PlusIcon, SlidersIcon, TrashIcon } from './icons'
 import { SidebarCollapseButton } from './SidebarCollapseButton'
 import { TitleEditor } from './TitleEditor'
+import { useSidebarEntryMenu } from './SidebarEntryMenu'
 
 export async function removeDiscussion(discussion: Discussion): Promise<void> {
   if (!window.confirm(t('SidebarDiscussions.deleteGroupChatMemberConversationsAndPostsAre', { value1: discussion.title }))) return
@@ -50,6 +51,7 @@ export function SidebarDiscussions() {
   const selected = useCore((s) => s.selectedDiscussionId)
   const section = useCore((s) => s.section)
   const [collapsed, setCollapsed] = useState(false)
+  const entryMenu = useSidebarEntryMenu('discussions')
   const [menu, setMenu] = useState<{ id: string; at: MenuPoint } | null>(null)
   const closeMenu = useCallback(() => setMenu(null), [])
   const [renamingId, setRenamingId] = useState<string | null>(null)
@@ -100,7 +102,8 @@ export function SidebarDiscussions() {
 
   return (
     <nav className="sidebar-discussions" data-collapsed={collapsed} aria-label={t('DiscussionView.groupChat_910')}>
-      <header className="task-list-header">
+      <header className="task-list-header" onContextMenu={entryMenu.onContextMenu}>
+        {entryMenu.menu}
         <SidebarCollapseButton icon={<GroupChatIcon />} label={t('DiscussionView.groupChat_910')} count={list.length} collapsed={collapsed} controls="sidebar-discussions" onToggle={() => setCollapsed((value) => !value)} />
         {archivedAll.length > 0 && (
           <button

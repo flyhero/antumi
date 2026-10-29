@@ -55,6 +55,12 @@ const Preferences = z.object({
   showUsage: z.boolean().catch(true),
   // Hidden only from the status bar; quota tracking and agent availability stay unchanged.
   hiddenUsageAgents: z.array(AgentKind).catch([]),
+  // The sidebar's optional entries (sidebar-entries.ts); the inbox shows by itself once a plugin
+  // brings a source, so its own switch matters only without one.
+  sidebarInbox: z.boolean().catch(false),
+  sidebarRoutines: z.boolean().catch(true),
+  sidebarGit: z.boolean().catch(true),
+  sidebarDiscussions: z.boolean().catch(true),
   // Off, nothing is said when the window is not in front; the dock count stays.
   notifications: z.boolean().catch(true),
   // On, an agent held up on the user while they are in another app comes up on a card at the top

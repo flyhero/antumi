@@ -1,12 +1,13 @@
 import type { Preferences } from './preferences'
 
-export const APPEARANCE_SECTIONS = ['colors', 'chat', 'terminal', 'language'] as const
+export const APPEARANCE_SECTIONS = ['colors', 'chat', 'terminal', 'sidebar', 'language'] as const
 export type AppearanceSection = typeof APPEARANCE_SECTIONS[number]
 
 const SECTION_PREFERENCES = {
   colors: ['theme', 'palette', 'backdrop'],
   chat: ['chatFontSize', 'chatFont', 'chatFontFamily', 'chatCjkFontFamily', 'chatWidth', 'foldTurns'],
   terminal: ['codeFontFamily', 'codeCjkFontFamily', 'terminalFontSize', 'terminalLineHeight', 'colorPrompt'],
+  sidebar: ['sidebarInbox', 'sidebarRoutines', 'sidebarGit', 'sidebarDiscussions'],
   language: ['language']
 } as const
 

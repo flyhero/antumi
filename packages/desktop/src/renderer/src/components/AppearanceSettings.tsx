@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from 'react'
+import { useEffect, useId, useState, type ReactNode } from 'react'
 import { t } from '../i18n'
 import { useCore } from '../core-store'
 import { DEFAULT_PREFERENCES, setPreference, usePreferences } from '../preferences'
@@ -13,7 +13,8 @@ import { CodeFontPicker } from './CodeFontPicker'
 import { CjkFontPicker } from './CjkFontPicker'
 import { PalettePicker } from './PalettePicker'
 import { BackdropPicker } from './BackdropPicker'
-import { ArrowUpIcon, CheckIcon, ChatIcon, ChevronDownIcon, RobotIcon, RotateLeftIcon, TerminalIcon } from './icons'
+import { ArrowUpIcon, BoardIcon, CheckIcon, ChatIcon, ChevronDownIcon, ClockIcon, GitIcon, GroupChatIcon, InboxIcon, RobotIcon, RotateLeftIcon, TerminalIcon } from './icons'
+import { inboxLocked, SIDEBAR_ENTRIES, SIDEBAR_PREFERENCE, sidebarShows, type SidebarEntry } from '../sidebar-entries'
 
 function ThemeMiniature({ scheme }: { scheme: 'light' | 'dark' }) {
   return (
@@ -52,6 +53,47 @@ function ThemePicker() {
   )
 }
 
+const SIDEBAR_ENTRY: Record<SidebarEntry, { label: () => string; hint: () => string; icon: () => ReactNode }> = {
+  inbox: { label: () => t('InboxEntry.inbox_1125'), hint: () => t('SettingsPage.sidebarInboxHint'), icon: () => <InboxIcon /> },
+  routines: { label: () => t('RoutinesEntry.scheduled'), hint: () => t('SettingsPage.sidebarRoutinesHint'), icon: () => <ClockIcon /> },
+  git: { label: () => 'Git', hint: () => t('SettingsPage.sidebarGitHint'), icon: () => <GitIcon /> },
+  discussions: { label: () => t('DiscussionView.groupChat_910'), hint: () => t('SettingsPage.sidebarDiscussionsHint'), icon: () => <GroupChatIcon /> }
+}
+
+// What the sidebar's top would show: the fixed entries, and the optional ones left on.
+function SidebarPreview({ preferences }: { preferences: Parameters<typeof sidebarShows>[1] }) {
+  const sources = useCore((s) => s.sources)
+  return (
+    <nav className="appearance-preview-sidebar" aria-hidden="true">
+      <span><BoardIcon />{t('OverviewEntry.overview_1276')}</span>
+      {SIDEBAR_ENTRIES.filter((entry) => entry !== 'discussions' && sidebarShows(entry, preferences, sources)).map((entry) => <span key={entry}>{SIDEBAR_ENTRY[entry].icon()}{SIDEBAR_ENTRY[entry].label()}</span>)}
+      <span><RobotIcon />{t('AgentProfiles.title')}</span>
+      <span><BoardIcon />{t('SearchPalette.tasks')}</span>
+      {sidebarShows('discussions', preferences, sources) && <span>{SIDEBAR_ENTRY.discussions.icon()}{SIDEBAR_ENTRY.discussions.label()}</span>}
+      <span><ChatIcon />{t('SearchPalette.conversations')}</span>
+    </nav>
+  )
+}
+
+function SidebarSettings() {
+  const preferences = usePreferences()
+  const sources = useCore((s) => s.sources)
+  const locked = inboxLocked(sources)
+  return (
+    <>
+    <SettingsGroup title={t('SettingsPage.sidebarEntries')}>
+      {SIDEBAR_ENTRIES.map((entry) => {
+        const key = SIDEBAR_PREFERENCE[entry]
+        const fixed = entry === 'inbox' && locked
+        return <SettingsRow key={entry} label={SIDEBAR_ENTRY[entry].label()} description={fixed ? t('SettingsPage.sidebarInboxLocked') : SIDEBAR_ENTRY[entry].hint()}
+          control={(labelId) => <Toggle labelId={labelId} checked={fixed || preferences[key]} disabled={fixed} onChange={(next) => setPreference(key, next)} />} />
+      })}
+    </SettingsGroup>
+    <p className="settings-note">{t('SettingsPage.sidebarEntriesHint')}</p>
+    </>
+  )
+}
+
 function AppearancePreview({ section, comparing, onCompare }: { section: AppearanceSection; comparing: boolean; onCompare: () => void }) {
   const typeface = useChatTypeface()
   const current = usePreferences()
@@ -75,6 +117,7 @@ function AppearancePreview({ section, comparing, onCompare }: { section: Appeara
       {section !== 'language' && <button type="button" className="button appearance-compare" disabled={!comparing && changedAppearancePreferences(current, DEFAULT_PREFERENCES, section).length === 0} aria-pressed={comparing} onClick={onCompare}>{comparing ? t('SettingsPage.showCurrent') : t('SettingsPage.compareDefaults')}</button>}
       <div className="appearance-preview-window" data-palette={palette} data-backdrop={backdrop === 'none' ? undefined : backdrop} data-section={section} data-comparing={comparing || undefined} style={{ colorScheme: scheme }}>
         <div className="appearance-preview-toolbar"><ChatIcon /><span>Antumi</span><span className="appearance-preview-sample">{t('SettingsPage.sample')}</span></div>
+        {section === 'sidebar' && <SidebarPreview preferences={preview} />}
         <div className="appearance-preview-chat chat-view" {...previewTypeface}>
           <div className="appearance-preview-thread" data-width={chatWidth}>
             <p className="appearance-preview-user">{t('SettingsPage.previewPrompt')}</p>
@@ -102,7 +145,9 @@ function AppearancePreview({ section, comparing, onCompare }: { section: Appeara
 
 export function AppearanceSettings() {
   const sectionLabelId = useId()
-  const [section, setSection] = useState<AppearanceSection>('colors')
+  // A way in that asked for a tab (the sidebar's menu) gets it once.
+  const [section, setSection] = useState<AppearanceSection>(() => useCore.getState().appearanceTab ?? 'colors')
+  useEffect(() => { useCore.setState({ appearanceTab: null }) }, [])
   const [comparing, setComparing] = useState(false)
   const current = usePreferences()
   const changed = changedAppearancePreferences(current, DEFAULT_PREFERENCES, section)
@@ -128,6 +173,7 @@ export function AppearanceSettings() {
           { value: 'colors', label: t('SettingsPage.theme') },
           { value: 'chat', label: t('SettingsPage.chat') },
           { value: 'terminal', label: t('SettingsPage.terminal') },
+          { value: 'sidebar', label: t('SettingsPage.sidebar') },
           { value: 'language', label: t('SettingsPage.language') }
         ]} />
       </div>
@@ -259,6 +305,9 @@ export function AppearanceSettings() {
             />
           )}
         </SettingsGroup>
+        </div>
+        <div hidden={section !== 'sidebar'}>
+        <SidebarSettings />
         </div>
         <div hidden={section !== 'language'}>
         <SettingsGroup title={t('language.interfaceLanguage')}>

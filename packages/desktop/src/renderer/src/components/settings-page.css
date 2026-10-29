@@ -75,6 +75,13 @@
 .appearance-preview-window[data-section='chat'] .appearance-preview-terminal,
 .appearance-preview-window[data-section='language'] .appearance-preview-terminal { display: none; }
 .appearance-preview-window[data-section='terminal'] .appearance-preview-terminal { padding: 24px 20px; border-top: 0; }
+/* The sidebar tab: its top beside the chat, the terminal out of the way. */
+.appearance-preview-window[data-section='sidebar'] { display: grid; grid-template-columns: 136px minmax(0, 1fr); }
+.appearance-preview-window[data-section='sidebar'] .appearance-preview-toolbar { grid-column: 1 / -1; }
+.appearance-preview-window[data-section='sidebar'] :is(.appearance-preview-terminal, .appearance-preview-code) { display: none; }
+.appearance-preview-sidebar { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 10px 8px; border-right: 1px solid var(--border); background: var(--bg); font-size: 12px; }
+.appearance-preview-sidebar > span { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 4px 6px; border-radius: var(--radius-xs); color: var(--text-muted); white-space: nowrap; }
+.appearance-preview-sidebar svg { flex-shrink: 0; width: 13px; height: 13px; }
 .appearance-preview-terminal .appearance-preview-code { margin-top: 24px; line-height: inherit; font-family: inherit; }
 .appearance-preview-code code { font-family: inherit; }
 .appearance-preview-prompt[data-colored='false'] { color: var(--text); }

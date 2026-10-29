@@ -23,6 +23,7 @@ import { EnvironmentNotice } from './components/EnvironmentNotice'
 import { StatusBar } from './components/StatusBar'
 import { UtilityPanelDock } from './components/UtilityPanelDock'
 import { SearchPalette } from './components/SearchPalette'
+import { useSidebarShows } from './sidebar-entries'
 import { WorktreeManager } from './components/WorktreeManager'
 import { RoutinesView } from './components/RoutinesView'
 import { RoutinesEntry } from './components/RoutinesEntry'
@@ -89,6 +90,7 @@ export function App() {
   const filesPanelOpen = useCore((s) => s.filesPanelOpen)
   const filesMaximized = useCore((s) => s.filesMaximized)
   const search = useCore((s) => s.search)
+  const sidebar = { routines: useSidebarShows('routines'), git: useSidebarShows('git'), discussions: useSidebarShows('discussions') }
   const utilityPanelOrder = useCore((s) => s.utilityPanelOrder)
   const sidebarHidden = usePreferences((s) => s.sidebarHidden)
   const maximizedUtility = browserPanelOpen && browserMaximized
@@ -139,12 +141,12 @@ export function App() {
             <Sidebar hidden={sidebarHidden}>
               <OverviewEntry />
               <InboxEntry />
-              <RoutinesEntry />
-              <GitEntry />
+              {sidebar.routines && <RoutinesEntry />}
+              {sidebar.git && <GitEntry />}
               <SquadsEntry />
               <EnvironmentNotice />
               <SidebarTasks />
-              <SidebarDiscussions />
+              {sidebar.discussions && <SidebarDiscussions />}
               <ConversationList />
             </Sidebar>
             {overviewOpen ? (

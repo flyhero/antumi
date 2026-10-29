@@ -409,7 +409,7 @@ export function isPreviewTool(name: string): boolean {
 }
 
 // The browser tools, named browser_<kind>.
-export const BROWSER_TOOL_KINDS = ['navigate', 'snapshot', 'screenshot', 'click', 'type', 'press', 'hover', 'scroll', 'select', 'wait', 'tabs', 'console'] as const
+export const BROWSER_TOOL_KINDS = ['navigate', 'snapshot', 'screenshot', 'click', 'type', 'press', 'hover', 'scroll', 'select', 'wait', 'tabs', 'console', 'upload', 'downloads'] as const
 export type BrowserToolKind = (typeof BROWSER_TOOL_KINDS)[number]
 export function browserToolName(kind: BrowserToolKind): string {
   return `browser_${kind}`

@@ -66,7 +66,7 @@ describe('antumi MCP server', () => {
       }
     })
     const listed = (await chat(frame('tools/list')))?.result as { tools: { name: string; annotations: { readOnlyHint: boolean } }[] }
-    expect(listed.tools.map((tool) => tool.name)).toEqual(['show_preview', 'browser_navigate', 'browser_snapshot', 'browser_screenshot', 'browser_click', 'browser_type', 'browser_press', 'browser_hover', 'browser_scroll', 'browser_select', 'browser_wait', 'browser_tabs', 'browser_console'])
+    expect(listed.tools.map((tool) => tool.name)).toEqual(['show_preview', 'browser_navigate', 'browser_snapshot', 'browser_screenshot', 'browser_click', 'browser_type', 'browser_press', 'browser_hover', 'browser_scroll', 'browser_select', 'browser_wait', 'browser_tabs', 'browser_console', 'browser_upload', 'browser_downloads'])
     expect(listed.tools.find((tool) => tool.name === 'browser_snapshot')?.annotations.readOnlyHint).toBe(true)
     const bad = await chat(frame('tools/call', { name: 'browser_click', arguments: { ref: 'nope' } }))
     expect(bad?.result).toMatchObject({ isError: true, content: [{ text: expect.stringContaining('参数不对') }] })

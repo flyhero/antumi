@@ -21,6 +21,10 @@ export function describeBrowserTool(kind: BrowserToolKind, input: Record<string,
       return str(input.key) ?? ''
     case 'select':
       return Array.isArray(input.values) ? `${ref} · ${input.values.map(String).join(', ')}` : ref
+    case 'upload':
+      return Array.isArray(input.files) ? `${ref} · ${input.files.map(String).map((file) => file.split(/[\\/]/).at(-1)).join(', ')}` : ref
+    case 'downloads':
+      return ''
     case 'scroll': {
       const direction = str(input.direction) ?? ''
       return ref ? `${ref} · ${direction}` : direction
@@ -42,5 +46,5 @@ export function describeBrowserTool(kind: BrowserToolKind, input: Record<string,
 
 // Whether the call's arguments are worth a line of their own under the title.
 export function showBrowserInput(kind: BrowserToolKind): boolean {
-  return kind === 'type' || kind === 'select' || kind === 'screenshot' || kind === 'console'
+  return kind === 'type' || kind === 'select' || kind === 'upload' || kind === 'screenshot' || kind === 'console'
 }

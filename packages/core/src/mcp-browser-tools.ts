@@ -3,7 +3,7 @@ import { z } from 'zod'
 import {
   browserActions,
   browserToolName,
-  BrowserUrl, BrowserViewport,
+  BrowserUrl, BrowserViewport, BrowserUploadOptions,
   describeBrowserPage,
   describeClosedTab,
   RpcError,
@@ -50,6 +50,8 @@ export const BROWSER_ARGUMENTS: Record<BrowserToolKind, z.ZodType<Record<string,
   hover: browserActions.hover.extend({ tabId: TabId }),
   scroll: browserActions.scroll.extend({ tabId: TabId }),
   select: browserActions.select.extend({ tabId: TabId }),
+  upload: BrowserUploadOptions.extend({ tabId: TabId }),
+  downloads: z.object({ tabId: TabId }),
   wait: browserActions.wait
     .extend({ tabId: TabId })
     .refine((args) => args.text !== undefined || args.textGone !== undefined || args.seconds !== undefined, { message: 'text、textGone、seconds 至少给一个' }),
@@ -252,6 +254,16 @@ export const BROWSER_TOOL_SPECS: ReadonlyArray<ToolSpec & { kind: BrowserToolKin
       additionalProperties: false
     },
     annotations: readOnly
+  },
+  {
+    kind: 'upload', name: browserToolName('upload'), title: '向网页上传文件',
+    description: '把用户要求上传的本地文件选择到网页的文件输入框，或点击上传按钮后选择文件；网页可能自动发送所选文件。ref 来自最新快照。files 使用 core 所在机器的绝对路径，每次最多 10 个文件、总计 20 MiB；不支持目录。返回新的页面快照。',
+    inputSchema: { type: 'object', properties: { ref: { type: 'string', description: '文件输入框或上传按钮的 ref' }, files: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 10, description: '要上传的本地文件绝对路径' }, ...tabIdProperty }, required: ['ref', 'files'], additionalProperties: false }, annotations: acts
+  },
+  {
+    kind: 'downloads', name: browserToolName('downloads'), title: '查看下载文件',
+    description: '列出这个会话在 Antumi 浏览器中的下载，包含进度、状态和浏览器所在机器的保存路径。tabId 可筛选一个标签页；下载结束后仍可查看。',
+    inputSchema: { type: 'object', properties: { ...tabIdProperty }, additionalProperties: false }, annotations: readOnly
   }
 ]
 
@@ -335,10 +347,12 @@ export function browserToolsOverCore(
 
   // One action on a tab; its arguments passed BROWSER_ARGUMENTS already, and are read again
   // through the action's own shape so each call is typed on its own.
-  function act(rpc: RpcConnection, kind: Exclude<BrowserToolKind, 'navigate' | 'snapshot' | 'screenshot' | 'tabs' | 'console'>, tabId: string, rest: Record<string, unknown>): Promise<BrowserAction> {
+  function act(rpc: RpcConnection, kind: Exclude<BrowserToolKind, 'navigate' | 'snapshot' | 'screenshot' | 'tabs' | 'console' | 'downloads'>, tabId: string, rest: Record<string, unknown>): Promise<BrowserAction> {
     switch (kind) {
       case 'click':
         return rpc.call('browser.click', { conversationId, tabId, ...browserActions.click.parse(rest) })
+      case 'upload':
+        return rpc.call('browser.upload', { conversationId, tabId, ...BrowserUploadOptions.parse(rest) })
       case 'type':
         return rpc.call('browser.type', { conversationId, tabId, ...browserActions.type.parse(rest) })
       case 'press':
@@ -387,6 +401,7 @@ export function browserToolsOverCore(
       case 'hover':
       case 'scroll':
       case 'select':
+      case 'upload':
       case 'wait': {
         const { tabId, ...rest } = args
         const id = await tabFor(rpc, tabId)
@@ -414,6 +429,10 @@ export function browserToolsOverCore(
         }
         if (tabs.length === 0) return { text: '这个会话还没有打开标签页。' }
         return { text: tabs.map((tab) => `- ${tab.id}${tab.id === currentTab ? '（当前）' : ''} ${tab.title || '(无标题)'} ${tab.url}`).join('\n') }
+      }
+      case 'downloads': {
+        const downloads = await rpc.call('browser.downloads', { conversationId, ...(typeof args.tabId === 'string' ? { tabId: args.tabId } : {}) })
+        return { text: downloads.length ? JSON.stringify(downloads, null, 2) : '这个会话还没有下载文件。' }
       }
       case 'console': {
         const { tabId, sinceNavigation, requestId } = args

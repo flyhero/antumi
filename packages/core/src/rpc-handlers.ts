@@ -462,6 +462,9 @@ export function createRpcHandlers(
     'browser.select': ({ conversationId, tabId, ...params }) => browser.select(conversationId, tabId, params),
     'browser.wait': ({ conversationId, tabId, ...params }) => browser.wait(conversationId, tabId, params),
     'browser.console': ({ conversationId, tabId, sinceNavigation, requestId }) => browser.console(conversationId, tabId, sinceNavigation ?? false, requestId),
+    'browser.upload': ({ conversationId, tabId, ref, files }) => browser.upload(conversationId, tabId, ref, files),
+    'browser.downloads': ({ conversationId, tabId }, connection) => browser.downloads(connection, conversationId, tabId),
+    'browser.downloadAction': async ({ id, action }, connection) => { await browser.downloadAction(connection, id, action); return OK },
     'browser.close': async ({ conversationId, tabId }) => {
       await browser.close(conversationId, tabId)
       return OK

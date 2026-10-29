@@ -1,4 +1,5 @@
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -162,6 +163,35 @@ describe('BrowserService', () => {
     expect(service.tabOf(opened.tab.id)?.viewport).toBeNull()
     const moved = await service.navigate(CONV_A, opened.tab.id, { url: 'http://localhost:5173/next' }, { width: 768, height: 1024 })
     expect(moved.tab.viewport).toEqual({ width: 768, height: 1024 })
+  })
+
+  it('uploads the files\' bytes, several at once, only into the conversation\'s own tab', async () => {
+    const opened = await service.open(CONV_A, 'http://localhost:5173/')
+    const first = path.join(root, 'a.txt')
+    const second = path.join(root, 'b.png')
+    writeFileSync(first, 'hello')
+    writeFileSync(second, Buffer.from([1, 2, 3]))
+    await expect(service.upload(CONV_A, opened.tab.id, 'e1', [first, second])).resolves.toMatchObject({ snapshot: 'uploaded a.txt,b.png into e1' })
+    const sent = host.calls.findLast((call) => call.method === 'upload')?.params
+    expect(sent).toMatchObject({ ref: 'e1', files: [{ name: 'a.txt', mimeType: 'text/plain', data: Buffer.from('hello').toString('base64') }, { name: 'b.png', mimeType: 'image/png', data: 'AQID' }] })
+    expect(JSON.stringify(sent)).not.toContain(root)
+    await expect(service.upload(CONV_B, opened.tab.id, 'e1', [first])).rejects.toMatchObject({ reason: 'browser-tab-not-found' })
+  })
+
+  it('lists a conversation\'s downloads to it alone, and every download only to the browser panel', async () => {
+    const download = (conversationId: string | null, tabId: string) => ({ id: randomUUID(), tabId, conversationId, url: 'https://example.com/f', filename: 'f.csv', path: '/d/f.csv', receivedBytes: 1, totalBytes: 1, state: 'completed' as const, paused: false, startedAt: 1, finishedAt: 2 })
+    const a = await service.open(CONV_A, 'http://localhost:5173/')
+    const b = await service.open(CONV_B, 'http://localhost:5173/')
+    host.downloads.push(download(CONV_A, a.tab.id), download(CONV_B, b.tab.id), download(null, a.tab.id))
+    const agent = fakeConnection()
+    expect((await service.downloads(agent, CONV_A)).map((each) => each.conversationId)).toEqual([CONV_A])
+    expect(await service.downloads(agent, CONV_A, b.tab.id)).toEqual([])
+    await expect(service.downloads(agent)).rejects.toMatchObject({ reason: 'browser-not-watching' })
+    await expect(service.downloadAction(agent, host.downloads[0]!.id, 'reveal')).rejects.toMatchObject({ reason: 'browser-not-watching' })
+    const panel = fakeConnection()
+    service.watchAll(panel)
+    expect(await service.downloads(panel)).toHaveLength(3)
+    await expect(service.downloadAction(panel, host.downloads[0]!.id, 'cancel')).resolves.toBeUndefined()
   })
 
   it('gives the browser panel every tab, and the user tabs of their own that no agent sees', async () => {

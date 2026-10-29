@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { isLocalHost, type BrowserNavigationOutcome } from '@antumi/protocol'
+import { isLocalHost, type BrowserDownload, type BrowserNavigationOutcome } from '@antumi/protocol'
 import { BROWSER_HOST_PROTOCOL_VERSION, type BrowserHostEndpoint, type BrowserHostEvent, type BrowserHostMethod, type BrowserHostParams, type BrowserHostResult, type HostTab } from '@antumi/protocol/node'
 import type { HostLink } from './browser-host-client'
 import { pngBytes } from './image-fixtures'
@@ -11,6 +11,7 @@ type Check = { checkId: string; tabId: string; resolve: (allow: boolean) => void
 // development raises a hostCheck and waits for host.resolve, as the real gate does.
 export function fakeBrowserHost() {
   const tabs = new Map<string, HostTab>()
+  const downloads: BrowserDownload[] = []
   const checks: Check[] = []
   const calls: Array<{ method: string; params: unknown }> = []
   const eventListeners = new Set<(event: BrowserHostEvent) => void>()
@@ -103,6 +104,9 @@ export function fakeBrowserHost() {
     scroll: ({ tabId, direction }) => ({ tab: tab(tabId), snapshot: `scrolled ${direction}` }),
     select: ({ tabId, values }) => ({ tab: tab(tabId), snapshot: `selected ${values.join(',')}` }),
     wait: ({ tabId }) => ({ tab: tab(tabId), snapshot: 'waited' }),
+    upload: ({ tabId, ref, files }) => ({ tab: tab(tabId), snapshot: `uploaded ${files.map((file) => file.name).join(',')} into ${ref}` }),
+    'downloads.list': () => downloads,
+    'downloads.action': () => ({ ok: true }),
     console: () => ({ messages: [{ level: 'log', text: 'hello', at: 1 }], errors: [], failedRequests: [] }),
     'host.resolve': ({ checkId, allow }) => {
       const index = checks.findIndex((check) => check.checkId === checkId)
@@ -135,6 +139,7 @@ export function fakeBrowserHost() {
   return {
     link,
     tabs,
+    downloads,
     checks,
     calls,
     emit,

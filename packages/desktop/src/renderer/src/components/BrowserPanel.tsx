@@ -9,6 +9,7 @@ import { ChatPicker } from './ChatPicker'
 import { ArrowLeftIcon, ArrowRightIcon, CameraIcon, CloseIcon, GlobeIcon, PlusIcon, RefreshIcon } from './icons'
 import { Spinner } from './Spinner'
 import { BrowserCaptureButton, BrowserDeveloperButton, BrowserShareButton } from './BrowserActions'
+import { BrowserDownloadsButton, useBrowserDownloads } from './BrowserDownloads'
 
 // The hostname a tab shows in its strip, or what it has while it has no page.
 function tabName(tab: BrowserTab): string {
@@ -178,6 +179,7 @@ export function BrowserPanel() {
   const status = useCore((s) => s.browser)
   const collaboration = useCore((state) => state.rpc?.features.includes('browser-collaboration') ?? false)
   const { tabs, selectedId } = useWatchAllBrowser()
+  const downloads = useBrowserDownloads()
   const tab = tabs.find((each) => each.id === selectedId) ?? null
   const [address, setAddress] = useState('')
   const [editing, setEditing] = useState(false)
@@ -231,6 +233,7 @@ export function BrowserPanel() {
             />
             <BookmarkStar tab={tab} />
             <BookmarksButton tab={tab} />
+            <BrowserDownloadsButton downloads={downloads} />
             <div className="browser-page-actions">
             <ViewportPicker tab={tab} />
             {collaboration ? <><BrowserCaptureButton key={`capture:${tab.id}`} tab={tab} /><BrowserShareButton key={`share:${tab.id}`} tab={tab} /><BrowserDeveloperButton key={`developer:${tab.id}`} tab={tab} /></> : <button
@@ -256,6 +259,7 @@ export function BrowserPanel() {
         </>
       ) : (
         <div className="browser-empty">
+          <BrowserDownloadsButton downloads={downloads} />
           <p>{t('BrowserPanel.noTabsOpenYet')}</p>
           <button type="button" className="button" onClick={() => void openUserBrowserTab()}>{t('BrowserPanel.newTab')}</button>
         </div>

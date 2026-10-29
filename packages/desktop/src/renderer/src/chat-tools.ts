@@ -54,7 +54,9 @@ const BROWSER_LABEL: Record<BrowserToolKind, string> = localized(() => ({
   select: t('chatTools.select'),
   wait: t('chatTools.wait'),
   tabs: t('chatTools.tabs'),
-  console: t('chatTools.console')
+  console: t('chatTools.console'),
+  upload: t('chatTools.upload'),
+  downloads: t('chatTools.downloads')
 }))
 
 // An agent's own terminals in the app's panel.

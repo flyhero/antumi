@@ -13,7 +13,7 @@ export type AgentMcpServer = { name: string } & ({ type: 'stdio'; command: strin
 
 // The browser tools that only read: what the page shows, says in its console, or is waited on,
 // and the user's bookmarks.
-export const BROWSER_READ_TOOLS: readonly string[] = [...(['snapshot', 'screenshot', 'scroll', 'wait', 'console', 'tabs'] as const).map(browserToolName), BROWSER_BOOKMARKS_TOOL]
+export const BROWSER_READ_TOOLS: readonly string[] = [...(['snapshot', 'screenshot', 'scroll', 'wait', 'console', 'tabs', 'downloads'] as const).map(browserToolName), BROWSER_BOOKMARKS_TOOL]
 
 // Antumi's tools that ask nothing of the user: showing a file the agent wrote, reading the
 // browser's page, reading or stopping a terminal the conversation opened itself, the user's

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { BrowserDownload, BrowserDownloadAction, BrowserUploadOptions } from './browser'
 import { ChatReference } from './chat-reference'
 import { AgentProfile, AgentProfileFields, AgentCall } from './agent-profile'
 import { gitParams, GitProject, GitTarget, GitBranch, GitStatus, GitHistory, GitDetail, GitComparison, GitAction, GitResult, GitOutgoing } from './git'
@@ -107,7 +108,7 @@ const UsageParams = z.object({ windowKinds: z.array(z.string()).optional() })
 // suggests what to fill it with (projects.suggestConfig).
 // conversation-references: history_read resolves explicit antumi://conversation/<id> references.
 // chat-references: user messages and queues retain the composer's explicit reference targets.
-export const CORE_FEATURES = ['chat-references', 'conversation-references', 'agent-profiles', 'pets', 'plugins', 'plugin-recommendations', 'chat-options', 'chat-images', 'task-start', 'worktrees', 'conversation-branches', 'conversation-commit-push', 'find-file', 'conversation-projects', 'browser', 'browser-collaboration', 'keep-awake', 'terminal-commands', 'bookmarks', 'usage-limit', 'agent-stats', 'conversation-stats', 'prompt-suggestions', 'environment', 'conversation-pin', 'schedules', 'chat-commands', 'file-mentions', 'plan-modes', 'agent-terminals', 'schedule-images', 'dashboard', 'task-conversation-summaries', 'routines', 'ports', 'conversation-fork', 'conversation-configuration', 'conversation-commit-steps', 'conversation-worktrees', 'conversation-start-branch', 'wire-log', 'file-preview', 'deferred-conversation-start', 'agent-cli-installation', 'agent-cli-maintenance', 'task-launch-options', 'git-management', 'git-commit-branches', 'task-handoff', 'handoff-model', 'handoff-mode', 'task-launch', 'discussions', 'discussion-members', 'discussion-projects', 'discussion-topics', 'discussion-requirements', 'task-cancel', 'task-redo-in-place', 'conversation-archive', 'discussion-archive', 'translate', 'commit-message', 'squads', 'squad-leader-planning', 'conversation-todos', 'knowledge-base', 'knowledge-base-kind', 'skills-library', 'skills-search', 'skills-activation', 'mcp-servers', 'source-investigate', 'todo-overview', 'conversation-helper', 'small-model-stats', 'terminal-color-prompt', 'git-commit-actions', 'file-editor', 'project-config', 'project-config-edit', 'model-providers', 'git-update', 'git-push-target', 'task-auto-run', 'session-import', 'agent-accounts', 'usage-analytics', 'task-references', 'release-idle-chats', 'project-star', 'git-favorites', 'project-files', 'git-projects', 'git-branch-browser', 'git-rebase'] as const
+export const CORE_FEATURES = ['chat-references', 'conversation-references', 'agent-profiles', 'pets', 'plugins', 'plugin-recommendations', 'chat-options', 'chat-images', 'task-start', 'worktrees', 'conversation-branches', 'conversation-commit-push', 'find-file', 'conversation-projects', 'browser', 'browser-collaboration', 'browser-file-transfers', 'keep-awake', 'terminal-commands', 'bookmarks', 'usage-limit', 'agent-stats', 'conversation-stats', 'prompt-suggestions', 'environment', 'conversation-pin', 'schedules', 'chat-commands', 'file-mentions', 'plan-modes', 'agent-terminals', 'schedule-images', 'dashboard', 'task-conversation-summaries', 'routines', 'ports', 'conversation-fork', 'conversation-configuration', 'conversation-commit-steps', 'conversation-worktrees', 'conversation-start-branch', 'wire-log', 'file-preview', 'deferred-conversation-start', 'agent-cli-installation', 'agent-cli-maintenance', 'task-launch-options', 'git-management', 'git-commit-branches', 'task-handoff', 'handoff-model', 'handoff-mode', 'task-launch', 'discussions', 'discussion-members', 'discussion-projects', 'discussion-topics', 'discussion-requirements', 'task-cancel', 'task-redo-in-place', 'conversation-archive', 'discussion-archive', 'translate', 'commit-message', 'squads', 'squad-leader-planning', 'conversation-todos', 'knowledge-base', 'knowledge-base-kind', 'skills-library', 'skills-search', 'skills-activation', 'mcp-servers', 'source-investigate', 'todo-overview', 'conversation-helper', 'small-model-stats', 'terminal-color-prompt', 'git-commit-actions', 'file-editor', 'project-config', 'project-config-edit', 'model-providers', 'git-update', 'git-push-target', 'task-auto-run', 'session-import', 'agent-accounts', 'usage-analytics', 'task-references', 'release-idle-chats', 'project-star', 'git-favorites', 'project-files', 'git-projects', 'git-branch-browser', 'git-rebase'] as const
 // session-import: core lists the sessions agents ran outside Antumi and imports them as conversations (sessionImports.*).
 // agent-accounts: Claude and Codex sign in to several accounts, one active each, and a usage limit
 // moves the agent to the next with quota (accounts.*); usage readings name their account.
@@ -541,6 +542,9 @@ export const rpcMethods = {
   'browser.wait': { params: BrowserTabRef.extend(browserActions.wait.shape), result: BrowserAction },
   // The page's console, errors and failed requests, since the tab opened or its last navigation.
   'browser.console': { params: BrowserTabRef.extend({ sinceNavigation: z.boolean().optional(), requestId: z.string().max(80).optional() }), result: BrowserConsole },
+  'browser.upload': { params: BrowserTabRef.extend(BrowserUploadOptions.shape), result: BrowserAction },
+  'browser.downloads': { params: z.object({ conversationId: z.string().uuid().optional(), tabId: BrowserTabId.optional() }), result: z.array(BrowserDownload) },
+  'browser.downloadAction': { params: z.object({ id: z.string().uuid(), action: BrowserDownloadAction }), result: Ok },
   'browser.close': { params: BrowserTabRef, result: Ok },
   // The user's side, from the app. status answers from the app's host, connecting when it is not.
   'browser.status': { params: z.object({}), result: BrowserStatus },
@@ -842,6 +846,7 @@ export const rpcNotifications = {
   // watching them (browser.watch).
   'browser.changed': z.object({ status: BrowserStatus }),
   'browser.tabsChanged': z.object({ conversationId: z.string().nullable(), tabs: z.array(BrowserTab) }),
+  'browser.downloadsChanged': z.object({ downloads: z.array(BrowserDownload) }),
   // Worktrees were cleaned, or their sizes counted: list them again.
   'worktrees.changed': z.object({}),
   'plugins.changed': z.object({ plugins: z.array(PluginInfo) }),

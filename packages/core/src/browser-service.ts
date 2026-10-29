@@ -6,6 +6,8 @@ import {
   type AttachmentInfo,
   type BrowserAction,
   type BrowserConsole,
+  type BrowserDownload,
+  type BrowserDownloadAction,
   type BrowserCaptureMode,
   type BrowserPageContext,
   type BrowserNavigateTo,
@@ -24,9 +26,11 @@ import { readBrowserHostEndpoint } from './browser-host-file'
 import { clip } from './chat-items'
 import { Rejection } from './rejection'
 import type { Connection } from './rpc-server'
+import { browserUploadFiles } from './browser-upload'
 
 // tabs with conversationId null are the user's own, for whoever watches all of them.
 export type BrowserEvent =
+  | { type: 'downloads'; downloads: BrowserDownload[] }
   | { type: 'status'; status: BrowserStatus }
   | { type: 'tabs'; conversationId: string | null; tabs: BrowserTab[] }
 
@@ -165,6 +169,9 @@ export class BrowserService {
         return
       case 'tabs':
         this.setTabs(event.tabs)
+        return
+      case 'downloads':
+        this.emit({ type: 'downloads', downloads: event.downloads })
         return
       case 'hostCheck':
         void this.hostCheck(link, event)
@@ -348,6 +355,17 @@ export class BrowserService {
     return (await this.panelTab(connection, tabId)).request('console', { tabId, requestId })
   }
 
+  async downloads(connection: Connection, conversationId?: string, tabId?: string): Promise<BrowserDownload[]> {
+    if (conversationId === undefined && !connection.browsing.has(WATCH_ALL)) throw new Rejection('browser-not-watching', '请先打开浏览器面板')
+    const records = await (await this.ensureLink()).request('downloads.list', {})
+    return records.filter((record) => (conversationId === undefined || record.conversationId === conversationId) && (!tabId || record.tabId === tabId))
+  }
+
+  async downloadAction(connection: Connection, id: string, action: z.infer<typeof BrowserDownloadAction>): Promise<void> {
+    if (!connection.browsing.has(WATCH_ALL)) throw new Rejection('browser-not-watching', '请先打开浏览器面板')
+    await (await this.ensureLink()).request('downloads.action', { id, action })
+  }
+
   private checkWatching(connection: Connection, tabId: string): HostTab {
     const tab = this.tabs.get(tabId)
     if (!tab) throw new Rejection('browser-tab-not-found', '标签页已经关闭')
@@ -468,6 +486,15 @@ export class BrowserService {
 
   wait(conversationId: string, tabId: string, params: ActionParams<'wait'>): Promise<BrowserAction> {
     return this.action(conversationId, 'wait', { tabId, ...params })
+  }
+
+  async upload(conversationId: string, tabId: string, ref: string, files: string[]): Promise<BrowserAction> {
+    const link = await this.agentTab(conversationId, tabId)
+    return this.whileActing(conversationId, tabId, async () => {
+      const payload = await browserUploadFiles(files)
+      this.checkAgentTab(conversationId, tabId)
+      return link.request('upload', { tabId, ref, files: payload })
+    }, (result) => ({ tab: this.describe(result.tab), snapshot: clip(result.snapshot, MAX_SNAPSHOT_CHARS) }))
   }
 
   async screenshot(conversationId: string, tabId: string, options: { fullPage?: boolean; ref?: string }): Promise<BrowserScreenshot> {

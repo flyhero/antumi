@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { browserActions, BrowserCaptureOptions, BrowserConsole, BrowserNavigateTo, BrowserNavigationOutcome, BrowserPageContext, BrowserScreenshotOptions, BrowserStatus, BrowserTab, BrowserTabId, BrowserUrl, BrowserViewport } from '../browser'
+import { BrowserDownload, BrowserDownloadAction, MAX_BROWSER_UPLOAD_BYTES, SnapshotRef } from '../browser'
 
 // JSON-RPC-shaped lines over a loopback WebSocket between core and the browser host, which the
 // desktop app runs in its main process. The app writes where to connect to the host file
@@ -53,6 +54,9 @@ export const browserHostMethods = {
   select: { params: TabRef.extend(browserActions.select.shape), result: ActionResult },
   wait: { params: TabRef.extend(browserActions.wait.shape), result: ActionResult },
   console: { params: TabRef.extend({ sinceNavigation: z.boolean().optional(), requestId: z.string().max(80).optional() }), result: BrowserConsole },
+  upload: { params: TabRef.extend({ ref: SnapshotRef, files: z.array(z.object({ name: z.string().min(1).max(255).regex(/^[^/\\\x00]+$/), mimeType: z.string().min(1).max(200), data: z.string().max(Math.ceil(MAX_BROWSER_UPLOAD_BYTES / 3) * 4) })).min(1).max(10) }), result: ActionResult },
+  'downloads.list': { params: z.object({}), result: z.array(BrowserDownload) },
+  'downloads.action': { params: z.object({ id: z.string().uuid(), action: BrowserDownloadAction }), result: Ok },
   // Core's answer to a hostCheck event.
   'host.resolve': { params: z.object({ checkId: z.string(), allow: z.boolean() }), result: Ok },
   shutdown: { params: z.object({}), result: Ok }
@@ -78,6 +82,7 @@ export function isBrowserHostMethod(name: string): name is BrowserHostMethod {
 export const BrowserHostRequest = z.object({ id: z.number(), method: z.string(), params: z.unknown() })
 
 export const BrowserHostEvent = z.discriminatedUnion('event', [
+  z.object({ event: z.literal('downloads'), downloads: z.array(BrowserDownload) }),
   z.object({ event: z.literal('status'), status: BrowserStatus }),
   // Every tab the host has, after any change to one of them.
   z.object({ event: z.literal('tabs'), tabs: z.array(HostTab) }),

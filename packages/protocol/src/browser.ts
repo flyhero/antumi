@@ -36,6 +36,18 @@ export const BrowserTab = z.object({
 })
 export type BrowserTab = z.infer<typeof BrowserTab>
 
+export const BrowserDownload = z.object({
+  id: z.string().uuid(), tabId: BrowserTabId, conversationId: z.string().uuid().nullable(),
+  url: z.string(), filename: z.string(), path: z.string(),
+  receivedBytes: z.number().nonnegative(), totalBytes: z.number().nonnegative(),
+  state: z.enum(['progressing', 'completed', 'cancelled', 'interrupted']), paused: z.boolean(),
+  startedAt: z.number(), finishedAt: z.number().nullable()
+})
+export type BrowserDownload = z.infer<typeof BrowserDownload>
+export const BrowserDownloadAction = z.enum(['cancel', 'open', 'reveal'])
+
+export const MAX_BROWSER_UPLOAD_BYTES = 20 * 1024 * 1024
+
 // app-closed: the desktop app, which runs the browser, is not up · starting: core is connecting
 // to it · ready: tabs can be opened · error: the last attempt failed (message says how).
 // running: core is connected to the app's browser host.
@@ -50,6 +62,7 @@ export type BrowserStatus = z.infer<typeof BrowserStatus>
 // After the tab's main frame has navigated, Playwright numbers the document it is on (f1e12),
 // so a ref from the page before cannot be taken for one on this page.
 export const SnapshotRef = z.string().regex(/^(?:f\d+)?e\d+$/)
+export const BrowserUploadOptions = z.object({ ref: SnapshotRef, files: z.array(z.string().min(1).max(32768)).min(1).max(10) })
 
 export const BrowserUrl = z.string().trim().min(1).max(4096)
 // Where a navigation goes: a URL, or a step through the tab's own history.

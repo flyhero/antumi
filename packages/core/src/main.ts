@@ -180,6 +180,9 @@ const browser = new BrowserService(
   (id, host, url) => conversations.askHost(id, host, url),
   (event) => {
     if (event.type === 'status') server?.broadcast('browser.changed', { status: event.status })
+    else if (event.type === 'downloads') {
+      for (const connection of server?.connections ?? []) if (connection.browsing.has(WATCH_ALL)) connection.notify('browser.downloadsChanged', { downloads: event.downloads })
+    }
     else {
       const { conversationId, tabs } = event
       ;[...(server?.connections ?? [])]

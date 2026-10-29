@@ -1,5 +1,6 @@
 import type { Locator, Page } from 'playwright-core'
-import { BROWSER_VIEWPORT, type browserActions, type BrowserViewport } from '@antumi/protocol'
+import { BROWSER_VIEWPORT, MAX_BROWSER_UPLOAD_BYTES, type browserActions, type BrowserViewport } from '@antumi/protocol'
+import type { BrowserHostParsedParams } from '@antumi/protocol/node'
 import type { z } from 'zod'
 import { HostError } from './host-error'
 
@@ -69,6 +70,20 @@ export async function click(page: Page, params: Params<'click'>): Promise<void> 
       timeout: ACTION_TIMEOUT_MS
     })
   )
+}
+
+export async function upload(page: Page, params: Omit<BrowserHostParsedParams<'upload'>, 'tabId'>): Promise<void> {
+  const files = params.files.map((file) => ({ name: file.name, mimeType: file.mimeType, buffer: Buffer.from(file.data, 'base64') }))
+  if (files.reduce((total, file) => total + file.buffer.length, 0) > MAX_BROWSER_UPLOAD_BYTES) throw new HostError('browser-upload-too-large', '每次上传文件总大小不能超过 20 MiB')
+  await withElement(params.ref, async () => {
+    const locator = refLocator(page, params.ref)
+    const input = await locator.evaluate((element) => element.tagName === 'INPUT' && element.getAttribute('type')?.toLowerCase() === 'file', undefined, { timeout: ACTION_TIMEOUT_MS })
+    if (input) await locator.setInputFiles(files, { timeout: ACTION_TIMEOUT_MS })
+    else {
+      const [chooser] = await Promise.all([page.waitForEvent('filechooser', { timeout: ACTION_TIMEOUT_MS }), locator.click({ timeout: ACTION_TIMEOUT_MS })])
+      await chooser.setFiles(files, { timeout: ACTION_TIMEOUT_MS })
+    }
+  })
 }
 
 export async function type(page: Page, params: Params<'type'>): Promise<void> {

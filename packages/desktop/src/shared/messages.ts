@@ -1,5 +1,17 @@
 // Application-owned text. Values and external content are passed separately.
 export const MESSAGES = {
+  "BrowserDownloads.title": {"zh": "下载", "en": "Downloads"},
+  "BrowserDownloads.session": {"zh": "本次运行", "en": "This session"},
+  "BrowserDownloads.empty": {"zh": "尚无下载，网页下载的文件会显示在这里。", "en": "No downloads yet. Files downloaded from web pages appear here."},
+  "BrowserDownloads.downloading": {"zh": "下载中", "en": "Downloading"},
+  "BrowserDownloads.paused": {"zh": "已暂停", "en": "Paused"},
+  "BrowserDownloads.completed": {"zh": "已完成", "en": "Completed"},
+  "BrowserDownloads.cancelled": {"zh": "已取消", "en": "Cancelled"},
+  "BrowserDownloads.interrupted": {"zh": "下载中断", "en": "Interrupted"},
+  "BrowserDownloads.reveal": {"zh": "显示文件位置", "en": "Show in folder"},
+  "BrowserDownloads.progress": {"zh": "{name} 的下载进度", "en": "Download progress for {name}"},
+  "chatTools.upload": {"zh": "上传文件", "en": "Upload files"},
+  "chatTools.downloads": {"zh": "查看下载", "en": "View downloads"},
   "ChatComposer.sendKeyHint": {"zh": "，{keys} 发送", "en": "; {keys} to send"},
   "KeyboardShortcuts.count": {"zh": "共 {count} 项可自定义快捷键", "en": "{count} customizable shortcuts"},
   "KeyboardShortcuts.sidebar": {"zh": "显示 / 隐藏侧栏", "en": "Toggle sidebar"},

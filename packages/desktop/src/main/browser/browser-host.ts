@@ -1,6 +1,6 @@
 import { mkdir, rm } from 'node:fs/promises'
 import path from 'node:path'
-import { session, WebContentsView } from 'electron'
+import { app, session, shell, WebContentsView, type DownloadItem, type Event, type WebContents } from 'electron'
 import { chromium } from 'playwright-core'
 import { BROWSER_HOST_PROTOCOL_VERSION, writePrivateJson, type BrowserHostResult } from '@antumi/protocol/node'
 import { BROWSER_VIEWPORT, normalizeBrowserUrl, type BrowserNavigateTo, type BrowserStatus, type BrowserViewport } from '@antumi/protocol'
@@ -15,6 +15,7 @@ import { applyViewport } from './viewport'
 import type { WindowSlot } from './window-slot'
 import { bindBrowserShortcuts } from './browser-shortcuts'
 import { BrowserCapture } from './browser-capture'
+import { BrowserDownloads } from './browser-downloads'
 
 // One session for every tab: cookies and logins outlive the app, apart from its own UI's.
 const PARTITION = 'persist:antumi-browser'
@@ -43,6 +44,12 @@ export async function startBrowserHost(slot: WindowSlot, hostFile: string): Prom
   let closing = false
 
   const registry = new TabRegistry(() => server?.emit({ event: 'tabs', tabs: registry.list() }))
+  const downloads = new BrowserDownloads(path.join(app.getPath('downloads'), 'Antumi'), (downloads) => server?.emit({ event: 'downloads', downloads }))
+  const onDownload = (_event: Event, item: DownloadItem, contents: WebContents) => {
+    const tab = registry.all().find((tab) => views.get(tab.id)?.webContents.id === contents.id)
+    if (tab) downloads.start(item, tab)
+  }
+  tabSession.on('will-download', onDownload)
   const gate = new HostGate(registry, (check) => server?.emit({ event: 'hostCheck', ...check }))
 
   const forget = (tab: Tab) => {
@@ -167,6 +174,8 @@ export async function startBrowserHost(slot: WindowSlot, hostFile: string): Prom
     if (closing) return
     closing = true
     gate.cancelAll()
+    tabSession.removeListener('will-download', onDownload)
+    downloads.dispose()
     await Promise.all(registry.all().map((tab) => tab.attachment.close()))
     await server?.close()
     await rm(hostFile, { force: true }).catch(() => {})
@@ -229,6 +238,17 @@ export async function startBrowserHost(slot: WindowSlot, hostFile: string): Prom
     scroll: ({ tabId, ...params }) => act(tabId, (tab) => actions.scroll(tab.page, params)),
     select: ({ tabId, ...params }) => act(tabId, (tab) => actions.select(tab.page, params)),
     wait: ({ tabId, ...params }) => act(tabId, (tab) => actions.wait(tab.page, params)),
+    upload: ({ tabId, ...params }) => act(tabId, (tab) => actions.upload(tab.page, params)),
+    'downloads.list': () => downloads.list(),
+    'downloads.action': async ({ id, action }) => {
+      if (action === 'cancel') downloads.cancel(id)
+      else {
+        const file = await downloads.completedPath(id)
+        if (action === 'reveal') shell.showItemInFolder(file)
+        else { const error = await shell.openPath(file); if (error) throw new HostError('browser-download-open-failed', error) }
+      }
+      return { ok: true }
+    },
     console: async ({ tabId, sinceNavigation, requestId }) => {
       const tab = registry.get(tabId)
       return { ...registry.console(tab, sinceNavigation ?? false), network: tab.network.list(), ...(requestId ? { request: await tab.network.detail(requestId) } : {}) }

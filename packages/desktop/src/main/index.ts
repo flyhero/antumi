@@ -17,6 +17,7 @@ import { defaultBrowserHomepage } from './browser/browser-homepage'
 import { installedApps, openWith, type InstalledApp } from './open-with'
 import { AppUpdater, InstallBlocked } from './app-update'
 import { bundleOf, leftovers, stageFromDmg, swapBlocked, swapInto } from './app-bundle-swap'
+import { appImageBlocked, replaceAppImage } from './app-image-swap'
 
 // The built-in browser: its tabs live here, in main, so a window closing or its renderer going
 // never touches a page an agent is on. The slot puts the one on show into the current window.
@@ -347,6 +348,7 @@ const updater = app.isPackaged || updateApi ? new AppUpdater({
   current: app.getVersion(),
   platform: process.platform,
   arch: process.arch,
+  linuxPackage: process.env.APPIMAGE ? 'AppImage' : 'deb',
   api: updateApi ?? 'https://api.github.com',
   preferencesFile: join(app.getPath('userData'), 'update.json'),
   downloads: join(app.getPath('userData'), 'updates'),
@@ -357,10 +359,12 @@ const updater = app.isPackaged || updateApi ? new AppUpdater({
     if (process.platform === 'darwin') return swapBlocked(bundleOf(app.getPath('exe')))
     // Only an app the NSIS installer put there can be updated by running the next one.
     if (process.platform === 'win32') return (await exists(join(dirname(app.getPath('exe')), 'Uninstall Antumi.exe'))) ? null : 'not-installed'
+    if (process.platform === 'linux') return appImageBlocked(process.env.APPIMAGE)
     return 'unsupported'
   },
   install: async (installer, version) => {
     if (process.platform === 'win32') return installOnWindows(installer)
+    if (process.platform === 'linux') return installAppImage(installer)
     const bundle = bundleOf(app.getPath('exe'))
     if (!bundle) throw new Error('not-a-bundle')
     const staged = await stageFromDmg(installer, bundle, version)
@@ -397,6 +401,16 @@ async function installOnWindows(installer: string): Promise<void> {
     throw error
   }
   child.unref()
+  app.quit()
+}
+
+// The executable this runs from lives in the AppImage's mount, gone once it quits: the relaunch
+// goes through the AppImage, by then the new version. Daemon and core outlive the app, as on macOS.
+async function installAppImage(installer: string): Promise<void> {
+  const appImage = process.env.APPIMAGE
+  if (!appImage) throw new Error('not-appimage')
+  await replaceAppImage(appImage, installer)
+  app.relaunch({ execPath: appImage, args: process.argv.slice(1) })
   app.quit()
 }
 

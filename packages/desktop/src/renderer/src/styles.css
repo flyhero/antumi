@@ -8830,6 +8830,8 @@ div.inspector-empty > p { margin: 0 0 8px; }
 .browser-tab-close:hover { background: var(--fill-2); color: var(--text); }
 .browser-tab-add { flex-shrink: 0; margin-left: 2px; }
 .browser-address { display: flex; align-items: center; gap: 2px; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+/* The native page covers anything drawn below the address bar. */
+.browser-address [data-tooltip]::after { top: auto; bottom: calc(100% + 6px); }
 .browser-url { flex: 1; min-width: 0; height: 28px; padding: 0 8px; font-size: 12px; border-radius: var(--radius-sm); }
 .browser-stage { position: relative; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; background: var(--bg); }
 .browser-stage[data-held] { background: var(--surface-muted); }

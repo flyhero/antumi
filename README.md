@@ -203,7 +203,7 @@ pnpm dist:linux   # 产物在 packages/desktop/dist/Antumi-<版本>-x86_64.AppIm
 
 **在 Windows 上安装**：安装包没有签名，SmartScreen 会拦一下，点「更多信息 → 仍要运行」。
 
-**在 Linux 上安装**：Debian、Ubuntu 用 `sudo apt install ./Antumi-<版本>-amd64.deb`。其他发行版用 AppImage：`chmod +x` 后直接运行，Ubuntu 22.04 及以上要先 `sudo apt install libfuse2`；Ubuntu 23.10 及以上若启动时报 sandbox 错误，改用 deb，或加 `--no-sandbox` 启动。Linux 版暂不支持应用内更新，新版本需重新下载安装。
+**在 Linux 上安装**：Debian、Ubuntu 用 `sudo apt install ./Antumi-<版本>-amd64.deb`。其他发行版用 AppImage：`chmod +x` 后直接运行，Ubuntu 22.04 及以上要先 `sudo apt install libfuse2`；Ubuntu 23.10 及以上若启动时报 sandbox 错误，改用 deb，或加 `--no-sandbox` 启动。AppImage 会像 macOS、Windows 一样在后台自动更新；deb 只提示新版本，需要重新下载安装。
 
 <p align="center">
   <img src="docs/assets/agents.png" alt="设置 → 外部智能体：Claude Code、Codex、Cursor 都已安装并登录" width="720" />

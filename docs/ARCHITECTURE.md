@@ -672,6 +672,8 @@ macOS 上没有 Developer ID，Squirrel 式的自动更新用不了（它要求�
 
 Windows 不让覆盖正在运行的 exe，而 daemon 和 core 就是安装目录里的 `Antumi.exe`（`ELECTRON_RUN_AS_NODE`），NSIS 安装程序还会 `taskkill` 掉当前用户所有的 `Antumi.exe`。所以安装前，界面先请 core 立刻收掉空闲待命的聊天 Agent（`conversations.releaseIdle`，和空闲 30 分钟后收掉一样，下一条消息在同一会话上接上；回合中、等用户回答、后台还有命令或子 Agent 的不算空闲），再请 daemon 退出（`retire`），然后让 core 退出（`stopBackendForInstall`）。daemon 只在没有活着的会话时同意，同意后立即拒绝新的启动（`daemon-retiring`），不会在回答和退出之间起新进程；不同意时返回仍活着的会话，界面按终端标签和会话列出来，可以打开，终端标签可以直接关掉，认不出的写成 Agent 的临时进程或无法识别的进程。开着的终端标签即使没在跑命令也算活着：shell 内部也能跑工作（如 PowerShell 的 cmdlet、线程任务），进程树证明不了它空闲，所以由用户关，不自动结束。有东西在跑就不装，下载好的安装包留着，重试不再下载。daemon 和 core 都要看到进程确实退出（daemon 的 pid 来自 `info`，用 `process.kill(pid, 0)` 得到 ESRCH 为准）才运行安装程序；连接超时之类说明不了什么，算作没停，报「后台没有按时退出」，并把已停掉的部分重新拉起。之后用 `/S --updated --force-run` 静默运行安装程序：装进注册表里记下的原安装位置，跳过向导，装完启动新版本。只有 NSIS 装的 App（旁边有 `Uninstall Antumi.exe`）才这样更新，别的情况给下载链接。
 
+Linux 上只有 AppImage 换自己（`app-image-swap.ts`）：运行中的 AppImage 由环境变量 `APPIMAGE` 指出位置，下载并校验后复制到它旁边的 `.<文件名>.update`，`chmod 755` 后 `rename` 到原文件名上，桌面快捷方式和启动器照样指向它；正在运行的版本还开着旧文件，不受影响。App 本身的可执行文件在 AppImage 的挂载目录里，退出后就没了，所以经 AppImage 重启（`app.relaunch({ execPath: APPIMAGE })`）。所在文件夹不可写时不能换。从 deb 装的没有 `APPIMAGE`，归包管理器管：只提示新版本，下载链接给 deb。
+
 「后台自动更新」默认开启，保留用户明确关闭的选择；开关和跳过、测试版设置一起原子写入 `update.json`。沿用启动 10 秒、每 6 小时的版本检查，只在后台下载和校验，不在用户使用期间主动重启。下载完左下角直接显示「安装并重启」，点击即安装，旁边的展开按钮查看详情、发布页或跳过该版本。不点击就等下次启动：完整且有 SHA-256 摘要的安装包存在 userData 的 `updates/`，校验完成才原子写入 `pending.json`。主进程在创建窗口、启动 backend 之前读这份记录，重新校验版本、架构、大小和摘要，再应用并重启进入新版；这个过程不依赖网络。关闭开关、跳过版本、关闭测试版选项都会阻止相应下载的自动安装，已完成的下载仍可手动安装。新版本运行后清除已应用的待安装记录，避免循环安装。损坏、缺失、未下载完的包不运行；后台下载失败间隔 10 分钟重试。Windows 继续通过 daemon 的原子 `retire` 保护后台 Agent 和终端，有进程运行或无法确认后台退出时保留安装包、进入原版本并显示原因，绝不强制停止工作。macOS 使用原有的 bundle 校验和交换流程，后台 Agent 与终端继续运行。
 
 

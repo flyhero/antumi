@@ -14,7 +14,9 @@ const release = (tag: string, change: Partial<Release> = {}): Release => ({
   prerelease: tag.includes('-'),
   assets: [
     { name: `Antumi-${tag.slice(1)}-arm64.dmg`, browser_download_url: `https://example.com/${tag}.dmg`, size: 4, digest: null },
-    { name: `Antumi-Setup-${tag.slice(1)}-x64.exe`, browser_download_url: `https://example.com/${tag}.exe`, size: 4, digest: null }
+    { name: `Antumi-Setup-${tag.slice(1)}-x64.exe`, browser_download_url: `https://example.com/${tag}.exe`, size: 4, digest: null },
+    { name: `Antumi-${tag.slice(1)}-x86_64.AppImage`, browser_download_url: `https://example.com/${tag}.AppImage`, size: 4, digest: null },
+    { name: `Antumi-${tag.slice(1)}-amd64.deb`, browser_download_url: `https://example.com/${tag}.deb`, size: 4, digest: null }
   ],
   ...change
 })
@@ -41,11 +43,14 @@ describe('newestRelease', () => {
 })
 
 describe('installerFor', () => {
-  it('picks the dmg for this Mac and the setup for Windows, none elsewhere', () => {
+  it('picks the dmg for this Mac, the setup for Windows and the package Linux runs from', () => {
     expect(installerFor(release('v1.0.0'), 'darwin', 'arm64')?.name).toBe('Antumi-1.0.0-arm64.dmg')
     expect(installerFor(release('v1.0.0'), 'darwin', 'x64')).toBeNull()
     expect(installerFor(release('v1.0.0'), 'win32', 'x64')?.name).toBe('Antumi-Setup-1.0.0-x64.exe')
-    expect(installerFor(release('v1.0.0'), 'linux', 'x64')).toBeNull()
+    expect(installerFor(release('v1.0.0'), 'linux', 'x64')?.name).toBe('Antumi-1.0.0-x86_64.AppImage')
+    expect(installerFor(release('v1.0.0'), 'linux', 'x64', 'deb')?.name).toBe('Antumi-1.0.0-amd64.deb')
+    expect(installerFor(release('v1.0.0'), 'linux', 'arm64')).toBeNull()
+    expect(installerFor(release('v1.0.0'), 'freebsd', 'x64')).toBeNull()
   })
 })
 

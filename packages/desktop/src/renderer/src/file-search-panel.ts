@@ -1,5 +1,6 @@
 import { t, useLocale } from './i18n'
-import { closeSearchPanel, findNext, findPrevious, getSearchQuery, replaceAll, replaceNext, SearchQuery, setSearchQuery } from '@codemirror/search'
+import { isShortcut } from './keyboard-shortcuts'
+import { closeSearchPanel, openSearchPanel, findNext, findPrevious, getSearchQuery, replaceAll, replaceNext, SearchQuery, setSearchQuery } from '@codemirror/search'
 import type { EditorState } from '@codemirror/state'
 import { runScopeHandlers, type EditorView, type Panel, type ViewUpdate } from '@codemirror/view'
 
@@ -52,6 +53,14 @@ export function matchCount(state: EditorState, query: SearchQuery) {
   return { current, total }
 }
 
+export function runFileSearchShortcut(event: KeyboardEvent, view: EditorView): boolean {
+  const command = isShortcut('find-content', event) ? openSearchPanel : isShortcut('find-previous', event) ? findPrevious : isShortcut('find-next', event) ? findNext : null
+  if (!command) return false
+  event.preventDefault()
+  command(view)
+  return true
+}
+
 // Replaces CodeMirror's stock panel, whose bare buttons and checkboxes ignore the app's look.
 export function createFileSearchPanel(view: EditorView): Panel {
   let query = getSearchQuery(view.state)
@@ -98,7 +107,8 @@ export function createFileSearchPanel(view: EditorView): Panel {
     replaceRow
   ])
   dom.onkeydown = (event) => {
-    if (event.isComposing) return
+    if (event.isComposing || event.defaultPrevented) return
+    if (runFileSearchShortcut(event, view)) return
     if (runScopeHandlers(view, event, 'search-panel')) event.preventDefault()
     else if (event.key === 'Enter' && event.target === search) { event.preventDefault(); (event.shiftKey ? findPrevious : findNext)(view) }
     else if (event.key === 'Enter' && event.target === replace) { event.preventDefault(); replaceNext(view) }

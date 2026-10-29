@@ -1,15 +1,69 @@
 // Application-owned text. Values and external content are passed separately.
 export const MESSAGES = {
+  "ChatComposer.sendKeyHint": {"zh": "，{keys} 发送", "en": "; {keys} to send"},
+  "KeyboardShortcuts.count": {"zh": "共 {count} 项可自定义快捷键", "en": "{count} customizable shortcuts"},
+  "KeyboardShortcuts.sidebar": {"zh": "显示 / 隐藏侧栏", "en": "Toggle sidebar"},
+  "ChatComposer.sendToAgentNow": {"zh": "不等回合结束，现在就交给 Agent{keys}", "en": "Send to Agent now without waiting for this turn to end{keys}"},
+  "ConversationView.paneLabel": {"zh": "分栏 {number}{active}", "en": "Pane {number}{active}"},
+  "composerPlaceholder.interruptKey": {"zh": "；{keys} 中断", "en": "; {keys} to interrupt"},
+  "composerPlaceholder.workingWithKeys": {"zh": "Agent 正在处理，可以先写下一条{interrupt}", "en": "Agent is working. Draft the next message now{interrupt}"},
+  "composerPlaceholder.queueWithKeys": {"zh": "{prefix}也可以写下一条{send}{steer}{interrupt}", "en": "{prefix}Draft another message{send}{steer}{interrupt}"},
+  "composerPlaceholder.queueKey": {"zh": "，{keys} 排到回合结束后发送", "en": "; {keys} queues it after this turn"},
+  "composerPlaceholder.steerKey": {"zh": "，{keys} 立刻插入", "en": ", {keys} to insert immediately"},
   "KeyboardShortcuts.title": {"zh": "快捷键", "en": "Keyboard shortcuts"},
-  "KeyboardShortcuts.description": {"zh": "自定义面板开关的快捷键，修改后立即生效。", "en": "Customize panel shortcuts. Changes take effect immediately."},
+  "KeyboardShortcuts.description": {"zh": "按使用场景查看和自定义快捷键，修改后立即生效。", "en": "Browse and customize shortcuts by context. Changes take effect immediately."},
+  "KeyboardShortcuts.newTask": {"zh": "新建任务", "en": "New task"},
+  "KeyboardShortcuts.quickAddTask": {"zh": "快速记任务", "en": "Quick add task"},
+  "KeyboardShortcuts.quickAddSubmit": {"zh": "创建快速任务", "en": "Create quick task"},
+  "KeyboardShortcuts.quickAddExpand": {"zh": "展开完整任务表单", "en": "Expand quick task into full form"},
+  "KeyboardShortcuts.openSettings": {"zh": "打开 / 关闭设置", "en": "Toggle settings"},
+  "KeyboardShortcuts.toggleSplit": {"zh": "收起 / 恢复分屏", "en": "Toggle conversation split"},
+  "KeyboardShortcuts.focusLeft": {"zh": "聚焦左侧会话", "en": "Focus left conversation"},
+  "KeyboardShortcuts.focusRight": {"zh": "聚焦右侧会话", "en": "Focus right conversation"},
+  "KeyboardShortcuts.sendMessage": {"zh": "发送消息 / 排队", "en": "Send message / queue"},
+  "KeyboardShortcuts.steerMessage": {"zh": "即时补充当前回合", "en": "Steer the running turn"},
+  "KeyboardShortcuts.sendNewConversation": {"zh": "发送到同配置新会话", "en": "Send to a new conversation"},
+  "KeyboardShortcuts.acceptSuggestion": {"zh": "采用输入建议", "en": "Accept input suggestion"},
+  "KeyboardShortcuts.interruptTurn": {"zh": "中断当前回合", "en": "Interrupt current turn"},
+  "KeyboardShortcuts.findContent": {"zh": "查找当前内容", "en": "Find in current content"},
+  "KeyboardShortcuts.findNext": {"zh": "下一个查找结果", "en": "Next search result"},
+  "KeyboardShortcuts.findPrevious": {"zh": "上一个查找结果", "en": "Previous search result"},
+  "KeyboardShortcuts.quickOpenFile": {"zh": "按名称转到文件", "en": "Quick open file"},
+  "KeyboardShortcuts.saveFile": {"zh": "保存当前文件", "en": "Save current file"},
+  "KeyboardShortcuts.submitForm": {"zh": "提交 / 保存表单", "en": "Submit / save form"},
+  "KeyboardShortcuts.groupApp": {"zh": "应用", "en": "Application"},
+  "KeyboardShortcuts.groupTasks": {"zh": "任务", "en": "Tasks"},
+  "KeyboardShortcuts.groupConversations": {"zh": "会话与分屏", "en": "Conversations and splits"},
+  "KeyboardShortcuts.groupChat": {"zh": "聊天与查找", "en": "Chat and search"},
+  "KeyboardShortcuts.groupFiles": {"zh": "文件", "en": "Files"},
+  "KeyboardShortcuts.groupPanels": {"zh": "面板", "en": "Panels"},
+  "KeyboardShortcuts.groupForms": {"zh": "表单", "en": "Forms"},
+  "KeyboardShortcuts.groupEditing": {"zh": "通用编辑与导航", "en": "Standard editing and navigation"},
+  "KeyboardShortcuts.scopeApp": {"zh": "应用界面", "en": "Application interface"},
+  "KeyboardShortcuts.scopeBoard": {"zh": "任务看板，非输入区", "en": "Task board, outside inputs"},
+  "KeyboardShortcuts.scopeQuickAdd": {"zh": "快速记任务输入框", "en": "Quick task input"},
+  "KeyboardShortcuts.scopeComposer": {"zh": "当前聊天输入框", "en": "Active chat input"},
+  "KeyboardShortcuts.scopeContent": {"zh": "当前聊天或文件", "en": "Current chat or file"},
+  "KeyboardShortcuts.scopeFile": {"zh": "文件编辑区", "en": "File editor"},
+  "KeyboardShortcuts.scopeForm": {"zh": "任务、例程、命令、待办和提交表单", "en": "Task, routine, command, to-do and commit forms"},
+  "KeyboardShortcuts.copy": {"zh": "复制", "en": "Copy"},
+  "KeyboardShortcuts.cut": {"zh": "剪切", "en": "Cut"},
+  "KeyboardShortcuts.paste": {"zh": "粘贴", "en": "Paste"},
+  "KeyboardShortcuts.undo": {"zh": "撤销", "en": "Undo"},
+  "KeyboardShortcuts.redo": {"zh": "重做", "en": "Redo"},
+  "KeyboardShortcuts.newline": {"zh": "输入框换行", "en": "New line in input"},
+  "KeyboardShortcuts.dismiss": {"zh": "关闭菜单、弹窗或返回", "en": "Dismiss menus and dialogs or go back"},
+  "KeyboardShortcuts.menuNavigation": {"zh": "菜单和候选项选择", "en": "Navigate and select menu items"},
+  "KeyboardShortcuts.terminalInterrupt": {"zh": "终端中断程序", "en": "Interrupt terminal process"},
+  "KeyboardShortcuts.nativeEditing": {"zh": "由当前输入控件或系统处理", "en": "Handled by the focused control or operating system"},
   "KeyboardShortcuts.files": {"zh": "显示 / 隐藏文件栏", "en": "Toggle files panel"},
   "KeyboardShortcuts.terminal": {"zh": "显示 / 隐藏终端栏", "en": "Toggle terminal panel"},
   "KeyboardShortcuts.browser": {"zh": "显示 / 隐藏浏览器栏", "en": "Toggle browser panel"},
   "KeyboardShortcuts.search": {"zh": "搜索动作或按键", "en": "Search actions or keys"},
   "KeyboardShortcuts.resetAll": {"zh": "全部恢复默认", "en": "Reset all to defaults"},
-  "KeyboardShortcuts.hint": {"zh": "点击按键组合即可修改，也可禁用或恢复默认。设置保存在这台设备上，终端和网页获得焦点时同样有效。", "en": "Click a binding to change it, disable it, or restore its default. Saved on this device; also works while a terminal or web page has focus."},
+  "KeyboardShortcuts.hint": {"zh": "点击按键组合即可修改、禁用或恢复默认。每项注明生效区域，设置保存在这台设备上；面板开关在终端和网页中同样有效。", "en": "Click a binding to change, disable or reset it. Each action shows its scope. Saved on this device; panel shortcuts also work in terminals and web pages."},
   "KeyboardShortcuts.conflict": {"zh": "该组合已用于「{action}」，请换一个组合或先禁用该动作的快捷键。", "en": "This binding is used by “{action}”. Choose another combination or disable that action's shortcut first."},
-  "KeyboardShortcuts.reserved": {"zh": "请使用带 Ctrl 或 Command 的组合，并避开系统、编辑和终端保留按键。", "en": "Use a combination with Ctrl or Command that isn't reserved for the system, editing, or terminal controls."},
+  "KeyboardShortcuts.reserved": {"zh": "请使用默认按键、功能键或带 Ctrl / Command 的可用组合，避开系统、编辑和终端保留按键。", "en": "Use a default binding, function key, or available Ctrl / Command combination. Avoid reserved system, editing, and terminal keys."},
   "KeyboardShortcuts.disabled": {"zh": "未绑定", "en": "Unbound"},
   "KeyboardShortcuts.default": {"zh": "默认：{keys}", "en": "Default: {keys}"},
   "KeyboardShortcuts.modify": {"zh": "修改「{action}」的快捷键", "en": "Change shortcut for “{action}”"},
@@ -1576,14 +1630,8 @@ export const MESSAGES = {
     "zh": "交给小助手…",
     "en": "Ask helper…"
   },
-  "ChatComposer.handOffToAddInstructionsOrPressEnter": {
-    "zh": "交给 {value1} 接着做：写下要它做的事，也可以不写，直接按 Enter 移交",
-    "en": "Hand off to {value1}: add instructions, or press Enter to hand off directly"
-  },
-  "ChatComposer.messageAgentEnterToSendShiftEnterFor": {
-    "zh": "给 Agent 发消息，Enter 发送，Shift+Enter 换行{value1}{value2}",
-    "en": "Message Agent. Enter to send, Shift+Enter for a new line{value1}{value2}"
-  },
+  "ChatComposer.handOffToAddInstructionsOrPressEnter": {"zh": "交给 {value1} 接着做：写下要它做的事，也可以不写{send}", "en": "Hand off to {value1}: add instructions, or leave it empty{send}"},
+  "ChatComposer.messageAgentEnterToSendShiftEnterFor": {"zh": "给 Agent 发消息{send}，Shift+Enter 换行{value1}{value2}", "en": "Message Agent{send}; Shift+Enter for a new line{value1}{value2}"},
   "ChatComposer.forCommands": {
     "zh": "，/ 选命令",
     "en": ", / for commands"
@@ -1620,10 +1668,7 @@ export const MESSAGES = {
     "zh": "还不能移交：{value1}",
     "en": "Cannot hand off yet: {value1}"
   },
-  "ChatComposer.handOffToEnter": {
-    "zh": "{value1}交给 {value2} 接着做（Enter）",
-    "en": "{value1}Hand off to {value2} (Enter)"
-  },
+  "ChatComposer.handOffToEnter": {"zh": "{value1}交给 {value2} 接着做{keys}", "en": "{value1}Hand off to {value2}{keys}"},
   "ChatComposer.stop": {
     "zh": "停止 {value1}，",
     "en": "Stop {value1}, "
@@ -3313,14 +3358,8 @@ export const MESSAGES = {
     "zh": "先在上面选一个 Agent",
     "en": "Choose an Agent above first"
   },
-  "ConversationDraft.additionalInstructionsOptionalEnterToInvestigate": {
-    "zh": "补充说明（可选），Enter 开始排查",
-    "en": "Additional instructions (optional); Enter to investigate"
-  },
-  "ConversationDraft.sendTheFirstMessageToEnterToSend": {
-    "zh": "给 {value1} 发第一条消息，Enter 发送，Shift+Enter 换行",
-    "en": "Send the first message to {value1}. Enter to send, Shift+Enter for a new line"
-  },
+  "ConversationDraft.additionalInstructionsOptionalEnterToInvestigate": {"zh": "补充说明（可选）{send}", "en": "Additional instructions (optional){send}"},
+  "ConversationDraft.sendTheFirstMessageToEnterToSend": {"zh": "给 {value1} 发第一条消息{send}，Shift+Enter 换行", "en": "Send the first message to {value1}{send}; Shift+Enter for a new line"},
   "ConversationDraft.readingIssueAndStarting": {
     "zh": "正在读取 issue 并启动 {value1}…",
     "en": "Reading issue and starting {value1}…"
@@ -3329,10 +3368,7 @@ export const MESSAGES = {
     "zh": "正在建 worktree 并启动 {value1}…",
     "en": "Creating worktree and starting {value1}…"
   },
-  "ConversationDraft.investigateEnter": {
-    "zh": "开始排查（Enter）",
-    "en": "Investigate (Enter)"
-  },
+  "ConversationDraft.investigateEnter": {"zh": "开始排查", "en": "Investigate"},
   "ConversationInspector.loadingChanges": {
     "zh": "正在读取改动…",
     "en": "Loading changes…"

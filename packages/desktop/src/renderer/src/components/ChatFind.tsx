@@ -1,7 +1,7 @@
 import { t, tr } from '../i18n'
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import { chatFindRanges, nextFindIndex } from '../chat-find'
-import { hasPrimaryModifier } from '../shortcut-keys'
+import { isShortcut, recordingShortcut } from '../keyboard-shortcuts'
 import { paneOwnsShortcuts, useConversationPane } from './conversation-pane'
 import { ArrowDownIcon, CloseIcon, SearchIcon } from './icons'
 
@@ -82,9 +82,9 @@ export function ChatFind({ state, scope, container, onOpen, loadOlder, hasOlder 
 
   useEffect(() => {
     const keys = (event: KeyboardEvent) => {
-      if (!owns || event.defaultPrevented || event.isComposing || !ownsShortcut(scope.current, event.target)) return
-      const primary = hasPrimaryModifier(event) && !event.altKey
-      if (primary && !event.shiftKey && event.key.toLowerCase() === 'f') {
+      if (!owns || event.defaultPrevented || event.isComposing || recordingShortcut() || !ownsShortcut(scope.current, event.target)) return
+      const previous = isShortcut('find-previous', event)
+      if (isShortcut('find-content', event)) {
         event.preventDefault()
         event.stopPropagation()
         if (!open) {
@@ -102,10 +102,10 @@ export function ChatFind({ state, scope, container, onOpen, loadOlder, hasOlder 
         event.preventDefault()
         event.stopPropagation()
         close()
-      } else if (open && (event.key === 'F3' || (primary && event.key.toLowerCase() === 'g'))) {
+      } else if (open && (isShortcut('find-next', event) || previous)) {
         event.preventDefault()
         event.stopPropagation()
-        next(event.shiftKey ? -1 : 1)
+        next(previous ? -1 : 1)
       }
     }
     window.addEventListener('keydown', keys, true)

@@ -1,25 +1,36 @@
 import { useEffect } from 'react'
-import { PanelShortcutAction, formatShortcut, matchPanelShortcut, panelShortcut, type ShortcutPlatform } from '../../shared/panel-shortcuts'
+import type { PanelShortcutAction } from '../../shared/panel-shortcuts'
+import { ShortcutAction, SHORTCUTS } from '../../shared/keyboard-shortcuts'
 import { onBrowserShortcut, syncPanelShortcuts } from './desktop-bridge'
-import { toggleBrowserPanel, toggleFilesPanel, toggleTerminalPanel, setSettingsOpen, useCore } from './core-store'
+import { focusSplitPane, setFileQuickOpen, setNewTaskOpen, toggleSplit, toggleBrowserPanel, toggleFilesPanel, toggleTerminalPanel, setSettingsOpen, useCore } from './core-store'
+import { toggleSidebar } from './components/WindowBrand'
 import { usePreferences } from './preferences'
+import { isShortcut, recordingShortcut, useShortcutLabel } from './keyboard-shortcuts'
 
-export const SHORTCUT_PLATFORM: ShortcutPlatform = typeof navigator !== 'undefined' && navigator.platform.startsWith('Mac')
-  ? 'darwin' : typeof navigator !== 'undefined' && navigator.platform.startsWith('Win') ? 'win32' : 'linux'
+export { SHORTCUT_PLATFORM } from './keyboard-shortcuts'
 
 export function usePanelShortcut(action: PanelShortcutAction): string {
-  const settings = usePreferences((state) => state.panelShortcuts)
-  return formatShortcut(panelShortcut(settings, SHORTCUT_PLATFORM, action), SHORTCUT_PLATFORM)
+  return useShortcutLabel(action)
 }
 
 export function recordingPanelShortcut(): boolean {
-  return document.querySelector('[data-shortcut-recording]') !== null
+  return recordingShortcut()
 }
 
-function runPanelShortcut(action: PanelShortcutAction): void {
+function runAppShortcut(action: ShortcutAction): boolean {
+  const state = useCore.getState()
+  if (action === 'toggle-sidebar') { toggleSidebar(); return true }
+  if (action === 'open-settings') { setSettingsOpen(!state.settingsOpen); return true }
+  if (state.settingsOpen) return false
   if (action === 'toggle-files') toggleFilesPanel()
   else if (action === 'toggle-terminal') void toggleTerminalPanel()
-  else toggleBrowserPanel()
+  else if (action === 'toggle-browser') toggleBrowserPanel()
+  else if (action === 'new-task') setNewTaskOpen(true)
+  else if (action === 'quick-open-file') setFileQuickOpen(true)
+  else if (action === 'focus-left' || action === 'focus-right') return focusSplitPane(action === 'focus-left' ? 0 : 1)
+  else if (action === 'toggle-split' && state.section === 'conversations') toggleSplit()
+  else return false
+  return true
 }
 
 export function usePanelShortcuts(): void {
@@ -27,19 +38,20 @@ export function usePanelShortcuts(): void {
   useEffect(() => { syncPanelShortcuts(settings) }, [settings])
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (recordingPanelShortcut() || useCore.getState().settingsOpen) return
+      if (recordingShortcut()) return
       if ([...document.querySelectorAll('dialog[open], [role="dialog"], [role="menu"]')].some((element) => element.getClientRects().length > 0)) return
-      const action = matchPanelShortcut(event, usePreferences.getState().panelShortcuts, SHORTCUT_PLATFORM)
+      const action = ShortcutAction.options.find((candidate) => SHORTCUTS[candidate].scope === 'app' && isShortcut(candidate, event))
       if (!action) return
+      const terminal = event.target instanceof Element && event.target.closest('.xterm') !== null
+      if (terminal && event.ctrlKey && !event.metaKey && !event.shiftKey && /^[a-z]$/i.test(event.key)) return
+      if (!event.repeat && !runAppShortcut(action)) return
       event.preventDefault()
       event.stopPropagation()
-      if (!event.repeat) runPanelShortcut(action)
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
   }, [])
   useEffect(() => onBrowserShortcut((kind) => {
-    if (kind === 'settings') setSettingsOpen(!useCore.getState().settingsOpen)
-    else if (!useCore.getState().settingsOpen && !recordingPanelShortcut()) runPanelShortcut(kind)
+    if (!recordingShortcut()) runAppShortcut(kind === 'settings' ? 'open-settings' : kind)
   }), [])
 }

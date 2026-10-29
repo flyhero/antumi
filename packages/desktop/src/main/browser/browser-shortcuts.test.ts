@@ -1,6 +1,7 @@
 import { WebContentsView, type Input } from 'electron'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { defaultPanelShortcut, withPanelShortcut, type ShortcutPlatform } from '../../shared/panel-shortcuts'
+import { withShortcut, SHORTCUTS } from '../../shared/keyboard-shortcuts'
 import { bindBrowserShortcuts } from './browser-shortcuts'
 import { WindowSlot } from './window-slot'
 
@@ -50,6 +51,24 @@ describe.each(platforms)('browser shortcuts on %s', (platform) => {
     slot.setPanelShortcuts(withPanelShortcut(slot.getPanelShortcuts(), platform, 'toggle-browser', null))
     expect(press({ key: 'B', code: 'KeyB', shift: true }).preventDefault).not.toHaveBeenCalled()
     expect(send).toHaveBeenCalledTimes(1)
+  })
+
+  it('uses live settings for settings and new-task actions in a web page', () => {
+    const slot = new WindowSlot()
+    const send = vi.spyOn(slot, 'sendToRenderer')
+    bindBrowserShortcuts(new WebContentsView().webContents, 'tab', slot, platform)
+    const original = SHORTCUTS['open-settings'].defaults(platform)[0]!
+    const key = { key: original.key, code: 'Comma', control: original.ctrl, meta: original.meta, shift: false }
+    press(key)
+    expect(send).toHaveBeenLastCalledWith('antumi:browser-shortcut', { kind: 'open-settings' })
+    slot.setPanelShortcuts(withShortcut(slot.getPanelShortcuts(), platform, 'open-settings', { key: 'F6', ctrl: false, meta: false, alt: false, shift: false }))
+    send.mockClear()
+    expect(press(key).preventDefault).not.toHaveBeenCalled()
+    press({ key: 'F6', code: 'F6', control: false, meta: false, shift: false })
+    expect(send).toHaveBeenLastCalledWith('antumi:browser-shortcut', { kind: 'open-settings' })
+    const task = SHORTCUTS['new-task'].defaults(platform)[0]!
+    press({ key: task.key, code: 'KeyN', control: task.ctrl, meta: task.meta, shift: false })
+    expect(send).toHaveBeenLastCalledWith('antumi:browser-shortcut', { kind: 'new-task' })
   })
 
   it('consumes a held panel key without dispatching again, and leaves IME alone', () => {

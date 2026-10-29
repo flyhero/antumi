@@ -3,7 +3,7 @@ import { lazy, Suspense, useCallback, useEffect, useImperativeHandle, useRef, us
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
 import { languages } from '@codemirror/language-data'
 import { bracketMatching, codeFolding, foldGutter, foldKeymap, HighlightStyle, indentOnInput, LanguageDescription, syntaxHighlighting } from '@codemirror/language'
-import { openSearchPanel, search, searchKeymap } from '@codemirror/search'
+import { findNext, findPrevious, openSearchPanel, search, searchKeymap } from '@codemirror/search'
 import { Compartment, EditorState, Prec, type Text } from '@codemirror/state'
 import { drawSelection, EditorView, highlightActiveLine, highlightActiveLineGutter, keymap, lineNumbers } from '@codemirror/view'
 import { indentationMarkers } from '@replit/codemirror-indentation-markers'
@@ -13,8 +13,8 @@ import { dropFileDraft, fileDraft, fileScopeKey, fileScopeParams, keepFileDraft,
 import { copyFileText } from '../file-actions'
 import { ContextMenu, MenuItem, menuPoint, type MenuPoint } from './ContextMenu'
 import { CheckIcon, CopyIcon, DocumentIcon } from './icons'
-import { PRIMARY_KEY_LABEL } from '../shortcut-keys'
-import { createFileSearchPanel } from '../file-search-panel'
+import { isShortcut, useShortcutLabel } from '../keyboard-shortcuts'
+import { createFileSearchPanel, runFileSearchShortcut } from '../file-search-panel'
 import { FileImage } from './FileImage'
 
 const FileMarkdown = lazy(() => import('./FileMarkdown').then((module) => ({ default: module.FileMarkdown })))
@@ -88,6 +88,7 @@ export function FileSource({ scope, tab, disk, wrap, writable, preview, ref }: {
 }) {
   const key = fileScopeKey(scope)
   const host = useRef<HTMLDivElement>(null)
+  const saveKey = useShortcutLabel('save-file')
   const editor = useRef<EditorView | null>(null)
   const base = useRef<{ text: string; doc: Text | null; mtimeMs: number | null }>({ text: disk.text, doc: null, mtimeMs: disk.mtimeMs })
   const [menu, setMenu] = useState<{ at: MenuPoint; selected: string; text: string } | null>(null)
@@ -162,10 +163,16 @@ export function FileSource({ scope, tab, disk, wrap, writable, preview, ref }: {
         extensions: [
           lineSeparator(draft?.base ?? disk.text),
           editing.of(editable(writableNow.current, path)),
-          Prec.highest(keymap.of([{ key: 'Mod-s', preventDefault: true, run: () => { void saveRef.current(); return true } }])),
+          Prec.highest(EditorView.domEventHandlers({ keydown: (event, view) => {
+            if (runFileSearchShortcut(event, view)) return true
+            if (!isShortcut('save-file', event)) return false
+            event.preventDefault()
+            if (!event.repeat) void saveRef.current()
+            return true
+          } })),
           lineNumbers(), fold, codeFolding(), highlightActiveLine(), highlightActiveLineGutter(), drawSelection(),
           history(), indentOnInput(), bracketMatching(), markers,
-          keymap.of([...searchKeymap, ...historyKeymap, ...foldKeymap, ...defaultKeymap, indentWithTab]), search({ top: true, createPanel: createFileSearchPanel }),
+          keymap.of([...searchKeymap.filter((binding) => binding.run !== openSearchPanel && binding.run !== findNext && binding.run !== findPrevious), ...historyKeymap, ...foldKeymap, ...defaultKeymap, indentWithTab]), search({ top: true, createPanel: createFileSearchPanel }),
           wording.of(editorPhrases()),
           EditorView.updateListener.of((update) => { if (update.docChanged) syncDirty(update.view) }),
           wrapping.of(wrap ? EditorView.lineWrapping : []), language.of([]), syntaxHighlighting(highlight), theme
@@ -251,7 +258,7 @@ export function FileSource({ scope, tab, disk, wrap, writable, preview, ref }: {
       setMenu({ at: menuPoint(event), selected: view.state.sliceDoc(selection.from, selection.to), text: view.state.sliceDoc() })
     }}>
       {menu && <ContextMenu at={menu.at} label={t('FileSource.fileContent')} onClose={close}>
-        {writable && tab.dirty && <MenuItem label={t('FileEditor.save')} icon={<CheckIcon />} hint={`${PRIMARY_KEY_LABEL}S`} onSelect={() => { close(); void save() }} />}
+        {writable && tab.dirty && <MenuItem label={t('FileEditor.save')} icon={<CheckIcon />} hint={saveKey} onSelect={() => { close(); void save() }} />}
         {menu.selected && <MenuItem label={t('ChatContextMenu.copySelection')} icon={<CopyIcon />} onSelect={() => { close(); void copyFileText(menu.selected) }} />}
         <MenuItem label={t('FileSource.copyAllContent')} icon={<DocumentIcon />} onSelect={() => { close(); void copyFileText(menu.text) }} />
       </ContextMenu>}

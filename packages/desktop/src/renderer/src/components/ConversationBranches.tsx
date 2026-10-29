@@ -8,7 +8,7 @@ import { BranchStatusDetails } from './BranchStatus'
 import { folderName, HeldBranchNote, holderLabel } from './BranchHolder'
 import { CommitMessageButton } from './CommitMessageButton'
 import { ArrowUpIcon, BranchIcon, CheckIcon, CommitIcon, PlusIcon } from './icons'
-import { hasPrimaryModifier, PRIMARY_KEY_LABEL } from '../shortcut-keys'
+import { isShortcut, useShortcutLabel } from '../keyboard-shortcuts'
 import { useOccludesBrowser } from '../browser-occlusion'
 import { commitSubject, commitWithWrittenMessage, useCanWriteCommitMessage, useWritingCommit } from '../written-commits'
 
@@ -111,6 +111,7 @@ function CreateForm({ onCreate }: { onCreate: (name: string) => void }) {
 // The message gets room for a subject and a body. With the steps on their own, it can be kept
 // local; ⌘Enter commits and pushes, as the main button does. Left empty, the agent writes it.
 function CommitForm({ target, steps, busy, onCommit }: { target: GitTarget; steps: boolean; busy: boolean; onCommit: (message: string, push: boolean) => void }) {
+  const submitKey = useShortcutLabel('submit-form')
   const [message, setMessage] = useState('')
   const writable = useCanWriteCommitMessage(target)
   const ready = !busy && (Boolean(message.trim()) || writable)
@@ -127,7 +128,7 @@ function CommitForm({ target, steps, busy, onCommit }: { target: GitTarget; step
         maxLength={10_000}
         onChange={(event) => setMessage(event.target.value)}
         onKeyDown={(event) => {
-          if (event.key === 'Enter' && hasPrimaryModifier(event) && !event.nativeEvent.isComposing) {
+          if (!event.repeat && isShortcut('submit-form', event.nativeEvent)) {
             event.preventDefault()
             submit(true)
           }
@@ -139,7 +140,7 @@ function CommitForm({ target, steps, busy, onCommit }: { target: GitTarget; step
       <div className="branch-commit-buttons">
         <CommitMessageButton target={target} disabled={busy} onMessage={setMessage} />
         {steps && <button type="button" className="button" disabled={!ready} onClick={() => submit(false)}>Commit</button>}
-        <button type="button" className="button primary" disabled={!ready} title={`${PRIMARY_KEY_LABEL}Enter`} onClick={() => submit(true)}>Commit &amp; Push</button>
+        <button type="button" className="button primary" disabled={!ready} title={submitKey || undefined} onClick={() => submit(true)}>Commit &amp; Push</button>
       </div>
     </div>
   )

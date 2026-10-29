@@ -6,7 +6,7 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, ne
 import { z } from 'zod'
 import { resolveUiLocale, UiLocale } from '@antumi/protocol'
 import { applicationMenu } from './application-menu'
-import { PanelShortcutSettings } from '../shared/panel-shortcuts'
+import { ShortcutSettings } from '../shared/keyboard-shortcuts'
 import { antumiPaths, readCoreEndpoint } from '@antumi/protocol/node'
 import { ensureBackend, replaceOldDaemon, stopBackendForInstall } from './backend'
 import { popupWindowOptions, RequestPopup } from './request-popup'
@@ -158,7 +158,7 @@ const requestPopup = new RequestPopup(() => {
 const Bounds = z.object({ x: z.number().finite(), y: z.number().finite(), width: z.number().finite().min(0), height: z.number().finite().min(0) })
 ipcMain.on('antumi:panel-shortcuts', (event, settings: unknown) => {
   if (event.sender !== mainWindow?.webContents) return
-  const parsed = PanelShortcutSettings.safeParse(settings)
+  const parsed = ShortcutSettings.safeParse(settings)
   if (parsed.success) slot.setPanelShortcuts(parsed.data)
 })
 ipcMain.handle('antumi:browser-show', (_event, tabId: unknown) => {

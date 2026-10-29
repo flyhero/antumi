@@ -4,7 +4,7 @@ import { openGuide, setAwakeMode, setSchedulesOpen, setSettingsOpen, setWorktree
 import { ALL_TABS, useBrowserTabs } from '../browser-state'
 import { formatBytes, worktreeRows, worktreeSummary } from '../worktree-groups'
 import { useWorktrees } from '../worktree-store'
-import { PRIMARY_KEY_LABEL } from '../shortcut-keys'
+import { useShortcutLabel } from '../keyboard-shortcuts'
 import { usePanelShortcut } from '../panel-shortcuts'
 import { BoltIcon, BookIcon, BranchIcon, ChatIcon, CheckIcon, ClockIcon, CoffeeIcon, FolderIcon, GearIcon, GlobeIcon, HelpIcon, PortsIcon, PulseIcon, TerminalIcon } from './icons'
 import { usePorts } from '../port-state'
@@ -46,6 +46,7 @@ function ConnectionStatus() {
 }
 
 function SettingsButton() {
+  const shortcut = useShortcutLabel('open-settings')
   const open = useCore((s) => s.settingsOpen)
   return (
     <button
@@ -53,7 +54,7 @@ function SettingsButton() {
       className="tool-button statusbar-settings"
       aria-label={t('StatusBar.settings')}
       aria-pressed={open}
-      data-tooltip={t('StatusBar.settings_1935', { PRIMARY_KEY_LABEL: PRIMARY_KEY_LABEL })}
+      data-tooltip={[t('StatusBar.settings'), shortcut].filter(Boolean).join(' · ')}
       data-tooltip-side="top"
       onClick={() => setSettingsOpen(!open)}
     >

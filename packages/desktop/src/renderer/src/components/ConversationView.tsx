@@ -15,7 +15,7 @@ import { ConversationInspector } from './ConversationInspector'
 import { ConversationStatus } from './ConversationStatus'
 import { beginHandoff, newConversationFrom, renameConversation, useReuseConversationSupported } from './ConversationActions'
 import { CloseIcon, CopyIcon, InspectorIcon, SplitIcon } from './icons'
-import { PRIMARY_KEY_LABEL } from '../shortcut-keys'
+import { useShortcutLabel } from '../keyboard-shortcuts'
 import { DEFAULT_SIDE_PANEL_RATIO } from './side-panel-size'
 import { TitleEditor } from './TitleEditor'
 import { useOpenTodoCount, useTodosShown } from '../conversation-todos'
@@ -57,6 +57,7 @@ export function useConversationPanel(conversation: Conversation | undefined) {
 // One conversation: the whole pane, or, in a split, one of its two columns (pane), whose header
 // says which and closes the column rather than the conversation. A split's inspector is its own.
 export function ConversationView({ id, pane }: { id: string; pane?: ConversationPane & { onClose: () => void } }) {
+  const paneKey = useShortcutLabel(pane?.index === 1 ? 'focus-right' : 'focus-left')
   const conversation = useCore((state) => state.conversations[id])
   const helperSupported = useHelperSupported(conversation)
   const helper = useHelper(helperSupported ? id : null)
@@ -128,7 +129,7 @@ export function ConversationView({ id, pane }: { id: string; pane?: Conversation
     {...dropProps}
   >
     <header className="detail-header conversation-header">
-      {pane && <button type="button" className="pane-chip" data-active={pane.active} aria-label={t('ConversationView.pane_729', { value1: pane.index + 1, value2: pane.active ? t('ConversationView.active') : '', PRIMARY_KEY_LABEL: PRIMARY_KEY_LABEL, value4: pane.index + 1 })} data-tooltip={`${PRIMARY_KEY_LABEL}${pane.index + 1}`} onClick={pane.focus}>{pane.index + 1}</button>}
+      {pane && <button type="button" className="pane-chip" data-active={pane.active} aria-label={[t('ConversationView.paneLabel', { number: pane.index + 1, active: pane.active ? t('ConversationView.active') : '' }), paneKey].filter(Boolean).join(' · ')} data-tooltip={paneKey || undefined} onClick={pane.focus}>{pane.index + 1}</button>}
       <ConversationStatus conversation={conversation} />
       <div className="header-meta">
         {renaming

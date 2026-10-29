@@ -5,6 +5,7 @@
 .keyboard-shortcut-search { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 200px; }
 .keyboard-shortcut-search svg { width: 16px; height: 16px; flex-shrink: 0; color: var(--text-muted); }
 .keyboard-shortcut-search .input { width: 100%; }
+.keyboard-shortcut-count { margin: 12px 0 0; }
 .keyboard-shortcut-hint { margin: 12px 0 16px; }
 .keyboard-shortcut-error { color: var(--danger); margin: 12px 0; }
 .keyboard-shortcut-settings .settings-row { flex-wrap: wrap; gap: 12px; }
@@ -14,3 +15,5 @@
 .keyboard-shortcut-binding[aria-pressed='true'] { outline: 2px solid var(--focus); outline-offset: 2px; }
 .keyboard-shortcut-binding kbd { font-family: var(--mono); }
 .keyboard-shortcut-recording { justify-content: space-between; flex-wrap: wrap; margin-top: 16px; }
+.keyboard-shortcut-reference { font-family: var(--mono); color: var(--text-muted); }
+.keyboard-shortcut-settings[data-shortcut-recording] .keyboard-shortcut-recording { position: sticky; bottom: 0; padding: 12px 0; background: var(--bg); border-top: 1px solid var(--border); }

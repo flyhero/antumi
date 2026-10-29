@@ -5,6 +5,7 @@ import { HighlightStyle, syntaxHighlighting } from '@codemirror/language'
 import { Compartment, EditorState, Prec } from '@codemirror/state'
 import { EditorView, keymap, placeholder } from '@codemirror/view'
 import { tags } from '@lezer/highlight'
+import { isShortcut } from '../keyboard-shortcuts'
 import { imageFilesOf } from '../attachment-images'
 import { livePreview } from './markdown-live-preview'
 
@@ -75,17 +76,14 @@ export function MarkdownEditor({ value, onSave, onChange, onSubmit, label, hint,
       state: EditorState.create({
         doc: value,
         extensions: [
-          // Ahead of the default ⌘↵ (a blank line), and kept from the form's own handler, which
-          // would submit a second time.
-          Prec.highest(keymap.of([{
-            key: 'Mod-Enter',
-            run: () => {
-              const submit = handlers.current.onSubmit
-              submit?.()
-              return submit !== undefined
-            },
-            stopPropagation: true
-          }])),
+          // Consume it here so the surrounding form cannot submit a second time.
+          Prec.highest(EditorView.domEventHandlers({ keydown: (event) => {
+            if (!handlers.current.onSubmit || !isShortcut('submit-form', event)) return false
+            event.preventDefault()
+            event.stopPropagation()
+            if (!event.repeat) handlers.current.onSubmit()
+            return true
+          } })),
           history(),
           keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
           markdown({ base: markdownLanguage }),

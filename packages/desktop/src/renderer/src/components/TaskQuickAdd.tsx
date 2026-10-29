@@ -3,6 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { create } from 'zustand'
 import type { AgentKind } from '@antumi/protocol'
 import { perform, setNewTaskOpen, useCore } from '../core-store'
+import { isShortcut, useShortcutLabel } from '../keyboard-shortcuts'
 import { defaultAgent } from '../default-agent'
 import { canPickFolder, pickFolder } from '../desktop-bridge'
 import { useInstalledAgents } from '../installed-agents'
@@ -30,6 +31,9 @@ export function openQuickAdd(): void {
 // Writing a task down at the top of the pending column: Enter creates it and leaves the field for
 // the next, Shift+Enter carries it into the full dialog, Esc or a click elsewhere folds it away.
 export function TaskQuickAdd({ onCreated }: { onCreated: (id: string) => void }) {
+  const quickAddKey = useShortcutLabel('quick-add-task')
+  const submitKey = useShortcutLabel('quick-add-submit')
+  const expandKey = useShortcutLabel('quick-add-expand')
   const { open, title, repos, agent } = useQuickAdd()
   const connected = useCore((s) => s.connection === 'connected')
   const editor = useRef<HTMLDivElement>(null)
@@ -61,7 +65,7 @@ export function TaskQuickAdd({ onCreated }: { onCreated: (id: string) => void })
 
   if (!open) {
     return (
-      <button type="button" className="task-quick-add-row" onClick={openQuickAdd}>{tr('TaskQuickAdd.writeATask', { value1: <kbd>N</kbd> })}</button>
+      <button type="button" className="task-quick-add-row" onClick={openQuickAdd}>{tr('TaskQuickAdd.writeATask', { value1: quickAddKey && <kbd>{quickAddKey}</kbd> })}</button>
     )
   }
 
@@ -89,12 +93,12 @@ export function TaskQuickAdd({ onCreated }: { onCreated: (id: string) => void })
         maxLength={200}
         onChange={(event) => useQuickAdd.setState({ title: event.target.value.replace(/\n/g, ' ') })}
         onKeyDown={(event) => {
-          if (event.nativeEvent.isComposing) return
-          if (event.key === 'Enter' && event.shiftKey) {
+          if (event.nativeEvent.isComposing || event.repeat) return
+          if (isShortcut('quick-add-expand', event.nativeEvent)) {
             event.preventDefault()
             useQuickAdd.setState({ open: false, title: '' })
             setNewTaskOpen(true, draft)
-          } else if (event.key === 'Enter') {
+          } else if (isShortcut('quick-add-submit', event.nativeEvent)) {
             event.preventDefault()
             void createTask()
           } else if (event.key === 'Escape') {
@@ -108,8 +112,8 @@ export function TaskQuickAdd({ onCreated }: { onCreated: (id: string) => void })
         <AgentPick agent={draft.agent} />
       </div>
       <div className="task-quick-add-hint">
-        <span>{tr('TaskQuickAdd.create', { value1: <kbd>↵</kbd> })}</span>
-        <span>{tr('TaskQuickAdd.moreOptions', { value1: <kbd>⇧↵</kbd> })}</span>
+        {submitKey && <span>{tr('TaskQuickAdd.create', { value1: <kbd>{submitKey}</kbd> })}</span>}
+        {expandKey && <span>{tr('TaskQuickAdd.moreOptions', { value1: <kbd>{expandKey}</kbd> })}</span>}
         <span>{tr('TaskQuickAdd.collapse', { value1: <kbd>Esc</kbd> })}</span>
       </div>
     </div>

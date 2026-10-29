@@ -6,7 +6,7 @@ import { timeAgo } from '../conversation-state'
 import { selectTask, setNewTaskOpen, useCore } from '../core-store'
 import { agentLabel, STATUS_LABEL } from '../labels'
 import { setPreference, TASK_SORTS, usePreferences } from '../preferences'
-import { PRIMARY_KEY_LABEL } from '../shortcut-keys'
+import { isShortcut, recordingShortcut, useShortcutLabel } from '../keyboard-shortcuts'
 import { boardColumns, boardProjects, type BoardColumn, type BoardFilter, type TaskSort } from '../task-board'
 import { waitingOn } from '../task-waiting'
 import { saveTaskText } from '../unsaved-edits'
@@ -41,6 +41,7 @@ const useBoardFilter = create<BoardFilter & { allDone: boolean }>(() => ({ query
 // The tasks, one column per status. Each card offers the step that moves its task on; the rest is
 // in the task itself, which a click opens.
 export function TaskBoard() {
+  const newTaskKey = useShortcutLabel('new-task')
   const tasks = useCore((s) => s.tasks)
   const filter = useBoardFilter()
   const sort = usePreferences((p) => p.taskSort)
@@ -62,7 +63,7 @@ export function TaskBoard() {
   // N writes a task down, unless it is being typed somewhere or a dialog or menu is up.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || event.key.toLowerCase() !== 'n' || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return
+      if (event.repeat || recordingShortcut() || !isShortcut('quick-add-task', event)) return
       if (event.target instanceof Element && event.target.closest('input, textarea, select, [contenteditable="true"], .xterm, [role="menu"], dialog')) return
       if (document.querySelector('dialog[open]')) return
       event.preventDefault()
@@ -94,7 +95,7 @@ export function TaskBoard() {
           onClick={() => setPreference('showAbandonedTasks', !abandoned)}
         >{t('ChatRequestCards.cancelled')}</button>
         <SortButton value={sort} />
-        <button type="button" className="button primary task-board-new" onClick={() => setNewTaskOpen(true)}>{tr('TaskBoard.newTask', { value1: <span className="task-board-key">{PRIMARY_KEY_LABEL}N</span> })}</button>
+        <button type="button" className="button primary task-board-new" onClick={() => setNewTaskOpen(true)}>{tr('TaskBoard.newTask', { value1: <span className="task-board-key">{newTaskKey}</span> })}</button>
       </header>
       <TaskDependencies columns={columns}>
         <div className="task-board-columns">

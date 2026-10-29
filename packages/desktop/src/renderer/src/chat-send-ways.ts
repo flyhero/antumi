@@ -1,3 +1,6 @@
+import { formatShortcut, shortcutBindings, type ShortcutAction, type ShortcutSettings } from '../../shared/keyboard-shortcuts'
+import { SHORTCUT_PLATFORM } from './keyboard-shortcuts'
+import { usePreferences } from './preferences'
 import { IS_MAC } from './shortcut-keys'
 
 export type SendWay = 'send' | 'interrupt' | 'queue' | 'steer' | 'newConversation'
@@ -11,17 +14,12 @@ export function sendWays(state: { working: boolean; queueable: boolean; steerabl
   return state.reusable ? [...now, 'newConversation'] : now
 }
 
-const PRIMARY = IS_MAC ? '⌘' : 'Ctrl'
-const SHIFT = IS_MAC ? '⇧' : 'Shift'
-const ENTER = IS_MAC ? '↩' : 'Enter'
+const SEND_ACTIONS: Record<SendWay, ShortcutAction> = { send: 'send-message', queue: 'send-message', steer: 'steer-message', newConversation: 'send-new-conversation', interrupt: 'interrupt-turn' }
 
 // Each key on its own cap, as the composer's key handler reads them.
-export function sendWayKeys(way: SendWay): string[] {
-  switch (way) {
-    case 'send':
-    case 'queue': return [ENTER]
-    case 'steer': return [PRIMARY, ENTER]
-    case 'newConversation': return [PRIMARY, SHIFT, ENTER]
-    case 'interrupt': return ['Esc']
-  }
+export function sendWayKeys(way: SendWay, settings: ShortcutSettings = usePreferences.getState().panelShortcuts): string[] {
+  const binding = shortcutBindings(settings, SHORTCUT_PLATFORM, SEND_ACTIONS[way])[0]
+  if (!binding) return []
+  const key = formatShortcut({ ...binding, ctrl: false, meta: false, alt: false, shift: false }, SHORTCUT_PLATFORM)
+  return [binding.ctrl ? (IS_MAC ? '⌃' : 'Ctrl') : '', binding.meta ? '⌘' : '', binding.alt ? (IS_MAC ? '⌥' : 'Alt') : '', binding.shift ? (IS_MAC ? '⇧' : 'Shift') : '', key === 'Escape' ? 'Esc' : key === 'Enter' && IS_MAC ? '↩' : key].filter(Boolean)
 }

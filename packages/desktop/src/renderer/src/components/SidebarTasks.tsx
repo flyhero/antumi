@@ -1,13 +1,14 @@
 import { t } from '../i18n'
 import { tasksWaitingOnUser } from '../attention'
 import { selectTask, setNewTaskOpen, useActionableItems, useTaskBoardOpen } from '../core-store'
-import { PRIMARY_KEY_LABEL } from '../shortcut-keys'
+import { useShortcutLabel } from '../keyboard-shortcuts'
 import { CountBadge } from './CountBadge'
 import { BoardIcon, PlusIcon } from './icons'
 
 // The sidebar's way to the task board, which holds every task: the entry counts only the ones held
 // up on the user, as the board shows the rest, and its ＋ starts a new one from anywhere.
 export function SidebarTasks() {
+  const shortcut = useShortcutLabel('new-task')
   const open = useTaskBoardOpen()
   const waiting = tasksWaitingOnUser(useActionableItems())
   return (
@@ -22,7 +23,7 @@ export function SidebarTasks() {
           type="button"
           className="icon-button sidebar-tasks-add sidebar-add"
           aria-label={t('SettingsPage.newTask')}
-          data-tooltip={t('SidebarTasks.newTaskN', { PRIMARY_KEY_LABEL: PRIMARY_KEY_LABEL })}
+          data-tooltip={[t('SettingsPage.newTask'), shortcut].filter(Boolean).join(' · ')}
           onClick={() => setNewTaskOpen(true)}
         >
           <PlusIcon />

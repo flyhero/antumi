@@ -2,7 +2,7 @@ import { t, tr } from '../i18n'
 import { useContext, useState } from 'react'
 import { focusPaneInput, selectConversation, setSchedulesOpen, useCore } from '../core-store'
 import { composerDraft } from '../composer-drafts'
-import { PRIMARY_KEY_LABEL } from '../shortcut-keys'
+import { useShortcutLabel } from '../keyboard-shortcuts'
 import { cancelSchedule, openRunsForConversation, runAction, scheduleState } from '../schedules'
 import { helperAllowsMode, isHelper, isPlanApproval, type ChatItem, type Conversation } from '@antumi/protocol'
 import { itemKey } from '../chat-state'
@@ -119,11 +119,12 @@ function ChatSchedules({ conversationId }: { conversationId: string }) {
 // The other column's composer, folded to a line: what was being written there, if anything, and the
 // keys that bring it to the front.
 function PaneReply({ conversationId, pane }: { conversationId: string; pane: ConversationPane }) {
+  const shortcut = useShortcutLabel(pane.index === 0 ? 'focus-left' : 'focus-right')
   const draft = composerDraft(conversationId).text.trim().split('\n')[0] ?? ''
   return (
     <button type="button" className="chat-pane-reply" onClick={() => { pane.focus(); focusPaneInput(pane.index) }}>
       <span className="chat-pane-reply-text" data-draft={draft ? true : undefined}>{draft ? t('ChatDock.draft', { draft: draft }) : t('ChatDock.replyInThisPane')}</span>
-      <kbd>{PRIMARY_KEY_LABEL}{pane.index + 1}</kbd>
+      {shortcut && <kbd>{shortcut}</kbd>}
     </button>
   )
 }

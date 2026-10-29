@@ -5,7 +5,7 @@ import type { RoutineTemplate } from '../routine-templates'
 import { dismissError, useChatOptionsSupported, useCore } from '../core-store'
 import { useInstalledAgents } from '../installed-agents'
 import { agentLabel } from '../labels'
-import { PRIMARY_KEY_LABEL, hasPrimaryModifier } from '../shortcut-keys'
+import { isShortcut, useShortcutLabel } from '../keyboard-shortcuts'
 import { createRoutine, AUTO_AGENT_LABEL, updateRoutine, WEEKDAY_LABEL } from '../routines'
 import { scheduleTime, UNATTENDED_LABEL } from '../schedules'
 import { AgentQuotaHint } from './AgentQuota'
@@ -47,6 +47,7 @@ function scheduleFrom(kind: Kind, time: string, days: readonly number[], every: 
 // unattended in the mode the settings give every scheduled run. A new one may start from a
 // template, which fills in the title, the instruction and the schedule to change at will.
 export function RoutineEditor({ routine, template = null, onClose }: { routine: Routine | null; template?: RoutineTemplate | null; onClose: () => void }) {
+  const submitKey = useShortcutLabel('submit-form')
   useOccludesBrowser()
   const dialog = useRef<HTMLDialogElement>(null)
   const titleInput = useRef<HTMLInputElement>(null)
@@ -128,7 +129,7 @@ export function RoutineEditor({ routine, template = null, onClose }: { routine: 
   }
 
   const onKeyDown = (event: KeyboardEvent) => {
-    if (event.key === 'Enter' && hasPrimaryModifier(event)) {
+    if (!event.repeat && isShortcut('submit-form', event.nativeEvent)) {
       event.preventDefault()
       void submit()
     }
@@ -247,7 +248,7 @@ export function RoutineEditor({ routine, template = null, onClose }: { routine: 
           <button type="button" className="button" onClick={onClose}>{t('ChatCommandSettings.cancel')}</button>
           <button type="button" className="button primary modal-submit" disabled={!canSubmit} onClick={() => void submit()}>
             {routine ? t('FileEditor.save') : t('RoutineEditor.create')}
-            <kbd>{PRIMARY_KEY_LABEL}↵</kbd>
+            {submitKey && <kbd>{submitKey}</kbd>}
           </button>
         </footer>
       </div>

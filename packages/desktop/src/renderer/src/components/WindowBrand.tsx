@@ -1,7 +1,6 @@
 import { t } from '../i18n'
-import { useEffect } from 'react'
 import { setPreference, usePreferences } from '../preferences'
-import { hasPrimaryModifier, PRIMARY_KEY_LABEL } from '../shortcut-keys'
+import { useShortcutLabel } from '../keyboard-shortcuts'
 import { SidebarIcon } from './icons'
 
 export function toggleSidebar(): void {
@@ -13,16 +12,7 @@ export function toggleSidebar(): void {
 export function WindowBrand() {
   const hidden = usePreferences((s) => s.sidebarHidden)
 
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (hasPrimaryModifier(event) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === 'b') {
-        event.preventDefault()
-        toggleSidebar()
-      }
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [])
+  const shortcut = useShortcutLabel('toggle-sidebar')
 
   const label = hidden ? t('WindowBrand.expandSidebar') : t('WindowBrand.collapseSidebar')
   return (
@@ -33,7 +23,7 @@ export function WindowBrand() {
         className="icon-button window-brand-toggle"
         aria-label={label}
         aria-pressed={!hidden}
-        data-tooltip={`${label}（${PRIMARY_KEY_LABEL}B）`}
+        data-tooltip={[label, shortcut].filter(Boolean).join(' · ')}
         data-tooltip-align="start"
         onClick={toggleSidebar}
       >

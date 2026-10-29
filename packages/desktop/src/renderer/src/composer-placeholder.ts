@@ -1,9 +1,17 @@
 import { t } from './i18n'
-import { PRIMARY_KEY_LABEL } from './shortcut-keys'
+import { currentShortcutLabel } from './keyboard-shortcuts'
 
-// What the input says while the agent works: what Enter does then, and, where the agent takes a
-// message into the running turn, the key that puts it there (⌘ on a Mac, Ctrl+ elsewhere).
-export function workingPlaceholder({ awaiting, queueable, steerable }: { awaiting: boolean; queueable: boolean; steerable: boolean }, primaryKey = PRIMARY_KEY_LABEL): string {
-  if (!queueable) return awaiting ? t('composerPlaceholder.answerTheRequestAboveFirst') : t('composerPlaceholder.agentIsWorkingDraftTheNextMessageNow')
-  return t('composerPlaceholder.draftAnotherMessageEnterQueuesItAfterThis', { value1: awaiting ? t('composerPlaceholder.answerTheRequestAboveFirst_2252') : '', value2: steerable ? t('composerPlaceholder.enterToInsertImmediately', { primaryKey: primaryKey }) : '' })
+type ComposerKeys = { send: string; steer: string; interrupt: string }
+
+export function workingPlaceholder({ awaiting, queueable, steerable }: { awaiting: boolean; queueable: boolean; steerable: boolean }, keys: ComposerKeys = {
+  send: currentShortcutLabel('send-message'), steer: currentShortcutLabel('steer-message'), interrupt: currentShortcutLabel('interrupt-turn')
+}): string {
+  if (!queueable && awaiting) return t('composerPlaceholder.answerTheRequestAboveFirst')
+  const interrupt = keys.interrupt ? t('composerPlaceholder.interruptKey', { keys: keys.interrupt }) : ''
+  if (!queueable) return t('composerPlaceholder.workingWithKeys', { interrupt })
+  return t('composerPlaceholder.queueWithKeys', {
+    prefix: awaiting ? t('composerPlaceholder.answerTheRequestAboveFirst_2252') : '',
+    send: keys.send ? t('composerPlaceholder.queueKey', { keys: keys.send }) : '',
+    steer: steerable && keys.steer ? t('composerPlaceholder.steerKey', { keys: keys.steer }) : '', interrupt
+  })
 }

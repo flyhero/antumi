@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 
 vi.hoisted(() => vi.stubGlobal('navigator', { platform: 'MacIntel' }))
 
+const { withShortcut } = await import('../../shared/keyboard-shortcuts')
+
 const { sendWayKeys, sendWays } = await import('./chat-send-ways')
 
 describe('ways to send', () => {
@@ -17,6 +19,13 @@ describe('ways to send', () => {
     // An older core takes nothing between turns, so there is nothing to steer either.
     expect(sendWays({ ...idle, working: true, steerable: true })).toEqual(['interrupt', 'newConversation'])
     expect(sendWays({ ...idle, reusable: false })).toEqual(['send'])
+  })
+
+  it('displays saved bindings and omits disabled shortcuts', () => {
+    const settings = withShortcut({ version: 1 }, 'darwin', 'send-message', { key: 'F6', ctrl: false, meta: false, alt: false, shift: false })
+    expect(sendWayKeys('send', settings)).toEqual(['F6'])
+    expect(sendWayKeys('queue', settings)).toEqual(['F6'])
+    expect(sendWayKeys('interrupt', withShortcut(settings, 'darwin', 'interrupt-turn', null))).toEqual([])
   })
 
   it('names the keys the composer reads', () => {

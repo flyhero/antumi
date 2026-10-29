@@ -1,4 +1,5 @@
 import { localized, t, tr } from '../i18n'
+import { isShortcut } from '../keyboard-shortcuts'
 import { useState } from 'react'
 import { openTodoCount, todoGroupDone, type RpcMethod, type RpcParams, type TodoGroup, type TodoItem, type TodoOwner } from '@antumi/protocol'
 import { addQuote } from '../chat-quotes'
@@ -145,7 +146,7 @@ function NewGroup({ conversationId, onDone }: { conversationId: string; onDone: 
         value={lines}
         onChange={(event) => setLines(event.target.value)}
         onKeyDown={(event) => {
-          if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+          if (!event.repeat && isShortcut('submit-form', event.nativeEvent)) {
             event.preventDefault()
             void submit()
           } else if (event.key === 'Escape') onDone()

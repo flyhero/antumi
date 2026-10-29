@@ -1,3 +1,4 @@
+import { useShortcutLabel } from '../keyboard-shortcuts'
 import { getLocale, t, tr } from '../i18n'
 import { useEffect, useMemo, useState } from 'react'
 import { agentDescriptor, ChatPermissionMode, type AgentKind, type ChatCatalog } from '@antumi/protocol'
@@ -33,6 +34,10 @@ import { ProviderPicker } from './ProviderPicker'
 // Opened on an inbox issue, it looks into that issue: the agent reads it first, in a mode that only
 // reads and plans unless another is picked, and the message is what the user adds, if anything.
 export function ConversationDraft() {
+  const sendKey = useShortcutLabel('send-message')
+  const sendLabel = [t('ChatComposer.send'), sendKey].filter(Boolean).join(' · ')
+  const sendHint = sendKey ? t('ChatComposer.sendKeyHint', { keys: sendKey }) : ''
+  const investigateLabel = [t('ConversationDraft.investigateEnter'), sendKey].filter(Boolean).join(' · ')
   const installed = useInstalledAgents()
   const recommendation = useRecommendation(installed)
   const from = useCore((s) => s.conversationDraftFrom)
@@ -286,7 +291,7 @@ export function ConversationDraft() {
                 autoFocus
                 readOnly={busy}
                 aria-label={t('ConversationDraft.firstMessage')}
-                placeholder={!agent ? t('ConversationDraft.chooseAnAgentAboveFirst') : issue ? t('ConversationDraft.additionalInstructionsOptionalEnterToInvestigate') : t('ConversationDraft.sendTheFirstMessageToEnterToSend', { value1: agentLabel(agent) })}
+                placeholder={!agent ? t('ConversationDraft.chooseAnAgentAboveFirst') : issue ? t('ConversationDraft.additionalInstructionsOptionalEnterToInvestigate', { send: sendHint }) : t('ConversationDraft.sendTheFirstMessageToEnterToSend', { value1: agentLabel(agent), send: sendHint })}
                 onPasteCapture={imagesSupported ? attached.handlers.onPaste : undefined}
                 onKeyDownCapture={(event) => {
                   if (commandMenu.onKeyDown(event) || mentionMenu.onKeyDown(event) || !sendsMessage(event)) return
@@ -338,8 +343,8 @@ export function ConversationDraft() {
                 <button
                   type="button"
                   className="chat-input-button" data-tooltip-side="top-end"
-                  aria-label={t('ChatComposer.sendEnter')}
-                  data-tooltip={busy && agent ? (issue ? t('ConversationDraft.readingIssueAndStarting', { value1: agentLabel(agent) }) : inWorktree ? t('ConversationDraft.creatingWorktreeAndStarting', { value1: agentLabel(agent) }) : t('ChatComposer.starting', { value1: agentLabel(agent) })) : issue ? t('ConversationDraft.investigateEnter') : t('ChatComposer.sendEnter')}
+                  aria-label={sendLabel}
+                  data-tooltip={busy && agent ? (issue ? t('ConversationDraft.readingIssueAndStarting', { value1: agentLabel(agent) }) : inWorktree ? t('ConversationDraft.creatingWorktreeAndStarting', { value1: agentLabel(agent) }) : t('ChatComposer.starting', { value1: agentLabel(agent) })) : issue ? investigateLabel : sendLabel}
                   disabled={!canSend}
                   onClick={() => void send()}
                 >

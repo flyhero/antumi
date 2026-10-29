@@ -1,3 +1,4 @@
+import { useShortcutHint } from '../keyboard-shortcuts'
 import { localized, t, tr } from '../i18n'
 import { useChatTypeface } from '../chat-typeface'
 import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
@@ -285,6 +286,7 @@ function Rounds({ discussion, posts }: { discussion: Discussion; posts: readonly
 }
 
 export function DiscussionView({ id }: { id: string }) {
+  const sendLabel = useShortcutHint('send-message', t('ChatComposer.send'))
   const discussion = useCore((s) => s.discussions[id])
   const posts = useDiscussionPosts((all) => all[id])
   const width = usePreferences((s) => s.chatWidth)
@@ -474,7 +476,7 @@ export function DiscussionView({ id }: { id: string }) {
                 {asTopic && topicBlocked && <span className="chat-options-note muted">{t('DiscussionView.membersAreStillSpeakingPauseOrWaitUntil_917')}</span>}
                 {busyNamed.length > 0 && <span className="chat-options-note muted">{tr('DiscussionView.isStillSpeakingWaitBeforeAskingAgain', { value1: busyNamed.map((member) => member.name).join('、') })}</span>}
                 <span className="chat-dock-spacer" />
-                <button type="button" className="chat-input-button" aria-label={t('ChatComposer.sendEnter')} data-tooltip={t('ChatComposer.sendEnter')} data-tooltip-side="top-end" disabled={!canSend} onClick={() => void send()}>
+                <button type="button" className="chat-input-button" aria-label={sendLabel} data-tooltip={sendLabel} data-tooltip-side="top-end" disabled={!canSend} onClick={() => void send()}>
                   <EnterIcon />
                 </button>
               </div>

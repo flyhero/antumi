@@ -2,7 +2,7 @@ import { t, tr } from '../i18n'
 import { useEffect, useId, useState, type FormEvent } from 'react'
 import { CHAT_COMMAND_ARGUMENTS, ChatCommandFields, type SavedChatCommand } from '@antumi/protocol'
 import { deleteChatCommand, perform, saveChatCommand, useCore } from '../core-store'
-import { PRIMARY_KEY_LABEL, hasPrimaryModifier } from '../shortcut-keys'
+import { isShortcut, useShortcutLabel } from '../keyboard-shortcuts'
 import { projectName } from './ProjectPicker'
 import { SettingsEmptyState } from './SettingsEmptyState'
 import { SettingsGroup } from './SettingsControls'
@@ -17,6 +17,7 @@ const EXAMPLES = [
 ] as const
 
 function CommandForm({ draft, projects, onDone }: { draft: Draft; projects: readonly string[]; onDone: () => void }) {
+  const submitKey = useShortcutLabel('submit-form')
   const [name, setName] = useState(draft.name)
   const [description, setDescription] = useState(draft.description)
   const [prompt, setPrompt] = useState(draft.prompt)
@@ -70,7 +71,7 @@ function CommandForm({ draft, projects, onDone }: { draft: Draft; projects: read
           value={prompt}
           onChange={(event) => setPrompt(event.target.value)}
           onKeyDown={(event) => {
-            if (event.key === 'Enter' && hasPrimaryModifier(event) && !event.nativeEvent.isComposing) void save()
+            if (!event.repeat && isShortcut('submit-form', event.nativeEvent)) { event.preventDefault(); void save() }
           }}
           placeholder={t('ChatCommandSettings.forExampleFindWhyFailedFixItAnd', { CHAT_COMMAND_ARGUMENTS: CHAT_COMMAND_ARGUMENTS })}
           rows={6}
@@ -88,7 +89,7 @@ function CommandForm({ draft, projects, onDone }: { draft: Draft; projects: read
       </label>
       <div className="chat-command-actions">
         <button type="button" className="button ghost" onClick={onDone}>{t('ChatCommandSettings.cancel')}</button>
-        <button type="submit" className="button primary" disabled={!valid || saving}>{tr('ChatCommandSettings.save', { value1: <kbd>{PRIMARY_KEY_LABEL}↵</kbd> })}</button>
+        <button type="submit" className="button primary" disabled={!valid || saving}>{tr('ChatCommandSettings.save', { value1: submitKey && <kbd>{submitKey}</kbd> })}</button>
       </div>
     </form>
   )

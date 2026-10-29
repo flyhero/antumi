@@ -6,7 +6,7 @@ import { canOpenWith } from '../desktop-bridge'
 import { isImagePath } from '../file-links'
 import { closedFile, dropFileDraft, EMPTY_FILE_TABS, expandedFolders, fileScopeKey, fileScopeParams, openedFile, revealedFile, revealedFolder, toggledFolder, updateFileTabs, useFileTabs, type FileScope, type FileTab } from '../file-tabs'
 import { MAX_FILE_TREE_WIDTH, MIN_FILE_TREE_WIDTH, setPreference, usePreferences } from '../preferences'
-import { PRIMARY_KEY_LABEL } from '../shortcut-keys'
+import { isShortcut, useShortcutLabel } from '../keyboard-shortcuts'
 import { FileSource, type FileDisk, type FileSourceHandle } from './FileSource'
 import { FileImage } from './FileImage'
 import { FileTree } from './FileTree'
@@ -95,6 +95,8 @@ function TreeResizer({ width, onWidth }: { width: number; onWidth(width: number)
 // The files panel's body: the folders' files on the left, the open ones on the right. Without
 // core's file-editor it is the earlier preview: read-only, with no tree.
 export function FileEditor({ scope, updatedAt, editor }: { scope: FileScope; updatedAt: number; editor: boolean }) {
+  const saveKey = useShortcutLabel('save-file')
+  const findKey = useShortcutLabel('find-content')
   const key = fileScopeKey(scope)
   const { roots } = scope
   const state = useFileTabs((state) => state[key] ?? EMPTY_FILE_TABS)
@@ -134,7 +136,10 @@ export function FileEditor({ scope, updatedAt, editor }: { scope: FileScope; upd
   const name = (tab: FileTab) => tab.file.path.split(/[\\/]/).at(-1) ?? tab.file.path
   const setPreview = (preview: boolean) => updateFileTabs(key, (state) => ({ ...state, tabs: state.tabs.map((tab) => tab.file.path === active?.file.path ? { ...tab, preview } : tab) }))
   return <div className="file-editor" onKeyDown={(event) => {
-    if (preview && (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') { event.preventDefault(); source.current?.save() }
+    if (isShortcut('save-file', event.nativeEvent)) { event.preventDefault(); if (!event.repeat) source.current?.save() }
+    else if (preview && isShortcut('find-content', event.nativeEvent)) {
+      event.preventDefault(); setPreview(false); requestAnimationFrame(() => source.current?.search())
+    }
   }}>
     <div className="file-editor-bar">
       {browsable && <button type="button" className="tool-button" aria-label={state.tree ? t('FileEditor.collapseFileTree') : t('FileEditor.openFileTree')} aria-pressed={state.tree} title={state.tree ? t('FileEditor.collapseFileTree') : t('FileEditor.openFileTree')} onClick={() => updateFileTabs(key, (state) => ({ ...state, tree: !state.tree }))}><SidebarIcon /></button>}
@@ -152,13 +157,13 @@ export function FileEditor({ scope, updatedAt, editor }: { scope: FileScope; upd
         </div>)}
       </div>
       {active && canOpenWith() && <OpenWithButton file={active.file} />}
-      {text && <button type="button" className="tool-button" aria-label={t('FileEditor.searchFileContents')} title={t('FileEditor.searchF', { PRIMARY_KEY_LABEL: PRIMARY_KEY_LABEL })} onClick={() => { setPreview(false); requestAnimationFrame(() => source.current?.search()) }}><SearchIcon /></button>}
+      {text && <button type="button" className="tool-button" aria-label={t('FileEditor.searchFileContents')} title={[t('FileEditor.searchFileContents'), findKey].filter(Boolean).join(' · ')} onClick={() => { setPreview(false); requestAnimationFrame(() => source.current?.search()) }}><SearchIcon /></button>}
       <button type="button" className="tool-button" ref={more} aria-label={t('FileEditor.moreActions')} aria-haspopup="menu" aria-expanded={menu !== null} onClick={(event) => {
         const bounds = event.currentTarget.getBoundingClientRect()
         setMenu((menu) => menu ? null : { x: bounds.right, y: bounds.bottom + 4 })
       }}><MoreIcon /></button>
       {menu && <ContextMenu at={menu} align="end" trigger={more.current} label={t('FileEditor.fileActions')} onClose={() => setMenu(null)}>
-        {writable && active?.dirty && <MenuItem label={t('FileEditor.save')} icon={<CheckIcon />} hint={`${PRIMARY_KEY_LABEL}S`} onSelect={() => { setMenu(null); source.current?.save() }} />}
+        {writable && active?.dirty && <MenuItem label={t('FileEditor.save')} icon={<CheckIcon />} hint={saveKey} onSelect={() => { setMenu(null); source.current?.save() }} />}
         {text && <MenuItem label={state.wrap ? t('FileEditor.disableWordWrap') : t('FileEditor.wordWrap')} icon={<span aria-hidden>↩</span>} onSelect={() => { setMenu(null); updateFileTabs(key, (state) => ({ ...state, wrap: !state.wrap })) }} />}
         <MenuItem label={t('BrowserPanel.reload')} icon={<RefreshIcon />} onSelect={() => { setMenu(null); setRefreshCount((count) => count + 1) }} />
         {active && <><div className="menu-separator" role="separator" /><FileMenuItems scope={scope} file={active.file} inPanel onClose={() => setMenu(null)} /></>}

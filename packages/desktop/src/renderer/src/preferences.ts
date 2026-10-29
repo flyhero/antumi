@@ -6,7 +6,7 @@ import { PALETTES } from './palettes'
 import { PetLevelPreference, PetSizePreference, PetStylePreference } from './pet-preferences'
 import { DEFAULT_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH, MIN_SIDEBAR_WIDTH } from './sidebar-width'
 import { SetupProgress } from './setup-progress'
-import { PanelShortcutSettings } from '../../shared/panel-shortcuts'
+import { ShortcutSettings } from '../../shared/keyboard-shortcuts'
 
 export const MIN_FILE_TREE_WIDTH = 120
 export const MAX_FILE_TREE_WIDTH = 600
@@ -19,7 +19,7 @@ export const TASK_SORTS = ['recent', 'created', 'title'] as const
 // This window's UI preferences. They shape how the desktop looks and behaves,
 // not what a task is, so they stay on this client instead of going to core.
 const Preferences = z.object({
-  panelShortcuts: PanelShortcutSettings.catch({ version: 1 }),
+  panelShortcuts: ShortcutSettings.catch({ version: 1 }),
   language: LanguagePreference.catch('system'),
   theme: z.enum(['system', 'light', 'dark']).catch('system'),
   // The set of colours the interface is drawn in; each has a light and a dark side.

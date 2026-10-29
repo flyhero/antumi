@@ -1,7 +1,7 @@
 import { AgentsView } from './components/AgentProfiles'
 import { t, useLocale } from './i18n'
 import { useEffect } from 'react'
-import { focusSplitPane, selectTask, setFileQuickOpen, setNewTaskOpen, setSettingsOpen, toggleSplit, useCore, useSplitPanes } from './core-store'
+import { selectTask, setSettingsOpen, useCore, useSplitPanes } from './core-store'
 import { NewTaskDialog } from './components/NewTaskDialog'
 import { SettingsPage } from './components/SettingsPage'
 import { SourceInboxView } from './components/SourceInboxView'
@@ -20,7 +20,6 @@ import { ConversationSplit } from './components/ConversationSplit'
 import { ConversationDraft } from './components/ConversationDraft'
 import { EnvironmentNotice } from './components/EnvironmentNotice'
 import { StatusBar } from './components/StatusBar'
-import { hasPrimaryModifier } from './shortcut-keys'
 import { UtilityPanelDock } from './components/UtilityPanelDock'
 import { FileQuickOpen } from './components/FileQuickOpen'
 import { WorktreeManager } from './components/WorktreeManager'
@@ -51,10 +50,6 @@ function leavesTask(event: KeyboardEvent): boolean {
   if (s.settingsOpen || s.newTaskOpen || s.taskLaunchId || s.worktreesOpen || s.routinesOpen || s.overviewOpen || s.inboxOpen) return false
   const typing = event.target instanceof Element && event.target.closest('input, textarea, select, [contenteditable="true"], .xterm, [role="menu"], dialog')
   return !typing && !document.querySelector('dialog[open]')
-}
-
-function inTerminal(event: KeyboardEvent): boolean {
-  return event.target instanceof Element && event.target.closest('.xterm') !== null
 }
 
 export function App() {
@@ -107,23 +102,7 @@ export function App() {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.isComposing || event.keyCode === 229 || event.repeat || recordingPanelShortcut()) return
-      const plain = hasPrimaryModifier(event) && !event.shiftKey && !event.altKey
-      if (plain && event.key.toLowerCase() === 'n') {
-        event.preventDefault()
-        setNewTaskOpen(true)
-      } else if (plain && event.key.toLowerCase() === 'p' && !inTerminal(event)) {
-        // ⌘P as in VS Code; Ctrl+P inside a shell is its own (previous command).
-        event.preventDefault()
-        if (!useCore.getState().settingsOpen) setFileQuickOpen(true)
-      } else if (plain && event.key === ',') {
-        event.preventDefault()
-        setSettingsOpen(!useCore.getState().settingsOpen)
-      } else if (plain && (event.key === '1' || event.key === '2') && focusSplitPane(event.key === '1' ? 0 : 1)) {
-        event.preventDefault()
-      } else if (plain && event.key === '\\' && useCore.getState().section === 'conversations' && !useCore.getState().settingsOpen) {
-        event.preventDefault()
-        toggleSplit()
-      } else if (event.key === 'Escape' && useCore.getState().settingsOpen && !useCore.getState().newTaskOpen) {
+      if (event.key === 'Escape' && useCore.getState().settingsOpen && !useCore.getState().newTaskOpen) {
         setSettingsOpen(false)
       } else if (event.key === 'Escape' && leavesTask(event)) {
         selectTask(null)

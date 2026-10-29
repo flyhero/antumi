@@ -10,7 +10,8 @@ import { messageReferences, shiftMentions, readMentionedText, writeMentionedText
 import { saidText, usePlans } from '../chat-state'
 import { QuoteCards } from './ChatQuoteCards'
 import { agentLabel } from '../labels'
-import { PRIMARY_KEY_LABEL } from '../shortcut-keys'
+import { currentShortcutLabel, isShortcut, recordingShortcut, useShortcutLabel } from '../keyboard-shortcuts'
+import { usePreferences } from '../preferences'
 import { workingPlaceholder } from '../composer-placeholder'
 import { useChatSurface } from './chat-surface'
 import { ChatAddMenu, ChatImageStrip, useComposerImages } from './ChatImages'
@@ -30,26 +31,20 @@ import { sendWayKeys, sendWays, type SendWay } from '../chat-send-ways'
 import { sendToNewConversation, useReuseConversationSupported } from './ConversationActions'
 import { useInitialMessages } from '../initial-messages'
 
-// Enter sends and Shift+Enter breaks the line; Enter while an input method is composing picks a
-// candidate instead.
 export function sendsMessage(event: KeyboardEvent<HTMLElement>): boolean {
-  return event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing
+  return !event.repeat && isShortcut('send-message', event.nativeEvent)
 }
 
-// ⌘⇧Enter (Ctrl+Shift+Enter elsewhere) sends to a new conversation on this one's settings.
 export function sendsToNewConversation(event: KeyboardEvent<HTMLElement>): boolean {
-  return event.key === 'Enter' && event.shiftKey && (event.metaKey || event.ctrlKey) && !event.nativeEvent.isComposing
+  return !event.repeat && isShortcut('send-new-conversation', event.nativeEvent)
 }
 
-// ⌘Enter (Ctrl+Enter elsewhere) sends into the running turn instead of queueing.
 export function steersMessage(event: KeyboardEvent<HTMLElement>): boolean {
-  return event.key === 'Enter' && (event.metaKey || event.ctrlKey) && !event.nativeEvent.isComposing
+  return !event.repeat && isShortcut('steer-message', event.nativeEvent)
 }
 
-// Tab or →, alone, takes the suggestion the empty input shows.
 function takesSuggestion(event: KeyboardEvent<HTMLElement>): boolean {
-  const alone = !event.shiftKey && !event.metaKey && !event.ctrlKey && !event.altKey && !event.nativeEvent.isComposing
-  return alone && (event.key === 'Tab' || event.key === 'ArrowRight')
+  return !event.repeat && isShortcut('accept-suggestion', event.nativeEvent)
 }
 
 // Images from two sources in order, each once.
@@ -242,6 +237,7 @@ function SendCard({ rows, note, children }: { rows: readonly SendRow[]; note: st
 }
 
 function SendCardRows({ rows, note }: { rows: readonly SendRow[]; note: string | null }) {
+  const shortcuts = usePreferences((state) => state.panelShortcuts)
   useOccludesBrowser()
   return (
     <div className="chat-send-card" role="group" aria-label={t('ChatComposer.waysToSend')}>
@@ -249,7 +245,7 @@ function SendCardRows({ rows, note }: { rows: readonly SendRow[]; note: string |
       {rows.map((row) => (
         <button key={row.way} type="button" className="chat-send-card-row" disabled={row.disabled} onClick={row.run}>
           <span>{row.label}</span>
-          <span className="chat-send-card-keys">{sendWayKeys(row.way).map((key) => <kbd key={key}>{key}</kbd>)}</span>
+          <span className="chat-send-card-keys">{sendWayKeys(row.way, shortcuts).map((key) => <kbd key={key}>{key}</kbd>)}</span>
         </button>
       ))}
     </div>
@@ -262,6 +258,13 @@ function SendCardRows({ rows, note }: { rows: readonly SendRow[]; note: string |
 // Images pasted, dropped or picked from the ＋ below sit above the text until it goes. `state` is
 // the running stage's, for the options row.
 export function ChatComposer({ conversation, state, compact = false }: { conversation: Conversation; state: StateItem | null; compact?: boolean }) {
+  const shortcuts = usePreferences((state) => state.panelShortcuts)
+  const suggestionKey = useShortcutLabel('accept-suggestion')
+  const steerKey = currentShortcutLabel('steer-message', shortcuts)
+  const sendKey = currentShortcutLabel('send-message', shortcuts)
+  const sendLabel = [t('ChatComposer.send'), sendKey].filter(Boolean).join(' · ')
+  const interruptLabel = [t('ChatComposer.interrupt'), currentShortcutLabel('interrupt-turn', shortcuts)].filter(Boolean).join(' · ')
+  const sendHint = sendKey ? t('ChatComposer.sendKeyHint', { keys: sendKey }) : ''
   const { id } = conversation
   const initialMessage = useInitialMessages((messages) => messages[id])
   const surface = useChatSurface()
@@ -459,9 +462,9 @@ export function ChatComposer({ conversation, state, compact = false }: { convers
         readOnly={starting}
         autoFocus={compact}
         placeholder={compact ? t('ChatComposer.askHelper') :
-          handingOff ? t('ChatComposer.handOffToAddInstructionsOrPressEnter', { value1: agentLabel(handingOff) })
-          : surface.sendBlocker ?? initialHint ?? suggestion ?? (idle || stopped ? t('ChatComposer.messageAgentEnterToSendShiftEnterFor', { value1: commandEntries.length > 0 ? t('ChatComposer.forCommands') : '', value2: mentionsSupported ? t('ChatComposer.toReferenceFiles') : '' })
-            : workingPlaceholder({ awaiting: turn === 'awaiting', queueable, steerable }))
+          handingOff ? t('ChatComposer.handOffToAddInstructionsOrPressEnter', { value1: agentLabel(handingOff), send: sendHint })
+          : surface.sendBlocker ?? initialHint ?? suggestion ?? (idle || stopped ? t('ChatComposer.messageAgentEnterToSendShiftEnterFor', { send: sendHint, value1: commandEntries.length > 0 ? t('ChatComposer.forCommands') : '', value2: mentionsSupported ? t('ChatComposer.toReferenceFiles') : '' })
+            : workingPlaceholder({ awaiting: turn === 'awaiting', queueable, steerable }, { send: currentShortcutLabel('send-message', shortcuts), steer: steerKey, interrupt: currentShortcutLabel('interrupt-turn', shortcuts) }))
         }
         setValue={(next) => {
           if (suggestion && next.text) setDismissed(suggestion)
@@ -469,7 +472,7 @@ export function ChatComposer({ conversation, state, compact = false }: { convers
         }}
         onPasteCapture={imagesSupported ? attached.handlers.onPaste : undefined}
         onKeyDownCapture={(event) => {
-          if (commandMenu.onKeyDown(event) || mentionMenu.onKeyDown(event)) return
+          if (recordingShortcut() || event.defaultPrevented || commandMenu.onKeyDown(event) || mentionMenu.onKeyDown(event)) return
           if (handingOff && (steersMessage(event) || sendsMessage(event))) {
             event.preventDefault()
             void handOff()
@@ -485,7 +488,7 @@ export function ChatComposer({ conversation, state, compact = false }: { convers
           } else if (sendsMessage(event)) {
             event.preventDefault()
             void send()
-          } else if (event.key === 'Escape' && working && !event.nativeEvent.isComposing) {
+          } else if (working && !event.repeat && isShortcut('interrupt-turn', event.nativeEvent)) {
             event.preventDefault()
             interrupt()
           }
@@ -503,8 +506,8 @@ export function ChatComposer({ conversation, state, compact = false }: { convers
             <HandoffModelPicker conversationId={id} agent={handingOff} />
           </>
         ) : optionsSupported && state ? <ChatOptionsBar compact={compact} conversation={conversation} state={state} /> : compact ? <HelperStartOptions conversation={conversation} /> : null}
-        {suggestion && (
-          <span className="chat-suggestion-hint" aria-hidden="true">{tr('ChatComposer.useSuggestion', { value1: <kbd>Tab</kbd> })}</span>
+        {suggestion && suggestionKey && (
+          <span className="chat-suggestion-hint" aria-hidden="true">{tr('ChatComposer.useSuggestion', { value1: <kbd>{suggestionKey}</kbd> })}</span>
         )}
         {/* A routine's chat is out of the list and its follow-ups light nothing: a run scheduled
             here would finish unseen. Running again belongs to the routine's own schedule. */}
@@ -528,7 +531,7 @@ export function ChatComposer({ conversation, state, compact = false }: { convers
           />
         )}
         {canSteer && (
-          <button type="button" className="button ghost chat-steer-button" data-tooltip-side="top-end" data-tooltip={t('ChatComposer.sendToAgentNowWithoutWaitingForThis', { PRIMARY_KEY_LABEL: PRIMARY_KEY_LABEL })} onClick={() => void send(true)}>{t('ChatComposer.insertNow')}</button>
+          <button type="button" className="button ghost chat-steer-button" data-tooltip-side="top-end" data-tooltip={t('ChatComposer.sendToAgentNow', { keys: steerKey ? `（${steerKey}）` : '' })} onClick={() => void send(true)}>{t('ChatComposer.insertNow')}</button>
         )}
         {handingOff ? (
           <button
@@ -537,18 +540,18 @@ export function ChatComposer({ conversation, state, compact = false }: { convers
             aria-label={t('ChatComposer.handOffTo', { value1: agentLabel(handingOff) })}
             data-tooltip-side="top-end"
             aria-disabled={handoff.blocker !== null}
-            data-tooltip={handoff.blocker ? t('ChatComposer.cannotHandOffYet', { value1: handoff.blocker }) : t('ChatComposer.handOffToEnter', { value1: handoff.stopsRunning ? t('ChatComposer.stop', { value1: agentLabel(handoff.from) }) : '', value2: agentLabel(handingOff) })}
+            data-tooltip={handoff.blocker ? t('ChatComposer.cannotHandOffYet', { value1: handoff.blocker }) : t('ChatComposer.handOffToEnter', { value1: handoff.stopsRunning ? t('ChatComposer.stop', { value1: agentLabel(handoff.from) }) : '', value2: agentLabel(handingOff), keys: sendKey ? ` · ${sendKey}` : '' })}
             disabled={busy || starting}
             onClick={() => void handOff()}
           >{t('ChatComposer.handOff')}</button>
         ) : (
           <SendCard rows={sendRows} note={initialHint ?? (starting ? t('ChatComposer.starting', { value1: agentLabel(conversation.agent) }) : null)}>
             {working ? (
-              <button type="button" className="chat-input-button" data-stop aria-label={t('ChatComposer.interruptThisTurnEsc')} onClick={interrupt}>
+              <button type="button" className="chat-input-button" data-stop aria-label={interruptLabel} onClick={interrupt}>
                 <StopIcon />
               </button>
             ) : (
-              <button type="button" className="chat-input-button" aria-label={t('ChatComposer.sendEnter')} disabled={!canSend} onClick={() => void send()}>
+              <button type="button" className="chat-input-button" aria-label={sendLabel} disabled={!canSend} onClick={() => void send()}>
                 <EnterIcon />
               </button>
             )}

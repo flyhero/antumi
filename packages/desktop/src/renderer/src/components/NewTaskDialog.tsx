@@ -4,7 +4,7 @@ import { AgentKind, IMAGE_MIME_TYPES, type TaskImage } from '@antumi/protocol'
 import { dismissError, perform, selectTask, setNewTaskOpen, useCore } from '../core-store'
 import { defaultAgent } from '../default-agent'
 import { useInstalledAgents } from '../installed-agents'
-import { PRIMARY_KEY_LABEL, hasPrimaryModifier } from '../shortcut-keys'
+import { isShortcut, useShortcutLabel } from '../keyboard-shortcuts'
 import { AgentQuotaHint, useRecommendation } from './AgentQuota'
 import { DependencyPicker } from './DependencyPicker'
 import { ProjectPicker } from './ProjectPicker'
@@ -27,6 +27,7 @@ function PaperclipIcon() {
 }
 
 export function NewTaskDialog() {
+  const submitKey = useShortcutLabel('submit-form')
   useOccludesBrowser()
   const tasks = useCore((s) => s.tasks)
   const connected = useCore((s) => s.connection === 'connected')
@@ -121,7 +122,7 @@ export function NewTaskDialog() {
   }
 
   const onKeyDown = (event: KeyboardEvent) => {
-    if (event.key === 'Enter' && hasPrimaryModifier(event)) {
+    if (!event.repeat && isShortcut('submit-form', event.nativeEvent)) {
       event.preventDefault()
       void submit()
     }
@@ -188,7 +189,7 @@ export function NewTaskDialog() {
             onChange={(e) => setTitle(e.target.value)}
             onKeyDown={(e) => {
               // ⌘↵ is handled by the dialog; composing Enter only commits the IME input.
-              if (e.key === 'Enter' && !hasPrimaryModifier(e) && !e.nativeEvent.isComposing) {
+              if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey && !e.nativeEvent.isComposing && !e.repeat) {
                 e.preventDefault()
                 void submit()
               }
@@ -292,7 +293,7 @@ export function NewTaskDialog() {
           <span className="new-task-footer-spacer" />
           <label className="switch">{tr('NewTaskDialog.createMore', { value1: <input type="checkbox" role="switch" checked={createMore} onChange={(e) => setCreateMore(e.target.checked)} />, value2: <span className="switch-track" aria-hidden="true" /> })}</label>
           {createMore && lastCreated && <span className="muted modal-created">{tr('NewTaskDialog.created', { lastCreated: lastCreated })}</span>}
-          <button type="button" className="button primary modal-submit" disabled={!canSubmit} onClick={() => void submit()}>{tr('NewTaskDialog.createTask', { value1: <kbd>{PRIMARY_KEY_LABEL}↵</kbd> })}</button>
+          <button type="button" className="button primary modal-submit" disabled={!canSubmit} onClick={() => void submit()}>{tr('NewTaskDialog.createTask', { value1: submitKey && <kbd>{submitKey}</kbd> })}</button>
         </footer>
       </div>
     </dialog>

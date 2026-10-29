@@ -2,7 +2,7 @@ import { t } from './i18n'
 import { z } from 'zod'
 import { AgentKind, BookmarkFields } from '@antumi/protocol'
 import type { ActionableTarget, Notice } from './attention'
-import { PanelShortcutAction, type PanelShortcutSettings } from '../../shared/panel-shortcuts'
+import { ShortcutAction, type ShortcutSettings } from '../../shared/keyboard-shortcuts'
 
 // What the Electron preload exposes; absent when the UI runs in a plain browser.
 declare global {
@@ -36,7 +36,7 @@ declare global {
       browserHomepage?(): Promise<unknown>
       browserBounds?(bounds: { x: number; y: number; width: number; height: number }): void
       browserOccluded?(occluded: boolean): Promise<unknown>
-      syncPanelShortcuts?(settings: PanelShortcutSettings): void
+      syncPanelShortcuts?(settings: ShortcutSettings): void
       // Bookmarks to import, read by main; absent from a main older than the renderer.
       bookmarkSources?(): Promise<unknown>
       readBookmarks?(id: string): Promise<unknown>
@@ -243,14 +243,14 @@ export function onBrowserFocused(listener: (tabId: string, focused: boolean) => 
   )
 }
 
-const Shortcut = z.object({ kind: z.union([PanelShortcutAction, z.literal('settings')]) })
+const Shortcut = z.object({ kind: z.union([ShortcutAction, z.literal('settings')]) })
 
-export function syncPanelShortcuts(settings: PanelShortcutSettings): void {
+export function syncPanelShortcuts(settings: ShortcutSettings): void {
   window.antumi?.syncPanelShortcuts?.(settings)
 }
 
 // An app shortcut pressed while a page had the keyboard; main caught it and passes it on.
-export function onBrowserShortcut(listener: (kind: PanelShortcutAction | 'settings') => void): () => void {
+export function onBrowserShortcut(listener: (kind: ShortcutAction | 'settings') => void): () => void {
   return (
     window.antumi?.onBrowserShortcut?.((event) => {
       const parsed = Shortcut.safeParse(event)

@@ -2,7 +2,7 @@ import { getLocale, t, tr } from '../i18n'
 import { useCallback, useMemo, useState, type FormEvent, type KeyboardEvent } from 'react'
 import type { Terminal, TerminalCommand } from '@antumi/protocol'
 import { deleteTerminalCommand, saveTerminalCommand, showError, useCore } from '../core-store'
-import { PRIMARY_KEY_LABEL, hasPrimaryModifier } from '../shortcut-keys'
+import { isShortcut, useShortcutLabel } from '../keyboard-shortcuts'
 import { commandTitle, offeredCommands, terminalProject } from '../terminal-commands'
 import { BookmarkIcon, PencilIcon, PlusIcon } from './icons'
 import { Popover } from './Popover'
@@ -72,6 +72,7 @@ function CommandForm({
   onSaved: () => void
   onCancel: () => void
 }) {
+  const submitKey = useShortcutLabel('submit-form')
   const [label, setLabel] = useState(draft.label)
   const [command, setCommand] = useState(draft.command)
   const [run, setRun] = useState(draft.run)
@@ -96,7 +97,7 @@ function CommandForm({
         value={command}
         onChange={(event) => setCommand(event.target.value)}
         onKeyDown={(event) => {
-          if (event.key === 'Enter' && hasPrimaryModifier(event) && !event.nativeEvent.isComposing) void save()
+          if (!event.repeat && isShortcut('submit-form', event.nativeEvent)) { event.preventDefault(); void save() }
         }}
         placeholder={t('TerminalCommandsMenu.commandEGPnpmDevCore')}
         aria-label={t('chatTools.command')}
@@ -125,7 +126,7 @@ function CommandForm({
       )}
       <div className="terminal-command-actions">
         <button type="button" className="button ghost" onClick={onCancel}>{t('ChatCommandSettings.cancel')}</button>
-        <button type="submit" className="button primary" disabled={!canSave}>{tr('ChatCommandSettings.save', { value1: <kbd>{PRIMARY_KEY_LABEL}↵</kbd> })}</button>
+        <button type="submit" className="button primary" disabled={!canSave}>{tr('ChatCommandSettings.save', { value1: submitKey && <kbd>{submitKey}</kbd> })}</button>
       </div>
     </form>
   )

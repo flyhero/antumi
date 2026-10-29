@@ -1,10 +1,10 @@
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { GitBranch, GitTag } from '@antumi/protocol'
 import { t } from '../i18n'
-import { branchMatch, branchRows, type BranchRow } from '../git-branches'
+import { branchGroupIds, branchMatch, branchRows, type BranchRow } from '../git-branches'
 import { setPreference, usePreferences } from '../preferences'
 import { ContextMenu, MenuCheckboxItem, menuPoint, type MenuPoint } from './ContextMenu'
-import { BranchIcon, CheckIcon, ChevronRightIcon, MoreIcon, StarIcon, TagIcon } from './icons'
+import { BranchIcon, CheckIcon, ChevronRightIcon, CollapseAllIcon, ExpandAllIcon, MoreIcon, StarIcon, TagIcon } from './icons'
 
 function Highlight({ text, query }: { text: string; query: string }) {
   const matches = new Set(branchMatch(text, query) ?? [])
@@ -28,7 +28,9 @@ export function GitBranchTree({ branches, tags, recent, selected, current, direc
   const foldedGroups = usePreferences((s) => s.gitFoldedGroups)
   const tree = useRef<HTMLDivElement>(null)
   const prefix = useId()
-  const folded = useMemo(() => new Set(foldedGroups[directory] ?? []), [foldedGroups, directory])
+  const folded = useMemo(() => new Set(foldedGroups[directory] ?? branchGroupIds({ branches, tags, current, recent, grouped, showRecent, showTags }, 1)), [foldedGroups, directory, branches, tags, current, recent, grouped, showRecent, showTags])
+  const groupIds = useMemo(() => branchGroupIds({ branches, tags, current, recent, grouped, showRecent, showTags }), [branches, tags, current, recent, grouped, showRecent, showTags])
+  const searching = Boolean(query.trim())
   const rows = branchRows({ branches, tags, current, recent, query, favoritesOnly: favoritesOnly && Boolean(toggleFavorite), grouped, showRecent, showTags, folded })
   const menuRow = menu?.row
   const menuBranch = menuRow?.kind === 'branch' ? branches.find((branch) => branch.ref === menuRow.branch.ref) : undefined
@@ -42,6 +44,10 @@ export function GitBranchTree({ branches, tags, recent, selected, current, direc
     if (open ?? !row.open) next.delete(row.id)
     else next.add(row.id)
     setPreference('gitFoldedGroups', { ...foldedGroups, [directory]: [...next] })
+  }
+  const expandAll = (open: boolean) => {
+    setPreference('gitFoldedGroups', { ...foldedGroups, [directory]: open ? [] : groupIds })
+    setActive('')
   }
   const revealMenu = (row: BranchRow, at?: MenuPoint) => {
     if (row.kind !== 'branch' && row.kind !== 'tag') return
@@ -65,6 +71,8 @@ export function GitBranchTree({ branches, tags, recent, selected, current, direc
         onChange={(event) => { setQuery(event.target.value); setActive('') }}
         onKeyDown={(event) => { if (event.key === 'ArrowDown') { event.preventDefault(); setActive(rows[0]?.id ?? ''); tree.current?.focus() } if (event.key === 'Escape') setQuery('') }} />
       {toggleFavorite && <button className="tool-button git-branch-star" aria-label={t('GitInspector.favoritesOnly')} title={t('GitInspector.favoritesOnly')} aria-pressed={favoritesOnly} onClick={() => setFavoritesOnly((value) => !value)}><StarIcon /></button>}
+      <button type="button" className="tool-button" aria-label={t('GitPage.expandAll')} data-tooltip={t(searching ? 'GitPage.searchAutoExpands' : 'GitPage.expandAll')} disabled={searching || groupIds.every((id) => !folded.has(id))} onClick={() => expandAll(true)}><ExpandAllIcon /></button>
+      <button type="button" className="tool-button" aria-label={t('GitPage.collapseAll')} data-tooltip={t(searching ? 'GitPage.searchAutoExpands' : 'GitPage.collapseAll')} disabled={searching || !groupIds.length || groupIds.every((id) => folded.has(id))} onClick={() => expandAll(false)}><CollapseAllIcon /></button>
       <button className="tool-button" aria-label={t('GitPage.viewOptions')} onClick={(event) => setSettings(menuPoint(event))}><MoreIcon /></button>
     </div>
     <div ref={tree} className="git-branch-list" role="tree" aria-label={t('GitInspector.branches')} tabIndex={0} aria-activedescendant={rows.length ? `${prefix}-${activeIndex}` : undefined}
@@ -99,10 +107,9 @@ export function GitBranchTree({ branches, tags, recent, selected, current, direc
             {Boolean(branch.ahead || branch.behind) && <span className="git-branch-track" title={t('GitInspector.aheadBehind', { ahead: branch.ahead ?? 0, behind: branch.behind ?? 0 })}>{Boolean(branch.behind) && <span data-side="behind">↓{branch.behind}</span>}{Boolean(branch.ahead) && <span data-side="ahead">↑{branch.ahead}</span>}</span>}
             {(branch.protected || branch.worktree && branch.name !== current) && <span className="git-branch-badge">{t(branch.protected ? 'GitInspector.task' : 'GitInspector.checkedOut')}</span>}
           </>}
-          {(row.kind === 'branch' || row.kind === 'tag') && <button className="tool-button git-row-actions" tabIndex={-1} aria-label={t('GitInspector.actionsFor', { value1: label })} onClick={(event) => { event.stopPropagation(); revealMenu(row, menuPoint(event)) }}><MoreIcon /></button>}
         </div>
       })}
-      {!rows.some((row) => row.kind === 'branch' || row.kind === 'tag') && <p className="git-message muted">{t('GitInspector.noMatchingBranches')}</p>}
+      {!rows.some((row) => row.kind === 'branch' || row.kind === 'tag' || row.kind === 'group') && <p className="git-message muted">{t('GitInspector.noMatchingBranches')}</p>}
     </div>
     {menu && <ContextMenu at={menu.at} label={t('GitInspector.branchActions')} onClose={closeMenu}>{menuBranch ? actions(menuBranch, closeMenu) : menuTag ? tagActions(menuTag, closeMenu) : null}</ContextMenu>}
     {settings && <ContextMenu at={settings} label={t('GitPage.viewOptions')} onClose={() => setSettings(null)}>

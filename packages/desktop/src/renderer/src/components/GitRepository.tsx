@@ -15,7 +15,7 @@ import { commitSubject, commitWithWrittenMessage, useCanWriteCommitMessage, useW
 import { GitRefLabel, GitRefName } from './GitRefLabel'
 import { ContextMenu, MenuItem, menuPoint, MenuRadioItem, MenuSubmenu, type MenuPoint } from './ContextMenu'
 import { FileDiffView, FileList, useFocusCount } from './Inspector'
-import { BranchIcon, LinkIcon, RefreshIcon, CheckIcon, ClockIcon, CommitIcon, CompareIcon, CopyIcon, DocumentIcon, MergeIcon, PencilIcon, StarIcon, TagIcon, TrashIcon } from './icons'
+import { BranchIcon, LinkIcon, RefreshIcon, CheckIcon, ClockIcon, CloseIcon, CommitIcon, CompareIcon, CopyIcon, DocumentIcon, MergeIcon, PencilIcon, StarIcon, TagIcon, TrashIcon } from './icons'
 import { ChatPicker } from './ChatPicker'
 import { GitPushDialog, GitPushRejectedDialog } from './GitPushDialog'
 import { setPreference, usePreferences } from '../preferences'
@@ -57,7 +57,12 @@ export function GitRepository({ target, updatedAt = 0, refresh = 0 }: { target: 
   const [direct, setDirect] = useState(false)
   const [dialog, setDialog] = useState<DialogChoice | null>(null)
   const [busy, setBusy] = useState(false)
-  const [note, setNote] = useState<string | null>(null)
+  const [note, setNote] = useState<{ message: string; persistent?: boolean } | null>(null)
+  useEffect(() => {
+    if (!note || note.persistent) return
+    const timer = setTimeout(() => setNote(null), 5_000)
+    return () => clearTimeout(timer)
+  }, [note])
   const refreshKey = `${updatedAt}:${refresh}:${revision}:${focus}:${version}`
   const key = `${gitTargetKey(target)}:${refreshKey}:${rpc ? 'connected' : 'disconnected'}`
   const retry = () => setVersion((n) => n + 1)
@@ -85,7 +90,7 @@ export function GitRepository({ target, updatedAt = 0, refresh = 0 }: { target: 
         }
       })
       if (!result) return null
-      setNote(resultNote(action, result, status?.rebase === true))
+      setNote({ message: resultNote(action, result, status?.rebase === true), persistent: result.state === 'conflicts' || result.stash === 'kept' })
       if (action.kind === 'switch' || action.kind === 'detach' || (action.kind === 'create' && action.checkout) || action.kind === 'rename') {
         setSelected('HEAD'); setSelectedCommit(null); setComparison(null)
       }
@@ -103,7 +108,7 @@ export function GitRepository({ target, updatedAt = 0, refresh = 0 }: { target: 
   // The dialog is gone by then: the agent writes the message, and the commit follows behind it.
   const commitWritten = async (push: boolean) => {
     const done = await commitWithWrittenMessage(target, async (message) => (await run({ kind: 'commit', message, push })) || null)
-    if (done) setNote(t('GitInspector.committed', { value1: commitSubject(done.message), value2: push ? t('GitInspector.andPushed') : '' }))
+    if (done) setNote({ message: t('GitInspector.committed', { value1: commitSubject(done.message), value2: push ? t('GitInspector.andPushed') : '' }) })
   }
   const updateSupported = rpc?.features.includes('git-update') ?? false
   // As IntelliJ's Update: the branch checked out asks how once it has diverged; any other just fast-forwards.
@@ -129,14 +134,14 @@ export function GitRepository({ target, updatedAt = 0, refresh = 0 }: { target: 
     })
     if (!pushed) return
     setDialog(null)
-    setNote(t('GitPush.pushed', { target: `${remote}/${name}` }))
+    setNote({ message: t('GitPush.pushed', { target: `${remote}/${name}` }) })
   }
   const updateAndPush = async (method: 'merge' | 'rebase', remote: string, name: string) => {
     setRejected(null)
     if (!currentBranch) return
     const updated = await execute({ kind: 'update', ref: currentBranch.ref, method })
     if (!updated) return
-    if (updated.state === 'conflicts') setNote(t('GitPush.updateStopped'))
+    if (updated.state === 'conflicts') setNote({ message: t('GitPush.updateStopped'), persistent: true })
     else await pushTo(remote, name)
   }
   // Opened on the state as it is now, not as the page last read it: a branch switched elsewhere
@@ -225,7 +230,12 @@ export function GitRepository({ target, updatedAt = 0, refresh = 0 }: { target: 
       {status.taskId && target.kind === 'project' && <p className="git-message muted">{t('GitPage.taskBound')}</p>}
       {status.blocker && <p className="git-message muted" role="status">{status.blocker}</p>}
       {writing && <p className="git-message muted" role="status">{t('ConversationBranches.writingCommitMessageThenCommitting')}</p>}
-      {note && <p className="git-message" role="status">{note}</p>}
+      {note?.persistent && <p className="git-message" role="status">{note.message}</p>}
+      {note && !note.persistent && <div className="toast git-result-toast" role="status" aria-atomic="true">
+        <span className="toast-icon" aria-hidden="true"><CheckIcon /></span>
+        <span className="toast-message">{note.message}</span>
+        <button className="tool-button" aria-label={t('GitPage.dismissResult')} onClick={() => setNote(null)}><CloseIcon /></button>
+      </div>}
       {status.operation && <div className="git-conflicts">
         <strong>{status.operation === 'merge' ? t('GitInspector.mergeIsUnfinished') : status.rebase ? t('GitInspector.rebaseIsUnfinished') : t('GitInspector.anotherGitOperationIsUnfinishedResolveItIn')}</strong>
         {status.conflicts.map((file) => <ConflictRow key={file} target={target} directory={status.directory} file={file} disabled={disabled} resolve={() => void run({ kind: 'resolve', file })} />)}
@@ -311,7 +321,7 @@ function History({ target, gitRef, query, refreshKey, remotes, selected, pick, a
       {/* Each row as wide as its own lanes, as IDEA's log: a busy stretch does not push every subject right. */}
       <svg className="git-graph" width={Math.max(16, graph[index]?.width ?? 0)} height="32" aria-hidden="true">{graph[index]?.paths.map((path, i) => <path key={i} d={path.d} data-color={path.color} />)}<circle cx={8 + (graph[index]?.lane ?? 0) * 12} cy="16" r="3" data-color={graph[index]?.color} /></svg>
       <span className="git-commit-subject"><GitRefLabel refs={commitRefs(commit.refs, remotes)} />{commit.subject}</span>
-      <span className="git-commit-author muted">{commit.author}</span><span className="git-commit-date muted">{new Date(commit.date).toLocaleDateString(getLocale())}</span>
+      <span className="git-commit-author muted" title={commit.author}>{commit.author}</span><time className="git-commit-date muted" dateTime={commit.date} title={new Date(commit.date).toLocaleString(getLocale())}>{new Date(commit.date).toLocaleDateString(getLocale())}</time>
     </button>)}
     {!busy && history?.commits.length === 0 && <p className="git-message muted">{t('GitInspector.noMatchingCommits')}</p>}
     {busy && <p className="git-message muted">{t('GitInspector.loadingHistory')}</p>}

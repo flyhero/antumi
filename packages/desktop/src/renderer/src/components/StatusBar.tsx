@@ -6,7 +6,7 @@ import { formatBytes, worktreeRows, worktreeSummary } from '../worktree-groups'
 import { useWorktrees } from '../worktree-store'
 import { useShortcutLabel } from '../keyboard-shortcuts'
 import { usePanelShortcut } from '../panel-shortcuts'
-import { BoltIcon, BookIcon, BranchIcon, ChatIcon, CheckIcon, ClockIcon, CoffeeIcon, FolderIcon, GearIcon, GlobeIcon, HelpIcon, PortsIcon, PulseIcon, TerminalIcon } from './icons'
+import { BoltIcon, BookIcon, WorktreeIcon, ChatIcon, CheckIcon, ClockIcon, CoffeeIcon, FolderIcon, GearIcon, GlobeIcon, HelpIcon, PortsIcon, PulseIcon, TerminalIcon } from './icons'
 import { usePorts } from '../port-state'
 import { UsageBar } from './UsageBar'
 import { openRuns } from '../schedules'
@@ -229,7 +229,7 @@ function WorktreeButton() {
       data-tooltip-side="top-end"
       onClick={() => setWorktreesOpen(!open)}
     >
-      <BranchIcon />
+      <WorktreeIcon />
       <span>{tr('StatusBar.worktrees', { count: count, value2: bytes > 0 ? ` · ${formatBytes(bytes)}` : '' })}</span>
       {cleanable > 0 && <span className="statusbar-worktrees-cleanable">{tr('StatusBar.cleanable', { cleanable: cleanable })}</span>}
     </button>

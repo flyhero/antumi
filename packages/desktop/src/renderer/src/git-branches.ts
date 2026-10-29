@@ -47,10 +47,12 @@ export type BranchRow = { id: string; depth: number; parent?: string } & (
   | { kind: 'filter'; ref: 'HEAD' | 'all' }
 )
 
-export function branchRows(options: {
+type BranchTreeOptions = {
   branches: readonly GitBranch[]; tags: readonly GitTag[]; current: string | null; recent: readonly string[];
   query: string; favoritesOnly: boolean; grouped: boolean; showRecent: boolean; showTags: boolean; folded: ReadonlySet<string>
-}): BranchRow[] {
+}
+
+export function branchRows(options: BranchTreeOptions): BranchRow[] {
   const { current, query, folded } = options
   const rows: BranchRow[] = query.trim() || options.favoritesOnly ? [] : [{ id: 'HEAD', kind: 'filter', ref: 'HEAD', depth: 0 }, { id: 'all', kind: 'filter', ref: 'all', depth: 0 }]
   const branches = options.branches.filter((branch) => (!options.favoritesOnly || branch.favorite) && branchMatch(`${branch.remote ? `${branch.remote}/` : ''}${branch.name}`, query) !== null)
@@ -87,4 +89,9 @@ export function branchRows(options: {
     for (const tag of tags) rows.push({ id: tag.ref, kind: 'tag', tag, label: tag.name, parent: 'tags', depth: 1 })
   }
   return rows
+}
+
+// Include descendants hidden by collapsed parents, independently of search and favorites.
+export function branchGroupIds(options: Omit<BranchTreeOptions, 'query' | 'favoritesOnly' | 'folded'>, minDepth = 0): string[] {
+  return branchRows({ ...options, query: '', favoritesOnly: false, folded: new Set() }).flatMap((row) => row.kind === 'group' && row.depth >= minDepth ? [row.id] : [])
 }

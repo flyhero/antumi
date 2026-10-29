@@ -9424,17 +9424,19 @@ summary.agent-group-head:focus-visible { outline: 2px solid var(--focus); outlin
 .git-tree-count { color: var(--text-3); font-variant-numeric: tabular-nums; padding-right: 4px; }
 .git-group-chevron { display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; flex-shrink: 0; }
 .git-group-chevron[data-open] { transform: rotate(90deg); }
-.git-row-actions { position: absolute; right: 4px; background: var(--surface); width: 24px; height: 24px; flex-shrink: 0; opacity: 0; }
-.git-branch-row:hover .git-row-actions, .git-branch-row[data-active] .git-row-actions, .git-branch-row:focus-within .git-row-actions { opacity: 1; }
-.git-history-columns { display: none; position: sticky; top: 0; z-index: 1; gap: 8px; padding: 4px 8px; color: var(--text-3); background: var(--surface); border-bottom: 1px solid var(--border); font-size: var(--chat-font-small, 12px); }
+.git-history-columns { display: flex; position: sticky; top: 0; z-index: 1; gap: 8px; padding: 4px 8px; color: var(--text-3); background: var(--surface); border-bottom: 1px solid var(--border); font-size: var(--chat-font-small, 12px); }
 .git-summary > .mono { font-weight: 600; }
 .git-details .git-commit-message { line-height: 1.7; }
 
 /* Git keeps each pane's scrolling independent, including in the narrow inspector. */
 .inspector-body:has(> .git-manager) { display: flex; padding: 0; overflow: hidden; }
-.git-manager { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; container: git / inline-size; font-size: var(--chat-font-size, 14px); }
+.git-manager { position: relative; display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; container: git / inline-size; font-size: var(--chat-font-size, 14px); }
+.git-result-toast { position: absolute; left: 50%; bottom: 16px; max-width: calc(100% - 32px); font-size: var(--chat-font-small, 12px); pointer-events: auto; }
+.git-result-toast .toast-icon { color: var(--status-done); }
+.git-result-toast > .tool-button { flex-shrink: 0; width: 24px; height: 24px; }
 .git-project-bar, .git-toolbar, .git-summary { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 8px 12px; flex-shrink: 0; }
 .git-project-bar { border-bottom: 1px solid var(--border); flex-wrap: nowrap; }
+.git-project-bar :is(.chat-picker, .button) { font-size: var(--chat-font-small, 12px); }
 .git-project-bar .chat-picker { flex: 1; max-width: none; }
 .git-summary { gap: 4px 8px; font-size: var(--chat-font-small, 12px); }
 .git-summary > .mono { overflow: hidden; text-overflow: ellipsis; }
@@ -9457,7 +9459,7 @@ summary.agent-group-head:focus-visible { outline: 2px solid var(--focus); outlin
 .git-branch-row svg { width: 12px; height: 12px; flex-shrink: 0; }
 .git-branch-star { flex-shrink: 0; border-radius: var(--radius-xs); }
 .git-branch-row > .git-branch-star { width: 24px; height: 24px; }
-.git-branch-star[aria-pressed='true'] { color: var(--text); }
+.git-branch-star[aria-pressed='true'] { color: var(--warning); }
 .git-branch-star[aria-pressed='true'] svg { fill: currentColor; }
 .git-branch-row > .git-branch-star[aria-pressed='false']:not(:focus-visible) svg { opacity: 0; }
 .git-branch-row:hover > .git-branch-star[aria-pressed='false'] svg, .git-branch-row:focus-within > .git-branch-star[aria-pressed='false'] svg { opacity: 1; }
@@ -9517,7 +9519,7 @@ summary.agent-group-head:focus-visible { outline: 2px solid var(--focus); outlin
 .git-graph path { fill: none; stroke: var(--graph-line, currentColor); stroke-width: 1.5; }
 .git-graph circle { fill: var(--surface); stroke: var(--graph-line, currentColor); stroke-width: 1.5; }
 .git-commit-row[data-selected] .git-graph circle { stroke: var(--accent); }
-.git-commit-subject { flex: 1; min-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.git-commit-subject { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* A commit's branches and tags: the first and how many more in its row, all of them on hover and
    under its detail, coloured by kind as IDEA's log is. */
 .git-ref-label { display: inline-flex; align-items: center; gap: 4px; max-width: 50%; margin-right: 6px; vertical-align: middle; }
@@ -9531,7 +9533,8 @@ summary.agent-group-head:focus-visible { outline: 2px solid var(--focus); outlin
 .git-ref-more { flex-shrink: 0; padding: 0 4px; border-radius: var(--radius-xs); background: var(--fill); color: var(--text-muted); }
 .git-ref-list { display: grid; gap: 6px; margin: 0; padding: 4px 6px; list-style: none; font-size: var(--chat-font-small, 12px); }
 .git-commit-branches { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 0 12px 8px; font-size: var(--chat-font-small, 12px); }
-.git-commit-author, .git-commit-date { display: none; }
+.git-commit-author { flex: 0 0 clamp(48px, 18cqw, 96px); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.git-commit-date { flex: 0 0 64px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .git-load-more { margin: 8px; }
 .git-details { display: none; min-width: 0; min-height: 0; overflow: auto; }
 .git-layout[data-detail] .git-details { display: block; flex: 1; }
@@ -9553,11 +9556,6 @@ summary.agent-group-head:focus-visible { outline: 2px solid var(--focus); outlin
 .git-dialog label { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .git-dialog label > .input { flex: 1; min-width: 0; }
 .git-dialog p { overflow-wrap: anywhere; }
-@container history (min-width: 560px) {
-  .git-commit-author { display: block; flex: 0 0 96px; max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .git-commit-date { display: block; flex: 0 0 88px; }
-  .git-history-columns { display: flex; }
-}
 @container git (min-width: 960px) {
   .git-layout, .git-layout[data-detail] { display: grid; grid-template-columns: minmax(160px, min(var(--git-branch-width), 28%)) 4px minmax(260px, 1fr) 4px minmax(240px, min(var(--git-detail-width), 36%)); }
   .git-pane-divider { display: block; }

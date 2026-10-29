@@ -113,6 +113,14 @@ export function RestoreIcon() {
   )
 }
 
+export function ExpandAllIcon() {
+  return <svg {...stroked}><path d="m6 6 4-4 4 4M6 14l4 4 4-4M4 10h12" /></svg>
+}
+
+export function CollapseAllIcon() {
+  return <svg {...stroked}><path d="m6 3 4 4 4-4M6 17l4-4 4 4M4 10h12" /></svg>
+}
+
 export function ChevronDownIcon() {
   return (
     <svg {...stroked}>
@@ -781,6 +789,27 @@ export function TagIcon() {
     <svg {...stroked}>
       <path d="M3.5 3.5h6.2l6.8 6.8-6.2 6.2-6.8-6.8z" />
       <circle cx="7.2" cy="7.2" r="1.2" />
+    </svg>
+  )
+}
+
+export function GitIcon() {
+  return (
+    <svg {...stroked}>
+      <path d="M10 1.7 18.3 10 10 18.3 1.7 10Z" />
+      <circle cx="8" cy="6.5" r="1.1" />
+      <circle cx="8" cy="13.5" r="1.1" />
+      <circle cx="12.5" cy="10" r="1.1" />
+      <path d="M8 7.6v4.8M8.9 7.2l2.7 2.1" />
+    </svg>
+  )
+}
+
+export function WorktreeIcon() {
+  return (
+    <svg {...stroked}>
+      <path d="M3 3.5V15a1 1 0 0 0 1 1h3.5M3 7h4.5" />
+      <path d="M7.5 4h3l1.3 1.5h4.7V10h-9ZM7.5 12h3l1.3 1.5h4.7V18h-9Z" />
     </svg>
   )
 }

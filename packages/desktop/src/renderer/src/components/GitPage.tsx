@@ -7,14 +7,14 @@ import { setPreference, usePreferences } from '../preferences'
 import { ChatPicker } from './ChatPicker'
 import { GitRepository } from './GitRepository'
 import { useFocusCount } from './Inspector'
-import { BranchIcon, CloseIcon, FolderIcon, RefreshIcon } from './icons'
+import { GitIcon, CloseIcon, FolderIcon, RefreshIcon } from './icons'
 import { projectName } from './ProjectPicker'
 
 export function GitEntry() {
   const supported = useCore((s) => s.rpc?.features.includes('git-projects'))
   const open = useCore((s) => s.gitOpen)
   if (!supported) return null
-  return <button className="inbox-entry" aria-current={open} onClick={() => openGit()}><BranchIcon /><span>Git</span></button>
+  return <button className="inbox-entry" aria-current={open} onClick={() => openGit()}><GitIcon /><span>Git</span></button>
 }
 
 export function GitPage() {
@@ -67,7 +67,7 @@ export function GitPage() {
   const chat = current?.conversationIds.map((id) => conversations[id]).find(Boolean)
   return <section className="git-page">
     <header className="git-page-header">
-      <h1><BranchIcon /> Git</h1>
+      <h1><GitIcon /> Git</h1>
       <button className="tool-button" aria-label={t('GitPage.close')} onClick={openOverview}><CloseIcon /></button>
     </header>
     <div className="git-project-bar git-page-projects">
@@ -87,7 +87,7 @@ export function GitPage() {
     {project && !active && <p className="git-message" role="alert">{t('GitPage.workspaceGone')}</p>}
     {error && <p className="git-message" role="alert">{error} <button className="button" onClick={() => setRetry((value) => value + 1)}>{t('ChatContextMenu.retry')}</button></p>}
     {!rpc?.features.includes('git-projects') ? <p className="inspector-empty muted">{t('GitPage.unsupported')}</p>
-      : !selected ? <div className="git-page-empty"><BranchIcon /><strong>{t('GitPage.emptyTitle')}</strong><p>{t('GitPage.emptyDescription')}</p></div>
+      : !selected ? <div className="git-page-empty"><GitIcon /><strong>{t('GitPage.emptyTitle')}</strong><p>{t('GitPage.emptyDescription')}</p></div>
         : !project && !error ? <p className="git-message muted">{t('GitInspector.loadingProject')}</p>
           : active && !error && <div className="git-manager"><GitRepository key={active} target={{ kind: 'project', project: active }} refresh={retry} /></div>}
   </section>

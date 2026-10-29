@@ -81,18 +81,32 @@ export function shortcutConflict(settings: ShortcutSettings, platform: ShortcutP
     && bindings.some((binding) => shortcutBindings(settings, platform, other).some((key) => sameShortcut(binding, key)))) ?? null
 }
 
+// What each system keeps for itself under the primary modifier (⌘ on macOS, Ctrl elsewhere),
+// alone, with Shift and with Alt, and, on macOS, under ⌃ alone, which its text fields read as
+// Emacs editing. The terminal leaves Ctrl+letter to the shell by itself (usePanelShortcuts).
+const RESERVED = {
+  darwin: { primary: 'acdhklmoqruvwxyz', primaryShift: 'acdiklrvwz/', primaryAlt: 'cdhijmw', control: 'abdefhklnoptvy' },
+  // Ctrl is the editing modifier here: select, copy, cut, paste, undo and redo, and the window's
+  // close, minimize, reload and quit, with copy and paste in terminals and the developer tools.
+  other: { primary: 'acmqrvwxyz', primaryShift: 'cirvwz', primaryAlt: '', control: '' }
+} as const
+
 export function reservedActionShortcut(action: ShortcutAction, binding: ShortcutBinding, platform: ShortcutPlatform): boolean {
   if (SHORTCUTS[action].defaults(platform).some((key) => sameShortcut(key, binding))) return false
   const { key, ctrl, meta, alt, shift } = binding
-  if ((ctrl && meta) || (platform !== 'darwin' && (meta || (ctrl && alt)))) return true
+  const mac = platform === 'darwin'
+  // Elsewhere the Windows or Super key is the system's, and Ctrl+Alt is AltGr, which types.
+  if (mac ? ctrl && meta : meta || (ctrl && alt)) return true
   if (key === 'Escape' || key === 'Tab' || ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown', 'Backspace', 'Delete'].includes(key)) return true
   if (!ctrl && !meta) return alt || !(SHORTCUTS[action].scope === 'board' && /^[a-z]$/.test(key)) && !/^F([1-3]|[6-9]|10)$/.test(key)
-  if (ctrl && !meta && key !== 'Backquote' && /^[a-z]$/.test(key) && (!shift || ['c', 'v', 'i'].includes(key))) return true
-  if (meta && (key === 'Backquote' || (shift && ['3', '4', '5', '6', 'q'].includes(key)))) return true
   if (['=', '+', '-', '0', 'F4', 'F5', 'F11', 'F12'].includes(key)) return true
-  if (!alt && !shift && ['a', 'c', 'd', 'h', 'k', 'l', 'm', 'o', 'q', 'r', 'u', 'v', 'w', 'x', 'y', 'z'].includes(key)) return true
-  if (!alt && shift && ['a', 'c', 'd', 'i', 'k', 'l', 'r', 'v', 'w', 'z', '/'].includes(key)) return true
-  return alt && ['c', 'd', 'h', 'i', 'j', 'm', 'w'].includes(key)
+  const reserved = RESERVED[mac ? 'darwin' : 'other']
+  const among = (keys: string) => key.length === 1 && keys.includes(key)
+  if (mac && ctrl) return !shift && among(reserved.control)
+  // Switching windows, screenshots and logging out.
+  if (mac && (key === 'Backquote' || (shift && among('3456q')))) return true
+  if (alt) return among(reserved.primaryAlt)
+  return among(shift ? reserved.primaryShift : reserved.primary)
 }
 
 export function matchesShortcut(action: ShortcutAction, input: ShortcutInput, settings: ShortcutSettings, platform: ShortcutPlatform): boolean {

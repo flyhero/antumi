@@ -60,6 +60,24 @@ describe.each(platforms)('application shortcuts on %s', (platform) => {
   })
 })
 
+it('reserves each system its own keys, and only those', () => {
+  const key = (k: string, mods: Partial<ShortcutBinding>): ShortcutBinding => ({ key: k, ctrl: false, meta: false, alt: false, shift: false, ...mods })
+  const reserved = (platform: ShortcutPlatform, binding: ShortcutBinding) => reservedActionShortcut('new-task', binding, platform)
+  for (const platform of ['win32', 'linux'] as const) {
+    for (const k of ['e', 'j', 't', 'k']) expect(reserved(platform, key(k, { ctrl: true })), `Ctrl+${k}`).toBe(false)
+    expect(reserved(platform, key('a', { ctrl: true, shift: true }))).toBe(false)
+    for (const k of ['m', 'r', 'w', 'q']) expect(reserved(platform, key(k, { ctrl: true })), `Ctrl+${k}`).toBe(true)
+    for (const k of ['c', 'i']) expect(reserved(platform, key(k, { ctrl: true, shift: true })), `Ctrl+Shift+${k}`).toBe(true)
+    expect(reserved(platform, key('3', { ctrl: true, shift: true }))).toBe(false)
+  }
+  for (const k of ['a', 'e', 'k']) expect(reserved('darwin', key(k, { ctrl: true })), `⌃${k}`).toBe(true)
+  for (const k of ['j', 'g', 'r']) expect(reserved('darwin', key(k, { ctrl: true })), `⌃${k}`).toBe(false)
+  expect(reserved('darwin', key('h', { meta: true }))).toBe(true)
+  expect(reserved('darwin', key('3', { meta: true, shift: true }))).toBe(true)
+  expect(reserved('darwin', key('Backquote', { meta: true }))).toBe(true)
+  expect(reserved('darwin', key('j', { meta: true }))).toBe(false)
+})
+
 it('uses exact modifiers for send, steer and send to a new conversation', () => {
   const settings: ShortcutSettings = { version: 1 }
   const steer = SHORTCUTS['steer-message'].defaults('darwin')[0]!

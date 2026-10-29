@@ -38,6 +38,7 @@ contextBridge.exposeInMainWorld('antumi', {
   browserHomepage: (): Promise<unknown> => ipcRenderer.invoke('antumi:browser-homepage'),
   browserBounds: (bounds: { x: number; y: number; width: number; height: number }): void => ipcRenderer.send('antumi:browser-bounds', bounds),
   browserOccluded: (occluded: boolean): Promise<unknown> => ipcRenderer.invoke('antumi:browser-occluded', occluded),
+  syncPanelShortcuts: (settings: unknown): void => ipcRenderer.send('antumi:panel-shortcuts', settings),
   bookmarkSources: (): Promise<unknown> => ipcRenderer.invoke('antumi:bookmark-sources'),
   readBookmarks: (id: string): Promise<unknown> => ipcRenderer.invoke('antumi:bookmark-read', id),
   pickBookmarksFile: (): Promise<unknown> => ipcRenderer.invoke('antumi:bookmark-pick-html'),

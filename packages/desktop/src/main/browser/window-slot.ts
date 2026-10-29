@@ -1,6 +1,7 @@
 import type { BrowserWindow, Rectangle, WebContentsView } from 'electron'
 import type { BrowserViewport } from '@antumi/protocol'
 import { fitViewport } from './viewport'
+import type { PanelShortcutSettings } from '../../shared/panel-shortcuts'
 
 // Where the one tab on show sits: in the window, over the panel's rectangle. The renderer says
 // which tab and where; a dialog or menu over the panel takes the view down meanwhile (occluded),
@@ -11,6 +12,15 @@ export class WindowSlot {
   private shown: { tabId: string; view: WebContentsView; viewport: BrowserViewport | null } | null = null
   private bounds: Rectangle | null = null
   private occluded = false
+  private panelShortcuts: PanelShortcutSettings = { version: 1 }
+
+  setPanelShortcuts(settings: PanelShortcutSettings): void {
+    this.panelShortcuts = settings
+  }
+
+  getPanelShortcuts(): PanelShortcutSettings {
+    return this.panelShortcuts
+  }
 
   attachWindow(window: BrowserWindow): void {
     if (this.window === window) return

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { perform, setFileQuickOpen, setFilesMaximized, showFilesPanel, toggleFilesPanel, useCore, useFilesContextScope, useFilesScope } from '../core-store'
 import { fileScopeKey, type FileScope } from '../file-tabs'
 import { PRIMARY_KEY_LABEL } from '../shortcut-keys'
+import { usePanelShortcut } from '../panel-shortcuts'
 import { useProjectHeads } from './BranchStatus'
 import { ChatPicker, type PickerOption } from './ChatPicker'
 import { FileEditor } from './FileEditor'
@@ -21,6 +22,7 @@ function useScopeBranch(scope: FileScope | null, updatedAt: number): string | nu
 
 // The files of what the user looks at, or of a project they pick here: the dock's 文件.
 export function FilesPanel() {
+  const shortcut = usePanelShortcut('toggle-files')
   const maximized = useCore((s) => s.filesMaximized)
   const contextScope = useFilesContextScope()
   const scope = useFilesScope()
@@ -54,7 +56,7 @@ export function FilesPanel() {
         </div>
         {readable && scope.roots.length > 0 && <button type="button" className="tool-button" aria-label={t('FilesPanel.goToFile')} data-tooltip={`${t('FilesPanel.goToFile')} ${PRIMARY_KEY_LABEL}P`} onClick={() => setFileQuickOpen(true)}><SearchIcon /></button>}
         <button type="button" className="tool-button" aria-label={maximized ? t('BrowserSidePanel.restore') : t('BrowserSidePanel.maximize')} data-tooltip={maximized ? t('BrowserSidePanel.restore') : t('BrowserSidePanel.maximize')} onClick={() => setFilesMaximized(!maximized)}>{maximized ? <RestoreIcon /> : <MaximizeIcon />}</button>
-        <button type="button" className="tool-button" aria-label={t('FilesPanel.hideFiles')} data-tooltip={t('FilesPanel.hideFiles')} onClick={toggleFilesPanel}><CloseIcon /></button>
+        <button type="button" className="tool-button" aria-label={t('FilesPanel.hideFiles')} data-tooltip={[t('FilesPanel.hideFiles'), shortcut].filter(Boolean).join(' ')} onClick={toggleFilesPanel}><CloseIcon /></button>
       </header>
       <div className="files-panel-body">
         {readable

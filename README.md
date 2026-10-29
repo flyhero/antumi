@@ -229,6 +229,8 @@ pnpm dist:linux   # 产物在 packages/desktop/dist/Antumi-<版本>-x86_64.AppIm
 | <kbd>Tab</kbd> 或 <kbd>→</kbd> | 采用 Claude Code 预测的下一句 |
 | <kbd>Esc</kbd> | 中断当前回合；在任务页里回到看板 |
 
+文件栏、终端栏和浏览器栏的开关可在「设置 → 快捷键」中修改、禁用或恢复默认，修改后立即生效，重启后保留。面板按钮的提示显示当前绑定；浏览器或终端获得焦点后也使用相同按键。
+
 </details>
 
 ## 本地优先，安全优先

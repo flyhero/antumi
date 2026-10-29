@@ -1,8 +1,7 @@
 import { AgentsView } from './components/AgentProfiles'
 import { t, useLocale } from './i18n'
-import { onBrowserShortcut } from './desktop-bridge'
 import { useEffect } from 'react'
-import { focusSplitPane, selectTask, setFileQuickOpen, setNewTaskOpen, setSettingsOpen, toggleBrowserPanel, toggleFilesPanel, toggleSplit, toggleTerminalPanel, useCore, useSplitPanes } from './core-store'
+import { focusSplitPane, selectTask, setFileQuickOpen, setNewTaskOpen, setSettingsOpen, toggleSplit, useCore, useSplitPanes } from './core-store'
 import { NewTaskDialog } from './components/NewTaskDialog'
 import { SettingsPage } from './components/SettingsPage'
 import { SourceInboxView } from './components/SourceInboxView'
@@ -42,6 +41,7 @@ import { usePreferences } from './preferences'
 import { usePortPolling } from './port-state'
 import { useUpdateFeed } from './update-state'
 import { AppPet } from './components/AppPet'
+import { recordingPanelShortcut, usePanelShortcuts } from './panel-shortcuts'
 
 // Esc goes from a task back to the board, unless it is meant for what has the focus:
 // typing (the composer interrupts the agent with it), a terminal, or a menu or dialog, which close first.
@@ -58,6 +58,7 @@ function inTerminal(event: KeyboardEvent): boolean {
 }
 
 export function App() {
+  usePanelShortcuts()
   useLocale((state) => state.locale)
   usePortPolling()
   useUpdateFeed()
@@ -105,6 +106,7 @@ export function App() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.isComposing || event.keyCode === 229 || event.repeat || recordingPanelShortcut()) return
       const plain = hasPrimaryModifier(event) && !event.shiftKey && !event.altKey
       if (plain && event.key.toLowerCase() === 'n') {
         event.preventDefault()
@@ -113,9 +115,6 @@ export function App() {
         // ⌘P as in VS Code; Ctrl+P inside a shell is its own (previous command).
         event.preventDefault()
         if (!useCore.getState().settingsOpen) setFileQuickOpen(true)
-      } else if (hasPrimaryModifier(event) && event.shiftKey && !event.altKey && event.key.toLowerCase() === 'e') {
-        event.preventDefault()
-        toggleFilesPanel()
       } else if (plain && event.key === ',') {
         event.preventDefault()
         setSettingsOpen(!useCore.getState().settingsOpen)
@@ -133,32 +132,6 @@ export function App() {
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [])
-
-  // Ctrl+` everywhere, as in VS Code. Caught before the focused terminal sees it, which would
-  // otherwise send the shell a NUL.
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && event.key === '`') {
-        event.preventDefault()
-        event.stopPropagation()
-        void toggleTerminalPanel()
-      } else if (event.ctrlKey && !event.metaKey && !event.altKey && event.shiftKey && event.key === '~') {
-        // Ctrl+Shift+` beside it, for the browser panel.
-        event.preventDefault()
-        event.stopPropagation()
-        toggleBrowserPanel()
-      }
-    }
-    window.addEventListener('keydown', onKeyDown, true)
-    return () => window.removeEventListener('keydown', onKeyDown, true)
-  }, [])
-
-  // The same shortcuts pressed while a browser tab has the keyboard: the page's view sees them,
-  // not this window, so main passes them on.
-  useEffect(() => onBrowserShortcut((kind) => {
-    if (kind === 'toggle-browser') toggleBrowserPanel()
-    else setSettingsOpen(!useCore.getState().settingsOpen)
-  }), [])
 
   // Files dragged anywhere but a drop target are swallowed here rather than opened by the window.
   useEffect(() => {

@@ -63,6 +63,7 @@ import { useOccludesBrowser } from '../browser-occlusion'
 import { UpdateSettings } from './UpdateNotice'
 import { PetSettings } from './PetSettings'
 import { AppearanceSettings } from './AppearanceSettings'
+import { KeyboardShortcutSettings } from './KeyboardShortcutSettings'
 import './settings-page.css'
 
 function NotificationSettings() {
@@ -516,6 +517,16 @@ type Section = {
 }
 
 const SECTIONS: readonly Section[] = localized(() => ([
+  {
+    id: 'keyboard-shortcuts',
+    group: t('SettingsPage.interface'),
+    title: t('KeyboardShortcuts.title'),
+    description: t('KeyboardShortcuts.description'),
+    keywords: ['keyboard', 'shortcut', 'hotkey', '快捷键', '键盘', '文件栏', '终端栏', '浏览器栏', 'Ctrl', 'Command', t('KeyboardShortcuts.files'), t('KeyboardShortcuts.terminal'), t('KeyboardShortcuts.browser')],
+    Icon: BoltIcon,
+    Body: KeyboardShortcutSettings,
+    grouped: true
+  },
   {
     id: 'appearance',
     group: t('SettingsPage.interface'),

@@ -7,6 +7,7 @@ import { AgentIcon, CloseIcon, MaximizeIcon, PlusIcon, QuoteIcon, RestoreIcon } 
 import { SessionTerminal } from './SessionTerminal'
 import { TerminalCommandsButton } from './TerminalCommandsMenu'
 import { terminalSelection } from './terminal-surface'
+import { usePanelShortcut } from '../panel-shortcuts'
 
 // Where a passage of the terminal goes: the conversation whose agent runs it, else the chat the
 // user has open, a task's included.
@@ -77,6 +78,7 @@ function tabTitle(terminal: Terminal, owner: string | null): string {
 // The dock puts them below the browser when both are open. Hiding the panel leaves them running in
 // the daemon; closing a tab ends what runs in it.
 export function TerminalPanel() {
+  const shortcut = usePanelShortcut('toggle-terminal')
   const terminals = useCore((s) => s.terminals)
   const activeId = useCore((s) => s.activeTerminalId)
   const maximized = useCore((s) => s.terminalMaximized)
@@ -119,7 +121,7 @@ export function TerminalPanel() {
         >
           {maximized ? <RestoreIcon /> : <MaximizeIcon />}
         </button>
-        <button type="button" className="tool-button" aria-label={t('TerminalPanel.hideTerminal')} data-tooltip={t('TerminalPanel.hideTerminalKeepsRunning')} onClick={() => void toggleTerminalPanel()}>
+        <button type="button" className="tool-button" aria-label={t('TerminalPanel.hideTerminal')} data-tooltip={[t('TerminalPanel.hideTerminalKeepsRunning'), shortcut].filter(Boolean).join(' ')} onClick={() => void toggleTerminalPanel()}>
           <CloseIcon />
         </button>
       </header>

@@ -5,7 +5,8 @@ import { ALL_TABS, useBrowserTabs } from '../browser-state'
 import { formatBytes, worktreeRows, worktreeSummary } from '../worktree-groups'
 import { useWorktrees } from '../worktree-store'
 import { PRIMARY_KEY_LABEL } from '../shortcut-keys'
-import { BookIcon, BranchIcon, ChatIcon, CheckIcon, ClockIcon, CoffeeIcon, FolderIcon, GearIcon, GlobeIcon, HelpIcon, PortsIcon, PulseIcon, TerminalIcon } from './icons'
+import { usePanelShortcut } from '../panel-shortcuts'
+import { BoltIcon, BookIcon, BranchIcon, ChatIcon, CheckIcon, ClockIcon, CoffeeIcon, FolderIcon, GearIcon, GlobeIcon, HelpIcon, PortsIcon, PulseIcon, TerminalIcon } from './icons'
 import { usePorts } from '../port-state'
 import { UsageBar } from './UsageBar'
 import { openRuns } from '../schedules'
@@ -86,6 +87,7 @@ function HelpButton() {
       {at && <ContextMenu at={at} above trigger={trigger.current} label={t('StatusBar.help')} onClose={() => setAt(null)}>
         <MenuItem icon={<BookIcon />} label={t('GuideView.guide')} onSelect={() => select(openGuide)} />
         <MenuItem icon={<PulseIcon />} label={t('SetupGuide.title')} onSelect={() => select(openSetup)} />
+        <MenuItem icon={<BoltIcon />} label={t('KeyboardShortcuts.title')} onSelect={() => select(() => setSettingsOpen(true, 'keyboard-shortcuts'))} />
         <div className="menu-separator" role="separator" />
         {/* The icon its Settings section shows. */}
         <MenuItem icon={<ChatIcon />} label={t('SupportSettings.title')} onSelect={() => select(() => setSettingsOpen(true, 'support'))} />
@@ -97,6 +99,7 @@ function HelpButton() {
 // The browser panel, on a core that hosts one; keep the latest known tab count visible while the
 // panel is closed, as terminals do.
 function BrowserButton() {
+  const shortcut = usePanelShortcut('toggle-browser')
   const supported = useBrowserSupported()
   const open = useCore((s) => s.browserPanelOpen)
   const count = useBrowserTabs((s) => s[ALL_TABS]?.tabs.length ?? 0)
@@ -107,7 +110,7 @@ function BrowserButton() {
       className="tool-button statusbar-browser"
       aria-label={t('BrowserSidePanel.browser')}
       aria-pressed={open}
-      data-tooltip={open ? t('StatusBar.hideBrowserCtrlShift') : t('StatusBar.browserCtrlShift')}
+      data-tooltip={[open ? t('BrowserSidePanel.hideBrowser') : t('BrowserSidePanel.browser'), shortcut].filter(Boolean).join(' ')}
       data-tooltip-side="top-end"
       onClick={toggleBrowserPanel}
     >
@@ -118,6 +121,7 @@ function BrowserButton() {
 }
 
 function FilesButton() {
+  const shortcut = usePanelShortcut('toggle-files')
   const open = useCore((s) => s.filesPanelOpen)
   return (
     <button
@@ -125,7 +129,7 @@ function FilesButton() {
       className="tool-button statusbar-files"
       aria-label={t('FilesPanel.files')}
       aria-pressed={open}
-      data-tooltip={`${open ? t('FilesPanel.hideFiles') : t('FilesPanel.files')} ${PRIMARY_KEY_LABEL}⇧E`}
+      data-tooltip={[open ? t('FilesPanel.hideFiles') : t('FilesPanel.files'), shortcut].filter(Boolean).join(' ')}
       data-tooltip-side="top-end"
       onClick={toggleFilesPanel}
     >
@@ -135,6 +139,7 @@ function FilesButton() {
 }
 
 function TerminalButton() {
+  const shortcut = usePanelShortcut('toggle-terminal')
   const open = useCore((s) => s.terminalPanelOpen)
   const count = useCore((s) => s.terminals.length)
   return (
@@ -143,7 +148,7 @@ function TerminalButton() {
       className="tool-button statusbar-terminal"
       aria-label={t('SettingsPage.terminal')}
       aria-pressed={open}
-      data-tooltip={open ? t('StatusBar.hideTerminalCtrl') : t('StatusBar.terminalCtrl')}
+      data-tooltip={[open ? t('TerminalPanel.hideTerminal') : t('SettingsPage.terminal'), shortcut].filter(Boolean).join(' ')}
       data-tooltip-side="top-end"
       onClick={() => void toggleTerminalPanel()}
     >

@@ -1,6 +1,6 @@
 import { mkdir, rm } from 'node:fs/promises'
 import path from 'node:path'
-import { session, WebContentsView, type WebContents } from 'electron'
+import { session, WebContentsView } from 'electron'
 import { chromium } from 'playwright-core'
 import { BROWSER_HOST_PROTOCOL_VERSION, writePrivateJson, type BrowserHostResult } from '@antumi/protocol/node'
 import { BROWSER_VIEWPORT, normalizeBrowserUrl, type BrowserNavigateTo, type BrowserStatus, type BrowserViewport } from '@antumi/protocol'
@@ -13,6 +13,7 @@ import { TabRegistry, type Tab } from './tabs'
 import { chromeUserAgent } from './user-agent'
 import { applyViewport } from './viewport'
 import type { WindowSlot } from './window-slot'
+import { bindBrowserShortcuts } from './browser-shortcuts'
 
 // One session for every tab: cookies and logins outlive the app, apart from its own UI's.
 const PARTITION = 'persist:antumi-browser'
@@ -93,7 +94,7 @@ export async function startBrowserHost(slot: WindowSlot, hostFile: string): Prom
       if (/^https?:\/\//i.test(url)) void open(tab.conversationId, null).then((opened) => goto(opened, { url })).catch(() => {})
       return { action: 'deny' }
     })
-    keysForApp(contents, tab.id, slot)
+    bindBrowserShortcuts(contents, tab.id, slot, process.platform === 'darwin' ? 'darwin' : process.platform === 'win32' ? 'win32' : 'linux')
     contents.on('focus', () => slot.sendToRenderer('antumi:browser-focused', { tabId: tab.id, focused: true }))
     contents.on('blur', () => slot.sendToRenderer('antumi:browser-focused', { tabId: tab.id, focused: false }))
     return tab
@@ -203,36 +204,4 @@ export async function startBrowserHost(slot: WindowSlot, hostFile: string): Prom
     },
     shutdown
   }
-}
-
-// With a tab focused, the window's page sees no keys: the app's own are answered here. Escape
-// returns to the app; Shift+Escape reaches the page as a plain Escape, as the old live view did.
-// The zoom keys stay the app's, so a page is never scaled under the agent.
-function keysForApp(contents: WebContents, tabId: string, slot: WindowSlot): void {
-  contents.setVisualZoomLevelLimits(1, 1).catch(() => {})
-  contents.on('before-input-event', (event, input) => {
-    if (input.type !== 'keyDown') return
-    const command = process.platform === 'darwin' ? input.meta : input.control
-    if (input.key === 'Escape') {
-      event.preventDefault()
-      if (input.shift) {
-        contents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' })
-        contents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' })
-      } else {
-        slot.focusApp()
-        slot.sendToRenderer('antumi:browser-focused', { tabId, focused: false })
-      }
-      return
-    }
-    if (!command) return
-    if (input.shift && input.code === 'Backquote') {
-      event.preventDefault()
-      slot.sendToRenderer('antumi:browser-shortcut', { kind: 'toggle-browser' })
-    } else if (input.key === ',') {
-      event.preventDefault()
-      slot.sendToRenderer('antumi:browser-shortcut', { kind: 'settings' })
-    } else if (['=', '+', '-', '0'].includes(input.key)) {
-      event.preventDefault()
-    }
-  })
 }

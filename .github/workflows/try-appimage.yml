@@ -43,7 +43,10 @@ jobs:
           note before "daemon=$daemon core=$core exe=$exe"
           pkill -TERM -f 'mount_Antumi[^ ]*/antumi --no-sandbox$' || note kill "no main process matched"
           sleep 15
+          note main-gone "main process left: $(pgrep -af 'antumi --no-sandbox$' | wc -l); runtime left: $(pgrep -af 'Antumi-.*AppImage' | grep -v xvfb | cut -c1-120 | tr '\n' ';')"
           note after-quit "daemon alive: $(kill -0 $daemon 2>/dev/null && echo yes || echo no); core alive: $(kill -0 $core 2>/dev/null && echo yes || echo no)"
           note mount "still mounted: $(grep -c "$mount" /proc/mounts); mcp.mjs readable: $(test -r $mount/resources/backend/mcp.mjs && echo yes || echo no)"
           note run-as-node "$(ELECTRON_RUN_AS_NODE=1 $exe -e 'console.log("node-ok")' 2>&1 | tail -1 | cut -c1-200)"
+          sleep 60
+          note later "after 75s: daemon alive $(kill -0 $daemon 2>/dev/null && echo yes || echo no); mounted $(grep -c "$mount" /proc/mounts); mcp.mjs readable $(test -r $mount/resources/backend/mcp.mjs && echo yes || echo no)"
           note app-log "$(tail -5 $RUNNER_TEMP/app.log | tr '\n' ';' | cut -c1-400)"

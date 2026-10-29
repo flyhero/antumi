@@ -190,7 +190,7 @@ pnpm dist:win     # output: packages/desktop/dist/Antumi-Setup-<version>-x64.exe
 pnpm dist:linux   # output: packages/desktop/dist/Antumi-<version>-x86_64.AppImage and -amd64.deb
 ```
 
-A machine with the app installed needs neither Node nor pnpm. The builds are unsigned: on another Mac, right-click → Open the first time; on Windows, SmartScreen stops it once, so choose More info → Run anyway. On Debian or Ubuntu, install the deb with `sudo apt install ./Antumi-<version>-amd64.deb`; elsewhere, `chmod +x` the AppImage and run it (Ubuntu 22.04 and later need `sudo apt install libfuse2` first). If Ubuntu 23.10 or later reports a sandbox error, use the deb or start it with `--no-sandbox`. The Linux app does not update itself yet: download each new version.
+A machine with the app installed needs neither Node nor pnpm. The builds are unsigned: on another Mac, right-click → Open the first time; on Windows, SmartScreen stops it once, so choose More info → Run anyway. On Debian or Ubuntu, install the deb with `sudo apt install ./Antumi-<version>-amd64.deb`; elsewhere, `chmod +x` the AppImage and run it (Ubuntu 22.04 and later need `sudo apt install libfuse2` first). If Ubuntu 23.10 or later reports a sandbox error, use the deb or start it with `--no-sandbox`. The AppImage updates itself in the background, as on macOS and Windows; the deb only tells you of a new version to download.
 
 <p align="center">
   <img src="docs/assets/agents.png" alt="Settings → Agents: Claude Code, Codex and Cursor installed and signed in" width="720" />

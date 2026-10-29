@@ -38,9 +38,16 @@ export function newestRelease(releases: readonly Release[], current: string, pre
   return best
 }
 
-// The installer built for this machine: the dmg for this Mac's architecture, the Windows setup.
-export function installerFor(release: Release, platform: NodeJS.Platform, arch: string): ReleaseAsset | null {
-  const suffix = platform === 'darwin' ? `-${arch}.dmg` : platform === 'win32' ? `-${arch}.exe` : null
+// How the app came onto a Linux machine: the AppImage replaces itself, a deb is only offered.
+export type LinuxPackage = 'AppImage' | 'deb'
+
+// The installer built for this machine: the dmg for this Mac's architecture, the Windows setup,
+// on Linux the package the app came as, named with Linux's names for the architecture.
+export function installerFor(release: Release, platform: NodeJS.Platform, arch: string, linuxPackage: LinuxPackage = 'AppImage'): ReleaseAsset | null {
+  const suffix = platform === 'darwin' ? `-${arch}.dmg`
+    : platform === 'win32' ? `-${arch}.exe`
+      : platform === 'linux' ? (linuxPackage === 'deb' ? `-${arch === 'x64' ? 'amd64' : arch}.deb` : `-${arch === 'x64' ? 'x86_64' : arch}.AppImage`)
+        : null
   return suffix ? (release.assets.find((asset) => asset.name.endsWith(suffix)) ?? null) : null
 }
 
@@ -62,6 +69,7 @@ export type UpdaterOptions = {
   current: string
   platform: NodeJS.Platform
   arch: string
+  linuxPackage?: LinuxPackage
   // GitHub's API, or a stand-in serving the same shape (ANTUMI_UPDATE_API, for trying an update).
   api: string
   // GitHub's site, read when the API refuses; github.com unless a test stands in for it.
@@ -163,7 +171,7 @@ export class AppUpdater {
   private async installNow(): Promise<void> {
     if (this.automaticRun) await this.automaticRun
     const release = this.release
-    const asset = release && installerFor(release, this.options.platform, this.options.arch)
+    const asset = release && installerFor(release, this.options.platform, this.options.arch, this.options.linuxPackage)
     if (!release || !asset || this.busy() || this.state.status === 'checking' || !this.state.canInstall) return
     try {
       const file = await this.downloadRelease(release, asset)
@@ -176,7 +184,7 @@ export class AppUpdater {
 
   private canDownloadAutomatically(): boolean {
     const release = this.release
-    const asset = release && installerFor(release, this.options.platform, this.options.arch)
+    const asset = release && installerFor(release, this.options.platform, this.options.arch, this.options.linuxPackage)
     return !this.stopped && this.state.automatic && this.state.canInstall
       && Boolean(release && versionOf(release) !== this.state.skipped && (!release.prerelease || this.state.prerelease))
       && Boolean(asset?.digest?.match(/^sha256:[0-9a-f]{64}$/))
@@ -185,7 +193,7 @@ export class AppUpdater {
   private runAutomatic(): Promise<void> {
     if (this.automaticRun) return this.automaticRun
     const release = this.release
-    const asset = release && installerFor(release, this.options.platform, this.options.arch)
+    const asset = release && installerFor(release, this.options.platform, this.options.arch, this.options.linuxPackage)
     if (!release || !asset || !this.canDownloadAutomatically() || this.hasDownload(asset) || this.busy()
       || this.state.status === 'checking' || Date.now() < this.retryAt) return Promise.resolve()
     this.automaticRun = this.downloadRelease(release, asset).then(() => {
@@ -225,11 +233,11 @@ export class AppUpdater {
       const release = Release.parse(JSON.parse(text))
       if (!isVersion(release.tag_name) || compareVersions(release.tag_name, this.options.current) <= 0) {
         await rm(this.pendingFile, { force: true })
-        const applied = installerFor(release, this.options.platform, this.options.arch)
+        const applied = installerFor(release, this.options.platform, this.options.arch, this.options.linuxPackage)
         if (applied) await rm(join(this.options.downloads, applied.name), { force: true })
         return
       }
-      const asset = installerFor(release, this.options.platform, this.options.arch)
+      const asset = installerFor(release, this.options.platform, this.options.arch, this.options.linuxPackage)
       if (!asset?.digest?.match(/^sha256:[0-9a-f]{64}$/) || release.draft || (release.prerelease && !this.state.prerelease)) return
       this.offer(release, asset, await this.options.installBlocked() === null)
       const file = join(this.options.downloads, asset.name)
@@ -277,7 +285,7 @@ export class AppUpdater {
       const newest = newestRelease(releases, this.options.current, this.state.prerelease)
       const release = newest && feed ? await this.withChecksums(newest) : newest
       if (release) {
-        const asset = installerFor(release, this.options.platform, this.options.arch)
+        const asset = installerFor(release, this.options.platform, this.options.arch, this.options.linuxPackage)
         this.offer(release, asset, asset !== null && await this.options.installBlocked() === null)
         this.set({ checkedAt: Date.now() })
       } else {
@@ -286,7 +294,7 @@ export class AppUpdater {
       }
     } catch (error) {
       // A verified pending installer remains usable even when the network is unavailable.
-      const asset = this.release && installerFor(this.release, this.options.platform, this.options.arch)
+      const asset = this.release && installerFor(this.release, this.options.platform, this.options.arch, this.options.linuxPackage)
       this.set({ status: asset && this.hasDownload(asset) ? 'ready' : this.release ? 'available' : 'error', checkedAt: Date.now(), error: error instanceof Error ? error.message : String(error) })
     }
   }

@@ -42,7 +42,7 @@ export function windowLabel(window: UsageWindow): string {
   if (window.kind === 'session') {
     return '5h'
   }
-  const period = window.kind === 'monthly' ? t('usageFormat.thisMonth') : t('usageFormat.thisWeek')
+  const period = window.kind === 'daily' ? t('usageFormat.thisDay') : window.kind === 'monthly' ? t('usageFormat.thisMonth') : t('usageFormat.thisWeek')
   return window.model ? `${window.model} ${period}` : period
 }
 

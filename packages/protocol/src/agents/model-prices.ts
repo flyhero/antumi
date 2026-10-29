@@ -29,10 +29,15 @@ export const CODEX_PRICES: readonly ModelPrice[] = CODEX_RATES.map(([model, inpu
 )
 
 const flash = price('gemini-3.8-flash', GEMINI_SOURCE, { ...rates(0.75, 3.75, 0.075), cacheWrite: 0.75, cacheWrite1h: 0.75 })
-export const CURSOR_PRICES: readonly ModelPrice[] = [
-  ...CLAUDE_PRICES, ...CODEX_PRICES,
+const geminiRates = (input: number, output: number): TokenRates => ({ ...rates(input, output), cacheWrite: input, cacheWrite1h: input })
+export const GEMINI_PRICES: readonly ModelPrice[] = [
   { ...flash, validUntil: '2026-12-31' },
-  { ...flash, validFrom: '2027-01-01', rates: { ...rates(1.5, 7.5, 0.15), cacheWrite: 1.5, cacheWrite1h: 1.5 } }
+  { ...flash, validFrom: '2027-01-01', rates: geminiRates(1.5, 7.5) },
+  long({ ...price('gemini-2.5-pro', GEMINI_SOURCE, geminiRates(1.25, 10)), updatedAt: '2026-10-29', validFrom: '2026-10-29' }, 200_000, geminiRates(2.5, 15)),
+  ...['gemini-3.1-pro-preview', 'gemini-3.1-pro-preview-customtools'].map((model) => long({ ...price(model, GEMINI_SOURCE, geminiRates(2, 12)), updatedAt: '2026-10-29', validFrom: '2026-10-29' }, 200_000, geminiRates(4, 18)))
+]
+export const CURSOR_PRICES: readonly ModelPrice[] = [
+  ...CLAUDE_PRICES, ...CODEX_PRICES, ...GEMINI_PRICES
 ]
 
 // Only versioned names, including dated provider snapshots; unresolved aliases stay unknown.

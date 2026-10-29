@@ -12,6 +12,10 @@ export interface AcpDialect {
   readonly idPrefix: string
   // The session mode the agent offers for each of Antumi's permission modes it has.
   readonly modes: Partial<Record<ChatPermissionMode, string>>
+  // A mode notification carried as an agent text chunk instead of current_mode_update.
+  modeUpdate?(text: string): string | null
+  // Some providers include cache reads in inputTokens rather than reporting them separately.
+  readonly inputIncludesCache?: boolean
   // Extensions Antumi asks for in initialize (clientCapabilities._meta).
   readonly clientMeta?: Record<string, unknown>
   // A runtime extension that must be present before a session is opened.
@@ -26,11 +30,11 @@ export interface AcpDialect {
   readonly models?: { method: string; parse(result: unknown): AcpModel[] | null }
   // The tool a call runs, where its input or the name it gives (an extension) says more than its
   // kind: null leaves it to the kind.
-  toolName?(rawInput: unknown, name: string | undefined, title?: string): string | null
+  toolName?(rawInput: unknown, name: string | undefined, title?: string, toolCallId?: string): string | null
   // The input worth showing, where the agent wraps a call's arguments.
-  toolInput?(rawInput: unknown): unknown
+  toolInput?(rawInput: unknown, context: { kind?: string; title?: string; locations?: { path: string; line?: number }[] }): unknown
   // Some agents carry questions and plan reviews over the standard permission request.
-  permissionPrompt?(request: unknown): { kind: 'question'; text: string } | { kind: 'plan'; text: string; runMode: ChatPermissionMode } | null
+  permissionPrompt?(request: unknown): { kind: 'question'; text: string } | { kind: 'plan'; text: string; runMode: ChatPermissionMode } | { kind: 'plan'; path: string; runMode: ChatPermissionMode } | null
   // The Task call a subagent announced on its parent's session runs for; without it, subagents
   // are left out of the chat.
   subagentCall?(update: unknown): string | null

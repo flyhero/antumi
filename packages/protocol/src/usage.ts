@@ -1,10 +1,10 @@
 import { z } from 'zod'
 import { AgentKind } from './task'
 
-// session: the rolling 5-hour window · weekly: the 7-day window · monthly: a billing month (Cursor).
+// session: rolling 5 hours · weekly: 7 days · monthly: billing month · daily: the provider's day.
 // A client names the kinds it reads (usage.list); core sends it no reading with another, since an
 // older client fails to parse the whole list over one unknown kind.
-export const USAGE_WINDOW_KINDS = ['session', 'weekly', 'monthly'] as const
+export const USAGE_WINDOW_KINDS = ['session', 'weekly', 'monthly', 'daily'] as const
 export const UsageWindowKind = z.enum(USAGE_WINDOW_KINDS)
 // What a client that names no kinds reads.
 export const LEGACY_USAGE_WINDOW_KINDS: readonly string[] = ['session', 'weekly']

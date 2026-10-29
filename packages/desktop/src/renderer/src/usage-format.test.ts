@@ -7,6 +7,7 @@ const window = (kind: UsageWindow['kind'], model: string | null = null): UsageWi
 describe('windowLabel', () => {
   it('names each window by its period, and a model-specific one by its model too', () => {
     expect([window('session'), window('weekly'), window('weekly', 'Opus'), window('monthly'), window('monthly', 'API')].map(windowLabel)).toEqual(['5h', '本周', 'Opus 本周', '本月', 'API 本月'])
+    expect([window('daily'), window('daily', 'Gemini Pro')].map(windowLabel)).toEqual(['今天', 'Gemini Pro 今天'])
   })
 })
 

@@ -305,12 +305,12 @@ describe('RoutineService', () => {
     expect(routines.pickAgent(auto)).toBe('claude')
     usage = [roomy('claude', 90), roomy('codex', 50)]
     expect(routines.pickAgent(auto)).toBe('codex')
-    usage = [exhausted('claude', clock + 2 * HOUR), exhausted('codex', clock + HOUR), signedOut('zcode')]
+    usage = [exhausted('claude', clock + 2 * HOUR), exhausted('codex', clock + HOUR), signedOut('zcode'), signedOut('gemini')]
     expect(routines.pickAgent(auto)).toBe('codex')
-    usage = [exhausted('claude', clock + HOUR), signedOut('zcode')]
+    usage = [exhausted('claude', clock + HOUR), signedOut('zcode'), signedOut('gemini')]
     expect(routines.pickAgent(auto)).toBe('codex')
     // One signed out cannot run it, ahead of one used up or not.
-    usage = [signedOut('claude'), exhausted('codex', clock + HOUR), signedOut('zcode')]
+    usage = [signedOut('claude'), exhausted('codex', clock + HOUR), signedOut('zcode'), signedOut('gemini')]
     expect(routines.pickAgent(auto)).toBe('codex')
   })
 

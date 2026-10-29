@@ -84,5 +84,8 @@ describe('usageReadable', () => {
     expect(usageReadable(legacy, usage([window(10, { kind: 'monthly' })], { agent: 'cursor' }))).toBe(false)
     expect(usageReadable(new Set(['session', 'weekly', 'monthly']), usage([window(10, { kind: 'monthly' })], { agent: 'cursor' }))).toBe(true)
     expect(usageReadable(legacy, usage([], { agent: 'cursor', status: 'signed-out' }))).toBe(true)
+    const gemini = usage([window(25, { kind: 'daily', model: 'gemini-2.5-pro' })], { agent: 'gemini' })
+    expect(usageReadable(new Set(['session', 'weekly', 'monthly']), gemini)).toBe(false)
+    expect(usageReadable(new Set(['session', 'weekly', 'monthly', 'daily']), gemini)).toBe(true)
   })
 })

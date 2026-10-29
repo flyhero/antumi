@@ -33,7 +33,7 @@ const Initialized = z.looseObject({
 const Content = z.looseObject({ type: z.string(), text: z.string().optional(), data: z.string().optional() })
 const Update = z.looseObject({
   sessionUpdate: z.string(), content: z.unknown().optional(), toolCallId: z.string().optional(), name: z.string().optional(), title: z.string().optional(), kind: z.string().optional(),
-  status: z.string().optional(), rawInput: z.unknown().optional(), rawOutput: z.unknown().optional(), locations: z.array(z.looseObject({ path: z.string() })).optional(),
+  status: z.string().optional(), rawInput: z.unknown().optional(), rawOutput: z.unknown().optional(), locations: z.array(z.looseObject({ path: z.string(), line: z.number().optional() })).optional(),
   entries: z.array(z.looseObject({ content: z.string(), status: z.string() })).optional(), currentModeId: z.string().optional(), configOptions: z.array(AcpConfig).optional(),
   availableCommands: z.array(z.looseObject({ name: z.string(), description: z.string(), input: z.looseObject({ hint: z.string().optional() }).nullish() })).optional()
 })
@@ -98,6 +98,9 @@ export class AcpDriver implements ChatDriver {
   private readonly initial = new Map<string, unknown>()
   private initialChoices: Array<{ option: ChatOption; value: string }> = []
   private readonly kept = new Map<string, unknown>()
+  // Kept whole for plan reviews; the displayed unified diff may have been clipped.
+  private readonly fileContents = new Map<string, string>()
+  private readonly toolWrites = new Map<string, string[]>()
   private initialized = false
   private authenticated = false
   private initSent = false
@@ -133,6 +136,7 @@ export class AcpDriver implements ChatDriver {
   // stage opened new. turnCost is what it stood at as the running turn began.
   private sessionCost: number | null = null
   private turnCost: number | null = null
+  private turnCostReported = false
 
   constructor(private readonly dialect: AcpDialect, private readonly stageId: string, private readonly options: ChatStageOptions, private readonly catalogOnly = false) {
     this.items = new ChatItems(stageId)
@@ -153,8 +157,8 @@ export class AcpDriver implements ChatDriver {
     const known = ChatPermissionMode.safeParse(mode)
     return known.success && this.dialect.modes[known.data] !== undefined
   }
-  private toolName(update: Pick<z.infer<typeof Update>, 'kind' | 'rawInput' | 'name' | 'title'>, old: string | undefined): string {
-    return this.dialect.toolName?.(update.rawInput, update.name, update.title) ?? (update.kind === 'execute' ? 'commandExecution' : update.kind === 'edit' ? 'fileChange' : old ?? update.kind ?? 'tool')
+  private toolName(update: Pick<z.infer<typeof Update>, 'kind' | 'rawInput' | 'name' | 'title' | 'toolCallId'>, old: string | undefined): string {
+    return this.dialect.toolName?.(update.rawInput, update.name, update.title, update.toolCallId) ?? (update.kind === 'execute' ? 'commandExecution' : update.kind === 'edit' ? 'fileChange' : old ?? update.kind ?? 'tool')
   }
   // The agent's own requests Antumi answers by asking the user.
   private asked(method: string | undefined): boolean {
@@ -399,6 +403,7 @@ export class AcpDriver implements ChatDriver {
         this.stopping = false
         this.turn = { id: keyOf(frame.id), ref: eventRef, began: at, text: '', block: null, blocks: 0 }
         this.turnCost = this.sessionCost
+        this.turnCostReported = false
         this.items.put({ id: `u:${eventRef}`, kind: 'user', text, images: [...images] }, at)
         this.messages.push({ role: 'user', text: messageText(text, images), eventKey: `chat:${eventRef}:user`, complete: false })
       }
@@ -632,11 +637,21 @@ export class AcpDriver implements ChatDriver {
   }
 
   private update(update: z.infer<typeof Update>, frame: Frame, at: number): void {
+    if (update.sessionUpdate === 'agent_message_chunk') {
+      const mode = this.dialect.modeUpdate?.(Content.safeParse(update.content).data?.text ?? '')
+      if (mode) {
+        this.config = this.config.map((entry) => entry.category === 'mode' ? { ...entry, currentValue: mode } : entry)
+        this.publishConfig(); return
+      }
+    }
     if (update.sessionUpdate === 'usage_update') {
       const usage = z.object({ used: z.number().int().nonnegative(), size: z.number().int().positive() }).safeParse(update)
       if (usage.success) this.state.setContext({ used: usage.data.used, window: usage.data.size })
       const cost = SessionCost.safeParse(update).data?.cost
-      if (cost?.currency === 'USD') this.sessionCost = cost.amount
+      if (cost?.currency === 'USD') {
+        this.sessionCost = cost.amount
+        if (this.turn) this.turnCostReported = true
+      }
       return
     }
 
@@ -688,7 +703,12 @@ export class AcpDriver implements ChatDriver {
     }
     const output = takeImageMarkers(blocks.map((block) => Content.safeParse(block).data?.text ?? '').filter(Boolean).join('\n'))
     const raw = z.looseObject({ command: z.string().optional(), path: z.string().optional() }).safeParse(update.rawInput).data
-    const input = this.dialect.toolInput ? this.dialect.toolInput(update.rawInput) : update.rawInput
+    const input = this.dialect.toolInput ? this.dialect.toolInput(update.rawInput, update) : update.rawInput
+    const writes = writtenPaths({ ...update, rawInput: input })
+    if (writes.length) this.toolWrites.set(update.toolCallId, writes)
+    for (const entry of content) {
+      if (entry.type === 'diff' && entry.path && entry.newText !== undefined && update.status === 'completed') this.fileContents.set(entry.path, entry.newText)
+    }
     const name = this.toolName(update, old?.name)
     // A subagent's later updates send its brief back as { prompt: null } and close with its time,
     // not its report, which the agent keeps to the parent agent.
@@ -771,7 +791,7 @@ export class AcpDriver implements ChatDriver {
         const name = prompt?.kind === 'plan' ? 'ExitPlanMode' : toolItem?.kind === 'tool' ? toolItem.name : this.toolName(tool, undefined)
         // An edit of a reference project is refused here, whoever would have answered it.
         // Kimi's permission frame may omit the path its preceding tool_call already named.
-        const announcedWrites = toolItem?.kind === 'tool' && toolItem.name === 'fileChange' ? toolItem.diffs.map((diff) => diff.path) : []
+        const announcedWrites = [...(tool.toolCallId ? this.toolWrites.get(tool.toolCallId) ?? [] : []), ...(toolItem?.kind === 'tool' && toolItem.name === 'fileChange' ? toolItem.diffs.map((diff) => diff.path) : [])]
         if (toolItem?.kind === 'tool' && toolItem.name === 'fileChange' && toolItem.input) {
           let input: unknown
           try { input = JSON.parse(toolItem.input) } catch { /* A non-JSON input carries no file fields. */ }
@@ -787,7 +807,8 @@ export class AcpDriver implements ChatDriver {
         this.pending.set(id, { rawId: frame.id, itemId, kind: 'permission', options: request.data.options, ...(prompt?.kind === 'plan' ? { planRunMode: prompt.runMode } : {}) })
         // The agent's reason for asking, as Cursor's "Not in allowlist: rg".
         const reason = z.array(z.looseObject({ content: z.unknown().optional() })).safeParse(tool.content).data?.map((entry) => Content.safeParse(entry.content).data?.text ?? '').find(Boolean)
-        const detail = prompt?.text ?? (announced ? (tool.rawInput === undefined ? reason ?? null : clip(JSON.stringify(tool.rawInput))) : reason ? `子 Agent 的请求：${reason}` : '子 Agent 的请求')
+        const promptText = prompt && 'path' in prompt ? this.fileContents.get(prompt.path) ?? `计划文件：${prompt.path}` : prompt?.text
+        const detail = promptText ?? (announced ? (tool.rawInput === undefined ? reason ?? null : clip(JSON.stringify(tool.rawInput))) : reason ? `子 Agent 的请求：${reason}` : '子 Agent 的请求')
         // A command quoted in backticks (as Cursor does); the bare command is what the request line names.
         const title = tool.title?.match(/^`([\s\S]+)`$/)?.[1] ?? tool.title ?? `${this.name} 工具调用`
         this.items.put({ id: itemId, kind: 'approval', requestId: id, tool: name, title, detail, toolItemId: tool.toolCallId ? `tool:${tool.toolCallId}` : null, decisions: ['allow', 'deny'], choices: request.data.options.map((option) => ({ id: option.optionId, label: option.name, decision: option.kind === 'allow_once' ? 'allow' : option.kind === 'allow_always' ? 'allowForSession' : 'deny', grants: option.kind.endsWith('_always') ? [{ kind: 'other', values: [option.name], scope: 'agent', behavior: option.kind === 'reject_always' ? 'deny' : 'allow' }] : [] })), ...(prompt?.kind === 'plan' ? { runModes: [prompt.runMode] } : {}), resolution: null }, at)
@@ -851,11 +872,11 @@ export class AcpDriver implements ChatDriver {
   private reportedMetering(result: unknown): Pick<Extract<ChatItem, { kind: 'turn' }>, 'usage' | 'metering'> {
     const tokens = TurnTokens.safeParse(z.looseObject({ usage: z.unknown() }).safeParse(result).data?.usage).data
     // To the micro-dollar: a difference of two totals leaves float dust (0.15000000000000002).
-    const costUsd = this.sessionCost !== null && this.turnCost !== null ? Math.max(0, Math.round((this.sessionCost - this.turnCost) * 1e6) / 1e6) : null
+    const costUsd = this.turnCostReported && this.sessionCost !== null && this.turnCost !== null ? Math.max(0, Math.round((this.sessionCost - this.turnCost) * 1e6) / 1e6) : null
     if (!tokens) return costUsd ? { metering: { models: [], calls: null, callsEstimated: false, reportedCostUsd: costUsd } } : {}
     const cacheRead = tokens.cachedReadTokens ?? null
     const cacheWrite = tokens.cachedWriteTokens ?? null
-    const input = tokens.inputTokens + (cacheRead ?? 0) + (cacheWrite ?? 0)
+    const input = tokens.inputTokens + (this.dialect.inputIncludesCache ? 0 : (cacheRead ?? 0) + (cacheWrite ?? 0))
     const output = tokens.outputTokens + (tokens.thoughtTokens ?? 0)
     const model = this.config.find((entry) => entry.category === 'model')?.currentValue ?? null
     return {

@@ -397,6 +397,8 @@ DeepSeek Harness 使用同一 ACP driver；`packages/dsh-runtime` 在官方导�
 
 Antigravity 也只是一份 dialect（`agents/antigravity/`）：`agy` 本身不说 ACP，跑的是 Google 发到 ACP registry 的 Antigravity ACP 服务。它没有安装器，Antumi 按版本钉住各平台压缩包的 SHA-256，用 adapter 的 `installation` 下载到 `~/.antumi/runtimes/antigravity-acp/<版本>/`；`installWithoutApplication` 让这条安装命令不必先检测到 Antigravity 应用。细节见 [Antigravity](ANTIGRAVITY.md)。ACP 恢复优先使用旧 Agent 已声明的 `loadSession`，仅声明 `resume` 时使用 `session/resume`。
 
+Gemini CLI 也复用通用 ACP driver（`agents/gemini/`）：文本模式通知、缺少 rawInput 的工具摘要、按文件路径审批的计划、缓存已包含在输入 token 的用量口径由 dialect 声明。计划正文从已完成工具 diff 保留的完整 newText 取，不读磁盘。adapter 的 `session.nativeResume: false` 让停止后继续和重启走历史移交，避免 CLI 的晚到历史重放混进新回合；其他 Agent 缺省沿用原生恢复。打包版 MCP 使用系统 Node，避开 Gemini 对 Electron 环境变量的过滤；每日额度按模型读取 Code Assist API，客户端声明支持 daily 后才接收。细节见 [Gemini CLI](GEMINI.md)。
+
 ZCode 不说 ACP，有自己的 driver（`agents/zcode/zcode-app-server.ts`），讲它桌面端用的 ZCode Protocol：命令走 `v4/command`，会话内容是订阅来的快照加行增量，审批和提问是 ZCode 发来的请求。协议没有公开的 schema，`zcode-schema.ts` 只宽松地写用到的部分。细节见 [ZCode](ZCODE.md)。
 
 Kimi Code 使用官方 `kimi acp` 和通用 ACP driver，dialect 负责四种原生模式、工具命名，以及由权限请求承载的单选提问和计划审批。需要 Node.js 版 CLI 2.3.2 以上，恢复会话沿用标准 ACP；原生 fork 会保留来源 MCP，改用交接以隔离会话权限。安装、权限及用量边界见 [Kimi Code](KIMI.md)。

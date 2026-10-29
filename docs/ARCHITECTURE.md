@@ -110,7 +110,7 @@
 
 允许读取 Antumi 记录且 core 声明 `conversation-references` 时，@ 菜单另提供「会话」分类。按标题、项目、外部智能体或 id 查找最近的普通会话（含已归档及定时运行），排除当前会话和任务、群聊、团队、委派及小助手的内部会话，最多显示 50 项。输入框保留标题与准确 id，草稿恢复不丢引用；发送为 `[标题](antumi://conversation/<uuid>)`，标题转义后不能改变链接结构。用户消息与 Agent 回复都可点击该链接打开原会话，已删除的引用保留标题并禁用跳转。
 
-聊天输入使用已有的 CodeMirror 编辑器，将文件、目录、项目、会话与智能体引用绘制为不可分割的行内标记；正文与标记共用排版，支持整块删除、撤销恢复和带引用的应用内复制粘贴。标记与已发送消息共用图标和样式，文件用折角文档图标；点击文件打开检查器、目录或项目在文件管理器中显示，会话打开原聊天，智能体打开其配置。发给 Agent 的文本仍按描述符生成原生路径（Claude 的 `@path`）、会话链接和 `@智能体名`，显示信息通过可选的 `references` 字段单独传递，包含发送文本中的范围和引用目标。core 声明 `chat-references` 后才接收新客户端的显示信息；日志的出站与排队记录保留它，四类驱动重放后恢复相同的用户消息。首条消息重试、排队编辑、插话、分叉草稿、移交和预约也携带引用；旧 core 或没有显示信息的旧消息继续显示原有文本，会话链接仍可识别。
+聊天输入使用已有的 CodeMirror 编辑器，将文件、目录、项目、会话与智能体引用绘制为不可分割的行内标记；正文与标记共用排版，支持整块删除、撤销恢复和带引用的应用内复制粘贴。标记与已发送消息共用图标和样式，文件用折角文档图标；点击文件在文件面板中打开、目录或项目在文件管理器中显示，会话打开原聊天，智能体打开其配置。发给 Agent 的文本仍按描述符生成原生路径（Claude 的 `@path`）、会话链接和 `@智能体名`，显示信息通过可选的 `references` 字段单独传递，包含发送文本中的范围和引用目标。core 声明 `chat-references` 后才接收新客户端的显示信息；日志的出站与排队记录保留它，四类驱动重放后恢复相同的用户消息。首条消息重试、排队编辑、插话、分叉草稿、移交和预约也携带引用；旧 core 或没有显示信息的旧消息继续显示原有文本，会话链接仍可识别。
 
 
 跨会话引用复用 `history_read`，工具说明引导 Agent 直接读取引用的 id，避免同名匹配；id 参数也接受完整引用 URL。读取仍受「让 Agent 读你在 Antumi 里的记录」开关约束，并沿用文本长度限制；引用内容是资料，不切换 Agent、工作目录或自动载入全部历史。旧 core 不显示会话分类。
@@ -271,7 +271,8 @@ Agent 描述符可提供英语展示文本，客户端传入语言读取，执�
 Claude Code 以 `claude -p --input-format stream-json --output-format stream-json` 运行，Codex 以 `codex app-server` 运行，Cursor 以 `cursor-agent acp` 或 `agent acp` 运行，OpenCode 以 `opencode acp` 运行，Pi 以 `pi --mode rpc` 运行。它们由 daemon 托管：关闭窗口、重启 core 都不会中断 Agent，core 重启后会接着读它的输出，没回答的确认请求也还在。
 
 - **显示**：Markdown 格式的回复；工具调用卡片，包括命令和输出、文件改动的 diff；每个回合是完成、中断还是失败。等你处理的确认请求、提问和计划固定在输入框上方，不会被滚走：确认请求可以允许、本会话都允许或拒绝（可以附一句理由告诉 Agent）。输入框上方还有项目里未提交的改动（点开检查器）和 Agent 的待办进度，↑ 跳回你的上一条消息。
-- **回复里的链接和图片**：网页链接（`http://`、`https://`）用系统浏览器打开。本机文件链接和行内代码中的文件名，点击后在右侧检查器的「文件」页只读预览；支持多个标签、代码高亮、行号定位、搜索、自动换行、调宽和最大化。Markdown 显示源码，超过 2 MiB 或非 UTF-8 文本的文件会说明无法预览。图片文件（PNG、JPEG、GIF、WebP、SVG）仍显示缩略图，点开放大；网络图片不加载，只显示链接。连接旧版 core 时，文件点击仍在文件管理器中定位。
+- **回复里的链接和图片**：网页链接（`http://`、`https://`）用系统浏览器打开。本机文件链接和行内代码中的文件名，点击后在右侧的文件面板中打开；支持多个标签、代码高亮、行号定位、搜索、自动换行、调宽和最大化。Markdown 显示源码，超过 2 MiB 或非 UTF-8 文本的文件会说明无法预览。图片文件（PNG、JPEG、GIF、WebP、SVG）仍显示缩略图，点开放大；网络图片不加载，只显示链接。连接旧版 core 时，文件点击仍在文件管理器中定位。
+- **文件面板**：右侧工具栏的「文件」面板（状态栏按钮或 <kbd>⌘</kbd> <kbd>Shift</kbd> <kbd>E</kbd>）浏览和编辑当前会话或任务所在的那份代码：会话的项目目录、任务的 worktree，头部写明项目名和分支，切换会话时跟着换。没有会话时（总览等页面），或想看别的项目，可在头部选择最近用过的项目主目录；所选只在看同一个会话或页面时有效，换走就回到跟随。打开的文件按目录记录，同一 worktree 上的几个会话共用一组标签。<kbd>⌘</kbd> <kbd>P</kbd> 按名称在这些目录里查找文件（`projects.searchFiles`），在面板中打开。面板和检查器、终端、端口占同一侧，打开一个会收起另一个。`files.*` 方法除会话 id 外也接受目录列表 `roots`（core 声明 `project-files`），旧 core 只能浏览带会话的目录。
 - **聊天右键菜单**：选中文字可复制选区，未选中时可复制所在消息或工具内容，工具输出复制完整原文；代码块和网页链接各有复制操作。文件右键可预览、复制绝对／项目相对路径、在文件管理器中定位，以及用系统默认应用打开；系统打开只在选择该菜单项时发生。文件标签和滚动位置按会话分别保留在当前窗口，重启后不恢复。
 - **当前聊天搜索**：普通会话、任务聊天和群聊按 ⌘/Ctrl+F 打开搜索栏，匹配文字高亮，Enter / Shift+Enter 切换结果，Esc 关闭（不会中断 Agent）。输入搜索词时临时展开折叠内容并读取更早的聊天页，关闭或清空后恢复原有折叠状态；切换聊天会清空搜索。检查器、终端和弹窗的快捷键不被接管。
 - **下一步建议**：Claude Code 回复完后，输入框里用灰字显示它预测的你下一句话，按 Tab 或 → 填入，直接打字就忽略。生成建议要再发一次简短请求（复用对话缓存，花费很少，但计入用量），在 设置 → 外部智能体 →「回合结束后建议下一步」里可以关掉。Codex 没有这个功能。
@@ -460,6 +461,26 @@ Agent 可用之后、任务来源之前是「接着聊」一步：从零用一�
 检查更新跟随远端当前的默认 HEAD，从提交对象读新列表，预览新增、移除和修改（包含技能目录里的脚本、参考文件变化）。更新先检查目标版本是否可用以及是否引入重名；已启用技能被移除或失效时需要显式确认。自选模式保留仍可用的选择，新增默认关闭；全部启用模式在用户确认更新后包含新增技能。切换或保存失败会恢复原 checkout，重启时以锁文件里的提交恢复，回退时也恢复上一次启用策略。运行中的 Agent 保留原 bundle，配置变化在下次启动生效。
 
 交给 Agent 的是**bundle**（`bundles/<key>/`）：`SkillsLibrary.bundleForAgent` 按仓库策略、兼容能力和目标 Agent 选技能，再复制技能自己的目录（仓库本身是技能时就是整个仓库；跳过软链接和 `.git`，限 32 MiB），同时写成 Claude Code 插件（`.claude-plugin/plugin.json` + `skills/`）和 `.agents/skills/` 两种布局；`key` 是技能及其提交的哈希，同样的选择得到同一个目录，提示词缓存得以保温，更新或回退后自然换新目录。descriptor 的 `capabilities.skills` 说明这个 Agent 能否接收 bundle，adapter 决定怎么交（`AgentLaunch.skills`）：Claude Code 用 `--plugin-dir`，Cursor 用 `--add-dir`，OpenCode 写进 `OPENCODE_CONFIG_CONTENT` 的 `skills`，Pi 用 `--skill`，DeepSeek Harness 写入运行配置；Codex、Antigravity 暂不支持。损坏或手动修改的锁若含重名，启动时跳过冲突名并记日志，仍加载其他技能；bundle 建不出来只记进 wire log，不阻止 Agent 启动。
+
+### Antumi 管理工具
+
+内置 MCP 的管理工具（`mcp-management-tools.ts`）把现有 core RPC 开放给聊天 Agent，名称集中在 protocol 的 `mcp-management.ts`。工具只解析参数、检查调用会话并转发 RPC；校验、持久化和变更通知仍由原服务负责，桌面端照常收到配置变化。不新增数据库结构或 RPC，不改变协议版本。
+
+| 工具 | 对应 RPC |
+| --- | --- |
+| `antumi_agent_profile_list` / `antumi_agent_profile_create` | `agentProfiles.list` / `agentProfiles.save` |
+| `antumi_squad_list` / `antumi_squad_create` | `squads.list` / `squads.create` |
+| `antumi_schedule_list` / `antumi_schedule_create` | `schedules.list` / `schedules.create` |
+| `antumi_routine_list` / `antumi_routine_create` | `routines.list` / `routines.create` |
+| `antumi_skill_list` / `antumi_skill_search` | `skills.list` / `skills.search` |
+| `antumi_skill_install` / `antumi_skill_set_activation` | `skills.install` / `skills.setActivation` |
+| `antumi_chat_command_list` / `antumi_chat_command_create` | `chatCommands.list` / `chatCommands.save` |
+
+智能体和聊天命令的创建参数不接受更新用的 `id`，其余沿用对应 RPC 的字段和默认值。智能体配置查询返回全部保存的配置（含归档状态），不改变 `antumi_agent_list` 按当前会话权限列出可委派智能体的行为；创建配置不会启动会话或团队任务。一次性预约的 `notBefore` 是 Unix 毫秒时间戳或 null，支持已有任务和会话目标；周期例程按 core 所在机器的本地时间执行，每次新开会话。安装技能仓库后默认不启用，通过独立的启用工具显式选择技能和适用 Agent；启用策略是完整替换，冲突和生效时机与设置页一致。不开放更新、归档、删除、取消或立即执行等其他管理操作。
+
+只有未归档的普通主会话及单 Agent 任务会话可用；规划、只读模式和只读工作区仅提供查询工具。团队成员与队长（包括还未产生团队运行记录的规划阶段）、委派子会话、群聊成员、例程和小助手均不提供这些工具。服务器启动时根据会话范围、模式和 core 的 feature 列表筛选工具；每次调用在同一条 RPC 连接里重新检查范围和模式，再调用业务 RPC。切到规划或只读后，旧工具调用也会被拒绝；读取会话或检查权限失败时不继续操作。未开启的工具在下次启动 MCP 时重新确定。
+
+新增查询工具列入 `antumiReadTools`；创建、安装和启用不列入免审批清单，沿用各 Agent 既有审批行为。MCP annotations 分别标明只读、重复调用和外部访问：创建与安装不标幂等，技能启用标幂等，市场搜索与仓库安装标记访问外部资源。参数错误和 core 的业务拒绝以工具错误返回，不自动重试写操作。历史工具的读取开关独立，管理工具不额外提供任务或会话历史查询；预约目标须来自已知 ID 或用户允许读取的历史。
 
 ### 用户的 MCP 服务器
 

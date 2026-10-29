@@ -1,11 +1,11 @@
-import { UsageAutomationSettings } from './UsageAutomationSettings'
-import { getLocale, localized, messageSearchText, t, tr } from '../i18n'
+import { UsageSettings } from './UsageSettings'
+import { localized, messageSearchText, t, tr, useLocale } from '../i18n'
 import type { BrowserStatus, WireUsage } from '@antumi/protocol'
-import { useEffect, useMemo, useState, type ReactElement } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { AGENT_KINDS, agentDescriptor, LANGUAGE_NAMES, PROTOCOL_VERSION, quickModel, TRANSLATE_LANGUAGES, UNATTENDED_MODES, type AgentKind, type SourceDescriptor } from '@antumi/protocol'
 import packageJson from '../../../../package.json'
 import { perform, setAwakeMode, setChatSettings, setSettingsOpen, useAwakeSupported, useCore, useBrowserSupported, useChatCommandsSupported, useKnowledgeBaseSupported, useMcpServersSupported, useModelProvidersSupported, useSessionImportSupported, useAccountsSupported, useProjectConfigEditSupported, useSkillsSupported, useTranslateSupported, useWireLogSupported } from '../core-store'
-import { DEFAULT_PREFERENCES, setPreference, usePreferences } from '../preferences'
+import { setPreference, usePreferences } from '../preferences'
 import { UNATTENDED_LABEL } from '../schedules'
 import { detectedAgents, useInstalledAgents } from '../installed-agents'
 import { useAgentCatalog } from '../agent-models'
@@ -14,8 +14,6 @@ import { PluginSettings } from './PluginSettings'
 import { InstalledAgentsSettings } from './InstalledAgentsSettings'
 import { TitleNamingSettings } from './TitleNamingSettings'
 import { AutoArchiveSettings } from './AutoArchiveSettings'
-import { ChatFontPicker } from './ChatFontPicker'
-import { CodeFontPicker } from './CodeFontPicker'
 import { agentLabel } from '../labels'
 import { appVersion, canNotify, canShowRequestPopup } from '../desktop-bridge'
 import { formatBytes } from '../wire-entries'
@@ -58,168 +56,14 @@ import { checkStatusText, GIT_INSTALL_HINT } from '../environment-text'
 import { settingsSectionOf } from './SourceInboxView'
 import { SourceSettingsSection } from './SourceSettingsSection'
 import { projectName } from './ProjectPicker'
-import { Resettable, Segmented, SettingsGroup, SettingsRow, Stepper, Toggle } from './SettingsControls'
-import { CjkFontPicker } from './CjkFontPicker'
+import { Segmented, SettingsGroup, SettingsRow, Stepper, Toggle } from './SettingsControls'
 import { SupportSettings } from './SupportSettings'
 import { ProjectConfigDialog, projectConfigSummary } from './ProjectConfigDialog'
-import { PalettePicker } from './PalettePicker'
-import { BackdropPicker } from './BackdropPicker'
 import { useOccludesBrowser } from '../browser-occlusion'
 import { UpdateSettings } from './UpdateNotice'
 import { PetSettings } from './PetSettings'
-
-function AppearanceSettings() {
-  const language = usePreferences((s) => s.language)
-  const theme = usePreferences((s) => s.theme)
-  const terminalFontSize = usePreferences((s) => s.terminalFontSize)
-  const terminalLineHeight = usePreferences((s) => s.terminalLineHeight)
-  const colorPrompt = usePreferences((s) => s.colorPrompt)
-  const colorPromptSupported = useCore((s) => s.rpc?.features.includes('terminal-color-prompt') ?? false)
-  const chatFontSize = usePreferences((s) => s.chatFontSize)
-  const chatWidth = usePreferences((s) => s.chatWidth)
-  const foldTurns = usePreferences((s) => s.foldTurns)
-  return (
-    <>
-      <SettingsGroup title={t('language.interfaceLanguage')}>
-        <SettingsRow label={t('language.interfaceLanguage')} description={t('language.description')}
-          control={(labelId) => <Segmented labelId={labelId} value={language} onChange={(value) => setPreference('language', value)}
-            options={[{ value: 'system', label: t('SettingsPage.system') }, { value: 'zh-CN', label: '简体中文' }, { value: 'en', label: 'English' }]} />} />
-      </SettingsGroup>
-      <SettingsGroup title={t('SettingsPage.colors')}>
-        <SettingsRow
-          label={t('SettingsPage.theme')}
-          description={t('SettingsPage.withSystemSelectedFollowsTheSystemSLight')}
-          control={(labelId) => (
-            <Segmented
-              labelId={labelId}
-              value={theme}
-              onChange={(next) => setPreference('theme', next)}
-              options={[
-                { value: 'system', label: t('SettingsPage.system') },
-                { value: 'light', label: t('SettingsPage.light') },
-                { value: 'dark', label: t('SettingsPage.dark') }
-              ]}
-            />
-          )}
-        />
-        <SettingsRow
-          label={t('SettingsPage.palette')}
-          description={t('SettingsPage.colorsForTheEntireInterfaceWithLightAnd')}
-          control={(labelId) => <PalettePicker labelId={labelId} />}
-        />
-        <SettingsRow
-          label={t('SettingsPage.gradientBackgroundExperimental')}
-          description={t('SettingsPage.aGradientBehindTheSidebarAndWindowEdges')}
-          control={(labelId) => <BackdropPicker labelId={labelId} />}
-        />
-      </SettingsGroup>
-      <SettingsGroup title={t('SettingsPage.chat')}>
-        <SettingsRow
-          label={t('SettingsPage.fontSize')}
-          description={t('SettingsPage.textSizeForMessagesWorkDetailsAndComposer')}
-          control={(labelId) => (
-            <Resettable label={t('SettingsPage.chatFontSize')} changed={chatFontSize !== DEFAULT_PREFERENCES.chatFontSize} onReset={() => setPreference('chatFontSize', DEFAULT_PREFERENCES.chatFontSize)}>
-              <Stepper
-                labelId={labelId}
-                value={chatFontSize}
-                min={10}
-                max={20}
-                unit="px"
-                onChange={(next) => setPreference('chatFontSize', next)}
-              />
-            </Resettable>
-          )}
-        />
-        <SettingsRow
-          label={t('SettingsPage.font')}
-          description={t('SettingsPage.serifChangesProseOnlyLeavingCodeUnchanged')}
-          control={(labelId) => <ChatFontPicker labelId={labelId} />}
-        />
-        <SettingsRow
-          label={t('SettingsPage.chineseFont')}
-          description={t('SettingsPage.chineseTextInChatUsesThisFontEnglish')}
-          control={(labelId) => <CjkFontPicker labelId={labelId} preference="chatCjkFontFamily" title={t('SettingsPage.chooseChineseChatFont')} />}
-        />
-        <SettingsRow
-          label={t('SettingsPage.pageWidth')}
-          description={t('SettingsPage.maximumMessageAndComposerWidthNarrow800pxMedium')}
-          control={(labelId) => (
-            <Segmented
-              labelId={labelId}
-              value={chatWidth}
-              onChange={(next) => setPreference('chatWidth', next)}
-              options={[
-                { value: 'narrow', label: t('SettingsPage.narrow') },
-                { value: 'medium', label: t('SettingsPage.medium') },
-                { value: 'full', label: t('SettingsPage.fullWidth') }
-              ]}
-            />
-          )}
-        />
-        <SettingsRow
-          label={t('SettingsPage.foldCompletedTurns')}
-          description={t('SettingsPage.foldReasoningCommandsAndInterimRepliesUnderWorked')}
-          control={(labelId) => (
-            <Toggle labelId={labelId} checked={foldTurns} onChange={(next) => setPreference('foldTurns', next)} />
-          )}
-        />
-      </SettingsGroup>
-      <SettingsGroup title={t('SettingsPage.terminalAndCode')}>
-        <SettingsRow
-          label={t('SettingsPage.codeFont')}
-          description={t('SettingsPage.fontForTerminalsCodeBlocksChangesAndFile')}
-          control={(labelId) => <CodeFontPicker labelId={labelId} />}
-        />
-        <SettingsRow
-          label={t('SettingsPage.chineseCodeFont')}
-          description={t('SettingsPage.fallbackForChineseInTerminalsCodeAndPreviews')}
-          control={(labelId) => <CjkFontPicker labelId={labelId} preference="codeCjkFontFamily" title={t('SettingsPage.chooseChineseCodeFont')} />}
-        />
-        <SettingsRow
-          label={t('SettingsPage.terminalFontSize')}
-          description={t('SettingsPage.appliesImmediatelyToOpenTerminals')}
-          control={(labelId) => (
-            <Resettable label={t('SettingsPage.terminalFontSize')} changed={terminalFontSize !== DEFAULT_PREFERENCES.terminalFontSize} onReset={() => setPreference('terminalFontSize', DEFAULT_PREFERENCES.terminalFontSize)}>
-              <Stepper
-                labelId={labelId}
-                value={terminalFontSize}
-                min={10}
-                max={20}
-                unit="px"
-                onChange={(next) => setPreference('terminalFontSize', next)}
-              />
-            </Resettable>
-          )}
-        />
-        <SettingsRow
-          label={t('SettingsPage.terminalLineHeight')}
-          description={t('SettingsPage.multiplierOfTheFontSOwnLineHeight')}
-          control={(labelId) => (
-            <Resettable label={t('SettingsPage.terminalLineHeight')} changed={terminalLineHeight !== DEFAULT_PREFERENCES.terminalLineHeight} onReset={() => setPreference('terminalLineHeight', DEFAULT_PREFERENCES.terminalLineHeight)}>
-              <Segmented
-                labelId={labelId}
-                value={String(terminalLineHeight)}
-                onChange={(next) => setPreference('terminalLineHeight', Number(next))}
-                options={[
-                  { value: '1', label: '1.0' },
-                  { value: '1.2', label: '1.2' },
-                  { value: '1.4', label: '1.4' }
-                ]}
-              />
-            </Resettable>
-          )}
-        />
-        {colorPromptSupported && (
-          <SettingsRow
-            label={t('SettingsPage.coloredPrompt')}
-            description={t('SettingsPage.forZshWithoutACustomPromptUseColors')}
-            control={(labelId) => <Toggle labelId={labelId} checked={colorPrompt} onChange={(next) => setPreference('colorPrompt', next)} />}
-          />
-        )}
-      </SettingsGroup>
-    </>
-  )
-}
+import { AppearanceSettings } from './AppearanceSettings'
+import './settings-page.css'
 
 function NotificationSettings() {
   const notifications = usePreferences((s) => s.notifications)
@@ -303,66 +147,6 @@ function TranslationSettings() {
         control={(labelId) => <Toggle labelId={labelId} checked={auto} onChange={(next) => setPreference('autoTranslate', next)} />}
       />
       <p className="settings-note">{t('SettingsPage.usesTheConversationSAgentChooseTheModel')}</p>
-    </>
-  )
-}
-
-function UsageSettings() {
-  const showUsage = usePreferences((s) => s.showUsage)
-  const hidden = usePreferences((s) => s.hiddenUsageAgents)
-  const usage = useCore((s) => s.usage)
-  const display = usePreferences((s) => s.usageDisplay)
-  const advice = usePreferences((s) => s.quotaAdvice)
-  const announcements = useCore((s) => s.chatSettings?.resetAnnouncements)
-  return (
-    <>
-      <SettingsRow
-        label={t('SettingsPage.showUsageQuotaInStatusBar')}
-        description={t('SettingsPage.subscriptionQuotaWindowsForEachAgentSuchAs')}
-        control={(labelId) => (
-          <Toggle labelId={labelId} checked={showUsage} onChange={(next) => setPreference('showUsage', next)} />
-        )}
-      />
-      {showUsage && AGENT_KINDS.filter((agent) => usage?.[agent] !== undefined).map((agent) => (
-        <SettingsRow key={agent} label={agentLabel(agent)} control={(labelId) => (
-          <Toggle labelId={labelId} checked={!hidden.includes(agent)} onChange={(next) => {
-            const current = usePreferences.getState().hiddenUsageAgents
-            setPreference('hiddenUsageAgents', next ? current.filter((entry) => entry !== agent) : [...current.filter((entry) => entry !== agent), agent])
-          }} />
-        )} />
-      ))}
-      <SettingsRow
-        label={t('SettingsPage.percentageDisplay')}
-        description={t('SettingsPage.changesTheDisplayedNumberOnlyLowQuotaWarning')}
-        control={(labelId) => (
-          <Segmented
-            labelId={labelId}
-            value={display}
-            onChange={(next) => setPreference('usageDisplay', next)}
-            options={[
-              { value: 'used', label: t('SettingsPage.used') },
-              { value: 'remaining', label: t('SettingsPage.remaining') }
-            ]}
-          />
-        )}
-      />
-      <SettingsRow
-        label={t('SettingsPage.quotaAdviceAndAlerts')}
-        description={t('SettingsPage.estimateUsagePaceAgainstResetTimesShowAdvice')}
-        control={(labelId) => (
-          <Toggle labelId={labelId} checked={advice} onChange={(next) => setPreference('quotaAdvice', next)} />
-        )}
-      />
-      {announcements !== undefined && (
-        <SettingsRow
-          label={t('SettingsPage.showServiceWideResetAnnouncements')}
-          description={t('SettingsPage.showUpcomingAndRecentResetsWhenServicesSuch')}
-          control={(labelId) => (
-            <Toggle labelId={labelId} checked={announcements} onChange={(next) => void setChatSettings({ resetAnnouncements: next })} />
-          )}
-        />
-      )}
-      <UsageAutomationSettings />
     </>
   )
 }
@@ -768,7 +552,8 @@ const SECTIONS: readonly Section[] = localized(() => ([
     description: t('SettingsPage.agentSubscriptionQuotaInTheStatusBar'),
     keywords: [t('SettingsPage.statusBar'), t('SettingsPage.quota'), t('SettingsPage.percentage'), t('SettingsPage.used'), t('SettingsPage.remaining'), t('SettingsPage.reset'), t('SettingsPage.serviceWideReset'), t('SettingsPage.announcement'), 'limitreset', ...AGENT_KINDS],
     Icon: GaugeIcon,
-    Body: UsageSettings
+    Body: UsageSettings,
+    grouped: true
   },
   {
     // In Electron only: a plain browser has no dock icon and nothing to click back to.
@@ -860,7 +645,8 @@ const CHAT_COMMANDS_SECTION: Section = localized(() => ({
   description: t('SettingsPage.savedPromptsAvailableWithInTheComposerEdit'),
   keywords: [t('chatTools.command'), t('SettingsPage.slash'), '/', t('ChatCommandSettings.prompt'), t('RoutinesSection.templates'), 'prompt', t('SettingsPage.chat'), t('BrowserPanel.conversation'), t('SettingsPage.shortcut')],
   Icon: TerminalIcon,
-  Body: ChatCommandSettings
+  Body: ChatCommandSettings,
+  grouped: true
 }))
 
 // On a core with a skills library: the Agent Skills it installs for agents; it opens 扩展.
@@ -883,7 +669,8 @@ const MCP_SECTION: Section = localized(() => ({
   description: t('SettingsPage.manageMcpServersShareThemWithSelectedAgents'),
   keywords: ['mcp', t('SettingsPage.servers'), 'server', t('SettingsPage.tools'), 'tool', t('SettingsPage.import'), t('SettingsPage.connection'), t('SettingsPage.tests'), 'token', t('SettingsPage.token'), t('McpSettingsSection.environmentVariables'), t('McpSettingsSection.requestHeaders'), ...AGENT_KINDS],
   Icon: PlugIcon,
-  Body: McpSettingsSection
+  Body: McpSettingsSection,
+  grouped: true
 }))
 
 // On a core that keeps them: the agents' accounts and switching between them; it follows 外部智能体.
@@ -894,7 +681,8 @@ const ACCOUNTS_SECTION: Section = localized(() => ({
   description: t('AgentAccounts.description'),
   keywords: [t('AgentAccounts.title'), 'account', 'login', t('AgentAccounts.signIn'), t('AgentAccounts.autoSwitch'), 'quota', 'CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'claude', 'codex'],
   Icon: PersonIcon,
-  Body: AgentAccountSettings
+  Body: AgentAccountSettings,
+  grouped: true
 }))
 
 // On a core that reads them: sessions the agents ran in a terminal, taken in as conversations; it follows 聊天命令.
@@ -916,7 +704,8 @@ const MODEL_PROVIDERS_SECTION: Section = localized(() => ({
   description: t('SettingsPage.modelProvidersDescription'),
   keywords: [t('SettingsPage.modelProviders'), 'provider', 'api key', 'key', t('ModelProviderSettings.plan'), 'coding plan', '火山', 'volcengine', 'ark', 'glm', '智谱', 'z.ai', 'kimi', 'minimax', 'anthropic', 'openai', ...AGENT_KINDS],
   Icon: CloudIcon,
-  Body: ModelProviderSettings
+  Body: ModelProviderSettings,
+  grouped: true
 }))
 
 // On a core that keeps a wire log: whether it does, and what it holds.
@@ -990,9 +779,10 @@ function matches(section: Section, needle: string): boolean {
   return [section.title, section.description, ...section.keywords].some((text) => messageSearchText(text).toLowerCase().includes(needle))
 }
 
-// Laid out like Orca's settings: sections on the left, one section at a time on the right.
 export function SettingsPage() {
   useOccludesBrowser()
+  const locale = useLocale((state) => state.locale)
+  const content = useRef<HTMLElement>(null)
   const sources = useCore((s) => s.sources)
   const plugins = useCore((s) => s.rpc?.features.includes('plugins') ?? false)
   const browser = useBrowserSupported()
@@ -1015,7 +805,7 @@ export function SettingsPage() {
         ...(skills ? [SKILLS_SECTION] : []), ...(mcp ? [MCP_SECTION] : [])
       ] : [section]))
     return [...own, ...(plugins ? [PLUGINS_SECTION] : []), ...sourceSections(sources ?? []), ...(knowledge ? [KNOWLEDGE_SECTION] : []), ...(browser ? [BROWSER_SECTION] : []), ...(wireLog ? [DEBUG_SECTION] : []), ...information]
-  }, [sources, browser, knowledge, skills, mcp, sessionImport, accounts, modelProviders, chatCommands, wireLog, plugins, run, permissions, getLocale()])
+  }, [sources, browser, knowledge, skills, mcp, sessionImport, accounts, modelProviders, chatCommands, wireLog, plugins, run, permissions, locale])
   const activeId = useCore((state) => state.settingsSection) ?? SECTIONS[0]?.id ?? ''
   const [query, setQuery] = useState('')
   useEffect(() => { setQuery('') }, [activeId])
@@ -1024,22 +814,24 @@ export function SettingsPage() {
   // While searching, stay on the chosen section if it still matches, else show the first match.
   const active = visible.find((section) => section.id === activeId) ?? visible[0]
   const groups = [...new Set(visible.map((section) => section.group))]
+  useEffect(() => { content.current?.scrollTo({ top: 0 }) }, [active?.id])
 
   return (
     <div className="settings">
       <aside className="settings-nav" aria-label={t('SettingsPage.settingsCategories')}>
         <div className="settings-nav-top">
+          <h1>{t('StatusBar.settings')}</h1>
           <button type="button" className="settings-back" onClick={() => setSettingsOpen(false)}>{tr('SettingsPage.back', { value1: <ArrowLeftIcon /> })}</button>
         </div>
         <div className="settings-search">
           <SearchIcon />
           <input
             className="input"
+            type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={t('SettingsPage.searchSettings')}
             aria-label={t('SettingsPage.searchSettings')}
-            autoFocus
           />
         </div>
         <nav className="settings-groups">
@@ -1063,11 +855,12 @@ export function SettingsPage() {
             </div>
           ))}
         </nav>
+        <footer className="settings-nav-footer"><span>Antumi</span><span>v{packageJson.version}</span></footer>
       </aside>
 
-      <main className="settings-content">
+      <main className="settings-content" ref={content}>
         <div className="titlebar-drag" aria-hidden="true" />
-        <div className="settings-inner">
+        <div className="settings-inner" data-section={active?.id}>
           {active ? (
             <section aria-labelledby={`settings-${active.id}`}>
               <header className="settings-section-header">
@@ -1081,7 +874,7 @@ export function SettingsPage() {
               )}
             </section>
           ) : (
-            <p className="settings-none">{tr('SettingsPage.noSettingsFoundFor', { value1: query.trim() })}</p>
+            <div className="settings-none" role="status"><SearchIcon /><p>{tr('SettingsPage.noSettingsFoundFor', { value1: query.trim() })}</p><button type="button" className="button" onClick={() => setQuery('')}>{t('SettingsPage.clearSearch')}</button></div>
           )}
         </div>
       </main>

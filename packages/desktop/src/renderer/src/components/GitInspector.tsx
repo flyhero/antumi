@@ -273,7 +273,7 @@ function ConflictRow({ target, directory, file, disabled, resolve }: { target: G
   const conversationId = useCore((s) => target.kind === 'conversation' ? target.id : s.tasks[target.id]?.conversationId ?? '')
   const resolved = { path: `${directory.replace(/[\\/]$/, '')}/${file}`, root: directory, relative: file, kind: 'file' as const }
   return <div className="git-conflict-row"><span className="mono" title={file}>{file}</span>
-    {conversationId && <button className="button" onClick={() => showResolvedFile({ conversationId, inspector: target.kind, roots: [directory] }, resolved, null)}>{t('chatTools.preview')}</button>}
+    {conversationId && <button className="button" onClick={() => showResolvedFile({ conversationId, roots: [directory] }, resolved, null)}>{t('chatTools.preview')}</button>}
     <button className="button" onClick={() => void openResolvedFile(resolved)}>{t('ChatBrowserCard.open')}</button>
     <button className="button" disabled={disabled} onClick={resolve}>{t('GitInspector.markResolved')}</button>
   </div>

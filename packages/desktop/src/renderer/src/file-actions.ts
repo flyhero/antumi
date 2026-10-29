@@ -1,11 +1,12 @@
 import { t } from './i18n'
 import type { ResolvedFile } from '@antumi/protocol'
-import { perform, showError, useCore } from './core-store'
+import { perform, showFilesPanel, showError, useCore } from './core-store'
 import { canRevealFile, openFile, revealFile } from './desktop-bridge'
 import { fileCandidates, type FileReference } from './file-links'
-import { openedFile, updateFileTabs } from './file-tabs'
+import { fileScopeKey, fileScopeParams, openedFile, updateFileTabs, type FileScope } from './file-tabs'
 
-export type ChatFileScope = { conversationId: string; inspector: 'task' | 'conversation'; roots: readonly string[] }
+// A chat's files: its conversation's folders, and the inspector beside it.
+export type ChatFileScope = FileScope & { conversationId: string; inspector: 'task' | 'conversation' }
 export const FILE_MANAGER = () => window.antumi?.platform === 'darwin' ? t('fileActions.finder') : window.antumi?.platform === 'win32' ? t('fileActions.fileExplorer') : t('fileActions.fileManager')
 
 export function filePreviewSupported(): boolean {
@@ -16,22 +17,20 @@ export function useFilePreviewSupported(): boolean {
   return useCore((state) => state.rpc?.features.includes('file-preview') ?? false)
 }
 
-export function showResolvedFile(scope: ChatFileScope, file: ResolvedFile, line: number | null): void {
-  updateFileTabs(scope.conversationId, (state) => openedFile(state, file, line))
-  useCore.setState(scope.inspector === 'task'
-    ? { inspectorOpen: true, taskInspectorTab: 'files' }
-    : { conversationInspectorOpen: true, conversationInspectorTab: 'files' })
+export function showResolvedFile(scope: FileScope, file: ResolvedFile, line: number | null): void {
+  updateFileTabs(fileScopeKey(scope), (state) => openedFile(state, file, line))
+  showFilesPanel(scope)
 }
 
-export async function resolveChatFile(scope: ChatFileScope, reference: FileReference): Promise<ResolvedFile | null> {
+export async function resolveChatFile(scope: FileScope, reference: FileReference): Promise<ResolvedFile | null> {
   return perform(async (rpc) => {
-    const found = await rpc.call('files.resolve', { conversationId: scope.conversationId, path: reference.path })
+    const found = await rpc.call('files.resolve', { ...fileScopeParams(scope), path: reference.path })
     if (!found) showError(t('ChatMarkdown.fileNotFound', { value1: reference.path }))
     return found
   })
 }
 
-export async function showChatFile(scope: ChatFileScope, reference: FileReference): Promise<void> {
+export async function showChatFile(scope: FileScope, reference: FileReference): Promise<void> {
   if (filePreviewSupported()) {
     const found = await resolveChatFile(scope, reference)
     if (found) showResolvedFile(scope, found, reference.line)

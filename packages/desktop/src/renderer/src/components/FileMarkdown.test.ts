@@ -10,7 +10,7 @@ vi.hoisted(() => {
 const render = (text: string) => renderToStaticMarkup(createElement(FileMarkdown, {
   text,
   file: { path: '/project/docs/guide.md', root: '/project', relative: 'docs/guide.md', kind: 'file' },
-  scope: { conversationId: 'chat', inspector: 'conversation', roots: ['/project'] }
+  scope: { conversationId: 'chat', roots: ['/project'] }
 }))
 
 describe('Markdown file preview', () => {

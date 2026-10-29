@@ -22,7 +22,6 @@ import {
 import { openChatWhileStarting, perform, selectTask, setInspectorOpen, setSchedulesOpen, showTaskChanges, showView, updateTask, useChatOptionsSupported, useCore, useSchedulesSupported, useTaskCancelSupported, useTaskLaunchSupported, useTaskRedoInPlace, useWireLogShown, useWorktreesSupported, type TaskView } from '../core-store'
 import { resolveModel, useAgentCatalog } from '../agent-models'
 import { reasonText, STATUS_HINT, STATUS_LABEL } from '../labels'
-import { useFileTabs } from '../file-tabs'
 import { waitingOn } from '../task-waiting'
 import { AgentPicker } from './AgentPicker'
 import { confirmQuota, modelText } from './AgentQuota'
@@ -707,13 +706,12 @@ export function TaskToolbar({ task, view }: { task: Task; view: TaskView }) {
   const helperSupported = useHelperSupported(parent)
   const helper = useHelper(helperSupported ? parent?.id ?? null : null)
   const worktree = task.repos.some((repo) => repo.worktreePath !== null)
-  const hasFiles = useFileTabs((state) => (state[task.conversationId ?? '']?.tabs.length ?? 0) > 0)
   const wire = useWireLogShown()
   const todosShown = useTodosShown()
   return (
     <div className="toolbar">
       {view === 'chat' && <TaskSteps task={task} />}
-      {task.conversationId && (calls?.length || helper || worktree || wire || hasFiles || todosShown) ? <InspectorToggle view={view} conversationId={task.conversationId} /> : null}
+      {task.conversationId && (calls?.length || helper || worktree || wire || todosShown) ? <InspectorToggle view={view} conversationId={task.conversationId} /> : null}
       {task.conversationId && <ViewToggle view={view} />}
       <MoreMenu task={task} />
       <span className="toolbar-separator" aria-hidden="true" />

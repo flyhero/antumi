@@ -1,14 +1,16 @@
 import { probeProvider, useProviderProbes } from '../provider-probes'
 import { getLocale, t } from '../i18n'
-import { useId, useState, type FormEvent } from 'react'
+import { useLayoutEffect, useId, useRef, useState, type FormEvent } from 'react'
 import {
   AGENT_KINDS, MODEL_PROVIDER_PRESETS, MODEL_PROVIDER_PRESET_IDS, providerUrlProblem, providerWireFor,
   type AgentKind, type ModelProvider, type ModelProviderInput, type ModelProviderPreset, type ModelProviderPresetId, type ModelProviderProbe, type ProviderModel, type ProviderWire
 } from '@antumi/protocol'
-import { perform, useCore } from '../core-store'
+import { perform, setSettingsOpen, useAccountsSupported, useCore } from '../core-store'
 import { agentLabel } from '../labels'
 import { Segmented } from './SettingsControls'
 import { PRESET_VENDOR } from '../provider-vendors'
+import { SettingsEmptyState } from './SettingsEmptyState'
+import { ArrowLeftIcon, ChevronDownIcon, ChevronRightIcon, CloudIcon, PlusIcon } from './icons'
 
 type Draft = {
   id: string | null
@@ -118,6 +120,9 @@ function ProviderForm({ initial, onDone }: { initial: Draft; onDone: (saved: str
   const [draft, setDraft] = useState(initial)
   const [saving, setSaving] = useState(false)
   const authId = useId()
+  const keyHintId = useId()
+  const form = useRef<HTMLFormElement>(null)
+  useLayoutEffect(() => { form.current?.closest('.settings-content')?.scrollTo({ top: 0 }) }, [])
   const set = (patch: Partial<Draft>) => setDraft((current) => ({ ...current, ...patch }))
   const endpoints = endpointsOf(draft)
   const models = modelsOf(draft)
@@ -147,13 +152,16 @@ function ProviderForm({ initial, onDone }: { initial: Draft; onDone: (saved: str
   }
 
   return (
-    <form className="chat-command-form" onSubmit={(event) => void save(event)}>
+    <form ref={form} className="chat-command-form provider-settings-form" onSubmit={(event) => void save(event)}>
+      <div className="settings-section-toolbar provider-form-heading">
+        <div><button type="button" className="link-button" onClick={() => onDone(null)}><ArrowLeftIcon />{t('SettingsPage.backToProviders')}</button><h3>{draft.name || t('ModelProviderSettings.custom')}{presetId && <VerifiedBadge preset={presetId} />}</h3></div>
+      </div>
       {draft.id === null && (
-        <div className="chat-command-field">
-          <span>{t('ModelProviderSettings.plan')}</span>
+        <details className="settings-disclosure provider-plan-switcher">
+          <summary>{t('ModelProviderSettings.plan')}<span>{draft.preset === 'custom' ? t('ModelProviderSettings.custom') : presetName(draft.preset)}</span><ChevronDownIcon /></summary>
           <PresetGrid value={draft.preset} onPick={pick} />
           <span className="chat-command-hint">{t('ModelProviderSettings.unverifiedHint')}</span>
-        </div>
+        </details>
       )}
       <label className="chat-command-field">
         <span>{t('ChatCommandSettings.name')}</span>
@@ -161,13 +169,18 @@ function ProviderForm({ initial, onDone }: { initial: Draft; onDone: (saved: str
       </label>
       <label className="chat-command-field">
         <span>API Key</span>
-        <input className="input mono" type="password" autoComplete="new-password" value={draft.apiKey} onChange={(event) => set({ apiKey: event.target.value })}
+        <input className="input mono" aria-label="API Key" aria-describedby={keyHintId} type="password" autoComplete="new-password" value={draft.apiKey} onChange={(event) => set({ apiKey: event.target.value })}
           placeholder={draft.hasKey ? t('McpSettingsSection.alreadySetLeaveEmptyToKeep') : ''} />
-        <span className="chat-command-hint">
+        <span id={keyHintId} className="chat-command-hint">
           {t('ModelProviderSettings.keyHint')}
           {preset && <> <a className="provider-link" href={preset.keyUrl} target="_blank" rel="noreferrer">{t('ModelProviderSettings.getKey')}</a></>}
         </span>
       </label>
+      {presetId && <p className="settings-note">{presetNotes(presetId)[0]}</p>}
+      {preset && <p className="provider-ready-summary">{t('SettingsPage.providerPresetHint', { model: draft.defaultModel, agents: draft.agents.filter((agent) => servable.includes(agent)).map(agentLabel).join('、') })}</p>}
+      <details className="settings-disclosure provider-advanced" key={draft.preset} open={preset === null || undefined}>
+        <summary>{preset ? t('SettingsPage.providerAdvanced') : t('SettingsPage.providerCustomSetup')}</summary>
+        {preset && <p className="settings-note">{t('SettingsPage.providerPresetHint', { model: draft.defaultModel, agents: draft.agents.map(agentLabel).join('、') })}</p>}
       <label className="chat-command-field">
         <span>{t('ModelProviderSettings.models')}</span>
         <textarea className="input mono mcp-args" rows={4} value={draft.models} onChange={(event) => setModels(event.target.value)} spellCheck={false} placeholder="glm-5.3" />
@@ -242,6 +255,7 @@ function ProviderForm({ initial, onDone }: { initial: Draft; onDone: (saved: str
           </label>
         </>
       )}
+      </details>
       <div className="chat-command-actions">
         <button type="button" className="button ghost" onClick={() => onDone(null)}>{t('ChatCommandSettings.cancel')}</button>
         <button type="submit" className="button primary" disabled={!ready || saving}>{saving ? t('McpSettingsSection.saving') : t('McpSettingsSection.saveAndTest')}</button>
@@ -278,10 +292,10 @@ function ProviderRow({ provider, probe, onProbe, onEdit }: { provider: ModelProv
     try { await perform((rpc) => rpc.call('modelProviders.remove', { id: provider.id })) } finally { setBusy(false) }
   }
   return (
-    <div className="plugin-row">
+    <article className="provider-entry">
       <div className="settings-row">
         <div className="settings-row-text">
-          <span className="settings-row-label">{provider.name}{preset && <VerifiedBadge preset={preset} />}</span>
+          <div className="agent-row-head"><span className="provider-mark" data-vendor={preset ? PRESET_VENDOR[preset].vendor : 'custom'} aria-hidden="true">{preset ? PRESET_VENDOR[preset].mark : '+'}</span><span className="settings-row-label">{provider.name}</span><span className="settings-state-pill" data-state={!provider.hasKey ? 'warning' : probe === 'running' ? 'pending' : probe ? (probe.ok ? 'ok' : 'error') : 'pending'}>{!provider.hasKey ? t('ModelProviderSettings.noKey') : probe === 'running' ? t('ModelProviderSettings.testing') : probe ? (probe.ok ? t('SettingsPage.providerTested') : t('SettingsPage.providerTestFailed')) : t('SettingsPage.providerUntested')}</span></div>
           <p className="settings-row-description">
             {t('ModelProviderSettings.summary', { value1: provider.agents.map(agentLabel).join('、'), value2: provider.defaultModel })}
             {!provider.hasKey && <span className="warning"> · {t('ModelProviderSettings.noKey')}</span>}
@@ -306,7 +320,7 @@ function ProviderRow({ provider, probe, onProbe, onEdit }: { provider: ModelProv
           </>
         ) : <button type="button" className="button ghost" disabled={busy} onClick={() => setRemoving(true)}>{t('ChatCommandSettings.delete')}</button>}
       </div>
-    </div>
+    </article>
   )
 }
 
@@ -316,19 +330,31 @@ export function ModelProviderSettings() {
   const connected = useCore((s) => s.connection === 'connected')
   const providers = useCore((s) => s.modelProviders)
   const [draft, setDraft] = useState<Draft | null>(null)
+  const accountsSupported = useAccountsSupported()
   const probes = useProviderProbes((state) => state.probes)
 
-  if (!connected) return <p className="settings-empty">{t('ChatCommandSettings.connectToAntumiCoreToView')}</p>
+  if (!connected) return <SettingsEmptyState icon={<CloudIcon />} title={t('SettingsPage.providersDisconnected')}>{t('ChatCommandSettings.connectToAntumiCoreToView')}</SettingsEmptyState>
   if (draft) return <ProviderForm key={draft.id ?? 'new'} initial={draft} onDone={(saved) => { setDraft(null); if (saved) void probeProvider(saved) }} />
   return (
-    <>
-      <p className="settings-note">{t('ModelProviderSettings.intro')}</p>
-      {providers.length === 0 ? <p className="settings-empty">{t('ModelProviderSettings.none')}</p> : providers.map((provider) => (
-        <ProviderRow key={provider.id} provider={provider} probe={probes[provider.id]?.revision === provider.revision ? probes[provider.id]?.result : undefined} onProbe={() => void probeProvider(provider.id)} onEdit={() => setDraft(draftOf(provider))} />
-      ))}
-      <div className="chat-command-actions">
-        <button type="button" className="button primary" onClick={() => setDraft(draftOfPreset(MODEL_PROVIDER_PRESET_IDS[0]))}>{t('ModelProviderSettings.add')}</button>
-      </div>
-    </>
+    <div className="provider-settings">
+      {providers.length === 0 ? <>
+        <SettingsEmptyState icon={<CloudIcon />} title={t('SettingsPage.providerGetStarted')} actions={<button type="button" className="button" onClick={() => setDraft(draftOfPreset('custom'))}><PlusIcon />{t('SettingsPage.providerCustomAdd')}</button>}>
+          {t('SettingsPage.providerEmptyHint')}
+        </SettingsEmptyState>
+        <div className="provider-start-list" aria-label={t('SettingsPage.providerChoosePlan')}>
+          <h3>{t('SettingsPage.providerChoosePlan')}</h3>
+          {MODEL_PROVIDER_PRESET_IDS.map((preset) => <button type="button" key={preset} className="provider-start-row" onClick={() => setDraft(draftOfPreset(preset))}>
+            <span className="provider-mark" data-vendor={PRESET_VENDOR[preset].vendor} aria-hidden="true">{PRESET_VENDOR[preset].mark}</span>
+            <span><strong>{presetName(preset)}</strong><span className="settings-quota-note">{MODEL_PROVIDER_PRESETS[preset].agents.map(agentLabel).join(' · ')}</span></span>
+            <VerifiedBadge preset={preset} /><ChevronRightIcon />
+          </button>)}
+          <p className="settings-note">{t('ModelProviderSettings.unverifiedHint')}</p>
+        </div>
+        <div className="provider-account-alternative"><h3>{t('SettingsPage.providerAccountAlternative')}</h3><p>{t('SettingsPage.providerAccountHint')}</p>{accountsSupported && <button type="button" className="link-button" onClick={() => setSettingsOpen(true, 'accounts')}>{t('AgentAccounts.manage')}<ChevronRightIcon /></button>}</div>
+      </> : <>
+        <div className="settings-section-toolbar"><p>{t('ModelProviderSettings.intro')}</p><button type="button" className="button primary" onClick={() => setDraft(draftOfPreset(MODEL_PROVIDER_PRESET_IDS[0]))}><PlusIcon />{t('ModelProviderSettings.add')}</button></div>
+        {providers.map((provider) => <ProviderRow key={provider.id} provider={provider} probe={probes[provider.id]?.revision === provider.revision ? probes[provider.id]?.result : undefined} onProbe={() => void probeProvider(provider.id)} onEdit={() => setDraft(draftOf(provider))} />)}
+      </>}
+    </div>
   )
 }

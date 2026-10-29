@@ -30,7 +30,7 @@ import { adviceText, alternativeAgent, paceText } from '../quota-advice-text'
 import { clearsText, formatClock, formatDuration, globalResetText, percentText, resetText, shownPercent, SPEND_OUTCOME_TEXT, spendNote, useNow, windowLabel } from '../usage-format'
 import { AgentIcon, CheckIcon, InfoIcon } from './icons'
 import { Spinner } from './Spinner'
-import { forecastText, useQuotaForecasts } from '../quota-forecast'
+import { forecastRunsOut, useQuotaForecasts } from '../quota-forecast'
 
 function errorText(usage: AgentUsage): string {
   return usage.error === 'auth-expired'
@@ -310,6 +310,10 @@ function UsageCard({ usage, accounts, accountLabel, now, advice, alternative, sh
       {usage.windows.map((window) => {
         const used = Math.round(window.usedPercent)
         const pace = showPace ? paceText(windowPace(window, now), now) : null
+        // Said only where the window runs out before it resets: that it lasts, the bar already shows.
+        const runsOut = showPace && window.usedPercent < 100
+          ? forecastRunsOut(forecasts.find((forecast) => forecast.window.kind === window.kind && forecast.window.model === window.model))
+          : null
         return (
           <div key={`${window.kind}-${window.model}`} className="usage-card-row" data-level={usageLevel(window.usedPercent)}>
             <span className="usage-card-label">{windowLabel(window)}</span>
@@ -323,10 +327,10 @@ function UsageCard({ usage, accounts, accountLabel, now, advice, alternative, sh
                 </span>
               ) })}</span>
             {window.resetsAt !== null && <span className="usage-card-reset">{resetText(window, now)}</span>}
+            {runsOut && <span className="usage-card-forecast" title={runsOut.basis}>{t('UsageBar.runsOutAt', { value1: formatClock(runsOut.at, now) })}</span>}
           </div>
         )
       })}
-      {showPace && forecasts.map((forecast) => <p className="usage-forecast-note" key={`${forecast.window.kind}/${forecast.window.model}`}>{windowLabel(forecast.window)} · {forecastText(forecast)}</p>)}
       {advice.length > 0 && <AdviceList advice={advice} now={now} alternative={alternative} />}
       {usage.resetCredits && (usage.resetCredits.available > 0 || usage.resetCredits.blockedBy || spending) && (
         <ResetCreditList usage={usage} credits={usage.resetCredits} now={now} spending={spending} onSpend={onSpend} onChange={onSpendingChange} />

@@ -22,9 +22,9 @@ import { startWorktreeUpdates } from './worktree-store'
 // the main window alone tells the user things, counts on the dock and keeps worktrees current.
 const popup = location.hash === '#request-popup'
 // The pet's playground (components/PetPlayground.tsx): the stage with a stand-in for the app, no core.
-const settingsPreview = import.meta.env.DEV && location.hash === '#pet-settings'
+const settingsPreview = import.meta.env.DEV && ['#pet-settings', '#settings'].includes(location.hash)
 const playground = location.hash === '#pet-playground' || settingsPreview
-if (settingsPreview) useCore.setState({ settingsOpen: true, settingsSection: 'pet' })
+if (settingsPreview) useCore.setState({ settingsOpen: true, settingsSection: location.hash === '#pet-settings' ? 'pet' : 'appearance' })
 
 startUiLanguage()
 followPreferences()
@@ -34,6 +34,7 @@ if (playground) {
   if (new URLSearchParams(location.search).has('port')) startCoreConnection('requests')
   startAppearance()
   startBackgroundRest()
+  startCodeFont()
 } else if (popup) {
   document.documentElement.dataset.window = 'request-popup'
   followRequestPopupWanted()

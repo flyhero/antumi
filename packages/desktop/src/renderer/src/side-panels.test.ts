@@ -23,6 +23,13 @@ describe('exclusivePanels', () => {
     expect(exclusivePanels({ ...withBrowser, inspectorOpen: true }, withBrowser)).toEqual({ terminalPanelOpen: false, portsPanelOpen: false, utilityPanelOrder: ['browser'] })
   })
 
+  it('treats the files panel as the terminal: either it or an inspector', () => {
+    const inspector = { ...closed, conversationInspectorOpen: true }
+    expect(exclusivePanels({ ...inspector, filesPanelOpen: true, utilityPanelOrder: ['files'] }, inspector)).toEqual({ inspectorOpen: false, conversationInspectorOpen: false })
+    const files: SidePanels = { ...closed, filesPanelOpen: true, utilityPanelOrder: ['browser', 'files'] }
+    expect(exclusivePanels({ ...files, inspectorOpen: true }, files)).toEqual({ terminalPanelOpen: false, filesPanelOpen: false, utilityPanelOrder: ['browser'] })
+  })
+
   it('changes nothing when nothing opens, or the other side is already away', () => {
     const terminal = { ...closed, terminalPanelOpen: true }
     expect(exclusivePanels(terminal, terminal)).toBeNull()

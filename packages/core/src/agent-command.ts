@@ -1,4 +1,4 @@
-import { AGENT_CALL_TOOLS, BROWSER_BOOKMARKS_TOOL, browserToolName, HISTORY_TOOLS, historyToolName, SHOW_PREVIEW_TOOL, SQUAD_TOOL_NAMES, terminalToolName, TODO_TOOLS, todoToolName } from '@antumi/protocol'
+import { AGENT_CALL_TOOLS, BROWSER_BOOKMARKS_TOOL, browserToolName, HISTORY_TOOLS, historyToolName, MANAGEMENT_READ_TOOLS, SHOW_PREVIEW_TOOL, SQUAD_TOOL_NAMES, terminalToolName, TODO_TOOLS, todoToolName } from '@antumi/protocol'
 
 // env is added to what the agent runs with, for an agent configured through its environment.
 export type AgentCommand = { command: string; args: string[]; env?: Record<string, string> }
@@ -20,5 +20,5 @@ export const BROWSER_READ_TOOLS: readonly string[] = [...(['snapshot', 'screensh
 // history (there only where the user allows it), and the to-dos where they come along. Running a
 // command in a terminal, or acting on a page, is left out.
 export function antumiReadTools(todos: boolean): string[] {
-  return [...Object.values(AGENT_CALL_TOOLS), ...Object.values(SQUAD_TOOL_NAMES), SHOW_PREVIEW_TOOL, ...BROWSER_READ_TOOLS, terminalToolName('read'), terminalToolName('stop'), ...HISTORY_TOOLS.map(historyToolName), ...(todos ? TODO_TOOLS.map(todoToolName) : [])]
+  return [...Object.values(AGENT_CALL_TOOLS), ...Object.values(SQUAD_TOOL_NAMES), ...MANAGEMENT_READ_TOOLS, SHOW_PREVIEW_TOOL, ...BROWSER_READ_TOOLS, terminalToolName('read'), terminalToolName('stop'), ...HISTORY_TOOLS.map(historyToolName), ...(todos ? TODO_TOOLS.map(todoToolName) : [])]
 }

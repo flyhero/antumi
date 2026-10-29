@@ -1,6 +1,6 @@
 import { afterEach, expect, it } from 'vitest'
 import type { ResolvedFile } from '@antumi/protocol'
-import { closedFile, EMPTY_FILE_TABS, expandedFolders, forgetFileTabs, markedDirty, openedFile, revealedFile, revealedFolder, saveFileScroll, toggledFolder, updateFileTabs, useFileTabs } from './file-tabs'
+import { closedFile, EMPTY_FILE_TABS, expandedFolders, fileScopeKey, fileScopeParams, forgetFileTabs, markedDirty, openedFile, revealedFile, revealedFolder, saveFileScroll, toggledFolder, updateFileTabs, useFileTabs } from './file-tabs'
 
 const file: ResolvedFile = { path: '/project/a.ts', root: '/project', relative: 'a.ts', kind: 'file' }
 afterEach(() => useFileTabs.setState({}, true))
@@ -13,13 +13,20 @@ it('deduplicates file tabs while honoring another request to reveal a line', () 
   expect(again.tabs[0]).toMatchObject({ line: 20, reveal: 2, scrollTop: 300 })
 })
 
-it('selects a neighboring tab on close and stays maximized, the file tree still showing', () => {
+it('selects a neighboring tab on close, the file tree still showing', () => {
   const next = { ...file, path: '/project/b.ts', relative: 'b.ts' }
-  const both = { ...openedFile(openedFile(EMPTY_FILE_TABS, file, null), next, null), maximized: true }
+  const both = openedFile(openedFile(EMPTY_FILE_TABS, file, null), next, null)
   const one = closedFile(both, next.path)
   expect(one.active).toBe(file.path)
-  expect(one.maximized).toBe(true)
-  expect(closedFile(one, file.path)).toMatchObject({ tabs: [], active: null, maximized: true })
+  expect(closedFile(one, file.path)).toMatchObject({ tabs: [], active: null, tree: true })
+})
+
+it('keys open files by their folders, so chats on one checkout share them', () => {
+  expect(fileScopeKey({ conversationId: 'a', roots: ['/wt/one'] })).toBe(fileScopeKey({ conversationId: 'b', roots: ['/wt/one'] }))
+  expect(fileScopeKey({ conversationId: 'a', roots: ['/wt/one'] })).not.toBe(fileScopeKey({ conversationId: 'a', roots: ['/wt/two'] }))
+  expect(fileScopeKey({ conversationId: 'a', roots: [] })).not.toBe(fileScopeKey({ conversationId: 'b', roots: [] }))
+  expect(fileScopeParams({ conversationId: 'a', roots: ['/wt/one'] })).toEqual({ conversationId: 'a' })
+  expect(fileScopeParams({ conversationId: null, roots: ['/wt/one'] })).toEqual({ roots: ['/wt/one'] })
 })
 
 it('isolates selections and scroll positions between conversations and cleans deleted ones', () => {

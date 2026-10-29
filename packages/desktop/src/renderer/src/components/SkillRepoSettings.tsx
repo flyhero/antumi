@@ -3,6 +3,7 @@ import { activatedSkillNames, type SkillRef, type SkillRepo, type SkillUpdateChe
 import { perform } from '../core-store'
 import { t, tr } from '../i18n'
 import { Toggle } from './SettingsControls'
+import { agentLabel } from '../labels'
 
 const short = (commit: string) => commit.slice(0, 7)
 
@@ -26,11 +27,17 @@ export function SkillRepoSettings({ repo, managed, fallback, onConfigure }: { re
   })
   const toggle = (name: string, enabled: boolean) => run(() => perform((rpc) => rpc.call('skills.setActivation', { id: repo.id, activation: { mode: 'selected', skills: enabled ? [...selected, name] : selected.filter((each) => each !== name), agents: repo.activation?.agents ?? null } })))
   return <li className="settings-skill-repo">
+    <div className="skill-library-overview">
+      <div className="settings-row-text">
+        <div className="settings-entry-title"><strong>{repo.plugin?.name ?? repo.id}</strong>{managed && <span className="settings-state-pill">{t('SkillsSettingsSection.enabledCount', { count: selected.length, total: repo.skills.length })}</span>}</div>
+        <p className="skill-library-url mono" title={repo.url}>{repo.url}</p>
+        {managed && <p className="settings-row-description">{repo.activation ? repo.activation.agents === null ? t('SkillsSettingsSection.allCompatibleAgents') : repo.activation.agents.length ? t('McpSettingsSection.sharedWith', { value1: repo.activation.agents.map(agentLabel).join('、') }) : t('McpSettingsSection.notSharedWithAnyAgent') : t('SkillsSettingsSection.legacyActivation')}</p>}
+      </div>
+      {managed && <button type="button" className="button" disabled={busy} onClick={onConfigure}>{t('SkillsSettingsSection.configure')}</button>}
+    </div>
     <details className="skill-repo-details">
-      <summary><span>{repo.plugin?.name ?? repo.id}</span>{managed && <span className="skill-repo-count">{t('SkillsSettingsSection.enabledCount', { count: selected.length, total: repo.skills.length })}</span>}</summary>
+      <summary><span>{t('SkillsSettingsSection.detailsAndMaintenance')}</span><span className="mono muted" title={repo.commit}>{short(repo.commit)}</span></summary>
       <div className="settings-project">
-        <span className="settings-project-path mono" title={repo.url}>{repo.url}</span><span className="mono muted" title={repo.commit}>{short(repo.commit)}</span>
-        {managed && <button type="button" className="button" disabled={busy} onClick={onConfigure}>{t('SkillsSettingsSection.configure')}</button>}
         <button type="button" className="button" disabled={busy} onClick={() => void run(async () => { if (readme !== null) { setReadme(null); return } const found = await perform((rpc) => rpc.call('skills.readme', { id: repo.id })); setReadme(found?.text ?? t('SkillsSettingsSection.noReadme')) })}>{readme === null ? t('ChatCommandSettings.description') : t('ChatPlan.collapse')}</button>
         <button type="button" className="button" disabled={busy} onClick={() => void inspect()}>{t('SkillsSettingsSection.checkForUpdates')}</button>
         {repo.previousCommit && <button type="button" className="button" disabled={busy} onClick={() => void run(() => perform((rpc) => rpc.call('skills.rollback', { id: repo.id })))}>{tr('SkillsSettingsSection.rollBackTo', { value1: short(repo.previousCommit) })}</button>}

@@ -3817,6 +3817,13 @@ div.inspector-empty > p { margin: 0 0 8px; }
   color: var(--text-muted);
 }
 
+/* The window runs out before it resets: the one forecast worth a line. */
+.usage-card-forecast {
+  grid-column: 1 / -1;
+  color: var(--warning);
+  cursor: help;
+}
+
 .usage-card-row[data-level='critical'] .usage-card-value,
 .usage-card-row[data-level='warning'] .usage-card-value {
   color: var(--level-color);
@@ -7529,8 +7536,26 @@ div.inspector-empty > p { margin: 0 0 8px; }
   .chat-input-card[data-working]::before { content: none; }
 }
 
-/* Grows with what is typed up to a limit, so no resize grip competes with the corner button. Its
-   copy under it (.chat-input-marks) must lay text out exactly as it does. */
+/* The plain-text composers (group chat, helper, routine) that don't run on CodeMirror: laid out as
+   the main composer's editor. Grows with what is typed up to a limit, so no resize grip competes
+   with the corner button. */
+.chat-input {
+  display: block;
+  width: 100%;
+  field-sizing: content;
+  min-height: 48px;
+  max-height: 40vh;
+  padding: 8px 12px 4px;
+  border: none;
+  outline: none;
+  resize: none;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.chat-input::placeholder { color: var(--text-3); }
 /* Send, or stop: round, at the end of the toolbar. One turns into the other as the turn starts
    and ends. */
 /* Sends a handoff: worded, not an arrow, as it changes who the chat is with. As tall as the send. */
@@ -10230,4 +10255,3 @@ button.squad-member-main { cursor: pointer; }
 .usage-automation-history summary { cursor: pointer; color: var(--text-muted); }
 .usage-automation-history p { display: flex; flex-direction: column; gap: 4px; padding: 8px 0; margin: 0; font-size: 12px; }
 .usage-automation-history { margin-top: 16px; }
-.usage-forecast-note { margin: 6px 0; color: var(--text-muted); font-size: 11px; }

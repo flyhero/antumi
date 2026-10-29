@@ -66,6 +66,7 @@ const Ok = z.object({ ok: z.literal(true) })
 const AccountRef = z.object({ agent: AgentKind, id: AgentAccountId })
 const ConversationRef = z.object({ id: z.string().uuid() })
 const DiscussionRef = z.object({ id: z.string().uuid() })
+const FileScopeParams = z.object({ conversationId: z.string().uuid().optional(), roots: z.array(z.string().min(1).max(32_768)).min(1).max(20).optional() })
 // The usage window kinds this client reads; an older client names none, and reads session and weekly.
 const UsageParams = z.object({ windowKinds: z.array(z.string()).optional() })
 // What core can do beyond this protocol version's baseline; an older core sends none.
@@ -95,13 +96,15 @@ const UsageParams = z.object({ windowKinds: z.array(z.string()).optional() })
 // git-push-target: git.outgoing lists what a push sends; push takes from and keeps an upstream it has;
 // git.execute takes track.
 // git-favorites: git.favorite saves branch favorites, included in git.status, across a repository's worktrees.
+// project-files: the files.* methods take project folders (roots) in place of a conversation, for the files panel
+//   browsing a project no conversation is on.
 // project-config: core copies files and runs setup in new worktrees and check before review, from a
 // project's .antumi/project.json, once the user trusts its commands (projects.config, projects.trustConfig).
 // project-config-edit: core writes that file as the user filled it in (projects.writeConfig), and
 // suggests what to fill it with (projects.suggestConfig).
 // conversation-references: history_read resolves explicit antumi://conversation/<id> references.
 // chat-references: user messages and queues retain the composer's explicit reference targets.
-export const CORE_FEATURES = ['chat-references', 'conversation-references', 'agent-profiles', 'pets', 'plugins', 'plugin-recommendations', 'chat-options', 'chat-images', 'task-start', 'worktrees', 'conversation-branches', 'conversation-commit-push', 'find-file', 'conversation-projects', 'browser', 'keep-awake', 'terminal-commands', 'bookmarks', 'usage-limit', 'agent-stats', 'conversation-stats', 'prompt-suggestions', 'environment', 'conversation-pin', 'schedules', 'chat-commands', 'file-mentions', 'plan-modes', 'agent-terminals', 'schedule-images', 'dashboard', 'task-conversation-summaries', 'routines', 'ports', 'conversation-fork', 'conversation-configuration', 'conversation-commit-steps', 'conversation-worktrees', 'conversation-start-branch', 'wire-log', 'file-preview', 'deferred-conversation-start', 'agent-cli-installation', 'agent-cli-maintenance', 'task-launch-options', 'git-management', 'git-commit-branches', 'task-handoff', 'handoff-model', 'handoff-mode', 'task-launch', 'discussions', 'discussion-members', 'discussion-projects', 'discussion-topics', 'discussion-requirements', 'task-cancel', 'task-redo-in-place', 'conversation-archive', 'discussion-archive', 'translate', 'commit-message', 'squads', 'squad-leader-planning', 'conversation-todos', 'knowledge-base', 'knowledge-base-kind', 'skills-library', 'skills-search', 'skills-activation', 'mcp-servers', 'source-investigate', 'todo-overview', 'conversation-helper', 'small-model-stats', 'terminal-color-prompt', 'git-commit-actions', 'file-editor', 'project-config', 'project-config-edit', 'model-providers', 'git-update', 'git-push-target', 'task-auto-run', 'session-import', 'agent-accounts', 'usage-analytics', 'task-references', 'release-idle-chats', 'project-star', 'git-favorites'] as const
+export const CORE_FEATURES = ['chat-references', 'conversation-references', 'agent-profiles', 'pets', 'plugins', 'plugin-recommendations', 'chat-options', 'chat-images', 'task-start', 'worktrees', 'conversation-branches', 'conversation-commit-push', 'find-file', 'conversation-projects', 'browser', 'keep-awake', 'terminal-commands', 'bookmarks', 'usage-limit', 'agent-stats', 'conversation-stats', 'prompt-suggestions', 'environment', 'conversation-pin', 'schedules', 'chat-commands', 'file-mentions', 'plan-modes', 'agent-terminals', 'schedule-images', 'dashboard', 'task-conversation-summaries', 'routines', 'ports', 'conversation-fork', 'conversation-configuration', 'conversation-commit-steps', 'conversation-worktrees', 'conversation-start-branch', 'wire-log', 'file-preview', 'deferred-conversation-start', 'agent-cli-installation', 'agent-cli-maintenance', 'task-launch-options', 'git-management', 'git-commit-branches', 'task-handoff', 'handoff-model', 'handoff-mode', 'task-launch', 'discussions', 'discussion-members', 'discussion-projects', 'discussion-topics', 'discussion-requirements', 'task-cancel', 'task-redo-in-place', 'conversation-archive', 'discussion-archive', 'translate', 'commit-message', 'squads', 'squad-leader-planning', 'conversation-todos', 'knowledge-base', 'knowledge-base-kind', 'skills-library', 'skills-search', 'skills-activation', 'mcp-servers', 'source-investigate', 'todo-overview', 'conversation-helper', 'small-model-stats', 'terminal-color-prompt', 'git-commit-actions', 'file-editor', 'project-config', 'project-config-edit', 'model-providers', 'git-update', 'git-push-target', 'task-auto-run', 'session-import', 'agent-accounts', 'usage-analytics', 'task-references', 'release-idle-chats', 'project-star', 'git-favorites', 'project-files'] as const
 // session-import: core lists the sessions agents ran outside Antumi and imports them as conversations (sessionImports.*).
 // agent-accounts: Claude and Codex sign in to several accounts, one active each, and a usage limit
 // moves the agent to the next with quota (accounts.*); usage readings name their account.
@@ -200,11 +203,13 @@ export const rpcMethods = {
   'system.awakeStatus': { params: z.object({}), result: ComputerAwakeStatus },
   'support.starStatus': { params: z.object({}), result: ProjectStarStatus },
   'support.star': { params: z.object({ identity: ProjectStarIdentity }), result: ProjectStarResult },
-  'files.resolve': { params: z.object({ conversationId: z.string().uuid(), path: z.string().min(1).max(32_768) }), result: ResolvedFile.nullable() },
-  'files.read': { params: z.object({ conversationId: z.string().uuid(), path: z.string().min(1).max(32_768) }), result: FileRead },
-  'files.list': { params: z.object({ conversationId: z.string().uuid(), path: z.string().min(1).max(32_768) }), result: DirectoryListing },
+  // Each takes the conversation whose folders the files belong to, or the folders themselves
+  // (feature project-files); one of the two.
+  'files.resolve': { params: FileScopeParams.extend({ path: z.string().min(1).max(32_768) }), result: ResolvedFile.nullable() },
+  'files.read': { params: FileScopeParams.extend({ path: z.string().min(1).max(32_768) }), result: FileRead },
+  'files.list': { params: FileScopeParams.extend({ path: z.string().min(1).max(32_768) }), result: DirectoryListing },
   'files.write': {
-    params: z.object({ conversationId: z.string().uuid(), path: z.string().min(1).max(32_768), text: z.string().max(MAX_FILE_PREVIEW_BYTES), expectedMtimeMs: z.number().nullable() }),
+    params: FileScopeParams.extend({ path: z.string().min(1).max(32_768), text: z.string().max(MAX_FILE_PREVIEW_BYTES), expectedMtimeMs: z.number().nullable() }),
     result: FileWrite
   },
   'system.setAwakeMode': { params: z.object({ mode: ComputerAwakeMode }), result: ComputerAwakeStatus },

@@ -24,7 +24,10 @@ const ConversationTarget = z.object({
   text: z.string().trim().max(100000),
   images: z.array(AttachmentId).max(MAX_CHAT_IMAGES).optional(),
   resumes: LimitRef.optional(),
-  references: z.array(ChatReference).max(1000).optional()
+  references: z.array(ChatReference).max(1000).optional(),
+  // An empty message made while a plan waited: the plan approval it is to give, by its request id.
+  // Core sets it; the plan answered some other way first, the run is dropped.
+  plan: z.string().optional()
 })
 // switchedTo: the account core moved the agent to when the limit came, to go on at once (AgentAccount.id).
 const ResumeTarget = z.object({ kind: z.literal('resume'), conversationId: z.string().uuid(), stageId: z.string(), itemId: z.string(), switchedTo: z.string().optional() })

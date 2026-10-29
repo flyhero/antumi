@@ -1494,6 +1494,11 @@ export class ConversationService {
     await this.send(id, message, images, !this.chats.idle(id), false, ref, chatReferencesFor(text, message, references))
   }
 
+  // The request id of the plan the conversation waits on the user to approve, if any.
+  waitingPlanRequest(id: string): string | null {
+    return this.waitingPlan(this.get(id))?.requestId ?? null
+  }
+
   // The plan the live stage waits on the user to approve, if any.
   private waitingPlan(conversation: Conversation): { requestId: string } | null {
     const stage = this.chats.activity(conversation.id) === null ? null : this.store.activeStage(conversation.id)

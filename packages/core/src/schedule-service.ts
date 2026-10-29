@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite'
 import {
   agentDescriptor,
+  isPlanApproval,
   limitOf,
   quotaVerdict,
   routineRunTitle,
@@ -10,6 +11,7 @@ import {
   ScheduledTarget,
   type AgentKind,
   type AgentUsage,
+  type ChatItem,
   type Conversation,
   type LimitRef,
   type RequestedTarget,
@@ -92,7 +94,7 @@ export type ScheduleDeps = {
     autoRuns?(): Task[]
     disableAutoRun?(id: string): void
   }
-  conversations: Pick<ConversationService, 'get' | 'create' | 'continue' | 'send' | 'runScheduled' | 'sentRef' | 'capacityAvailable'> & Partial<Pick<ConversationService, 'leaveSpentAccount'>>
+  conversations: Pick<ConversationService, 'get' | 'create' | 'continue' | 'send' | 'runScheduled' | 'sentRef' | 'capacityAvailable'> & Partial<Pick<ConversationService, 'waitingPlanRequest'>> & Partial<Pick<ConversationService, 'leaveSpentAccount'>>
   usage: { list(): AgentUsage[]; refresh(): Promise<AgentUsage[]> }
   beforeQuotaWait?(agent: AgentKind): Promise<void>
   // The mode runs start in, as the user last set it.
@@ -172,7 +174,8 @@ export class ScheduleService {
 
   // A conversation run made where a resume waits takes the resume's place: the one run then both
   // continues the stopped turn and carries the user's message, under one id, so nothing goes twice.
-  create(target: RequestedTarget, notBefore: number | null): ScheduledRun {
+  create(requested: RequestedTarget, notBefore: number | null): ScheduledRun {
+    const target = this.withPlan(requested)
     const { title, agent } = this.describe(target)
     checkUnattended(agent)
     if (target.kind === 'task') {
@@ -195,6 +198,23 @@ export class ScheduleService {
     const id = this.insert(target, title, agent, notBefore, this.lastPosition() + 1)
     void this.tick()
     return publicRun(this.found(id))
+  }
+
+  // An empty message made while a plan waits is that plan's approval: it says which, so answering
+  // the plan another way first drops it rather than telling the agent to start on it again.
+  private withPlan(target: RequestedTarget): RequestedTarget {
+    if (target.kind !== 'conversation') return target
+    const { plan: _given, ...rest } = target
+    const plan = rest.text || rest.images?.length || rest.resumes ? null : this.deps.conversations.waitingPlanRequest?.(rest.conversationId) ?? null
+    return plan ? { ...rest, plan } : rest
+  }
+
+  // A plan answered in the chat, by the user or another client, leaves its scheduled approval with
+  // nothing to approve. The run's own answer comes once it is starting, so it is not one of these.
+  observe(conversationId: string, items: readonly ChatItem[]): void {
+    const answered = new Set(items.flatMap((item) => (item.kind === 'approval' && isPlanApproval(item) && item.resolution !== null ? [item.requestId] : [])))
+    if (answered.size === 0) return
+    this.cancelFor((run) => run.target.kind === 'conversation' && run.target.conversationId === conversationId && run.target.plan !== undefined && answered.has(run.target.plan), 'plan-answered')
   }
 
   // Core's own plan for a turn the usage limit stopped: resume it once the limit lifts, ahead of

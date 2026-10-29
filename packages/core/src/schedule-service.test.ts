@@ -56,7 +56,11 @@ describe('ScheduleService', () => {
 
   function serve(autoRun = false): void {
     conversations = new ConversationService(store, daemon, path.join(root, 'sessions'),
-      (event) => { if (event.type === 'chatItems') limits.observe(event.conversationId, event.items) },
+      (event) => {
+        if (event.type !== 'chatItems') return
+        limits.observe(event.conversationId, event.items)
+        schedules.observe(event.conversationId, event.items)
+      },
       projects, attachments())
     const target = conversations
     daemon.deliver = (event) => {
@@ -285,6 +289,24 @@ describe('ScheduleService', () => {
       expect.objectContaining({ type: 'control_response', response: expect.objectContaining({ request_id: 'plan-1' }) })
     ]))
     expect(userTexts(conversation.id)).toEqual(['Plan the refactor'])
+  })
+
+  it('drops a scheduled approval once the user answers the plan themselves', async () => {
+    const conversation = await conversations.create('claude', [])
+    daemon.reply = (id) => daemon.emit(id, {
+      type: 'control_request', request_id: 'plan-1',
+      request: { subtype: 'can_use_tool', tool_name: 'ExitPlanMode', input: { plan: '# Plan' }, tool_use_id: 'toolu_plan-1' }
+    })
+    await conversations.send(conversation.id, 'Plan the refactor')
+    await settle()
+    const approval = schedules.create({ kind: 'conversation', conversationId: conversation.id, text: '' }, clock + HOUR)
+    const message = schedules.create({ kind: 'conversation', conversationId: conversation.id, text: 'and add tests' }, clock + HOUR)
+    expect(approval.target).toMatchObject({ plan: 'plan-1' })
+
+    await conversations.respond(conversation.id, 'plan-1', { decision: 'allow' })
+    await settle()
+    expect(run(approval.id)).toMatchObject({ status: 'cancelled', error: 'plan-answered' })
+    expect(run(message.id)?.status).toBe('waiting')
   })
 
   it('goes one run per agent at a time, in the order the user put them', async () => {

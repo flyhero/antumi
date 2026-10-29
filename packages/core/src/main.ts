@@ -145,6 +145,7 @@ const conversations = new ConversationService(
       })
     } else if (event.type === 'chatItems') {
       limits.observe(event.conversationId, event.items)
+      schedules.observe(event.conversationId, event.items)
       turns.observe(event.conversationId, event.items)
       smallModels.observe(event.items)
       for (const id of new Set(event.items.map((item) => item.stageId))) {

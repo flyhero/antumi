@@ -11,7 +11,7 @@ Issues straight to work · Agents working together · Self-verification · No qu
 ![Platform](https://img.shields.io/badge/platform-macOS%20%C2%B7%20Windows%20%C2%B7%20Linux-lightgrey)
 ![Agents](https://img.shields.io/badge/agents-10%20supported-8A2BE2)
 
-[Download](https://github.com/flyhero/antumi/releases) · [Why not just the terminal](#why-not-just-the-terminal) · [More features](#more-features) · [Getting started](#getting-started) · [Docs](#docs) · [Changelog](CHANGELOG.md) · [Feedback](https://github.com/flyhero/antumi/issues)
+[Download](https://github.com/flyhero/antumi/releases) · [Why not just the terminal](#why-not-just-the-terminal) · [More features](#more-features) · [Getting started](#getting-started) · [Docs](#docs) · [Changelog](CHANGELOG.md) · [Community](#community)
 
 [简体中文](README.md) · **English**
 
@@ -294,6 +294,10 @@ The documentation is in Chinese for now.
 | Publish a release | [Architecture · Automated releases](docs/ARCHITECTURE.md#自动发布) |
 | See what changed in each release | [CHANGELOG.md](CHANGELOG.md) |
 
+## Community
+
+Something feels off, or you want another agent supported? [Open an issue](https://github.com/flyhero/antumi/issues).
+
 ## Contributing
 
 Start with [AGENTS.md](AGENTS.md) (process boundaries, protocol, commit format) and [DESIGN.md](DESIGN.md) (visual rules). Before committing:
@@ -316,7 +320,6 @@ Antumi is currently in **development preview** (0.21.x), developed and tested ma
 - **Remote execution**: Let agents work on repositories over SSH / WSL while the board stays local.
 - **More agents and ecosystem**: Expanding support for more agent CLIs and ACP servers.
 
-Something feels off, or you want another agent supported? [Open an issue](https://github.com/flyhero/antumi/issues).
 
 ## The name
 

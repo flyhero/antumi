@@ -10,7 +10,7 @@ issue 直接开工 · 多 Agent 协作 · 自己验证 · 额度不断档
 ![Platform](https://img.shields.io/badge/platform-macOS%20%C2%B7%20Windows%20%C2%B7%20Linux-lightgrey)
 ![Agents](https://img.shields.io/badge/agents-10%20supported-8A2BE2)
 
-[下载](https://github.com/flyhero/antumi/releases) · [为什么不只用终端](#为什么不只用终端) · [更多功能](#更多功能) · [快速开始](#快速开始) · [文档](#文档) · [更新日志](CHANGELOG.md) · [反馈](https://github.com/flyhero/antumi/issues)
+[下载](https://github.com/flyhero/antumi/releases) · [为什么不只用终端](#为什么不只用终端) · [更多功能](#更多功能) · [快速开始](#快速开始) · [文档](#文档) · [更新日志](CHANGELOG.md) · [社区](#社区)
 
 **简体中文** · [English](README.en.md)
 
@@ -306,6 +306,10 @@ pnpm dist:linux   # 产物在 packages/desktop/dist/Antumi-<版本>-x86_64.AppIm
 | 发布新版本 | [技术架构 · 自动发布](docs/ARCHITECTURE.md#自动发布) |
 | 看每个版本改了什么 | [CHANGELOG.md](CHANGELOG.md) |
 
+## 社区
+
+用下来哪里别扭、想接哪个 Agent，欢迎提 [issue](https://github.com/flyhero/antumi/issues)。
+
 ## 参与开发
 
 先读 [AGENTS.md](AGENTS.md)（进程边界、协议、提交规范）和 [DESIGN.md](DESIGN.md)（视觉规范）。提交前跑：
@@ -328,7 +332,6 @@ Antumi 目前是**开发版**（0.21.x），主要在 macOS 上开发和测试�
 - **远程执行**：让 Agent 在 SSH / WSL 里的仓库上干活，看板留在本机。
 - **更多 Agent 与生态**：持续扩展主流 Agent CLI 与 ACP 生态支持。
 
-用下来哪里别扭、想接哪个 Agent，欢迎提 [issue](https://github.com/flyhero/antumi/issues)。
 
 ## 关于名字
 

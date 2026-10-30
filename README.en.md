@@ -198,7 +198,7 @@ xattr -dr com.apple.quarantine /Applications/Antumi.app
 
 <br/>
 
-The builds are unsigned: on another Mac, right-click → Open the first time; on Windows, SmartScreen stops it once, so choose More info → Run anyway. On Debian or Ubuntu, install the deb with `sudo apt install ./Antumi-<version>-amd64.deb`; elsewhere, `chmod +x` the AppImage and run it (Ubuntu 22.04 and later need `sudo apt install libfuse2` first). If Ubuntu 23.10 or later reports a sandbox error, use the deb or start it with `--no-sandbox`. The AppImage updates itself in the background, as on macOS and Windows; the deb only tells you of a new version to download.
+The builds are unsigned: on another Mac, right-click → Open the first time; on Windows, SmartScreen stops it once, so choose More info → Run anyway. On Debian or Ubuntu, install the deb with `sudo apt install ./Antumi-<version>-linux-amd64.deb`; elsewhere, `chmod +x` the AppImage and run it (Ubuntu 22.04 and later need `sudo apt install libfuse2` first). If Ubuntu 23.10 or later reports a sandbox error, use the deb or start it with `--no-sandbox`. The AppImage updates itself in the background, as on macOS and Windows; the deb only tells you of a new version to download.
 
 </details>
 
@@ -219,19 +219,19 @@ pnpm dev          # starts the daemon, core and the desktop app together
 **Build a macOS app** (Apple Silicon):
 
 ```bash
-pnpm dist:mac     # output: packages/desktop/dist/Antumi-<version>-arm64.dmg
+pnpm dist:mac     # output: packages/desktop/dist/Antumi-<version>-macos-arm64.dmg
 ```
 
 **Build a Windows installer** (x64; it builds on macOS too):
 
 ```bash
-pnpm dist:win     # output: packages/desktop/dist/Antumi-Setup-<version>-x64.exe
+pnpm dist:win     # output: packages/desktop/dist/Antumi-<version>-windows-x64.exe
 ```
 
 **Build a Linux app** (x64; it builds on Linux only, since node-pty is compiled there and needs `build-essential` and `python3`):
 
 ```bash
-pnpm dist:linux   # output: packages/desktop/dist/Antumi-<version>-x86_64.AppImage and -amd64.deb
+pnpm dist:linux   # output: packages/desktop/dist/Antumi-<version>-linux-x86_64.AppImage and -linux-amd64.deb
 ```
 
 A machine with the app installed needs neither Node nor pnpm.

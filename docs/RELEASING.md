@@ -32,9 +32,9 @@ node -p 'require("./package.json").version'
 
 ```bash
 pnpm install
-pnpm dist:mac    # → packages/desktop/dist/Antumi-<版本>-arm64.dmg（Apple 芯片）
-pnpm dist:win    # → packages/desktop/dist/Antumi-Setup-<版本>-x64.exe（macOS 上也能打）
-pnpm dist:linux  # → packages/desktop/dist/Antumi-<版本>-x86_64.AppImage 和 -amd64.deb（只能在 Linux 上打，要有 C++ 编译器和 python3）
+pnpm dist:mac    # → packages/desktop/dist/Antumi-<版本>-macos-arm64.dmg（Apple 芯片）
+pnpm dist:win    # → packages/desktop/dist/Antumi-<版本>-windows-x64.exe（macOS 上也能打）
+pnpm dist:linux  # → packages/desktop/dist/Antumi-<版本>-linux-x86_64.AppImage 和 -linux-amd64.deb（只能在 Linux 上打，要有 C++ 编译器和 python3）
 ```
 
 `<版本>` 取自 `packages/desktop/package.json`。耗时约 1–3 分钟。日志里出现 `skipped macOS application code signing … 0 valid identities found` 是正常的：没有 Apple 证书，App 走 ad-hoc 签名。
@@ -46,7 +46,7 @@ cd packages/desktop
 pnpm exec electron-vite build
 node scripts/bundle-backend.mjs --platform darwin
 pnpm exec electron-builder --mac --publish never -c.extraMetadata.version=<下一版>-beta.1
-# → packages/desktop/dist/Antumi-<下一版>-beta.1-arm64.dmg
+# → packages/desktop/dist/Antumi-<下一版>-beta.1-macos-arm64.dmg
 ```
 
 打完检查（mac）：
@@ -55,7 +55,7 @@ pnpm exec electron-builder --mac --publish never -c.extraMetadata.version=<下�
 cd packages/desktop
 /usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" dist/mac-arm64/Antumi.app/Contents/Info.plist   # 应为期望的版本号
 codesign --verify --deep --strict dist/mac-arm64/Antumi.app && echo 签名完好
-hdiutil verify dist/Antumi-<版本>-arm64.dmg                                                                # 末行应为 VALID
+hdiutil verify dist/Antumi-<版本>-macos-arm64.dmg                                                                # 末行应为 VALID
 ```
 
 `packages/desktop/dist/` 不进 git，产物留在那里，把完整路径告诉用户即可。

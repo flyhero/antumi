@@ -640,7 +640,7 @@ macOS（Apple Silicon）可以打包成 dmg：
 
 ```bash
 pnpm install
-pnpm dist:mac     # 产物在 packages/desktop/dist/Antumi-<版本>-arm64.dmg
+pnpm dist:mac     # 产物在 packages/desktop/dist/Antumi-<版本>-macos-arm64.dmg
 ```
 
 `dist:mac` 依次执行 electron-vite 构建、`bundle-backend`（esbuild 把 core、daemon 和 MCP 服务各打成一个 JS，附上 node-pty 的 macOS 预编译）和 electron-builder。打包的 App 由 Electron 自带的 Node 运行这些文件（`ELECTRON_RUN_AS_NODE`），所以**装了 App 的机器不需要 Node 和 pnpm**，只需要 `claude` / `codex` CLI 本身。
@@ -650,7 +650,7 @@ pnpm dist:mac     # 产物在 packages/desktop/dist/Antumi-<版本>-arm64.dmg
 Windows（x64）打成 NSIS 安装包，在 macOS 上也能打（electron-builder 自带 NSIS 和 wine）：
 
 ```bash
-pnpm dist:win     # 产物在 packages/desktop/dist/Antumi-Setup-<版本>-x64.exe
+pnpm dist:win     # 产物在 packages/desktop/dist/Antumi-<版本>-windows-x64.exe
 ```
 
 `bundle-backend` 按 `--platform` 只带目标平台的 node-pty 预编译，Windows 上是 win32-x64（含 ConPTY）。安装按用户进行，默认装到 `%LOCALAPPDATA%\Programs\Antumi`，不需要管理员权限；窗口用系统自己的边框，不显示 Electron 的默认菜单栏。打包的 App 在 Windows 上直接用资源管理器给它的 PATH，npm（`%APPDATA%\npm`）和 Claude Code 原生安装（`%USERPROFILE%\.local\bin`）的目录都在里面。

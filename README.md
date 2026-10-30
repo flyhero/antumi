@@ -209,7 +209,7 @@ xattr -dr com.apple.quarantine /Applications/Antumi.app
 
 **在 Windows 上安装**：安装包没有签名，SmartScreen 会拦一下，点「更多信息 → 仍要运行」。
 
-**在 Linux 上安装**：Debian、Ubuntu 用 `sudo apt install ./Antumi-<版本>-amd64.deb`。其他发行版用 AppImage：`chmod +x` 后直接运行，Ubuntu 22.04 及以上要先 `sudo apt install libfuse2`；Ubuntu 23.10 及以上若启动时报 sandbox 错误，改用 deb，或加 `--no-sandbox` 启动。AppImage 会像 macOS、Windows 一样在后台自动更新；deb 只提示新版本，需要重新下载安装。
+**在 Linux 上安装**：Debian、Ubuntu 用 `sudo apt install ./Antumi-<版本>-linux-amd64.deb`。其他发行版用 AppImage：`chmod +x` 后直接运行，Ubuntu 22.04 及以上要先 `sudo apt install libfuse2`；Ubuntu 23.10 及以上若启动时报 sandbox 错误，改用 deb，或加 `--no-sandbox` 启动。AppImage 会像 macOS、Windows 一样在后台自动更新；deb 只提示新版本，需要重新下载安装。
 
 </details>
 
@@ -230,19 +230,19 @@ pnpm dev          # 同时启动 daemon、core 和桌面端
 **打包成 macOS 应用**（Apple Silicon）：
 
 ```bash
-pnpm dist:mac     # 产物在 packages/desktop/dist/Antumi-<版本>-arm64.dmg
+pnpm dist:mac     # 产物在 packages/desktop/dist/Antumi-<版本>-macos-arm64.dmg
 ```
 
 **打包成 Windows 安装包**（x64，在 macOS 上也能打）：
 
 ```bash
-pnpm dist:win     # 产物在 packages/desktop/dist/Antumi-Setup-<版本>-x64.exe
+pnpm dist:win     # 产物在 packages/desktop/dist/Antumi-<版本>-windows-x64.exe
 ```
 
 **打包成 Linux 应用**（x64，只能在 Linux 上打：node-pty 要在本机编译，需要 `build-essential` 和 `python3`）：
 
 ```bash
-pnpm dist:linux   # 产物在 packages/desktop/dist/Antumi-<版本>-x86_64.AppImage 和 -amd64.deb
+pnpm dist:linux   # 产物在 packages/desktop/dist/Antumi-<版本>-linux-x86_64.AppImage 和 -linux-amd64.deb
 ```
 
 装了 App 的机器不需要 Node 和 pnpm。

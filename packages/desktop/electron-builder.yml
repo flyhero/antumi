@@ -26,6 +26,9 @@ mac:
   # From docs/branding/antumi-icon-agent-blocks-3d.png, laid on macOS's icon grid: an 824px rounded square on a
   # 1024px canvas, with room for its shadow.
   icon: build/icon.png
+  # Every installer is named <version>-<os>-<arch>, so a download says which system it is for. The
+  # name must keep ending in -<arch>.<ext>: installed versions pick their update by that ending.
+  artifactName: ${productName}-${version}-macos-${arch}.${ext}
   target:
     - target: dmg
       arch:
@@ -44,7 +47,7 @@ nsis:
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
-  artifactName: ${productName}-Setup-${version}-${arch}.${ext}
+  artifactName: ${productName}-${version}-windows-${arch}.${ext}
 # AppImage runs without installing; the deb sets up chrome-sandbox, which Electron needs where
 # unprivileged user namespaces are off (Ubuntu 23.10 and later). Built on Linux: see bundle-backend.
 linux:
@@ -53,7 +56,7 @@ linux:
   category: Development
   maintainer: flyhero
   synopsis: Task-first multi-agent manager
-  artifactName: ${productName}-${version}-${arch}.${ext}
+  artifactName: ${productName}-${version}-linux-${arch}.${ext}
   target:
     - target: AppImage
       arch:

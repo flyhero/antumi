@@ -44,8 +44,8 @@ The four sections below follow the whole path from a task to finished work; the 
 
 In a terminal, taking on a bug means copying the issue text to an agent, creating a branch and explaining what to do. In Antumi, issues from GitHub, Jira, Linear and ZenTao sync into the sidebar **Inbox** and become tasks in one click. When a task starts, it gets its own worktree and a branch named after the issue; the agent reads the code and proposes a plan, and only changes code once you approve it. A bug whose cause is unclear can be investigated in a conversation first, until the root cause is found. A group chat's conclusion becomes a task in one click too, and tasks can depend on each other, so the next one unlocks only once the previous one passes review.
 
-
 [Connect an issue source →](docs/GETTING-STARTED.en.md#task-sources) · [How tasks flow →](docs/ARCHITECTURE.md#2-任务模型)
+
 <img src="docs/assets/features/intake.webp" alt="Intake: import a GitHub issue from the inbox as a task, start it, and the agent reads the code and proposes a plan for you to approve" width="100%" />
 
 ### Agents working together
@@ -57,96 +57,90 @@ Five agents in five terminal windows means switching between them to find out wh
 - **Handoff**: click the agent name at the bottom left of the composer, and another agent carries on in the same folder with the chat history.
 - **In parallel, without collisions**: each task gets its own worktree; whatever waits for your approval, answer or review is gathered in the overview, and you get a notification when an agent finishes or needs you.
 
-
 [Delegation →](docs/ARCHITECTURE.md#智能体与委派) · [Handoff →](docs/GETTING-STARTED.en.md#handoff)
+
 <img src="docs/assets/features/delegate.webp" alt="Delegation: type @ to name the code reviewer, the card shows it working, and the review comes back to the main conversation" width="100%" />
 
 ### Agents verify their own work, you just review
 
 In a terminal, when an agent says it's done you still open a browser to click through it, then paste the errors back. In Antumi, agents open pages in the built-in browser, click around, read the console and network requests, take screenshots, and read dev server output in the built-in terminal, then fix what they find. You can take over a page at any time, or add a selected element or a screenshot straight into the chat. When it's done, inspect the whole task branch's diff, run the project checks, and merge when you're satisfied.
 
-
 [Built-in browser →](docs/ARCHITECTURE.md#5-内置浏览器) · [Review →](docs/ARCHITECTURE.md#验收之后)
+
 <img src="docs/assets/features/verify.webp" alt="Self-verification: the agent screenshots the page and sees an overdue to-do not marked, reads the console error, fixes it, and screenshots again to confirm" width="100%" />
 
 ### Keep working when quota runs out
 
 In a terminal, a turn that hits the limit just stops and waits for you. In Antumi, with several Claude Code or Codex accounts it switches account and goes on in the same session; with none to switch to, it continues by itself when the quota resets; or hand the work to another agent in one click. The status bar keeps each agent's usage and reset times in view: plenty left just before a reset, and it tells you to use it; on track to run out early, and it suggests another model or agent.
 
-
 [Several accounts →](docs/GETTING-STARTED.en.md#multiple-accounts) · [Quota pacing →](docs/ARCHITECTURE.md#额度节奏与建议)
+
 <img src="docs/assets/features/handoff.webp" alt="Handoff: switch the composer from Claude Code to Codex, add a note, and Codex continues with tests" width="100%" />
+
+<img src="docs/assets/features/quota.webp" alt="Quota: zoom into the status bar, hover each agent for usage and reset times, then show remaining percentages" width="100%" />
 
 <sub>I built Antumi after half a year of heavy use of several agents, to fix these pain points of my own.</sub>
 
 ## More features
 
-[See your quota](#see-your-quota) · [Side assistant](#side-assistant) · [Translation](#translation) · [Split view](#split-view) · [Group chat](#group-chat) · [Teams](#teams) · [Routines and scheduling](#routines-and-scheduling) · [To-dos](#to-dos)
+[Side assistant](#side-assistant) · [Translation](#translation) · [Split view](#split-view) · [Group chat](#group-chat) · [Teams](#teams) · [Routines and scheduling](#routines-and-scheduling) · [To-dos](#to-dos)
 
 <sub>Looping demos use real UI components with sample data: the pointer makes real clicks, and small areas are zoomed in. The interface shown is in Chinese.</sub>
-
-### See your quota
-
-Antumi's status bar keeps Claude Code, Codex, Cursor, Antigravity and ZCode usage in view; hover for each agent's quota windows and reset times. It also paces your usage against the next reset: plenty left, and it tells you to use it; on track to run out early, and it suggests a lighter model or another agent for the small jobs.
-
-
-[Docs →](docs/ARCHITECTURE.md#额度节奏与建议)
-<img src="docs/assets/features/quota.webp" alt="Quota: zoom into the status bar, hover each agent for usage and reset times, then show remaining percentages" width="100%" />
 
 ### Side assistant
 
 Select part of a conversation, right-click and choose **Ask helper**: the side assistant opens on the right with the passage quoted, ready to explain, follow up, or take on a small task. It defaults to a lightweight model with its own context, so the main conversation stays focused.
 
-
 [Docs →](docs/GETTING-STARTED.en.md#helper-and-translation)
+
 <img src="docs/assets/features/assistant.webp" alt="Side assistant: select a term, right-click to hand it to the assistant, and ask about it on the right" width="100%" />
 
 ### Translation
 
 Click **Translate** under a reply to read it in your language, and click again for the original; or select one sentence and translate it from the right-click menu. A lightweight model does the work outside the main conversation's context.
 
-
 [Docs →](docs/GETTING-STARTED.en.md#helper-and-translation)
+
 <img src="docs/assets/features/translation.webp" alt="Translation: translate a reply, switch back to the original, then translate one selected sentence" width="100%" />
 
 ### Split view
 
 ⌘-click another conversation, or choose **Open in right split pane** from its menu, to put two conversations side by side: work on an implementation while checking another agent's advice. Each pane has its own input, progress, and approval requests, with a draggable divider to adjust the space.
 
-
 [Docs →](docs/GETTING-STARTED.en.md#split-view-two-conversations-side-by-side)
+
 <img src="docs/assets/features/split.webp" alt="Split view: ⌘-click a second conversation to show Claude Code and Codex side by side, then type on the right" width="100%" />
 
 ### Group chat
 
 Bring 2–5 agents into one conversation to answer independently, then respond to each other's ideas. Jump in or @ a member at any time, steer the pace with **Continue** and **Summarize now**, and let the chair summarize agreements and disagreements; discussions are read-only and do not change code.
 
-
 [Docs →](docs/ARCHITECTURE.md#群聊)
+
 <img src="docs/assets/features/discussion.webp" alt="Group chat: three agents answer independently, respond after Continue, and the chair summarizes after Summarize now" width="100%" />
 
 ### Teams
 
 Assign external agents, models, and responsibilities to a team lead, developers, and reviewers, or pick agents you have saved, then give the team a task. The team lead agrees on a plan with you before dispatching work in a shared worktree, with sequential development and parallel read-only analysis.
 
-
 [Docs →](docs/ARCHITECTURE.md#团队)
+
 <img src="docs/assets/features/squad.webp" alt="Teams: click Edit and expand the developer to see its external agent, model, and responsibilities" width="100%" />
 
 ### Routines and scheduling
 
 Under **Routines** in the sidebar, schedule Claude Code, Codex, OpenCode, Pi, DeepSeek Harness, ZCode, Kimi Code, or Gemini CLI to work daily, on weekdays, or weekly; the clock beside the composer reserves a message for a set time or for when quota resets, and tasks and plan approvals can be reserved too. Routines can choose an agent with available quota; unattended runs answer prompts automatically based on permission modes. The computer must stay awake; Cursor and Antigravity are not supported for routines.
 
-
 [Docs →](docs/GETTING-STARTED.en.md#scheduling-send-when-quota-resets-or-at-a-set-time)
+
 <img src="docs/assets/features/schedule.webp" alt="Scheduling: open routines and reservations from the sidebar, then reserve a message with the composer clock" width="100%" />
 
 ### To-dos
 
 When an agent's reply mentions things for you to do later (before release, to verify, to configure), it records them as the conversation's to-dos, and the inspector button in the header shows how many are open. Tick them off in the **To-dos** tab; **Overview → To-dos** gathers every conversation's to-dos, and items marked "Agent can do" can be handed back to the agent.
 
-
 [Docs →](docs/ARCHITECTURE.md#待办)
+
 <img src="docs/assets/features/todos.webp" alt="To-dos: an agent records to-dos, the header inspector opens the to-dos tab to tick one off, and the overview lists them all" width="100%" />
 
 <details>
@@ -193,7 +187,20 @@ Antumi drives the agent CLIs you already have installed and signed in to.
 
 Connecting a model provider, several accounts, or importing issues from GitHub and Jira: see the [user guide](docs/GETTING-STARTED.en.md) (also under Help → User guide in the app).
 
+**On macOS, clear the quarantine attribute first** (the app is ad-hoc signed, not notarized by Apple), then open it from Applications:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Antumi.app
+```
+
+<details>
+<summary><b>Install notes: Windows, Linux, and the macOS prompts</b></summary>
+
+<br/>
+
 The builds are unsigned: on another Mac, right-click → Open the first time; on Windows, SmartScreen stops it once, so choose More info → Run anyway. On Debian or Ubuntu, install the deb with `sudo apt install ./Antumi-<version>-amd64.deb`; elsewhere, `chmod +x` the AppImage and run it (Ubuntu 22.04 and later need `sudo apt install libfuse2` first). If Ubuntu 23.10 or later reports a sandbox error, use the deb or start it with `--no-sandbox`. The AppImage updates itself in the background, as on macOS and Windows; the deb only tells you of a new version to download.
+
+</details>
 
 <details>
 <summary><b>Run from source and build</b></summary>

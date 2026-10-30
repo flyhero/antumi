@@ -10,7 +10,7 @@ issue 直接开工 · 多 Agent 协作 · 自己验证 · 额度不断档
 ![Platform](https://img.shields.io/badge/platform-macOS%20%C2%B7%20Windows%20%C2%B7%20Linux-lightgrey)
 ![Agents](https://img.shields.io/badge/agents-10%20supported-8A2BE2)
 
-[下载](https://github.com/flyhero/antumi/releases) · [为什么不只用终端](#为什么不只用终端) · [更多功能](#更多功能) · [快速开始](#快速开始) · [文档](#文档) · [更新日志](CHANGELOG.md) · [社区](#社区)
+[下载](https://github.com/flyhero/antumi/releases)  · [更多功能](#更多功能) · [快速开始](#快速开始) · [文档](#文档) · [更新日志](CHANGELOG.md) · [社区](#社区)
 
 **简体中文** · [English](README.en.md)
 
@@ -41,8 +41,8 @@ Antumi 驱动的就是你装好、登录好的 Agent CLI，配置和登录都不
 
 终端里接一个 bug，要先把 issue 原文复制给 Agent，再建分支、讲清楚要做什么。在 Antumi 里，GitHub、Jira、Linear、禅道的 issue 同步进侧栏「收件箱」，一键导入成任务：开始后自动建好独立 worktree 和带 issue 编号的分支，Agent 先读代码、拿出计划，你批准后才改代码。原因还不清楚的 bug 可以先「会话排查」，查清根因再动手；群聊的结论也能一键新建任务，任务之间可设前置依赖，前一个验收通过才解锁下一个。
 
-
 [接入 issue 来源 →](docs/GETTING-STARTED.md#任务来源) · [任务怎么流转 →](docs/ARCHITECTURE.md#2-任务模型)
+
 <img src="docs/assets/features/intake.webp" alt="任务演示：在收件箱把 GitHub issue 导入成任务，打开后点「开始执行」，Agent 读完代码拿出计划等你批准" width="100%" />
 
 ### 多个 Agent 相互协作
@@ -54,94 +54,88 @@ Antumi 驱动的就是你装好、登录好的 Agent CLI，配置和登录都不
 - **移交**：点输入框左下角的 Agent 名称，换另一个 Agent 带着聊天记录在同一个目录接着做。
 - **并行不打架**：每个任务一个独立 worktree，代码互不干扰；等你批准、回答、验收的事集中在总览里，Agent 做完或在等你时会发系统通知。
 
-
 [委派 →](docs/ARCHITECTURE.md#智能体与委派) · [移交 →](docs/GETTING-STARTED.md#无缝移交)
+
 <img src="docs/assets/features/delegate.webp" alt="委派演示：在输入框 @ 代码审查员，主 Agent 委派后卡片显示工作中，审查结果自动回到主会话" width="100%" />
 
 ### Agent 自己验证，你只管验收
 
 终端里 Agent 说「改好了」，你还得自己开浏览器点一遍，再把报错贴回去。在 Antumi 里，Agent 在内置浏览器里打开页面、点击、读控制台和网络请求、截图，在内置终端里看开发服务器的输出，发现问题自己接着修；你随时可以接管页面，或把选中的元素、截图直接加进会话。做完后检查整条任务分支的 diff、运行项目检查，满意了再合并。
 
-
 [内置浏览器 →](docs/ARCHITECTURE.md#5-内置浏览器) · [验收 →](docs/ARCHITECTURE.md#验收之后)
+
 <img src="docs/assets/features/verify.webp" alt="自己验证演示：Agent 打开页面截图发现逾期待办没标红，读控制台找到报错并修改，再截图确认修好" width="100%" />
 
 ### 额度用完，工作不停
 
 终端里撞上限，这一轮就停在那儿等你。在 Antumi 里，配了多个 Claude Code / Codex 账号就自动换号，在原会话里接着跑；没有可换的号，就等额度恢复后自动继续；也可以一键移交给另一个 Agent。底部状态栏常驻各 Agent 的用量和恢复时间，快重置了还剩很多就提醒你放心多用，照这个速度会提前用完就建议换模型或换 Agent。
 
-
 [配多个账号 →](docs/GETTING-STARTED.md#多个账号) · [额度节奏 →](docs/ARCHITECTURE.md#额度节奏与建议)
+
 <img src="docs/assets/features/handoff.webp" alt="无缝移交演示：在输入框把 Claude Code 换成 Codex，写下补充说明，Codex 接着补测试" width="100%" />
+
+<img src="docs/assets/features/quota.webp" alt="额度演示：放大底部状态栏，依次悬停查看三个 Agent 的用量和恢复时间，再改看剩余额度" width="100%" />
 
 <sub>我在重度使用多个 Agent 半年后，为解决自己的这些痛点做了 Antumi。</sub>
 
 ## 更多功能
 
-[额度看得见](#额度看得见) · [小助手](#小助手) · [翻译](#翻译) · [分屏](#分屏) · [群聊](#群聊) · [团队](#团队) · [定时与预约](#定时与预约) · [待办](#待办)
-
-### 额度看得见
-
-底部状态栏常驻 Claude Code、Codex、Cursor、Antigravity、ZCode 的用量，悬停就能看各自的额度窗口和恢复时间，并按重置时间估算节奏：还剩很多就提醒你放心多用，会提前用完就建议换模型，或把轻活交给另一个 Agent。
-
-
-[详细 →](docs/ARCHITECTURE.md#额度节奏与建议)
-<img src="docs/assets/features/quota.webp" alt="额度演示：放大底部状态栏，依次悬停查看三个 Agent 的用量和恢复时间，再改看剩余额度" width="100%" />
+[小助手](#小助手) · [翻译](#翻译) · [分屏](#分屏) · [群聊](#群聊) · [团队](#团队) · [定时与预约](#定时与预约) · [待办](#待办)
 
 ### 小助手
 
 选中聊天里的一段内容，右键「交给小助手」，它会带着这段引用在右侧打开，帮你解释、追问或处理。小助手默认使用轻量模型、拥有独立上下文，主会话继续专注手头的工作。
 
-
 [详细 →](docs/GETTING-STARTED.md#小助手与翻译)
+
 <img src="docs/assets/features/assistant.webp" alt="小助手演示：选中「幂等键」，右键交给小助手，在右侧追问并得到解释" width="100%" />
 
 ### 翻译
 
 英文回复下方点「翻译」就能读中文，再点一下切回原文；也可以只选中一句，右键「翻译」。由轻量模型完成，不占主会话上下文。
 
-
 [详细 →](docs/GETTING-STARTED.md#小助手与翻译)
+
 <img src="docs/assets/features/translation.webp" alt="翻译演示：点「翻译」读中文、切回原文，再选中一句右键翻译" width="100%" />
 
 ### 分屏
 
 按住 ⌘ 点击另一个会话，或在会话菜单里选「在右侧分屏打开」，两个会话就并排显示：一边推进实现，一边看另一个 Agent 的建议。两侧可以分别输入、查看进度和处理批准请求，拖动分隔线就能调整宽度。
 
-
 [详细 →](docs/GETTING-STARTED.md#分屏两个会话并排)
+
 <img src="docs/assets/features/split.webp" alt="分屏演示：⌘ 点击另一个会话，Claude Code 和 Codex 并排显示，在右侧输入" width="100%" />
 
 ### 群聊
 
 让 2–5 个 Agent 在同一条对话里先独立作答，再互相回应，讨论方案的取舍。你可以随时插话或 @ 成员追问，用「继续」「立即总结」掌握节奏，最后由主持人汇总共识与分歧；讨论只读、不改代码。
 
-
 [详细 →](docs/ARCHITECTURE.md#群聊)
+
 <img src="docs/assets/features/discussion.webp" alt="群聊演示：三个 Agent 独立作答，点「继续」互相回应，点「立即总结」由主持人总结" width="100%" />
 
 ### 团队
 
 为队长、开发和评审分别配置外部智能体、模型与职责，或直接选用已保存的智能体，然后把一项任务交给整个团队。队长先和你确认计划，再安排成员在同一个 worktree 中协作：开发串行，只读分析可并行。
 
-
 [详细 →](docs/ARCHITECTURE.md#团队)
+
 <img src="docs/assets/features/squad.webp" alt="团队演示：点「编辑」，展开开发成员，查看它的外部智能体、模型与职责" width="100%" />
 
 ### 定时与预约
 
 在侧栏「定时」里让 Claude Code、Codex、OpenCode、Pi、DeepSeek Harness、ZCode、Kimi Code 或 Gemini CLI 按每天、工作日或每周执行工作；输入框旁的时钟按钮能把这条消息预约到指定时间或额度恢复后，任务和计划批准也能预约。定时任务可自动选择有额度的 Agent；无人值守时 Agent 问的事由 Antumi 按模式代答，不会停下来等你。电脑需保持唤醒，Cursor 与 Antigravity 暂不支持。
 
-
 [详细 →](docs/GETTING-STARTED.md#预约额度恢复后或到点再发)
+
 <img src="docs/assets/features/schedule.webp" alt="定时与预约演示：打开侧栏「定时」和「预约」，再用输入框旁的时钟预约发送消息" width="100%" />
 
 ### 待办
 
 Agent 在回复里提到要你之后处理的事（上线前要做的、要你验证或配置的），会记成这条会话的待办，头部检查器按钮上显示未完成数。点开「待办」页签逐项勾掉；「总览 · 待办」汇总所有会话，标着「Agent 可做」的项还能一键交回给 Agent。
 
-
 [详细 →](docs/ARCHITECTURE.md#待办)
+
 <img src="docs/assets/features/todos.webp" alt="待办演示：Agent 记下待办，点头部检查器按钮打开「待办」页签勾掉一项，再在总览里查看所有会话的待办" width="100%" />
 
 <details>
@@ -188,6 +182,17 @@ Antumi 驱动的是你已经装好、登录好的 Agent CLI。
 
 接服务商、配多个账号、从 GitHub / Jira 导入 issue，见[使用指南](docs/GETTING-STARTED.md)（App 里 帮助 → 使用指南 也能打开）。
 
+**macOS 装好后先去掉隔离属性**（App 只有 ad-hoc 签名，没经过 Apple 公证），再从「应用程序」里打开：
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Antumi.app
+```
+
+<details>
+<summary><b>安装注意：macOS 通知权限、Windows、Linux</b></summary>
+
+<br/>
+
 **在 macOS 上安装 dmg**：App 只有 ad-hoc 签名，没经过 Apple 公证，所以比一般 App 多一步。
 
 1. 打开 dmg，把 Antumi 拖进「应用程序」。不要在 dmg 里直接运行，那样系统通知发不出来。
@@ -205,6 +210,8 @@ Antumi 驱动的是你已经装好、登录好的 Agent CLI。
 **在 Windows 上安装**：安装包没有签名，SmartScreen 会拦一下，点「更多信息 → 仍要运行」。
 
 **在 Linux 上安装**：Debian、Ubuntu 用 `sudo apt install ./Antumi-<版本>-amd64.deb`。其他发行版用 AppImage：`chmod +x` 后直接运行，Ubuntu 22.04 及以上要先 `sudo apt install libfuse2`；Ubuntu 23.10 及以上若启动时报 sandbox 错误，改用 deb，或加 `--no-sandbox` 启动。AppImage 会像 macOS、Windows 一样在后台自动更新；deb 只提示新版本，需要重新下载安装。
+
+</details>
 
 <details>
 <summary><b>从源码运行与打包</b></summary>

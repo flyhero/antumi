@@ -61,7 +61,15 @@ jobs:
           const next = lines.findIndex((line, index) => index > start && line.startsWith('## '));
           const notes = lines.slice(start + 1, next === -1 ? undefined : next).join('\n').trim();
           if (!notes) throw new Error(`CHANGELOG.md entry for ${version} is empty`);
-          writeFileSync('release-notes.md', `${notes}\n\n### 安装包\n\n| 平台 | 文件 |\n| --- | --- |\n| macOS · Apple Silicon | Antumi-${version}-macos-arm64.dmg |\n| Windows · x64 | Antumi-${version}-windows-x64.exe |\n| Linux · x64 | Antumi-${version}-linux-x86_64.AppImage、Antumi-${version}-linux-amd64.deb |\n\nmacOS 若提示无法打开，到「系统设置 → 隐私与安全性」点「仍要打开」；Windows 被 SmartScreen 拦住时，点「更多信息 → 仍要运行」；Linux 的 AppImage 需先 \`chmod +x\`，Ubuntu 22.04 及以上还要装 libfuse2。\n`);
+          // In macOS, Windows, Linux order: GitHub lists the assets themselves by name.
+          const download = (name) => `[${name}](https://github.com/${process.env.GITHUB_REPOSITORY}/releases/download/${tag}/${name})`;
+          const installers = [
+            ['macOS · Apple Silicon', `Antumi-${version}-macos-arm64.dmg`],
+            ['Windows · x64', `Antumi-${version}-windows-x64.exe`],
+            ['Linux · x64（AppImage）', `Antumi-${version}-linux-x86_64.AppImage`],
+            ['Linux · x64（deb）', `Antumi-${version}-linux-amd64.deb`]
+          ].map(([system, name]) => `| ${system} | ${download(name)} |`).join('\n');
+          writeFileSync('release-notes.md', `${notes}\n\n### 安装包\n\n| 平台 | 下载 |\n| --- | --- |\n${installers}\n\nmacOS 若提示无法打开，到「系统设置 → 隐私与安全性」点「仍要打开」；Windows 被 SmartScreen 拦住时，点「更多信息 → 仍要运行」；Linux 的 AppImage 需先 \`chmod +x\`，Ubuntu 22.04 及以上还要装 libfuse2。\n`);
           const commit = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
           appendFileSync(process.env.GITHUB_OUTPUT, `commit=${commit}\nprerelease=${version.includes('-')}\n`);
           NODE

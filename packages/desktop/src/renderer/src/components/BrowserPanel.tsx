@@ -259,7 +259,8 @@ export function BrowserPanel() {
         </>
       ) : (
         <div className="browser-empty">
-          <BrowserDownloadsButton downloads={downloads} />
+          {/* Downloads outlive the tabs that made them, so the list stays reachable, but only once there is one. */}
+          {downloads.length > 0 && <div className="browser-empty-actions"><BrowserDownloadsButton downloads={downloads} /></div>}
           <p>{t('BrowserPanel.noTabsOpenYet')}</p>
           <button type="button" className="button" onClick={() => void openUserBrowserTab()}>{t('BrowserPanel.newTab')}</button>
         </div>

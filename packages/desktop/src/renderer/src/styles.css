@@ -8857,7 +8857,8 @@ div.inspector-empty > p { margin: 0 0 8px; }
 .browser-bookmark-text .menu-item-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .browser-bookmark-where { overflow: hidden; color: var(--text-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .browser-status { display: flex; align-items: center; gap: 12px; min-height: 28px; padding: 0 12px; border-top: 1px solid var(--border); color: var(--text-3); font-size: 12px; white-space: nowrap; }
-.browser-empty { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 16px; color: var(--text-muted); font-size: 13px; }
+.browser-empty { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: safe center; gap: 10px; padding: 16px; color: var(--text-muted); font-size: 13px; text-align: center; }
+.browser-empty-actions { position: absolute; top: 8px; right: 8px; }
 .browser-empty p { margin: 0; }
 .browser-error { color: var(--danger); }
 .settings-inline { display: inline-flex; align-items: center; gap: 10px; }

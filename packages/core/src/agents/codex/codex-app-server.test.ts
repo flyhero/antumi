@@ -985,7 +985,7 @@ describe('CodexAppServer rate limits', () => {
 
   it('treats a missing window as no news, and later updates as winning', () => {
     const driver = replay([update(limits), update({ ...limits, primary: { usedPercent: 50, windowDurationMins: 300, resetsAt: null }, secondary: null, planType: null })])
-    expect(driver.takeUsage()?.windows.map((w) => [w.kind, w.usedPercent])).toEqual([['weekly', 7], ['session', 50]])
+    expect(driver.takeUsage()?.windows.map((w) => [w.kind, w.usedPercent])).toEqual([['session', 50], ['weekly', 7]])
   })
 
   it('leaves out other metered limits, and never logs the frame', () => {

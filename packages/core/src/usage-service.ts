@@ -1,5 +1,5 @@
-import { AGENT_KINDS, DEFAULT_ACCOUNT, agentDescriptor, usageAccount, usageReadable, type AgentKind, type AgentUsage, type GlobalResets, type ResetCreditOutcome, type UsageWindow } from '@antumi/protocol'
-import { UsageFetchError, type ResetCreditUse, type UsageReport, type UsageSource } from './usage-source'
+import { AGENT_KINDS, DEFAULT_ACCOUNT, agentDescriptor, usageAccount, usageReadable, type AgentKind, type AgentUsage, type GlobalResets, type ResetCreditOutcome } from '@antumi/protocol'
+import { replaceWindows, UsageFetchError, type ResetCreditUse, type UsageReport, type UsageSource } from './usage-source'
 
 const POLL_MS = 15 * 60_000
 // Manual refreshes and session exits come in bursts, and the provider endpoints are rate-limited too.
@@ -149,12 +149,11 @@ export class UsageService {
       return
     }
     if (report.windows.length > 0) {
-      const named = (window: UsageWindow) => report.windows.some((each) => each.kind === window.kind && each.model === window.model)
       const next: AgentUsage = this.decorate({
         agent,
         account,
         status: 'ok',
-        windows: [...(previous?.windows ?? []).filter((window) => !named(window)), ...report.windows],
+        windows: replaceWindows(previous?.windows ?? [], report.windows),
         plan: report.plan ?? previous?.plan ?? null,
         error: null,
         updatedAt: report.at,

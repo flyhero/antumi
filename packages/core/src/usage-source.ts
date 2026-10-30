@@ -16,12 +16,18 @@ export type ResetCreditUse = (requestId: string, creditId?: string, home?: strin
 // reading is worth fetching again now.
 export type UsageReport = { at: number; windows: UsageWindow[]; plan?: string | null; refresh?: boolean }
 
+// The later windows over the earlier, each in the place it had: a report names only some windows,
+// and moving those to the end would reorder the rows a client shows. New ones go last.
+export function replaceWindows(earlier: readonly UsageWindow[], later: readonly UsageWindow[]): UsageWindow[] {
+  const same = (a: UsageWindow, b: UsageWindow) => a.kind === b.kind && a.model === b.model
+  return [...earlier.map((old) => later.find((window) => same(window, old)) ?? old), ...later.filter((window) => !earlier.some((old) => same(old, window)))]
+}
+
 // Two reports a driver saw before the host took them, the later winning window by window.
 export function mergeUsageReports(earlier: UsageReport | null, later: UsageReport): UsageReport {
-  const kept = (earlier?.windows ?? []).filter((old) => !later.windows.some((window) => window.kind === old.kind && window.model === old.model))
   return {
     at: Math.max(earlier?.at ?? later.at, later.at),
-    windows: [...kept, ...later.windows],
+    windows: replaceWindows(earlier?.windows ?? [], later.windows),
     plan: later.plan ?? earlier?.plan,
     refresh: Boolean(earlier?.refresh || later.refresh)
   }

@@ -174,7 +174,16 @@ describe('UsageService.report', () => {
     service.report('claude', 'default', { at: 1_004_000, windows: [session] })
     // Stamped with when the agent said so, not when core passed it on.
     expect(events).toEqual([expect.objectContaining({ agent: 'claude', status: 'ok', plan: 'max', updatedAt: 1_004_000 })])
-    expect(service.list().find((u) => u.agent === 'claude')?.windows).toEqual([weekly, opus, session])
+    // In the place the poll gave it, so the rows a client shows keep their order.
+    expect(service.list().find((u) => u.agent === 'claude')?.windows).toEqual([session, weekly, opus])
+  })
+
+  it('adds a window the reading did not have after the ones it did', async () => {
+    const { service, advance } = setup(async () => ({ signedIn: true, windows: [window, weekly], plan: 'max' }))
+    await service.refresh()
+    advance(5_000)
+    service.report('claude', 'default', { at: 1_004_000, windows: [{ ...opus, usedPercent: 30 }, { ...window, usedPercent: 60 }] })
+    expect(service.list().find((u) => u.agent === 'claude')?.windows).toEqual([{ ...window, usedPercent: 60 }, weekly, { ...opus, usedPercent: 30 }])
   })
 
   it('shows a report from an agent no poll has read yet', () => {

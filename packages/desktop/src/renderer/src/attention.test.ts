@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Conversation, ScheduledRun, Task } from '@antumi/protocol'
-import { actionableItems, attentionCount, noticesBetween, quickApproval, tasksWaitingOnUser, type Snapshot } from './attention'
+import { actionableItems, attentionCount, noticesBetween, quickApproval, tasksWaitingOnUser, unseenConversations, type Snapshot } from './attention'
 
 const conversation = (id: string, patch: Partial<Conversation> = {}): Conversation => ({
   id,
@@ -224,7 +224,21 @@ describe('tasksWaitingOnUser', () => {
   })
 })
 
+describe('unseenConversations', () => {
+  it('names the chats with a reply not looked at, as the count has them', () => {
+    const helper = conversation('h', { helperOf: 'a' })
+    const inRoutine = conversation('r', { routineId: 'routine' })
+    expect(unseenConversations(snapshot([conversation('a'), conversation('b'), helper, inRoutine], [], ['a', 'h', 'r']))).toEqual(['a'])
+  })
+})
+
 describe('noticesBetween', () => {
+  it('leaves a turn over untold when the island shows the reply', () => {
+    const awaiting = conversation('a', { chat: { turn: 'awaiting' } })
+    expect(noticesBetween(snapshot([awaiting]), snapshot([conversation('a')]), true, false)).toEqual([])
+    expect(noticesBetween(snapshot([conversation('a', { chat: { turn: 'running' } })]), snapshot([awaiting]), true, false)).toHaveLength(1)
+  })
+
   it('says nothing of conversations first seen or unchanged', () => {
     const a = conversation('a', { chat: { turn: 'running' } })
     expect(noticesBetween(snapshot(), snapshot([a]))).toEqual([])

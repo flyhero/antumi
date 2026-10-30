@@ -142,11 +142,8 @@ export function tasksWaitingOnUser(items: readonly ActionableItem[]): number {
 export function attentionCount(s: Snapshot): number {
   const counted = new Set<string>()
   for (const conversation of Object.values(s.conversations)) {
-    if (isHelper(conversation) || archived(conversation)) continue
-    if (conversation.routineId || (conversation.parentConversationId && !waitingOrAsking(conversation)) || (conversation.squadRunId && !waitingOrAsking(conversation))) continue
-    const coordinated = conversation.taskId && s.tasks[conversation.taskId]?.squadId
-    if (coordinated && !waitingOrAsking(conversation)) continue
-    if (waiting(conversation) || asking(conversation) || s.unseen[conversation.id]) counted.add(conversation.id)
+    if (!counts(conversation, s) || !(waiting(conversation) || asking(conversation) || s.unseen[conversation.id])) continue
+    counted.add(conversation.id)
   }
   let count = counted.size
   for (const task of Object.values(s.tasks)) {
@@ -155,6 +152,21 @@ export function attentionCount(s: Snapshot): number {
   }
   for (const routine of s.routines ?? []) count += routine.unread
   return count
+}
+
+// Whether a chat is the user's to attend to on its own: not a helper, not put away, and not a
+// member of something (a routine, a group chat, a team) that is attended to as a whole, unless
+// it is held up on the user itself.
+function counts(conversation: Conversation, s: Pick<Snapshot, 'tasks'>): boolean {
+  if (isHelper(conversation) || archived(conversation)) return false
+  if (conversation.routineId || (conversation.parentConversationId && !waitingOrAsking(conversation)) || (conversation.squadRunId && !waitingOrAsking(conversation))) return false
+  const coordinated = conversation.taskId && s.tasks[conversation.taskId]?.squadId
+  return !(coordinated && !waitingOrAsking(conversation))
+}
+
+// The chats with a reply the user has not looked at, as the dock count has them.
+export function unseenConversations(s: Snapshot): string[] {
+  return Object.values(s.conversations).filter((conversation) => s.unseen[conversation.id] && counts(conversation, s)).map((conversation) => conversation.id)
 }
 
 // A task's chat is told of under the task's name, and leads to the task.
@@ -167,8 +179,9 @@ export function named(conversation: Conversation, tasks: Snapshot['tasks'], runs
 // What to tell the user about between two states: an agent now waiting on them, a turn over, or
 // an agent gone. Judged on the turn, not the task, so a task's chat is told of once. A routine's
 // conversation is told of through its run (routineNoticesBetween), not here. Without tellWaiting
-// an agent now waiting goes untold: the card of waiting requests shows it instead.
-export function noticesBetween(prev: Snapshot, next: Snapshot, tellWaiting = true): Notice[] {
+// an agent now waiting goes untold: the card of waiting requests shows it instead; without
+// tellFinished a turn over goes untold too: the island kept up always shows the reply.
+export function noticesBetween(prev: Snapshot, next: Snapshot, tellWaiting = true, tellFinished = true): Notice[] {
   const notices: Notice[] = []
   for (const conversation of Object.values(next.conversations)) {
     if (isHelper(conversation)) continue
@@ -183,7 +196,7 @@ export function noticesBetween(prev: Snapshot, next: Snapshot, tellWaiting = tru
     } else if (waiting(conversation) && !waiting(before)) {
       if (tellWaiting) notices.push({ title, body: t('attention.agentNeedsYourApprovalOrAnswer'), target })
     } else if (working(before) && !working(conversation)) {
-      notices.push({ title, body: asking(conversation) ? t('attention.agentFinishedThisTurnAndHasAQuestion') : t('attention.agentFinishedThisTurn'), target })
+      if (tellFinished) notices.push({ title, body: asking(conversation) ? t('attention.agentFinishedThisTurnAndHasAQuestion') : t('attention.agentFinishedThisTurn'), target })
     }
   }
   return notices

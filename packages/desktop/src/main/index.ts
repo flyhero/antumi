@@ -455,6 +455,12 @@ ipcMain.handle('antumi:request-popup-mode', (event, mode: unknown) => {
   if (event.sender !== mainWindow?.webContents || (mode !== 'requests' && mode !== 'always')) return
   requestPopup.setMode(mode)
 })
+const PopupAttention = z.array(z.string()).max(10_000)
+ipcMain.on('antumi:request-popup-attention', (event, unseen: unknown) => {
+  const parsed = PopupAttention.safeParse(unseen)
+  if (event.sender !== mainWindow?.webContents || !parsed.success) return
+  requestPopup.setAttention(parsed.data)
+})
 const PopupLayout = z.object({ visible: z.boolean(), height: z.number().finite().min(0).max(10_000) })
 ipcMain.on('antumi:request-popup-layout', (event, layout: unknown) => {
   const parsed = PopupLayout.safeParse(layout)

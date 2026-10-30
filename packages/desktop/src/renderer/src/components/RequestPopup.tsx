@@ -4,7 +4,7 @@ import { create } from 'zustand'
 import type { AgentKind, ChatItem, Conversation } from '@antumi/protocol'
 import { dropChat, pathShortener, setChatPage, useChat } from '../chat-state'
 import { dismissError, perform, useCore } from '../core-store'
-import { layoutRequestPopup, onRequestPopupGeometry, onRequestPopupWanted, openFromRequestPopup, setRequestPopupInteractive, type PopupGeometry } from '../desktop-bridge'
+import { layoutRequestPopup, onRequestPopupAttention, onRequestPopupGeometry, onRequestPopupWanted, openFromRequestPopup, setRequestPopupInteractive, type PopupGeometry } from '../desktop-bridge'
 import type { ActionableTarget } from '../attention'
 import { agentLabel } from '../labels'
 import { usePreferences } from '../preferences'
@@ -35,9 +35,12 @@ const useWanted = create<boolean>()(() => false)
 const setWanted = (wanted: boolean) => useWanted.setState(wanted, true)
 // How main placed the window: an island over the menu bar, or a plain card under it.
 const useGeometry = create<PopupGeometry>()(() => ({ island: false, notch: null }))
+// The chats with a reply the user has not looked at, as the main window says: it alone knows.
+const useUnseen = create<ReadonlySet<string>>()(() => new Set())
 
 export function followRequestPopup(): void {
   onRequestPopupWanted(setWanted)
+  onRequestPopupAttention((unseen) => useUnseen.setState(new Set(unseen), true))
   // How the card is drawn (styles.css): an island, joined to the notch when there is one.
   onRequestPopupGeometry((geometry) => {
     const { island, notch } = geometry
@@ -117,7 +120,8 @@ export function RequestPopup() {
   const error = useCore((s) => s.error)
   const fontSize = usePreferences((s) => s.chatFontSize)
   const queue = useMemo(() => popupQueue({ tasks, conversations }, closed), [tasks, conversations, closed, getLocale()])
-  const activity = useMemo(() => (always ? islandActivity({ tasks, conversations }) : []), [always, tasks, conversations, getLocale()])
+  const unseen = useUnseen()
+  const activity = useMemo(() => (always ? islandActivity({ tasks, conversations }, unseen) : []), [always, tasks, conversations, unseen, getLocale()])
   const at = Math.max(0, queue.findIndex((each) => each.conversationId === picked))
   const entry = wanted || (always && hovered) ? queue[at] : undefined
   const conversation = entry ? conversations[entry.conversationId] : undefined
@@ -210,10 +214,11 @@ export function RequestPopup() {
   // With nothing to open on, the pointer leaves the island as it is: the ant at rest.
   const expanded = active || (hovered && activity.length > 0)
   // The folded island's leading ear: the agents of what its trailing ear speaks of, those
-  // waiting on the user first, then those at work.
+  // waiting on the user first, then those with a reply not looked at, then those at work.
   const marks = [...new Set([
     ...queue.flatMap((each) => conversations[each.conversationId]?.agent ?? []),
-    ...activity.map((each) => each.agent)
+    ...activity.filter((each) => each.state === 'replied').map((each) => each.agent),
+    ...activity.filter((each) => each.state === 'running').map((each) => each.agent)
   ])].slice(0, EAR_MARKS)
   // Both fold the island at once, though the pointer is still on it from the click: it opens
   // again once the pointer leaves and comes back.
@@ -269,9 +274,12 @@ export function RequestPopup() {
 }
 
 // The island folded: the agents' marks on one side of the notch, and on the other what waits on
-// the user, else how many are at work; with nothing to say, the ant at rest and its mood.
+// the user, else the replies not looked at, else how many are at work. With nothing to say it
+// is the notch's size, and shows as nothing until pointed at.
 function Compact({ waiting, activity, agents }: { waiting: number; activity: readonly ActivityEntry[]; agents: readonly AgentKind[] }) {
   const notch = useGeometry((s) => s.notch)
+  const replied = activity.filter((entry) => entry.state === 'replied').length
+  const running = activity.length - replied
   // At rest the ant keeps the notch company, with a mood that turns with the hour.
   const idle = waiting === 0 && activity.length === 0
   const mood = antMood(new Date().getHours())
@@ -286,15 +294,18 @@ function Compact({ waiting, activity, agents }: { waiting: number; activity: rea
       <span className="island-ear island-ear-trailing">
         {waiting > 0
           ? <span className="island-badge" data-tone="accent">{t('RequestPopup.waitingOnYou', { count: waiting })}</span>
-          : activity.length > 0
-            ? <span className="island-badge">{t('RequestPopup.agentsWorking', { count: activity.length })}</span>
-            : idle && <AntMoodMark mood={mood} />}
+          : replied > 0
+            ? <span className="island-badge" data-tone="accent">{t('RequestPopup.newReplies', { count: replied })}</span>
+            : running > 0
+              ? <span className="island-badge">{t('RequestPopup.agentsWorking', { count: running })}</span>
+              : idle && <AntMoodMark mood={mood} />}
       </span>
     </div>
   )
 }
 
-// The island open with nothing to answer: each agent at work, leading to its chat in the window.
+// The island open with nothing to answer: each agent at work or reply not looked at, leading to
+// its chat in the window.
 function Activity({ entries, onOpen }: { entries: readonly ActivityEntry[]; onOpen: (target: ActionableTarget) => void }) {
   return (
     <section className="island-activity" aria-label={t('RequestPopup.agentsAtWork')}>
@@ -302,7 +313,7 @@ function Activity({ entries, onOpen }: { entries: readonly ActivityEntry[]; onOp
         <button key={entry.conversationId} type="button" className="island-row" onClick={() => onOpen(entry.target)}>
           <span className="island-mark"><AgentIcon agent={entry.agent} /></span>
           <span className="island-row-title">{entry.title}</span>
-          <span className="island-row-state">{t('TaskActivity.running')}</span>
+          <span className="island-row-state" data-state={entry.state}>{entry.state === 'replied' ? t('RequestPopup.replied') : t('TaskActivity.running')}</span>
         </button>
       ))}
     </section>

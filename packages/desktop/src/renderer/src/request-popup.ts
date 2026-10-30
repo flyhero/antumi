@@ -26,18 +26,22 @@ export function popupQueue(s: Pick<Snapshot, 'tasks' | 'conversations'>, closed:
   })
 }
 
-// One chat with an agent at work, on the island while nothing is asked: under its task's name
-// when it has one, most recently active first. A chat held up on the user is on the card instead.
-export type ActivityEntry = { conversationId: string; title: string; target: ActionableTarget; agent: AgentKind }
+// One chat on the island while nothing is asked: its agent at work, or a reply the user has not
+// looked at (as the main window says, which alone knows). Under its task's name when it has
+// one, most recently active first. A chat held up on the user is on the card instead.
+export type ActivityEntry = { conversationId: string; title: string; target: ActionableTarget; agent: AgentKind; state: 'running' | 'replied' }
 
-export function islandActivity(s: Pick<Snapshot, 'tasks' | 'conversations'>): ActivityEntry[] {
+export function islandActivity(s: Pick<Snapshot, 'tasks' | 'conversations'>, unseen: ReadonlySet<string>): ActivityEntry[] {
   return Object.values(s.conversations)
-    .filter((conversation) => !isHelper(conversation) && conversation.archivedAt == null && working(conversation) && !waiting(conversation))
-    .sort((a, b) => b.updatedAt - a.updatedAt)
-    .map((conversation) => {
+    .flatMap((conversation) => {
+      if (isHelper(conversation) || conversation.archivedAt != null || waiting(conversation)) return []
+      const state: ActivityEntry['state'] | null = working(conversation) ? 'running' : unseen.has(conversation.id) ? 'replied' : null
+      if (!state) return []
       const { title, target } = named(conversation, s.tasks)
-      return { conversationId: conversation.id, title, target: target.kind === 'task' ? target : { kind: 'conversation', id: conversation.id }, agent: conversation.agent }
+      return [{ conversation, entry: { conversationId: conversation.id, title, target: target.kind === 'task' ? target : { kind: 'conversation' as const, id: conversation.id }, agent: conversation.agent, state } }]
     })
+    .sort((a, b) => b.conversation.updatedAt - a.conversation.updatedAt)
+    .map(({ entry }) => entry)
 }
 
 // What the card's header marks the request as: a question, a plan to approve, or a permission.

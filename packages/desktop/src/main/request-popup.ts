@@ -17,6 +17,8 @@ export class RequestPopup {
   private placement: PopupPlacement | null = null
   // The page's last height, to put the window back together after the displays change.
   private height = 0
+  // The chats with a reply the user has not looked at, from the main window, which alone knows.
+  private unseen: string[] = []
 
   constructor(private readonly create: () => BrowserWindow) {}
 
@@ -69,6 +71,11 @@ export class RequestPopup {
   // at. Pointer moves still reach the page, which is how it knows.
   setInteractive(interactive: boolean): void {
     if (this.placement?.island) this.window?.setIgnoreMouseEvents(!interactive, { forward: true })
+  }
+
+  setAttention(unseen: string[]): void {
+    this.unseen = unseen
+    this.window?.webContents.send('antumi:request-popup-attention', unseen)
   }
 
   owns(contents: WebContents): boolean {
@@ -135,6 +142,7 @@ export class RequestPopup {
     // one was put away (which forgets the display).
     window.webContents.on('did-finish-load', () => {
       window.webContents.send('antumi:request-popup-wanted', this.wanted)
+      window.webContents.send('antumi:request-popup-attention', this.unseen)
       this.placement = null
       this.place()
     })

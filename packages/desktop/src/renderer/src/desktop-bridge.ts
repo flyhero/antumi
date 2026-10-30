@@ -30,6 +30,8 @@ declare global {
       onNotificationClick?(listener: (target: unknown) => void): () => void
       requestPopup?(wanted: boolean): Promise<unknown>
       requestPopupMode?(mode: 'requests' | 'always'): Promise<unknown>
+      requestPopupAttention?(unseen: string[]): void
+      onRequestPopupAttention?(listener: (unseen: unknown) => void): () => void
       onRequestPopupWanted?(listener: (wanted: boolean) => void): () => void
       onRequestPopupGeometry?(listener: (geometry: unknown) => void): () => void
       requestPopupLayout?(layout: { visible: boolean; height: number }): void
@@ -191,6 +193,19 @@ export function canShowIsland(): boolean {
 // Up only when asked for, or kept up always, as an island that the card expands.
 export function setRequestPopupMode(mode: 'requests' | 'always'): void {
   void window.antumi?.requestPopupMode?.(mode).catch(() => {})
+}
+
+// From the main window: the chats with a reply the user has not looked at, for the island to
+// show. Only the main window knows, since it is where they are looked at.
+export function tellRequestPopupAttention(unseen: string[]): void {
+  window.antumi?.requestPopupAttention?.(unseen)
+}
+
+export function onRequestPopupAttention(listener: (unseen: string[]) => void): () => void {
+  return window.antumi?.onRequestPopupAttention?.((unseen) => {
+    const parsed = z.array(z.string()).safeParse(unseen)
+    if (parsed.success) listener(parsed.data)
+  }) ?? (() => {})
 }
 
 export function onRequestPopupWanted(listener: (wanted: boolean) => void): () => void {

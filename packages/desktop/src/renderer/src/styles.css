@@ -9957,7 +9957,18 @@ summary.agent-group-head:focus-visible { outline: 2px solid var(--focus); outlin
   .ant-head-eyes-open, .ant-head-eyes-shut { animation: none; }
   .ant-head-mark:not([data-asleep='true']) .ant-head-eyes-shut { opacity: 0; }
 }
-/* Open with nothing to answer: the agents at work, each a row to its chat. */
+/* Opening: what unfolds settles in from just above, as the window has already grown to fit it;
+   folding is at once, so the island is out of the way as soon as the pointer leaves. */
+:root[data-island] .request-popup-frame[data-expanded='true'] .island > * { animation: island-unfold 160ms ease-out; }
+@keyframes island-unfold {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  :root[data-island] .request-popup-frame[data-expanded='true'] .island > * { animation: none; }
+}
+/* Open with nothing to answer: the agents at work and the replies not yet looked at, each a row
+   to its chat. */
 .island-activity { display: flex; flex-direction: column; gap: 2px; padding: 8px; }
 .island-row {
   display: flex;

@@ -7122,13 +7122,15 @@ export const MESSAGES = {
     "en": "Island at the top of the screen"
   },
   "SettingsPage.islandDescription": {
-    "zh": "在别的应用里时，等待确认的请求以卡片弹出，可直接作答，不抢焦点；这类请求不再另发系统通知。「始终」时常驻刘海，显示在跑和等你的 Agent，鼠标移上去展开（仅 macOS）。",
-    "en": "While using another app, requests waiting on you come up as a card you can answer without losing focus; they do not also trigger system notifications. Always: it stays at the notch, shows the agents at work and waiting on you, and expands under the pointer (macOS only)."
+    "zh": "在别的应用里时，等待确认的请求以卡片弹出，可直接作答，不抢焦点；这类请求不再另发系统通知。「始终」时常驻刘海，显示在跑、有新回复和等你的 Agent，鼠标移上去展开，新回复也不再另发通知（仅 macOS）。",
+    "en": "While using another app, requests waiting on you come up as a card you can answer without losing focus; they do not also trigger system notifications. Always: it stays at the notch, shows the agents at work, with a new reply and waiting on you, and expands under the pointer; new replies do not trigger notifications either (macOS only)."
   },
   "SettingsPage.islandOff": {"zh": "关闭", "en": "Off"},
   "SettingsPage.islandWhenNeeded": {"zh": "需要我时弹出", "en": "When needed"},
   "RequestPopup.waitingOnYou": {"zh": "等你 {count}", "en": "{count} waiting"},
   "RequestPopup.agentsWorking": {"zh": "{count} 在跑", "en": "{count} working"},
+  "RequestPopup.newReplies": {"zh": "{count} 条新回复", "en": "{count, plural, one {{count} new reply} other {{count} new replies}}"},
+  "RequestPopup.replied": {"zh": "已回复", "en": "Replied"},
   "RequestPopup.agentsAtWork": {"zh": "在跑的 Agent", "en": "Agents at work"},
   "SettingsPage.automatic": {
     "zh": "自动（{cheapestLabel}）",

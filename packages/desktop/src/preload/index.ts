@@ -27,6 +27,12 @@ contextBridge.exposeInMainWorld('antumi', {
   // The card of waiting requests: the main window asks for it, the card lays itself out.
   requestPopup: (wanted: boolean): Promise<unknown> => ipcRenderer.invoke('antumi:request-popup', wanted),
   requestPopupMode: (mode: 'requests' | 'always'): Promise<unknown> => ipcRenderer.invoke('antumi:request-popup-mode', mode),
+  requestPopupAttention: (unseen: string[]): void => ipcRenderer.send('antumi:request-popup-attention', unseen),
+  onRequestPopupAttention: (listener: (unseen: unknown) => void): (() => void) => {
+    const handler = (_event: IpcRendererEvent, unseen: unknown) => listener(unseen)
+    ipcRenderer.on('antumi:request-popup-attention', handler)
+    return () => ipcRenderer.removeListener('antumi:request-popup-attention', handler)
+  },
   onRequestPopupWanted: (listener: (wanted: boolean) => void): (() => void) => {
     const handler = (_event: IpcRendererEvent, wanted: unknown) => listener(wanted === true)
     ipcRenderer.on('antumi:request-popup-wanted', handler)

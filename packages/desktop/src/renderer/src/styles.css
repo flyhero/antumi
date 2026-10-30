@@ -9913,14 +9913,15 @@ summary.agent-group-head:focus-visible { outline: 2px solid var(--focus); outlin
   font-size: var(--chat-font-small);
   white-space: nowrap;
 }
-.request-popup-label { flex-shrink: 0; color: var(--accent); font-weight: 600; }
+.request-popup-label { display: grid; place-items: center; flex-shrink: 0; color: var(--accent); }
+.request-popup-label svg { width: 16px; height: 16px; }
 .request-popup-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
 .request-popup-agent { flex-shrink: 0; display: grid; place-items: center; color: var(--text-3); }
 .request-popup-agent .agent-mark { width: 16px; height: 16px; }
 .request-popup-spacer { flex: 1; }
 .request-popup-pager { display: flex; flex-shrink: 0; align-items: center; gap: 4px; color: var(--text-3); font-variant-numeric: tabular-nums; }
-.request-popup-header .link-button { flex-shrink: 0; margin-left: 4px; }
 .request-popup-step,
+.request-popup-open,
 .request-popup-close {
   display: grid;
   place-items: center;
@@ -9936,6 +9937,7 @@ summary.agent-group-head:focus-visible { outline: 2px solid var(--focus); outlin
 }
 .request-popup-step { width: 24px; height: 24px; }
 .request-popup-step:hover,
+.request-popup-open:hover,
 .request-popup-close:hover { background: var(--fill); color: var(--text); }
 .request-popup-step[data-direction='previous'] svg { transform: scaleX(-1); }
 .request-popup .chat-intervention { max-height: none; border: 0; border-radius: 0; }

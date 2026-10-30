@@ -1,5 +1,5 @@
 import { getLocale, useLocale, t } from '../i18n'
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type JSX } from 'react'
 import { create } from 'zustand'
 import type { ChatItem, Conversation } from '@antumi/protocol'
 import { dropChat, pathShortener, setChatPage, useChat } from '../chat-state'
@@ -7,14 +7,14 @@ import { dismissError, perform, useCore } from '../core-store'
 import { layoutRequestPopup, onRequestPopupWanted, openFromRequestPopup } from '../desktop-bridge'
 import { agentLabel } from '../labels'
 import { usePreferences } from '../preferences'
-import { popupKey, popupLabel, popupQueue, type PopupEntry } from '../request-popup'
+import { popupKey, popupKind, popupLabel, popupQueue, type PopupEntry, type PopupKind } from '../request-popup'
 import { ChatSurfaceContext, type ChatSurface } from './chat-surface'
 import { PendingRequests } from './ChatDock'
 import { ChatRoots } from './ChatMarkdown'
 import type { RequestItem } from './ChatRequestCards'
 import { ChatPaths } from './ChatToolCard'
 import { scheduleErrorToastDismiss } from './ErrorToast'
-import { AgentIcon, ChevronRightIcon, CloseIcon } from './icons'
+import { AgentIcon, ChevronRightIcon, CloseIcon, DocumentIcon, HelpIcon, LockIcon, PopInIcon } from './icons'
 
 type StateItem = Extract<ChatItem, { kind: 'state' }>
 
@@ -22,6 +22,8 @@ const NO_ITEMS: readonly ChatItem[] = []
 const NONE_CLOSED: ReadonlySet<string> = new Set()
 // Asked for, with nothing to show by then (answered in the meantime): the card stays down.
 const GIVE_UP_MS = 5000
+// The header's mark of what is asked: the words are its label, for the pointer and a reader.
+const KIND_ICON: Record<PopupKind, JSX.Element> = { question: <HelpIcon />, plan: <DocumentIcon />, permission: <LockIcon /> }
 
 // Whether the main window wants the card up. Followed from the page's start: main says so as soon
 // as the page loads, which may be before React has mounted anything to hear it.
@@ -148,7 +150,7 @@ export function RequestPopup() {
     <div ref={frame} className="request-popup-frame">
       <section className="chat-view request-popup" data-font-size={fontSize} aria-label={t('ChatDock.requestsAwaitingYourResponse')}>
         <header className="request-popup-header">
-          <span className="request-popup-label">{popupLabel(entry.request)}</span>
+          <span className="request-popup-label" role="img" aria-label={popupLabel(entry.request)} title={popupLabel(entry.request)}>{KIND_ICON[popupKind(entry.request)]}</span>
           <span className="request-popup-title" title={entry.title}>{entry.title}</span>
           <span className="request-popup-agent" role="img" aria-label={agentLabel(conversation.agent)} title={agentLabel(conversation.agent)}><AgentIcon agent={conversation.agent} /></span>
           <span className="request-popup-spacer" />
@@ -159,7 +161,7 @@ export function RequestPopup() {
               <button type="button" className="request-popup-step" aria-label={t('ChatRequestCards.next')} onClick={() => step(1)}><ChevronRightIcon /></button>
             </span>
           )}
-          <button type="button" className="link-button" onClick={() => openFromRequestPopup(entry.target)}>{t('RequestPopup.openInAntumi')}</button>
+          <button type="button" className="request-popup-open" aria-label={t('RequestPopup.openInAntumi')} title={t('RequestPopup.openInAntumi')} onClick={() => openFromRequestPopup(entry.target)}><PopInIcon /></button>
           <button type="button" className="request-popup-close" aria-label={t('RequestPopup.collapseShowAgainForNewRequests')} title={t('RequestPopup.collapseShowAgainForNewRequests')} onClick={close}><CloseIcon /></button>
         </header>
         {error && <p className="request-popup-error" role="alert">{error}</p>}

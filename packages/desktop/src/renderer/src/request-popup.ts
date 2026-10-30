@@ -25,9 +25,16 @@ export function popupQueue(s: Pick<Snapshot, 'tasks' | 'conversations'>, closed:
   })
 }
 
+// What the card's header marks the request as: a question, a plan to approve, or a permission.
+export type PopupKind = 'question' | 'plan' | 'permission'
+export function popupKind(request: ConversationRequest): PopupKind {
+  if (request.kind === 'question') return 'question'
+  return request.tool !== null && PLAN_TOOLS.has(request.tool) ? 'plan' : 'permission'
+}
+
 export function popupLabel(request: ConversationRequest): string {
-  if (request.kind === 'question') return t('requestPopup.hasAQuestion')
-  return request.tool !== null && PLAN_TOOLS.has(request.tool) ? t('requestPopup.planAwaitingApproval') : t('requestPopup.awaitingYourPermission')
+  const kind = popupKind(request)
+  return kind === 'question' ? t('requestPopup.hasAQuestion') : kind === 'plan' ? t('requestPopup.planAwaitingApproval') : t('requestPopup.awaitingYourPermission')
 }
 
 // Whether the card is worth bringing up: a chat now held up on the user, or held up on something

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { createReadStream, createWriteStream } from 'node:fs'
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { z } from 'zod'
 import { compareVersions, isVersion, type UpdateState } from '../shared/app-update'
@@ -25,6 +25,8 @@ const FIRST_CHECK = 10_000
 const RETRY_AFTER = 10 * 60_000
 const FEED_TAG = /<link\b[^>]*\bhref="[^"]*\/releases\/tag\/([^"]+)"/g
 const CHECKSUM_LINE = /^([0-9a-f]{64})\s+\*?(\S+)$/
+// An installer this updater downloaded; nothing else in its folder is ever removed.
+const INSTALLER = /^Antumi-.+\.(dmg|exe|AppImage|deb)$/
 
 // The newest published release above the running version, a pre-release only when the user takes
 // them. A skipped version is still found, so the settings page can say it is there.
@@ -215,11 +217,21 @@ export class AppUpdater {
         const temporary = `${this.pendingFile}.tmp`
         await writeFile(temporary, JSON.stringify(release))
         await rename(temporary, this.pendingFile)
+        await this.removeSuperseded(asset.name)
       }
       this.downloaded = file
       this.downloadedAsset = JSON.stringify(asset)
     }
     return file
+  }
+
+  // An installer downloaded for a version a newer one replaced before it was installed: only the
+  // pending one is ever installed or cleared once applied, so the rest would stay for good.
+  private async removeSuperseded(pending: string): Promise<void> {
+    const names = await readdir(this.options.downloads).catch(() => [])
+    for (const name of names) {
+      if (name !== pending && INSTALLER.test(name)) await rm(join(this.options.downloads, name), { force: true }).catch(() => {})
+    }
   }
 
   private get pendingFile(): string {

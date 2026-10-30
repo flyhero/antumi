@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import type { QuotaAdvice, UsageForecast, UsageWindow } from '@antumi/protocol'
-import { UsageWindowRow } from './UsageBar'
+import { MeterHint, UsageWindowRow } from './UsageBar'
 
 vi.hoisted(() => {
   vi.stubGlobal('window', { antumi: undefined, matchMedia: () => ({ matches: false, addEventListener() {}, removeEventListener() {} }), addEventListener() {}, removeEventListener() {} })
@@ -46,5 +46,15 @@ describe('UsageWindowRow', () => {
 
   it('draws no time mark for a window without a reset time', () => {
     expect(render({ window: { ...weekly, resetsAt: null }, forecast: undefined, advice: [] })).not.toContain('usage-meter-time')
+  })
+})
+
+describe('MeterHint', () => {
+  it('explains the fill and the mark behind an info button, in the terms the meters are shown in', () => {
+    const used = renderToStaticMarkup(createElement(MeterHint, { display: 'used' }))
+    expect(used).toContain('aria-label="进度条说明"')
+    expect(used).toMatch(/aria-describedby="([^"]+)".*role="tooltip"/)
+    expect(used).toContain('填充越过竖线')
+    expect(renderToStaticMarkup(createElement(MeterHint, { display: 'remaining' }))).toContain('填充短于竖线')
   })
 })

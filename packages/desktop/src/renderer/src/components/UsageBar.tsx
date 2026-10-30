@@ -195,6 +195,19 @@ export function GlobalResetList({ resets, now }: { resets: GlobalResets; now: nu
   )
 }
 
+// What a meter's fill and its time mark stand for, on hover rather than as a legend taking a row.
+export function MeterHint({ display }: { display: Preferences['usageDisplay'] }) {
+  const id = useId()
+  return (
+    <span className="usage-card-meter-hint">
+      <button type="button" className="usage-card-meter-info" aria-label={t('UsageBar.aboutTheMeters')} aria-describedby={id}><InfoIcon /></button>
+      <span id={id} role="tooltip" className="usage-card-meter-tooltip">
+        {display === 'remaining' ? t('UsageBar.meterHintRemaining') : t('UsageBar.meterHintUsed')}
+      </span>
+    </span>
+  )
+}
+
 // One window in the card: its meter against the clock, when it resets, and what to do about it.
 export function UsageWindowRow({ window, now, display, showPace, forecast, advice, alternative }: {
   window: UsageWindow
@@ -344,9 +357,12 @@ function UsageCard({ usage, accounts, accountLabel, now, advice, alternative, sh
       onBlurCapture={onLeave}
     >
       <div className="usage-card-title">
-        {agentLabel(usage.agent)}
-        {accountLabel && <span className="muted"> · {accountLabel}</span>}
-        {usage.plan && <span className="muted"> · {usage.plan}</span>}
+        <span>
+          {agentLabel(usage.agent)}
+          {accountLabel && <span className="muted"> · {accountLabel}</span>}
+          {usage.plan && <span className="muted"> · {usage.plan}</span>}
+        </span>
+        {timed && <MeterHint display={display} />}
       </div>
       {usage.windows.map((window) => (
         <UsageWindowRow
@@ -360,12 +376,6 @@ function UsageCard({ usage, accounts, accountLabel, now, advice, alternative, sh
           alternative={alternative}
         />
       ))}
-      {timed && (
-        <div className="usage-card-legend" aria-hidden="true">
-          <span><i className="usage-card-legend-fill" />{display === 'remaining' ? t('UsageBar.legendLeft') : t('UsageBar.legendUsed')}</span>
-          <span><i className="usage-card-legend-time" />{display === 'remaining' ? t('UsageBar.legendTimeLeft') : t('UsageBar.legendTimeElapsed')}</span>
-        </div>
-      )}
       {usage.resetCredits && (usage.resetCredits.available > 0 || usage.resetCredits.blockedBy || spending) && (
         <ResetCreditList usage={usage} credits={usage.resetCredits} now={now} spending={spending} onSpend={onSpend} onChange={onSpendingChange} />
       )}

@@ -3836,6 +3836,11 @@ div.inspector-empty > p { margin: 0 0 8px; }
 }
 
 .usage-card-title {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 20px;
   font-weight: 600;
 }
 
@@ -3910,31 +3915,14 @@ div.inspector-empty > p { margin: 0 0 8px; }
   color: var(--warning);
 }
 
-.usage-card-legend {
-  display: flex;
-  gap: 12px;
-  color: var(--text-3);
-}
-
-.usage-card-legend i {
-  display: inline-block;
-  margin-right: 4px;
-  vertical-align: middle;
-}
-
-.usage-card-legend-fill {
-  width: 12px;
-  height: 6px;
-  border-radius: 999px;
-  background: var(--text-muted);
-}
-
-.usage-card-legend-time {
-  width: 2px;
-  height: 10px;
-  border-radius: 1px;
-  background: var(--text);
-}
+/* Below the title, across the card: the card itself sits right above the status bar. */
+.usage-card-meter-hint { margin-left: auto; }
+.usage-card-meter-info { display: grid; place-items: center; width: 20px; height: 20px; padding: 0; border: 0; border-radius: var(--radius-xs); background: transparent; color: var(--text-3); cursor: help; }
+.usage-card-meter-info svg { width: 14px; height: 14px; }
+.usage-card-meter-info:hover, .usage-card-meter-info:focus-visible { background: var(--fill); color: var(--text-muted); }
+.usage-card-meter-info:focus-visible { outline: 2px solid var(--focus); outline-offset: 0; }
+.usage-card-meter-tooltip { position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 1; visibility: hidden; padding: 8px 12px; border: 1px solid var(--border-2); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow-float); color: var(--text-muted); font-weight: 400; line-height: 1.5; }
+.usage-card-meter-hint:hover .usage-card-meter-tooltip, .usage-card-meter-hint:focus-within .usage-card-meter-tooltip { visibility: visible; }
 
 .usage-card-row[data-level='critical'] .usage-card-value,
 .usage-card-row[data-level='warning'] .usage-card-value {
@@ -8999,6 +8987,8 @@ div.inspector-empty > p { margin: 0 0 8px; }
 .browser-stage-frame { border: 1px solid var(--border); background: var(--bg); pointer-events: none; }
 .browser-stage-note { color: var(--text-3); font-size: 12px; }
 .browser-address .chat-picker { flex-shrink: 0; }
+/* A page held at a size instead of following the panel: easy to forget, so it is marked. */
+.browser-address .tool-button[data-tone='held'] { color: var(--accent); }
 .browser-address .menu-anchor { flex-shrink: 0; }
 .browser-bookmark-star[data-kept] { color: var(--accent); }
 .browser-bookmark-star[data-kept] svg { fill: currentColor; }

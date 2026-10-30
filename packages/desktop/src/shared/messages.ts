@@ -9700,21 +9700,17 @@ export const MESSAGES = {
     "zh": "已用 {used}%，时间已过 {elapsed}%",
     "en": "{used}% used, {elapsed}% of the window elapsed"
   },
-  "UsageBar.legendUsed": {
-    "zh": "已用",
-    "en": "Used"
+  "UsageBar.aboutTheMeters": {
+    "zh": "进度条说明",
+    "en": "About the meters"
   },
-  "UsageBar.legendLeft": {
-    "zh": "剩余",
-    "en": "Left"
+  "UsageBar.meterHintUsed": {
+    "zh": "填充是已用的额度，竖线是这个周期的时间已过多少。填充越过竖线，就是用得比时间快。",
+    "en": "The fill is the quota used; the mark is how much of the window's time has passed. A fill past the mark means you are using it faster than time is passing."
   },
-  "UsageBar.legendTimeElapsed": {
-    "zh": "时间已过",
-    "en": "Time elapsed"
-  },
-  "UsageBar.legendTimeLeft": {
-    "zh": "时间剩余",
-    "en": "Time left"
+  "UsageBar.meterHintRemaining": {
+    "zh": "填充是剩余的额度，竖线是这个周期还剩多少时间。填充短于竖线，就是用得比时间快。",
+    "en": "The fill is the quota left; the mark is how much of the window's time is left. A fill short of the mark means you are using it faster than time is passing."
   },
   "UsageBar.refreshing": {
     "zh": "刷新中…",

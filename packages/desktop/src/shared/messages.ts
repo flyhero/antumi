@@ -1224,7 +1224,7 @@ export const MESSAGES = {
   "BrowserActions.shareConfirm": {"zh": "共享页面", "en": "Share page"},
   "BrowserActions.developerTools": {"zh": "开发者工具", "en": "Developer tools"},
   "BrowserActions.diagnostics": {"zh": "控制台与网络", "en": "Console and network"},
-  "BrowserActions.openDevtools": {"zh": "打开原生开发者工具", "en": "Open native DevTools"},
+  "BrowserActions.openDevtools": {"zh": "原生开发者工具", "en": "Native DevTools"},
   "BrowserActions.closeDevtools": {"zh": "关闭开发者工具并恢复 Agent", "en": "Close DevTools and resume Agent"},
   "BrowserActions.console": {"zh": "控制台", "en": "Console"},
   "BrowserActions.network": {"zh": "网络请求", "en": "Network"},

@@ -635,8 +635,22 @@ body.stacked-panel-resizing * {
 .conversation-group-fold:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 .conversation-group-title svg { width: 12px; height: 12px; flex-shrink: 0; transition: transform 0.15s; }
 .conversation-group-fold[aria-expanded='false'] > svg { transform: rotate(-90deg); }
-/* Grouped by agent, the rows leave their mark out and the heading carries it. */
-.conversation-group-agent { display: inline-flex; }
+/* A group as a folder: its mark in the rows' icon column, its name as large as theirs and lighter,
+   its rows indented under a guide from the mark, like a file tree. The chevron waits for the
+   pointer. */
+.conversation-group[data-tree] > .conversation-group-title { font-size: 14px; font-weight: 400; }
+.conversation-group[data-tree] .conversation-group-fold { gap: 10px; padding: 6px 12px; }
+.conversation-group[data-tree] .conversation-group-fold:hover { color: var(--text); }
+.conversation-group[data-tree] .count { font-size: 12px; color: var(--text-3); }
+.conversation-group[data-tree] .conversation-group-fold > svg { opacity: 0; transition: opacity 0.12s, transform 0.15s; }
+.conversation-group[data-tree] .conversation-group-title:hover .conversation-group-fold > svg { opacity: 1; }
+.conversation-group-mark { width: 16px; height: 16px; display: grid; place-items: center; flex-shrink: 0; }
+.conversation-group-title .conversation-group-mark svg { width: 16px; height: 16px; transition: none; }
+.conversation-group-mark .agent-mark { width: 14px; height: 14px; }
+.conversation-group-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conversation-group[data-tree] > ul { margin: 0 0 12px 27px; padding: 0 8px 0 0; border-left: 1px solid var(--border); }
+.conversation-group[data-tree] .conversation-row { padding-left: 8px; }
+.conversation-group[data-tree] .conversation-group-more:not([data-beside]) { padding-left: 35px; }
 /* A project's group starts a conversation there; shown while the heading is pointed at, under the
    section's own ＋. */
 .conversation-group-new { margin-right: 4px; opacity: 0; }
@@ -945,7 +959,6 @@ span.chat-translate .spinner { width: 12px; height: 12px; }
 /* Negative margins keep the row as tall as the title it replaces. */
 .task-row .title-editor {
   margin: -3px 0;
-  font-weight: 500;
 }
 
 .task-row .status-icon {
@@ -963,9 +976,9 @@ span.chat-translate .spinner { width: 12px; height: 12px; }
   text-decoration-color: color-mix(in srgb, var(--text-muted) 60%, transparent);
 }
 
-/* One line, as the agents' own apps list their chats; the whole title shows on hover. */
+/* One line, as the agents' own apps list their chats; the whole title shows on hover. Regular
+   weight, so a long list stays light. */
 .task-row-title {
-  font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -999,7 +1012,7 @@ span.chat-translate .spinner { width: 12px; height: 12px; }
 .conversation-row { grid-template-columns: 16px minmax(0, 1fr) auto; }
 .conversation-row .task-row-meta,
 .conversation-row .conversation-snippet { grid-column: 2 / span 2; }
-.conversation-age { grid-column: 3; padding-top: 1px; color: var(--text-muted); font-size: 11px; white-space: nowrap; }
+.conversation-age { grid-column: 3; padding-top: 1px; color: var(--text-3); font-size: 12px; white-space: nowrap; }
 
 .task-row-meta {
   grid-column: 2;

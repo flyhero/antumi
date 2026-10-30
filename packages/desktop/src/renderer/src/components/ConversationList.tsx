@@ -14,7 +14,7 @@ import { ConversationStatus } from './ConversationStatus'
 import { ConversationPeek, useConversationPeek } from './ConversationPeek'
 import { conversationActivity } from '../work-activity'
 import { ContextMenu, MenuCheckboxItem, menuPoint, MenuRadioItem, MenuSubmenu, type MenuPoint } from './ContextMenu'
-import { AgentIcon, ChatIcon, ChevronDownIcon, PlusIcon, SlidersIcon } from './icons'
+import { AgentIcon, ChatIcon, ChevronDownIcon, FilesIcon, FolderIcon, PinIcon, PlusIcon, SlidersIcon } from './icons'
 import { primaryProjectName, projectName, projectNames } from './ProjectPicker'
 import { SidebarCollapseButton } from './SidebarCollapseButton'
 import { SidebarSearchField, SidebarSearchToggle } from './SidebarSearch'
@@ -75,6 +75,15 @@ function arrange(conversations: Conversation[], by: GroupBy, sort: SortBy): Grou
     groups.set(label, group)
   }
   return [...top, ...[...groups.values()].sort((a, b) => a.rank - b.rank || (a.label ?? '').localeCompare(b.label ?? '', getLocale()))]
+}
+
+// What heads a group as a folder over its rows: a project's folder, open while its conversations
+// show; the pin; an agent's mark. A group by status has none and keeps its chevron.
+function groupMark(group: Group, by: GroupBy, folded: boolean) {
+  if (group.key === 'pinned') return <PinIcon />
+  if (group.agent) return <AgentIcon agent={group.agent} />
+  if (by === 'project') return folded ? <FolderIcon /> : <FilesIcon />
+  return null
 }
 
 // By title or project name, ignoring case. Message text is searched by core.
@@ -349,15 +358,16 @@ export function ConversationList() {
       <div id="sidebar-conversations" className="sidebar-section-content" hidden={collapsed}>
       {free.length === 0 ? <p className="task-list-empty">{t('ConversationList.noConversationsYetClickAtTheTopRight')}</p> :
         visible.length === 0 && archived.length === 0 ? snippets && <p className="task-list-empty">{tr('ConversationList.noConversationsMatch', { needle: needle })}</p> :
-        groups.map((group) => group.label === null
-          ? <ul key={group.key}>{group.items.map((conversation) => row(conversation))}</ul>
-          : <section key={group.key} className="conversation-group" aria-label={group.label}>
+        groups.map((group) => {
+          if (group.label === null) return <ul key={group.key}>{group.items.map((conversation) => row(conversation))}</ul>
+          const mark = groupMark(group, groupBy, isFolded(group.key))
+          return <section key={group.key} className="conversation-group" data-tree={mark ? '' : undefined} aria-label={group.label}>
             <h3 className="conversation-group-title">
               <button type="button" className="conversation-group-fold" aria-expanded={!isFolded(group.key)} onClick={() => toggleFold(group.key)}>
-                <ChevronDownIcon />
-                {group.agent && <span className="conversation-group-agent"><AgentIcon agent={group.agent} /></span>}
-                {group.label}
+                {mark ? <span className="conversation-group-mark">{mark}</span> : <ChevronDownIcon />}
+                <span className="conversation-group-label">{group.label}</span>
                 <span className="count">{group.items.length}</span>
+                {mark && <ChevronDownIcon />}
               </button>
               {group.project && (
                 <button
@@ -394,7 +404,8 @@ export function ConversationList() {
                 )
               })()}
             </ul>}
-          </section>)}
+          </section>
+        })}
       {archived.length > 0 && (
         <section className="conversation-group conversation-archive" aria-label={t('ConversationList.archived')}>
           <h3 className="conversation-group-title">

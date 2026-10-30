@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import type { ProjectFileMatch } from '@antumi/protocol'
-import { closeSearch, selectConversation, selectTask, showFilesPanel, useCore, useFilesScope } from '../core-store'
-import { showResolvedFile } from '../file-actions'
-import { fileScopeKey, revealedFolder, updateFileTabs } from '../file-tabs'
+import { closeSearch, selectConversation, selectTask, useCore, useFilesScope } from '../core-store'
+import { revealFilesFolder, showResolvedFile } from '../file-actions'
 import { isDarkTheme, onThemeChange } from '../appearance'
 import { t } from '../i18n'
 import { agentEntries, conversationEntries, matchScore, recentEntries, searchSections, SEARCH_CATEGORIES, taskEntries, type SearchCategory, type SearchEntry, type SearchKind, type SearchSection } from '../search-palette'
@@ -113,10 +112,7 @@ export function SearchPalette({ initial }: { initial: SearchCategory }) {
       const match = files.find((each) => each.path === entry.id)
       if (!match) return
       if (match.kind === 'file') showResolvedFile(scope, { path: match.path, root: match.root, relative: match.relative, kind: 'file' }, null)
-      else {
-        updateFileTabs(fileScopeKey(scope), (state) => revealedFolder({ ...state, tree: true }, roots, match.path))
-        showFilesPanel(scope)
-      }
+      else revealFilesFolder(scope, match.path)
     }
   }
 

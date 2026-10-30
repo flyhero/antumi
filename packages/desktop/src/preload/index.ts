@@ -62,5 +62,36 @@ contextBridge.exposeInMainWorld('antumi', {
     const handler = (_event: IpcRendererEvent, payload: unknown) => listener(payload)
     ipcRenderer.on('antumi:browser-shortcut', handler)
     return () => ipcRenderer.removeListener('antumi:browser-shortcut', handler)
+  },
+  openPanelWindow: (kind: string, commands: unknown): Promise<unknown> => ipcRenderer.invoke('antumi:panel-window-open', kind, commands),
+  focusPanelWindow: (kind: string): Promise<unknown> => ipcRenderer.invoke('antumi:panel-window-focus', kind),
+  closePanelWindow: (kind: string): Promise<unknown> => ipcRenderer.invoke('antumi:panel-window-close', kind),
+  sendPanelCommand: (kind: string, command: unknown): void => ipcRenderer.send('antumi:panel-window-command', kind, command),
+  onPanelWindows: (listener: (message: unknown) => void): (() => void) => {
+    const handler = (_event: IpcRendererEvent, message: unknown) => listener(message)
+    ipcRenderer.on('antumi:panel-windows', handler)
+    return () => ipcRenderer.removeListener('antumi:panel-windows', handler)
+  },
+  onPanelCommand: (listener: (command: unknown) => void): (() => void) => {
+    const handler = (_event: IpcRendererEvent, command: unknown) => listener(command)
+    ipcRenderer.on('antumi:panel-command', handler)
+    return () => ipcRenderer.removeListener('antumi:panel-command', handler)
+  },
+  dockPanelWindow: (payload: unknown): void => ipcRenderer.send('antumi:panel-window-dock', payload),
+  hidePanelWindow: (payload: unknown): void => ipcRenderer.send('antumi:panel-window-hide', payload),
+  onPanelRequestClose: (listener: () => void): (() => void) => {
+    const handler = () => listener()
+    ipcRenderer.on('antumi:panel-request-close', handler)
+    return () => ipcRenderer.removeListener('antumi:panel-request-close', handler)
+  },
+  panelHostReady: (): void => ipcRenderer.send('antumi:panel-host-ready'),
+  panelReceipt: (receipt: unknown): void => ipcRenderer.send('antumi:panel-receipt', receipt),
+  sendPanelQuote: (quote: unknown): Promise<unknown> => ipcRenderer.invoke('antumi:panel-quote', quote),
+  sendPanelBrowserContext: (payload: unknown): Promise<unknown> => ipcRenderer.invoke('antumi:panel-browser-context', payload),
+  forwardPanelShortcut: (shortcut: unknown): void => ipcRenderer.send('antumi:panel-shortcut', shortcut),
+  onPanelShortcut: (listener: (shortcut: unknown) => void): (() => void) => {
+    const handler = (_event: IpcRendererEvent, shortcut: unknown) => listener(shortcut)
+    ipcRenderer.on('antumi:panel-shortcut', handler)
+    return () => ipcRenderer.removeListener('antumi:panel-shortcut', handler)
   }
 })

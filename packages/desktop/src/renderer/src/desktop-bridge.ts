@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { AgentKind, BookmarkFields } from '@antumi/protocol'
 import type { ActionableTarget, Notice } from './attention'
 import { ShortcutAction, type ShortcutSettings } from '../../shared/keyboard-shortcuts'
+import type { PanelBrowserContext, PanelCommand, PanelDockPayload, PanelHandoff, PanelKind } from '../../shared/panel-window'
 
 // What the Electron preload exposes; absent when the UI runs in a plain browser.
 declare global {
@@ -43,6 +44,21 @@ declare global {
       pickBookmarksFile?(): Promise<unknown>
       onBrowserFocused?(listener: (event: unknown) => void): () => void
       onBrowserShortcut?(listener: (event: unknown) => void): () => void
+      openPanelWindow?(kind: string, commands: unknown): Promise<unknown>
+      focusPanelWindow?(kind: string): Promise<unknown>
+      closePanelWindow?(kind: string): Promise<unknown>
+      sendPanelCommand?(kind: string, command: unknown): void
+      onPanelWindows?(listener: (message: unknown) => void): () => void
+      onPanelCommand?(listener: (command: unknown) => void): () => void
+      dockPanelWindow?(payload: unknown): void
+      hidePanelWindow?(payload: unknown): void
+      onPanelRequestClose?(listener: () => void): () => void
+      panelHostReady?(): void
+      panelReceipt?(receipt: unknown): void
+      sendPanelQuote?(quote: unknown): Promise<unknown>
+      sendPanelBrowserContext?(payload: unknown): Promise<unknown>
+      forwardPanelShortcut?(shortcut: unknown): void
+      onPanelShortcut?(listener: (shortcut: unknown) => void): () => void
       // Newer releases (main's app-update.ts); absent from a main older than the renderer.
       updateState?(): Promise<unknown>
       checkForUpdate?(): Promise<unknown>
@@ -267,4 +283,68 @@ export function setNativeTheme(theme: 'system' | 'light' | 'dark'): void {
 export async function pickPlugin(kind: 'directory' | 'zip'): Promise<string | null> {
   const picked = await window.antumi?.pickPlugin?.(kind)
   return typeof picked === 'string' && picked ? picked : null
+}
+
+export function canOpenPanelWindow(): boolean {
+  return window.antumi?.openPanelWindow !== undefined
+}
+
+export async function openPanelWindow(kind: PanelKind, commands: readonly PanelCommand[]): Promise<boolean> {
+  return await window.antumi?.openPanelWindow?.(kind, commands) === true
+}
+
+export function focusPanelWindow(kind: PanelKind): void {
+  void window.antumi?.focusPanelWindow?.(kind).catch(() => {})
+}
+
+export function closePanelWindow(kind: PanelKind): void {
+  void window.antumi?.closePanelWindow?.(kind).catch(() => {})
+}
+
+export function sendPanelCommand(kind: PanelKind, command: PanelCommand): void {
+  window.antumi?.sendPanelCommand?.(kind, command)
+}
+
+export function onPanelWindows(listener: (message: unknown) => void): () => void {
+  return window.antumi?.onPanelWindows?.(listener) ?? (() => {})
+}
+
+export function onPanelCommand(listener: (command: unknown) => void): () => void {
+  return window.antumi?.onPanelCommand?.(listener) ?? (() => {})
+}
+
+export function dockPanelWindow(payload: PanelDockPayload): void {
+  window.antumi?.dockPanelWindow?.(payload)
+}
+
+export function hidePanelWindow(payload: PanelHandoff): void {
+  window.antumi?.hidePanelWindow?.(payload)
+}
+
+export function onPanelRequestClose(listener: () => void): () => void {
+  return window.antumi?.onPanelRequestClose?.(listener) ?? (() => {})
+}
+
+export function panelHostReady(): void {
+  window.antumi?.panelHostReady?.()
+}
+
+export function panelReceipt(id: number, accepted: boolean): void {
+  window.antumi?.panelReceipt?.({ id, accepted })
+}
+
+export async function sendPanelQuote(quote: { conversationId: string; text: string }): Promise<boolean> {
+  return await window.antumi?.sendPanelQuote?.(quote) === true
+}
+
+export async function sendPanelBrowserContext(payload: PanelBrowserContext): Promise<boolean> {
+  return await window.antumi?.sendPanelBrowserContext?.(payload) === true
+}
+
+export function forwardPanelShortcut(shortcut: { action: ShortcutAction; addressFocused: boolean }): void {
+  window.antumi?.forwardPanelShortcut?.(shortcut)
+}
+
+export function onPanelShortcut(listener: (shortcut: unknown) => void): () => void {
+  return window.antumi?.onPanelShortcut?.(listener) ?? (() => {})
 }

@@ -318,6 +318,15 @@ textarea {
   margin-left: 8px;
 }
 
+/* A panel in a window of its own fills it, the way a maximized dock panel fills the main window. */
+.panel-window > .side-panel {
+  flex: 1;
+  margin: 8px;
+  min-width: 0;
+  animation: none;
+  box-shadow: none;
+}
+
 .utility-panel-dock > .side-panel {
   min-height: 0;
 }

@@ -2,6 +2,7 @@ import { createContext, useEffect, useState } from 'react'
 import { create } from 'zustand'
 import { isBrowserTool, type BrowserTab, type RpcConnection } from '@antumi/protocol'
 import { perform, showBrowserPanel, useCore } from './core-store'
+import { focusPanelWindow, sendPanelCommand } from './desktop-bridge'
 import { urlPath } from './file-links'
 import { usePreferences } from './preferences'
 import { browserHomepage } from './desktop-bridge'
@@ -148,7 +149,13 @@ export async function openFileInBrowser(path: string, conversationId: string): P
       ? rpc.call('browser.userNavigate', { tabId: open.id, to: { history: 'reload' } })
       : rpc.call('browser.newTab', { conversationId, url })
   })
-  if (tab) focusBrowserTab(tab.id)
+  if (!tab) return
+  if (useCore.getState().panelWindows.includes('browser')) {
+    sendPanelCommand('browser', { type: 'focus-tab', tabId: tab.id })
+    focusPanelWindow('browser')
+  } else {
+    focusBrowserTab(tab.id)
+  }
 }
 
 // Follows every tab while the browser panel is up.

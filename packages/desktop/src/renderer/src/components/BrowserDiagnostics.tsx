@@ -54,12 +54,13 @@ export function BrowserDiagnostics({ tab, onClose }: { tab: BrowserTab; onClose(
   }, [selected, tab.id, detailVersion])
   const request = data?.network?.find((request) => request.id === selected)
   const consoleText = [...(data?.errors ?? []).map((text) => `[error] ${text}`), ...(data?.messages ?? []).map((entry) => `[${entry.level}] ${entry.text}`), ...(data?.failedRequests ?? []).map((entry) => `${entry.method} ${entry.url} — ${entry.failure}`)].join('\n')
-  const send = () => {
+  const send = async () => {
     const text = view === 'console' ? consoleText.slice(-16000) : request && detail ? `${request.method} ${request.url}\nHTTP ${request.status ?? '—'} ${request.statusText}\n\n${JSON.stringify(detail, null, 2).slice(0, 24000)}` : ''
     if (!text) return
-    dialog.current?.close()
-    sendBrowserContextToComposer(tab, `${t(view === 'console' ? 'BrowserActions.console' : 'BrowserActions.network')} · ${tab.title}\n${tab.url}\n\n${text}`)
-    onClose()
+    if (await sendBrowserContextToComposer(tab, `${t(view === 'console' ? 'BrowserActions.console' : 'BrowserActions.network')} · ${tab.title}\n${tab.url}\n\n${text}`)) {
+      dialog.current?.close()
+      onClose()
+    }
   }
   return <dialog ref={dialog} className="modal browser-diagnostics-dialog" aria-labelledby={titleId} onCancel={(event) => { event.preventDefault(); onClose() }} onClick={(event) => { if (event.target === event.currentTarget) onClose() }}>
     <div className="modal-body">

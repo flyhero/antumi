@@ -1,9 +1,9 @@
 import { afterEach, expect, it } from 'vitest'
 import type { ResolvedFile } from '@antumi/protocol'
-import { closedFile, EMPTY_FILE_TABS, expandedFolders, fileScopeKey, fileScopeParams, forgetFileTabs, markedDirty, openedFile, revealedFile, revealedFolder, saveFileScroll, toggledFolder, updateFileTabs, useFileTabs } from './file-tabs'
+import { closedFile, EMPTY_FILE_TABS, expandedFolders, exportFileTabs, fileDraft, fileScopeKey, fileScopeParams, forgetFileTabs, importFileTabs, keepFileDraft, markedDirty, openedFile, registerFileDraft, revealedFile, revealedFolder, saveFileScroll, toggledFolder, updateFileTabs, useFileTabs } from './file-tabs'
 
 const file: ResolvedFile = { path: '/project/a.ts', root: '/project', relative: 'a.ts', kind: 'file' }
-afterEach(() => useFileTabs.setState({}, true))
+afterEach(() => importFileTabs({ tabs: {}, drafts: [] }))
 
 it('deduplicates file tabs while honoring another request to reveal a line', () => {
   const first = openedFile(EMPTY_FILE_TABS, file, 10)
@@ -63,6 +63,40 @@ it('opens SVG in preview, remembers a source choice, and honors source line navi
   const source = { ...opened, tabs: opened.tabs.map((tab) => ({ ...tab, preview: false })) }
   expect(openedFile(source, svg, null).tabs[0]?.preview).toBe(false)
   expect(openedFile(opened, svg, 5).tabs[0]).toMatchObject({ preview: false, line: 5 })
+})
+
+it('moves open files and unsaved text with a snapshot', () => {
+  updateFileTabs('scope', (state) => openedFile(state, file, 4))
+  keepFileDraft('scope', file.path, { text: 'next', base: 'was', mtimeMs: 10 })
+  const snapshot = exportFileTabs()
+  useFileTabs.setState({}, true)
+  importFileTabs(snapshot)
+  expect(useFileTabs.getState().scope?.tabs[0]?.file.path).toBe(file.path)
+  expect(useFileTabs.getState().scope?.tabs[0]?.line).toBe(4)
+  const again = exportFileTabs()
+  expect(again.drafts).toEqual([{ id: 'scope', path: file.path, text: 'next', base: 'was', mtimeMs: 10 }])
+})
+
+it('captures the live editor before it unmounts and preserves a multi-project scope', () => {
+  const key = fileScopeKey({ conversationId: 'chat', roots: ['/one', '/two'] })
+  updateFileTabs(key, (state) => openedFile(state, file, null))
+  keepFileDraft(key, file.path, { text: 'old draft', base: 'disk', mtimeMs: 1 })
+  let text = 'still mounted'
+  const release = registerFileDraft(key, file.path, () => ({ text, base: 'disk', mtimeMs: 1 }))
+  try {
+    expect(exportFileTabs().drafts).toEqual([{ id: key, path: file.path, text, base: 'disk', mtimeMs: 1 }])
+    text = 'latest keystroke'
+    const snapshot = exportFileTabs()
+    importFileTabs({ tabs: {}, drafts: [] })
+    importFileTabs(snapshot)
+    expect(fileDraft(key, file.path)?.text).toBe('latest keystroke')
+  } finally { release() }
+})
+
+it('does not transfer a cached draft after the live editor saved or undid its edits', () => {
+  keepFileDraft('scope', file.path, { text: 'stale', base: 'disk', mtimeMs: 1 })
+  const release = registerFileDraft('scope', file.path, () => null)
+  try { expect(exportFileTabs().drafts).toEqual([]) } finally { release() }
 })
 
 it('opens every project until a folder is folded, and reveals a file by opening its folders', () => {

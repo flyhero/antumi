@@ -102,7 +102,7 @@ function HelpButton() {
 function BrowserButton() {
   const shortcut = usePanelShortcut('toggle-browser')
   const supported = useBrowserSupported()
-  const open = useCore((s) => s.browserPanelOpen)
+  const open = useCore((s) => s.browserPanelOpen || s.panelWindows.includes('browser'))
   const count = useBrowserTabs((s) => s[ALL_TABS]?.tabs.length ?? 0)
   if (!supported) return null
   return (
@@ -123,7 +123,7 @@ function BrowserButton() {
 
 function FilesButton() {
   const shortcut = usePanelShortcut('toggle-files')
-  const open = useCore((s) => s.filesPanelOpen)
+  const open = useCore((s) => s.filesPanelOpen || s.panelWindows.includes('files'))
   return (
     <button
       type="button"
@@ -141,7 +141,7 @@ function FilesButton() {
 
 function TerminalButton() {
   const shortcut = usePanelShortcut('toggle-terminal')
-  const open = useCore((s) => s.terminalPanelOpen)
+  const open = useCore((s) => s.terminalPanelOpen || s.panelWindows.includes('terminal'))
   const count = useCore((s) => s.terminals.length)
   return (
     <button

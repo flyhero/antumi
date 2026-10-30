@@ -694,6 +694,24 @@ export function StopIcon() {
   )
 }
 
+export function PopOutIcon() {
+  return (
+    <svg {...stroked}>
+      <rect x="3.5" y="7" width="8.5" height="8.5" rx="1.4" />
+      <path d="M10.5 3.5H16.5V9.5M16.5 3.5l-6 6" />
+    </svg>
+  )
+}
+
+export function PopInIcon() {
+  return (
+    <svg {...stroked}>
+      <rect x="3.5" y="7" width="8.5" height="8.5" rx="1.4" />
+      <path d="M16.5 3.5V9.5H10.5M16.5 3.5L10.5 9.5" />
+    </svg>
+  )
+}
+
 export function ExternalIcon() {
   return (
     <svg {...stroked}>

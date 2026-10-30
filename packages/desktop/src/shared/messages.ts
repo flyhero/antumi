@@ -1420,6 +1420,15 @@ export const MESSAGES = {
     "zh": "隐藏（浏览器继续运行）",
     "en": "Hide (browser keeps running)"
   },
+  "PanelWindow.openSeparate": { "zh": "独立窗口", "en": "Own window" },
+  "PanelWindow.openSeparateHint": {
+    "zh": "打开成独立窗口，可拖到另一块屏幕或全屏",
+    "en": "Open in a separate window you can move to another screen or make full screen"
+  },
+  "PanelWindow.returnToMain": { "zh": "放回主窗口", "en": "Put back" },
+  "PanelWindow.returnToMainHint": { "zh": "放回主窗口右侧", "en": "Put back on the right of the main window" },
+  "PanelWindow.openFailed": { "zh": "未能打开独立窗口，请重试。", "en": "Could not open the separate window. Try again." },
+  "PanelWindow.sendFailed": { "zh": "未能加入聊天草稿，请重试。", "en": "Could not add to the chat draft. Try again." },
   "ChatBrowserWindow.browserActionCompleted": {
     "zh": "浏览器操作已完成",
     "en": "Browser action completed"

@@ -3,7 +3,9 @@ import { useEffect, useState } from 'react'
 import type { Terminal } from '@antumi/protocol'
 import { addQuote } from '../chat-quotes'
 import { closeTerminal, openTerminal, selectTerminal, setTerminalMaximized, toggleTerminalPanel, useCore, useTerminalCommandsSupported, type CoreState } from '../core-store'
+import { hideThisPanel, quoteFromPanel, thisPanelKind } from '../panel-window-page'
 import { AgentIcon, CloseIcon, MaximizeIcon, PlusIcon, QuoteIcon, RestoreIcon } from './icons'
+import { PanelWindowButton } from './PanelWindowButton'
 import { SessionTerminal } from './SessionTerminal'
 import { TerminalCommandsButton } from './TerminalCommandsMenu'
 import { terminalSelection } from './terminal-surface'
@@ -33,11 +35,18 @@ function QuoteSelection({ terminal, dismiss }: { terminal: Terminal; dismiss: ()
     const timer = setTimeout(dismiss, 1200)
     return () => clearTimeout(timer)
   }, [done, dismiss])
-  const quote = () => {
+  const quote = async () => {
     const text = selectedLines(terminal.sessionId)
     if (!target || !text) return
-    addQuote(target, null, text)
-    setDone(true)
+    try {
+      if (thisPanelKind()) {
+        const accepted = await quoteFromPanel(target, text)
+        setDone(accepted)
+        if (!accepted) useCore.setState({ error: t('PanelWindow.sendFailed') })
+      } else setDone(addQuote(target, null, text) !== null)
+    } catch (error) {
+      useCore.setState({ error: error instanceof Error ? error.message : String(error) })
+    }
   }
   if (done) return <span className="terminal-quote-done" role="status">{title ? t('TerminalPanel.quotedIn', { title: title }) : t('TerminalPanel.quotedInComposer')}</span>
   return (
@@ -77,7 +86,7 @@ function tabTitle(terminal: Terminal, owner: string | null): string {
 // The app's own terminals: the user's shells, and commands agents run where the user can watch.
 // The dock puts them below the browser when both are open. Hiding the panel leaves them running in
 // the daemon; closing a tab ends what runs in it.
-export function TerminalPanel() {
+export function TerminalPanel({ windowed = false }: { windowed?: boolean }) {
   const shortcut = usePanelShortcut('toggle-terminal')
   const terminals = useCore((s) => s.terminals)
   const activeId = useCore((s) => s.activeTerminalId)
@@ -112,16 +121,19 @@ export function TerminalPanel() {
           </button>
         </div>
         {commandsSupported && <TerminalCommandsButton terminal={active} />}
-        <button
-          type="button"
-          className="tool-button"
-          aria-label={maximized ? t('BrowserSidePanel.restore') : t('BrowserSidePanel.maximize')}
-          data-tooltip={maximized ? t('BrowserSidePanel.restore') : t('BrowserSidePanel.maximize')}
-          onClick={() => setTerminalMaximized(!maximized)}
-        >
-          {maximized ? <RestoreIcon /> : <MaximizeIcon />}
-        </button>
-        <button type="button" className="tool-button" aria-label={t('TerminalPanel.hideTerminal')} data-tooltip={[t('TerminalPanel.hideTerminalKeepsRunning'), shortcut].filter(Boolean).join(' ')} onClick={() => void toggleTerminalPanel()}>
+        <PanelWindowButton kind="terminal" windowed={windowed} />
+        {!windowed && (
+          <button
+            type="button"
+            className="tool-button"
+            aria-label={maximized ? t('BrowserSidePanel.restore') : t('BrowserSidePanel.maximize')}
+            data-tooltip={maximized ? t('BrowserSidePanel.restore') : t('BrowserSidePanel.maximize')}
+            onClick={() => setTerminalMaximized(!maximized)}
+          >
+            {maximized ? <RestoreIcon /> : <MaximizeIcon />}
+          </button>
+        )}
+        <button type="button" className="tool-button" aria-label={t('TerminalPanel.hideTerminal')} data-tooltip={[t('TerminalPanel.hideTerminalKeepsRunning'), shortcut].filter(Boolean).join(' ')} onClick={windowed ? hideThisPanel : () => void toggleTerminalPanel()}>
           <CloseIcon />
         </button>
       </header>

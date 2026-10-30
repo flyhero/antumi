@@ -59,6 +59,8 @@ import { reasonText } from './labels'
 import { askProjectTrust } from './project-trust'
 import { receiveTodos } from './conversation-todos'
 import { openUtilityPanel, visibleUtilityPanelOrder, type UtilityPanelKind, type UtilityPanelsOpen } from './utility-panel-order'
+import { closePanelWindow, focusPanelWindow, sendPanelCommand } from './desktop-bridge'
+import type { PanelKind } from '../../shared/panel-window'
 import { exclusivePanels } from './side-panels'
 import { actionableItems, type ActionableItem } from './attention'
 import { overview, type Overview } from './overview'
@@ -216,6 +218,8 @@ export type CoreState = {
   // The browser panel in the shared utility dock: every tab there is, the user's own included.
   browserPanelOpen: boolean
   browserMaximized: boolean
+  // Panels showing in a window of their own, so the dock leaves them out.
+  panelWindows: PanelKind[]
   // Top to bottom among the utility panels that are open; reopening one moves it to the end.
   utilityPanelOrder: UtilityPanelKind[]
   activeTerminalId: string | null
@@ -321,6 +325,7 @@ export const useCore = create<CoreState>()(() => ({
   search: null,
   browserPanelOpen: false,
   browserMaximized: false,
+  panelWindows: [],
   utilityPanelOrder: [],
   activeTerminalId: null,
   terminalCommands: [],
@@ -445,23 +450,37 @@ function openPanels(s: CoreState): UtilityPanelsOpen {
 
 // One panel brought up: below what is open, the top one going past two, and no other left
 // maximized over it. Nothing changes for one already up.
-function shownUtilityPanel(s: CoreState, panel: UtilityPanelKind): Partial<UtilityPanelState> {
+export function shownUtilityPanel(s: CoreState, panel: UtilityPanelKind): Partial<UtilityPanelState> {
   if (openPanels(s)[panel]) return {}
   return utilityPanels(s, openUtilityPanel(s.utilityPanelOrder, openPanels(s), panel), false)
 }
 
-function hiddenUtilityPanel(s: CoreState, panel: UtilityPanelKind): UtilityPanelState {
+export function hiddenUtilityPanel(s: CoreState, panel: UtilityPanelKind): UtilityPanelState {
   return utilityPanels(s, visibleUtilityPanelOrder(s.utilityPanelOrder, openPanels(s)).filter((each) => each !== panel), true)
+}
+
+function panelIsOut(kind: PanelKind): boolean {
+  return useCore.getState().panelWindows.includes(kind)
 }
 
 // Opens the browser panel on a conversation's tab: the one it has, or the one about to appear.
 export function showBrowserPanel(conversationId: string | null): void {
+  if (panelIsOut('browser')) {
+    focusPanelWindow('browser')
+    if (conversationId) sendPanelCommand('browser', { type: 'focus-conversation', conversationId })
+    return
+  }
   useCore.setState((s) => shownUtilityPanel(s, 'browser'))
   if (conversationId) focusBrowserConversation(conversationId)
 }
 
 // Opens the browser panel on one tab, from the page's card in the chat.
 export function showBrowserTab(tabId: string): void {
+  if (panelIsOut('browser')) {
+    focusPanelWindow('browser')
+    sendPanelCommand('browser', { type: 'focus-tab', tabId })
+    return
+  }
   useCore.setState((s) => shownUtilityPanel(s, 'browser'))
   focusBrowserTab(tabId)
 }
@@ -486,13 +505,7 @@ function activeAmong(id: string | null, terminals: readonly Terminal[]): string 
 export async function openTerminal(cwd = contextFolder(useCore.getState())): Promise<Terminal | null> {
   const colorPrompt = useCore.getState().rpc?.features.includes('terminal-color-prompt') ? { colorPrompt: usePreferences.getState().colorPrompt } : {}
   const terminal = await perform((rpc) => rpc.call('terminals.open', { cwd, ...colorPrompt }))
-  if (terminal) {
-    useCore.setState((s) => ({
-      terminals: s.terminals.some((each) => each.id === terminal.id) ? s.terminals : [...s.terminals, terminal],
-      activeTerminalId: terminal.id,
-      ...shownUtilityPanel(s, 'terminal')
-    }))
-  }
+  if (terminal) showTerminalOf(terminal)
   return terminal
 }
 
@@ -519,13 +532,7 @@ export async function cancelAgentCliUpgrade(agent: AgentKind): Promise<void> {
 
 export async function installAgentCli(agent: AgentKind): Promise<Terminal | null> {
   const terminal = await perform((rpc) => rpc.call('system.installAgentCli', { agent }))
-  if (terminal) {
-    useCore.setState((s) => ({
-      terminals: s.terminals.some((each) => each.id === terminal.id) ? s.terminals : [...s.terminals, terminal],
-      activeTerminalId: terminal.id,
-      ...shownUtilityPanel(s, 'terminal')
-    }))
-  }
+  if (terminal) showTerminalOf(terminal)
   return terminal
 }
 
@@ -547,11 +554,21 @@ export function selectTerminal(id: string): void {
 
 // Brings up the panel on one terminal, as an agent's tool card does for the command it started.
 export function showTerminal(id: string): void {
+  if (panelIsOut('terminal')) {
+    focusPanelWindow('terminal')
+    sendPanelCommand('terminal', { type: 'select-terminal', id })
+    return
+  }
   useCore.setState((s) => ({ activeTerminalId: id, ...shownUtilityPanel(s, 'terminal') }))
 }
 
-// Opening the panel with nothing in it starts a shell right away.
+// Opening the panel with nothing in it starts a shell right away. A panel in its own window is
+// closed instead, and the shell keeps running.
 export async function toggleTerminalPanel(): Promise<void> {
+  if (panelIsOut('terminal')) {
+    closePanelWindow('terminal')
+    return
+  }
   const { terminalPanelOpen, terminals } = useCore.getState()
   const open = !terminalPanelOpen
   useCore.setState((s) => (open ? shownUtilityPanel(s, 'terminal') : hiddenUtilityPanel(s, 'terminal')))
@@ -612,6 +629,10 @@ export function setTerminalMaximized(maximized: boolean): void {
 }
 
 export function toggleBrowserPanel(): void {
+  if (panelIsOut('browser')) {
+    closePanelWindow('browser')
+    return
+  }
   useCore.setState((s) => (s.browserPanelOpen ? hiddenUtilityPanel(s, 'browser') : shownUtilityPanel(s, 'browser')))
 }
 
@@ -624,6 +645,10 @@ export function setFilesMaximized(maximized: boolean): void {
 }
 
 export function toggleFilesPanel(): void {
+  if (panelIsOut('files')) {
+    closePanelWindow('files')
+    return
+  }
   useCore.setState((s) => (s.filesPanelOpen ? hiddenUtilityPanel(s, 'files') : shownUtilityPanel(s, 'files')))
 }
 
@@ -678,6 +703,11 @@ export function closeSearch(): void {
 
 // Opens the files panel, on `scope` when given (null: follow what the user looks at).
 export function showFilesPanel(scope?: FileScope | null): void {
+  if (panelIsOut('files')) {
+    focusPanelWindow('files')
+    sendPanelCommand('files', scope === undefined ? { type: 'show-files' } : { type: 'show-files', scope: scope && { conversationId: scope.conversationId, roots: [...scope.roots] } })
+    return
+  }
   useCore.setState((s) => {
     const context = filesContext(s)
     const follows = scope === undefined ? {} : {
@@ -1099,11 +1129,16 @@ export async function setAccountAutoSwitch(autoSwitch: boolean): Promise<void> {
 }
 
 function showTerminalOf(terminal: Terminal): void {
+  const out = panelIsOut('terminal')
   useCore.setState((s) => ({
     terminals: s.terminals.some((each) => each.id === terminal.id) ? s.terminals : [...s.terminals, terminal],
     activeTerminalId: terminal.id,
-    ...shownUtilityPanel(s, 'terminal')
+    ...(out ? {} : shownUtilityPanel(s, 'terminal'))
   }))
+  if (out) {
+    sendPanelCommand('terminal', { type: 'select-terminal', id: terminal.id })
+    focusPanelWindow('terminal')
+  }
 }
 
 // Fails with core's own words, for the usage card to show beside the button pressed; the usage it

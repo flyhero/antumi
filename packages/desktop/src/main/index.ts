@@ -2,14 +2,17 @@ import { readFile, realpath, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { spawn } from 'node:child_process'
 import { dirname, extname, isAbsolute, join } from 'node:path'
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, net, Notification, protocol, shell, type OpenDialogOptions } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, net, Notification, protocol, screen, shell, type OpenDialogOptions, type WebContents } from 'electron'
 import { z } from 'zod'
 import { resolveUiLocale, UiLocale } from '@antumi/protocol'
 import { applicationMenu } from './application-menu'
-import { ShortcutSettings } from '../shared/keyboard-shortcuts'
+import { ShortcutAction, ShortcutSettings } from '../shared/keyboard-shortcuts'
 import { antumiPaths, readCoreEndpoint } from '@antumi/protocol/node'
 import { ensureBackend, replaceOldDaemon, stopBackendForInstall } from './backend'
 import { popupWindowOptions, RequestPopup } from './request-popup'
+import { PanelWindows, parseDockPayload, parseHandoff, parsePanelCommands, parsePanelKind } from './panel-windows'
+import { panelWindowBounds, panelWindowHash, type PanelKind } from '../shared/panel-window'
+import { PanelBrowserContext, PanelQuote, PanelReceipt } from '../shared/panel-window'
 import { startBrowserHost, type BrowserHost } from './browser/browser-host'
 import { WindowSlot } from './browser/window-slot'
 import { findBookmarkSources, htmlBookmarks, readBookmarkSource, type BookmarkPlaces } from './browser/bookmark-import'
@@ -20,7 +23,7 @@ import { bundleOf, leftovers, stageFromDmg, swapBlocked, swapInto } from './app-
 import { appImageBlocked, replaceAppImage } from './app-image-swap'
 
 // The built-in browser: its tabs live here, in main, so a window closing or its renderer going
-// never touches a page an agent is on. The slot puts the one on show into the current window.
+// never touches a page an agent is on. The slot puts the one on show into the window that asked.
 const slot = new WindowSlot()
 let browserHost: BrowserHost | null = null
 let mainWindow: BrowserWindow | null = null
@@ -113,6 +116,9 @@ function createWindow(): void {
   })
   loadRenderer(win)
   slot.attachWindow(win)
+  win.webContents.on('did-finish-load', () => {
+    if (mainWindow === win) panelWindows.announce()
+  })
 }
 
 function loadRenderer(win: BrowserWindow, hash?: string): void {
@@ -154,6 +160,47 @@ const requestPopup = new RequestPopup(() => {
   return win
 })
 
+const PANEL_TITLE: Record<PanelKind, { en: string; zh: string }> = {
+  browser: { en: 'Browser', zh: '浏览器' },
+  files: { en: 'Files', zh: '文件' },
+  terminal: { en: 'Terminal', zh: '终端' }
+}
+
+function createPanelWindow(kind: PanelKind, slot: number): BrowserWindow {
+  const win = new BrowserWindow({
+    width: 1100,
+    height: 760,
+    minWidth: 720,
+    minHeight: 480,
+    title: uiText(PANEL_TITLE[kind].en, PANEL_TITLE[kind].zh),
+    show: false,
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: PRELOAD,
+      sandbox: true,
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  })
+  // The page's title is the app name; this window is one panel, and says so.
+  win.on('page-title-updated', (event) => event.preventDefault())
+  const displays = screen.getAllDisplays()
+  const mainBounds = mainWindow && !mainWindow.isDestroyed() ? mainWindow.getBounds() : null
+  const mainDisplay = mainBounds ? screen.getDisplayMatching(mainBounds) : screen.getPrimaryDisplay()
+  win.setBounds(panelWindowBounds(mainDisplay.workArea, displays.filter((display) => display.id !== mainDisplay.id).map((display) => display.workArea), slot))
+  win.once('ready-to-show', () => win.show())
+  loadRenderer(win, panelWindowHash(kind))
+  return win
+}
+
+const panelWindows = new PanelWindows(createPanelWindow, (message) => {
+  mainWindow?.webContents.send('antumi:panel-windows', message)
+})
+
+function fromMain(sender: WebContents): boolean {
+  return sender === mainWindow?.webContents
+}
+
 // The browser panel's say over the tab on show: which one, where it sits, whether something is
 // over it. Bounds arrive as the renderer's CSS pixels; the window's zoom turns them into points.
 const Bounds = z.object({ x: z.number().finite(), y: z.number().finite(), width: z.number().finite().min(0), height: z.number().finite().min(0) })
@@ -162,19 +209,96 @@ ipcMain.on('antumi:panel-shortcuts', (event, settings: unknown) => {
   const parsed = ShortcutSettings.safeParse(settings)
   if (parsed.success) slot.setPanelShortcuts(parsed.data)
 })
-ipcMain.handle('antumi:browser-show', (_event, tabId: unknown) => {
+ipcMain.handle('antumi:browser-show', (event, tabId: unknown) => {
+  const owner = BrowserWindow.fromWebContents(event.sender)
+  if (!owner) return
   const id = typeof tabId === 'string' ? tabId : null
-  slot.show(id, id ? (browserHost?.viewOf(id) ?? null) : null, id ? (browserHost?.viewportOf(id) ?? null) : null)
+  slot.show(owner, id, id ? (browserHost?.viewOf(id) ?? null) : null, id ? (browserHost?.viewportOf(id) ?? null) : null)
 })
 ipcMain.on('antumi:browser-bounds', (event, bounds: unknown) => {
+  const owner = BrowserWindow.fromWebContents(event.sender)
   const parsed = Bounds.safeParse(bounds)
-  if (!parsed.success) return
+  if (!owner || !parsed.success) return
   const zoom = event.sender.getZoomFactor()
   const { x, y, width, height } = parsed.data
-  slot.setBounds({ x: Math.round(x * zoom), y: Math.round(y * zoom), width: Math.round(width * zoom), height: Math.round(height * zoom) })
+  slot.setBounds(owner, { x: Math.round(x * zoom), y: Math.round(y * zoom), width: Math.round(width * zoom), height: Math.round(height * zoom) })
 })
-ipcMain.handle('antumi:browser-occluded', (_event, occluded: unknown) => {
-  slot.setOccluded(occluded === true)
+ipcMain.handle('antumi:browser-occluded', (event, occluded: unknown) => {
+  const owner = BrowserWindow.fromWebContents(event.sender)
+  if (owner) slot.setOccluded(owner, occluded === true)
+})
+
+const PanelShortcut = z.object({ action: ShortcutAction, addressFocused: z.boolean() })
+
+ipcMain.on('antumi:panel-host-ready', (event) => {
+  if (fromMain(event.sender)) panelWindows.announce()
+})
+ipcMain.on('antumi:panel-receipt', (event, payload: unknown) => {
+  if (!fromMain(event.sender)) return
+  const parsed = PanelReceipt.safeParse(payload)
+  if (parsed.success) panelWindows.acknowledge(parsed.data.id, parsed.data.accepted)
+})
+
+ipcMain.handle('antumi:panel-window-open', (event, kind: unknown, commands: unknown) => {
+  if (!fromMain(event.sender)) return false
+  const parsedKind = parsePanelKind(kind)
+  const parsedCommands = parsePanelCommands(commands)
+  if (!parsedKind || !parsedCommands) return false
+  panelWindows.open(parsedKind, parsedCommands)
+  return true
+})
+ipcMain.handle('antumi:panel-window-focus', (event, kind: unknown) => {
+  if (!fromMain(event.sender)) return
+  const parsed = parsePanelKind(kind)
+  if (parsed) panelWindows.focus(parsed)
+})
+ipcMain.handle('antumi:panel-window-close', (event, kind: unknown) => {
+  if (!fromMain(event.sender)) return
+  const parsed = parsePanelKind(kind)
+  if (parsed) panelWindows.dismiss(parsed)
+})
+ipcMain.on('antumi:panel-window-command', (event, kind: unknown, command: unknown) => {
+  if (!fromMain(event.sender)) return
+  const parsedKind = parsePanelKind(kind)
+  const parsedCommands = parsePanelCommands([command])
+  const parsed = parsedCommands?.[0]
+  if (parsedKind && parsed) panelWindows.send(parsedKind, parsed)
+})
+ipcMain.on('antumi:panel-window-dock', (event, payload: unknown) => {
+  const kind = panelWindows.owns(event.sender)
+  const parsed = parseDockPayload(payload)
+  if (kind && parsed && parsed.docked === kind) {
+    if (!mainWindow) createWindow()
+    panelWindows.dock(kind, parsed)
+  }
+})
+ipcMain.on('antumi:panel-window-hide', (event, payload: unknown) => {
+  const kind = panelWindows.owns(event.sender)
+  const parsed = parseHandoff(payload)
+  if (kind && parsed) {
+    // On Windows/Linux the last window closes the app, including any unclaimed file handoff.
+    if (parsed.files && !mainWindow && process.platform !== 'darwin') createWindow()
+    panelWindows.hide(kind, parsed)
+  }
+})
+ipcMain.handle('antumi:panel-quote', (event, payload: unknown) => {
+  if (!panelWindows.owns(event.sender)) return false
+  const parsed = PanelQuote.safeParse(payload)
+  if (!parsed.success) return false
+  if (!mainWindow) createWindow()
+  return panelWindows.deliver({ type: 'quote', ...parsed.data })
+})
+ipcMain.handle('antumi:panel-browser-context', (event, payload: unknown) => {
+  if (!panelWindows.owns(event.sender)) return false
+  const parsed = PanelBrowserContext.safeParse(payload)
+  if (!parsed.success) return false
+  if (!mainWindow) createWindow()
+  return panelWindows.deliver({ type: 'browser-context', ...parsed.data })
+})
+ipcMain.on('antumi:panel-shortcut', (event, payload: unknown) => {
+  if (!panelWindows.owns(event.sender)) return
+  const parsed = PanelShortcut.safeParse(payload)
+  if (parsed.success) mainWindow?.webContents.send('antumi:panel-shortcut', parsed.data)
 })
 
 // The version that runs, which a build may set apart from the source's package.json (a beta).
@@ -478,6 +602,7 @@ void app.whenReady().then(async () => {
 // rather than finding a port nothing answers on.
 let quitting = false
 app.on('before-quit', (event) => {
+  panelWindows.beginQuit()
   updater?.stop()
   if (quitting || !browserHost) return
   event.preventDefault()

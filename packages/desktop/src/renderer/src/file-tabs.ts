@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { ResolvedFile } from '@antumi/protocol'
+import type { FilesSnapshot } from '../../shared/panel-window'
 
 // The folders the files panel shows, and the conversation they came from when there is one: a
 // core without project-files reads files only through a conversation.
@@ -80,9 +81,16 @@ export function forgetFileTabs(id: string): void {
   for (const key of drafts.keys()) if (key.startsWith(`${id}\0`)) drafts.delete(key)
 }
 
-// Unsaved edits of a tab whose editor is not showing, with the disk text and mtime they started from.
+// Cached edits plus live readers: a transfer can happen before React unmounts the editor.
 export type FileDraft = { text: string; base: string; mtimeMs: number | null }
 const drafts = new Map<string, FileDraft>()
+const liveDrafts = new Map<string, () => FileDraft | null>()
+
+export function registerFileDraft(id: string, path: string, read: () => FileDraft | null): () => void {
+  const key = `${id}\0${path}`
+  liveDrafts.set(key, read)
+  return () => { if (liveDrafts.get(key) === read) liveDrafts.delete(key) }
+}
 
 export function fileDraft(id: string, path: string): FileDraft | undefined {
   return drafts.get(`${id}\0${path}`)
@@ -94,6 +102,28 @@ export function keepFileDraft(id: string, path: string, draft: FileDraft): void 
 
 export function dropFileDraft(id: string, path: string): void {
   drafts.delete(`${id}\0${path}`)
+}
+
+// The files window carries the open tabs and unsaved text, and hands them back when it docks.
+export function exportFileTabs(): Pick<FilesSnapshot, 'tabs' | 'drafts'> {
+  for (const [key, read] of liveDrafts) {
+    const draft = read()
+    if (draft) drafts.set(key, draft)
+    else drafts.delete(key)
+  }
+  return {
+    tabs: useFileTabs.getState(),
+    drafts: [...drafts.entries()].map(([key, draft]) => {
+      const at = key.lastIndexOf('\0')
+      return { id: key.slice(0, at), path: key.slice(at + 1), text: draft.text, base: draft.base, mtimeMs: draft.mtimeMs }
+    })
+  }
+}
+
+export function importFileTabs(snapshot: Pick<FilesSnapshot, 'tabs' | 'drafts'>): void {
+  drafts.clear()
+  for (const draft of snapshot.drafts) drafts.set(`${draft.id}\0${draft.path}`, { text: draft.text, base: draft.base, mtimeMs: draft.mtimeMs })
+  useFileTabs.setState(snapshot.tabs, true)
 }
 
 export function saveFileScroll(id: string, path: string, scrollTop: number, scrollLeft: number): void {

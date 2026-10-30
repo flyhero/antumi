@@ -7,7 +7,9 @@ import { useProjectHeads } from './BranchStatus'
 import { ChatPicker, type PickerOption } from './ChatPicker'
 import { FileEditor } from './FileEditor'
 import { projectName, projectNames } from './ProjectPicker'
+import { hideThisPanel } from '../panel-window-page'
 import { CloseIcon, FolderIcon, MaximizeIcon, RestoreIcon, SearchIcon } from './icons'
+import { PanelWindowButton } from './PanelWindowButton'
 import './files-panel.css'
 
 const FOLLOW = 'follow'
@@ -20,7 +22,7 @@ function useScopeBranch(scope: FileScope | null, updatedAt: number): string | nu
 }
 
 // The files of what the user looks at, or of a project they pick here: the dock's 文件.
-export function FilesPanel() {
+export function FilesPanel({ windowed = false }: { windowed?: boolean }) {
   const shortcut = usePanelShortcut('toggle-files')
   const maximized = useCore((s) => s.filesMaximized)
   const contextScope = useFilesContextScope()
@@ -54,8 +56,9 @@ export function FilesPanel() {
           {branch && following && <span className="files-panel-branch mono" title={branch}>{branch}</span>}
         </div>
         {readable && scope.roots.length > 0 && <button type="button" className="tool-button" aria-label={t('FilesPanel.goToFile')} data-tooltip={t('FilesPanel.goToFile')} onClick={() => openSearch('files')}><SearchIcon /></button>}
-        <button type="button" className="tool-button" aria-label={maximized ? t('BrowserSidePanel.restore') : t('BrowserSidePanel.maximize')} data-tooltip={maximized ? t('BrowserSidePanel.restore') : t('BrowserSidePanel.maximize')} onClick={() => setFilesMaximized(!maximized)}>{maximized ? <RestoreIcon /> : <MaximizeIcon />}</button>
-        <button type="button" className="tool-button" aria-label={t('FilesPanel.hideFiles')} data-tooltip={[t('FilesPanel.hideFiles'), shortcut].filter(Boolean).join(' ')} onClick={toggleFilesPanel}><CloseIcon /></button>
+        <PanelWindowButton kind="files" windowed={windowed} />
+        {!windowed && <button type="button" className="tool-button" aria-label={maximized ? t('BrowserSidePanel.restore') : t('BrowserSidePanel.maximize')} data-tooltip={maximized ? t('BrowserSidePanel.restore') : t('BrowserSidePanel.maximize')} onClick={() => setFilesMaximized(!maximized)}>{maximized ? <RestoreIcon /> : <MaximizeIcon />}</button>}
+        <button type="button" className="tool-button" aria-label={t('FilesPanel.hideFiles')} data-tooltip={[t('FilesPanel.hideFiles'), shortcut].filter(Boolean).join(' ')} onClick={windowed ? hideThisPanel : toggleFilesPanel}><CloseIcon /></button>
       </header>
       <div className="files-panel-body">
         {readable

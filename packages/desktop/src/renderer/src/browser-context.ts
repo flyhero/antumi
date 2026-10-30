@@ -4,6 +4,8 @@ import { insertIntoComposer } from './composer-insertions'
 import { openConversationDraft, selectConversation, selectTask, useCore, type CoreState } from './core-store'
 import { focusChatInput } from './helper-conversations'
 import { composerDraft } from './composer-drafts'
+import { sendPanelBrowserContext } from './desktop-bridge'
+import { panelKindFromHash } from '../../shared/panel-window'
 
 export function browserConversationTarget(state: CoreState, tab: BrowserTab): string | null {
   if (!state.overviewOpen && state.section === 'conversations' && state.conversationDraft) return null
@@ -36,7 +38,19 @@ export function mergeComposerImages(current: readonly ChatImage[], incoming: rea
   return [...current, ...incoming.filter((image) => !current.some((known) => known.id === image.id))].slice(0, MAX_CHAT_IMAGES)
 }
 
-export function sendBrowserContextToComposer(tab: BrowserTab, text: string, images: readonly ChatImage[] = []): boolean {
+export async function sendBrowserContextToComposer(tab: BrowserTab, text: string, images: readonly ChatImage[] = []): Promise<boolean> {
+  if (typeof location === 'undefined' || !panelKindFromHash(location.hash)) return insertBrowserContext(tab, text, images)
+  try {
+    if (await sendPanelBrowserContext({ tab, text, images: [...images] })) return true
+    useCore.setState({ error: t('PanelWindow.sendFailed') })
+  } catch (error) {
+    useCore.setState({ error: error instanceof Error ? error.message : String(error) })
+  }
+  return false
+}
+
+// Only the main renderer owns composers and their pending insertions.
+export function insertBrowserContext(tab: BrowserTab, text: string, images: readonly ChatImage[] = []): boolean {
   const state = useCore.getState()
   const target = browserConversationTarget(state, tab)
   if (!target && !state.conversationDraft) openConversationDraft()

@@ -1,9 +1,9 @@
 import { t } from './i18n'
 import type { ResolvedFile } from '@antumi/protocol'
 import { perform, showFilesPanel, showError, useCore } from './core-store'
-import { canRevealFile, openFile, revealFile } from './desktop-bridge'
+import { canRevealFile, focusPanelWindow, openFile, revealFile, sendPanelCommand } from './desktop-bridge'
 import { fileCandidates, type FileReference } from './file-links'
-import { fileScopeKey, fileScopeParams, openedFile, updateFileTabs, type FileScope } from './file-tabs'
+import { fileScopeKey, fileScopeParams, openedFile, revealedFolder, updateFileTabs, type FileScope } from './file-tabs'
 
 // A chat's files: its conversation's folders, and the inspector beside it.
 export type ChatFileScope = FileScope & { conversationId: string; inspector: 'task' | 'conversation' }
@@ -17,8 +17,31 @@ export function useFilePreviewSupported(): boolean {
   return useCore((state) => state.rpc?.features.includes('file-preview') ?? false)
 }
 
+function wireScope(scope: FileScope): { conversationId: string | null; roots: string[] } {
+  return { conversationId: scope.conversationId, roots: [...scope.roots] }
+}
+
+function filesAreOut(): boolean {
+  return useCore.getState().panelWindows.includes('files')
+}
+
 export function showResolvedFile(scope: FileScope, file: ResolvedFile, line: number | null): void {
+  if (filesAreOut()) {
+    sendPanelCommand('files', { type: 'open-file', scope: wireScope(scope), file, line })
+    focusPanelWindow('files')
+    return
+  }
   updateFileTabs(fileScopeKey(scope), (state) => openedFile(state, file, line))
+  showFilesPanel(scope)
+}
+
+export function revealFilesFolder(scope: FileScope, folder: string): void {
+  if (filesAreOut()) {
+    sendPanelCommand('files', { type: 'reveal-folder', scope: wireScope(scope), folder })
+    focusPanelWindow('files')
+    return
+  }
+  updateFileTabs(fileScopeKey(scope), (state) => revealedFolder({ ...state, tree: true }, scope.roots, folder))
   showFilesPanel(scope)
 }
 

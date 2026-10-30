@@ -10,6 +10,9 @@ import { startBackgroundRest } from './background-rest'
 import { startCodeFont } from './code-font'
 import { followRequestPopupWanted, RequestPopup } from './components/RequestPopup'
 import { startCoreConnection, useCore } from './core-store'
+import { startPanelWindowHost } from './panel-window-host'
+import { startPanelWindowPage, thisPanelKind } from './panel-window-page'
+import { PanelWindow } from './components/PanelWindow'
 import { SettingsPage } from './components/SettingsPage'
 import { applyTitleBar } from './desktop-bridge'
 import { startNotifications } from './notifications'
@@ -21,6 +24,7 @@ import { startWorktreeUpdates } from './worktree-store'
 // The card of waiting requests (main's request-popup.ts) is this page too, with only what it needs:
 // the main window alone tells the user things, counts on the dock and keeps worktrees current.
 const popup = location.hash === '#request-popup'
+const panelKind = thisPanelKind()
 // The pet's playground (components/PetPlayground.tsx): the stage with a stand-in for the app, no core.
 const settingsPreview = import.meta.env.DEV && ['#pet-settings', '#settings'].includes(location.hash)
 const playground = location.hash === '#pet-playground' || settingsPreview
@@ -41,6 +45,12 @@ if (playground) {
   startCoreConnection('requests')
   startAppearance()
   startCodeFont()
+} else if (panelKind) {
+  startPanelWindowPage()
+  startCoreConnection()
+  startAppearance()
+  startBackgroundRest()
+  startCodeFont()
 } else {
   startCoreConnection()
   startAppearance()
@@ -50,6 +60,7 @@ if (playground) {
   startUnsavedEditRetries()
   startWorktreeUpdates()
   startNotifications()
+  startPanelWindowHost()
 }
 
 const root = document.getElementById('root')
@@ -58,6 +69,6 @@ if (!root) {
 }
 createRoot(root).render(
   <StrictMode>
-    {settingsPreview ? <div className="app"><SettingsPage /></div> : playground ? <PetPlayground /> : popup ? <RequestPopup /> : <App />}
+    {settingsPreview ? <div className="app"><SettingsPage /></div> : playground ? <PetPlayground /> : popup ? <RequestPopup /> : panelKind ? <PanelWindow kind={panelKind} /> : <App />}
   </StrictMode>
 )

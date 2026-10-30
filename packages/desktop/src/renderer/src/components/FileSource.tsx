@@ -9,7 +9,7 @@ import { drawSelection, EditorView, highlightActiveLine, highlightActiveLineGutt
 import { indentationMarkers } from '@replit/codemirror-indentation-markers'
 import { tags } from '@lezer/highlight'
 import { perform } from '../core-store'
-import { dropFileDraft, fileDraft, fileScopeKey, fileScopeParams, keepFileDraft, markedDirty, saveFileScroll, updateFileTabs, useFileTabs, type FileScope, type FileTab } from '../file-tabs'
+import { dropFileDraft, fileDraft, fileScopeKey, fileScopeParams, keepFileDraft, markedDirty, registerFileDraft, saveFileScroll, updateFileTabs, useFileTabs, type FileScope, type FileTab } from '../file-tabs'
 import { copyFileText } from '../file-actions'
 import { ContextMenu, MenuItem, menuPoint, type MenuPoint } from './ContextMenu'
 import { CheckIcon, CopyIcon, DocumentIcon } from './icons'
@@ -180,6 +180,8 @@ export function FileSource({ scope, tab, disk, wrap, writable, preview, ref }: {
       })
     })
     editor.current = view
+    const releaseDraft = registerFileDraft(key, path, () => view.state.doc.eq(baseDoc(view))
+      ? null : { text: view.state.sliceDoc(), base: base.current.text, mtimeMs: base.current.mtimeMs })
     syncDirty(view)
     const saved = useFileTabs.getState()[key]?.tabs.find((tab) => tab.file.path === path)
     const restore = requestAnimationFrame(() => {
@@ -193,6 +195,7 @@ export function FileSource({ scope, tab, disk, wrap, writable, preview, ref }: {
       if (current) view.dispatch({ effects: language.reconfigure(support) })
     }).catch(() => {})
     return () => {
+      releaseDraft()
       current = false
       cancelAnimationFrame(restore)
       view.scrollDOM.removeEventListener('scroll', scroll)

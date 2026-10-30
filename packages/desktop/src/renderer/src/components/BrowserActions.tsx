@@ -32,7 +32,7 @@ export function BrowserCaptureButton({ tab }: { tab: BrowserTab }) {
     try {
       const context = await perform((rpc) => rpc.call('browser.capture', { tabId: tab.id, mode, accent }))
       if (!context) { if (mode === 'selection') useCore.setState({ error: t('BrowserActions.noSelection') }); return }
-      setDone(sendBrowserContextToComposer(tab, browserContextText(context, tab.id), context.image ? [context.image] : []))
+      setDone(await sendBrowserContextToComposer(tab, browserContextText(context, tab.id), context.image ? [context.image] : []))
     } finally { active.current = false; setBusy(null) }
   }
   return <>

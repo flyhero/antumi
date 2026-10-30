@@ -29,6 +29,7 @@ declare global {
       setBadge?(count: number): Promise<unknown>
       onNotificationClick?(listener: (target: unknown) => void): () => void
       requestPopup?(wanted: boolean): Promise<unknown>
+      requestPopupMode?(mode: 'requests' | 'always'): Promise<unknown>
       onRequestPopupWanted?(listener: (wanted: boolean) => void): () => void
       onRequestPopupGeometry?(listener: (geometry: unknown) => void): () => void
       requestPopupLayout?(layout: { visible: boolean; height: number }): void
@@ -180,6 +181,16 @@ export function canShowRequestPopup(): boolean {
 // Asked for when a request comes in while the user is away; put away when it should go.
 export function wantRequestPopup(wanted: boolean): void {
   void window.antumi?.requestPopup?.(wanted).catch(() => {})
+}
+
+// Whether the card can stay up as an island at the notch: on macOS, with a main new enough.
+export function canShowIsland(): boolean {
+  return window.antumi?.platform === 'darwin' && window.antumi.requestPopupMode !== undefined
+}
+
+// Up only when asked for, or kept up always, as an island that the card expands.
+export function setRequestPopupMode(mode: 'requests' | 'always'): void {
+  void window.antumi?.requestPopupMode?.(mode).catch(() => {})
 }
 
 export function onRequestPopupWanted(listener: (wanted: boolean) => void): () => void {

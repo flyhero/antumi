@@ -25,7 +25,7 @@ export type Snapshot = {
 export const waiting = (conversation: Conversation) => conversation.sessionId !== null && conversation.chat?.turn === 'awaiting'
 // The turn is over with a question the agent asked in passing still open.
 const asking = (conversation: Conversation) => conversation.sessionId !== null && conversation.chat?.turn === 'idle' && conversation.chat.request?.async === true
-const working = (conversation: Conversation) => Boolean(conversation.delegation?.open) || conversation.chat?.turn === 'running' || conversation.chat?.turn === 'awaiting'
+export const working = (conversation: Conversation) => Boolean(conversation.delegation?.open) || conversation.chat?.turn === 'running' || conversation.chat?.turn === 'awaiting'
 const crashed = (conversation: Conversation) => conversation.sessionId === null && (conversation.lastExit?.code ?? 0) !== 0
 // Put away by the user: its agent was stopped and it takes no message until it is taken out, so
 // nothing in it waits on them.
@@ -158,7 +158,7 @@ export function attentionCount(s: Snapshot): number {
 }
 
 // A task's chat is told of under the task's name, and leads to the task.
-function named(conversation: Conversation, tasks: Snapshot['tasks'], runs?: Snapshot['squadRuns']): { title: string; target: AttentionTarget } {
+export function named(conversation: Conversation, tasks: Snapshot['tasks'], runs?: Snapshot['squadRuns']): { title: string; target: AttentionTarget } {
   const taskId = conversation.taskId ?? (conversation.squadRunId ? runs?.[conversation.squadRunId]?.taskId : undefined)
   const task = taskId ? tasks[taskId] : undefined
   return task ? { title: task.title, target: { kind: 'task', id: task.id } } : { title: conversation.title, target: { kind: 'conversation', id: conversation.id } }

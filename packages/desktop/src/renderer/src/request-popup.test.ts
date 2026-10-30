@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Conversation, ConversationRequest, Task } from '@antumi/protocol'
-import { newlyWaiting, popupKey, popupLabel, popupQueue } from './request-popup'
+import { islandActivity, newlyWaiting, popupKey, popupLabel, popupQueue } from './request-popup'
 
 const request = (requestId: string, patch: Partial<ConversationRequest> = {}): ConversationRequest => ({
   requestId, kind: 'approval', tool: 'Bash', title: 'pnpm test', decisions: ['allow', 'deny'], open: 1, ...patch
@@ -51,6 +51,23 @@ const task = (id: string, patch: Partial<Task> = {}): Task => ({
 })
 
 const byId = <T extends { id: string }>(items: T[]): Record<string, T> => Object.fromEntries(items.map((each) => [each.id, each]))
+
+describe('islandActivity', () => {
+  it('lists the chats with an agent at work, latest first, a task chat under the task, never one held up on the user', () => {
+    const conversations = byId([
+      conversation('a', { chat: { turn: 'running' }, updatedAt: 10 }),
+      conversation('b', { chat: { turn: 'running' }, taskId: 't1', updatedAt: 20 }),
+      awaiting('c', request('r1'), { updatedAt: 30 }),
+      conversation('d', { chat: { turn: 'running' }, archivedAt: 1, updatedAt: 40 }),
+      conversation('idle')
+    ])
+    const activity = islandActivity({ conversations, tasks: byId([task('t1', { conversationId: 'b' })]) })
+    expect(activity.map((entry) => [entry.conversationId, entry.title, entry.target])).toEqual([
+      ['b', '任务 t1', { kind: 'task', id: 't1' }],
+      ['a', '会话 a', { kind: 'conversation', id: 'a' }]
+    ])
+  })
+})
 
 describe('popupQueue', () => {
   it('offers the chats held up on the user, longest waiting first, a task chat under the task', () => {

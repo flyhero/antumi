@@ -451,6 +451,10 @@ ipcMain.handle('antumi:request-popup', (event, wanted: unknown) => {
   if (event.sender !== mainWindow?.webContents || typeof wanted !== 'boolean') return
   requestPopup.want(wanted)
 })
+ipcMain.handle('antumi:request-popup-mode', (event, mode: unknown) => {
+  if (event.sender !== mainWindow?.webContents || (mode !== 'requests' && mode !== 'always')) return
+  requestPopup.setMode(mode)
+})
 const PopupLayout = z.object({ visible: z.boolean(), height: z.number().finite().min(0).max(10_000) })
 ipcMain.on('antumi:request-popup-layout', (event, layout: unknown) => {
   const parsed = PopupLayout.safeParse(layout)

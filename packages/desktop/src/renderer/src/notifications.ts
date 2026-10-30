@@ -1,8 +1,8 @@
 import { attentionCount, noticesBetween } from './attention'
 import { openUsageCard, selectConversation, selectTask, setRoutinesOpen, useCore } from './core-store'
-import { canNotify, canShowRequestPopup, notify, onNotificationClick, setBadge, wantRequestPopup } from './desktop-bridge'
+import { canNotify, canShowRequestPopup, notify, onNotificationClick, setBadge, setRequestPopupMode, wantRequestPopup } from './desktop-bridge'
 import { currentInstalledAgents } from './installed-agents'
-import { usePreferences } from './preferences'
+import { usePreferences, type Preferences } from './preferences'
 import { quotaNoticesBetween } from './quota-notices'
 import { newlyWaiting } from './request-popup'
 import { routineNoticesBetween } from './routines'
@@ -74,18 +74,23 @@ function saveSentAdvice(): void {
   }
 }
 
-const popupOn = () => canShowRequestPopup() && usePreferences.getState().requestPopup
+const popupOn = () => canShowRequestPopup() && usePreferences.getState().island !== 'off'
 
 // The card comes up for a request that arrives while the user is elsewhere, and goes when the
-// setting is turned off; main puts it away when the window is back in front.
+// setting is turned off; main puts it away when the window is back in front. Kept always, main
+// holds the island up by itself and the card only expands it.
 function startRequestPopup(): void {
   if (!canShowRequestPopup()) return
+  const tell = (island: Preferences['island']) => setRequestPopupMode(island === 'always' ? 'always' : 'requests')
+  tell(usePreferences.getState().island)
   useCore.subscribe((next, prev) => {
     if (next.conversations !== prev.conversations && popupOn() && !document.hasFocus() && newlyWaiting(prev.conversations, next.conversations)) {
       wantRequestPopup(true)
     }
   })
   usePreferences.subscribe((next, prev) => {
-    if (prev.requestPopup && !next.requestPopup) wantRequestPopup(false)
+    if (next.island === prev.island) return
+    tell(next.island)
+    if (next.island === 'off') wantRequestPopup(false)
   })
 }

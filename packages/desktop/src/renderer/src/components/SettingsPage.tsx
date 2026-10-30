@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { AGENT_KINDS, agentDescriptor, LANGUAGE_NAMES, PROTOCOL_VERSION, quickModel, TRANSLATE_LANGUAGES, UNATTENDED_MODES, type AgentKind, type SourceDescriptor } from '@antumi/protocol'
 import packageJson from '../../../../package.json'
 import { perform, setAwakeMode, setChatSettings, setSettingsOpen, useAwakeSupported, useCore, useBrowserSupported, useChatCommandsSupported, useKnowledgeBaseSupported, useMcpServersSupported, useModelProvidersSupported, useSessionImportSupported, useAccountsSupported, useProjectConfigEditSupported, useSkillsSupported, useTranslateSupported, useWireLogSupported } from '../core-store'
-import { setPreference, usePreferences } from '../preferences'
+import { setPreference, usePreferences, type Preferences } from '../preferences'
 import { UNATTENDED_LABEL } from '../schedules'
 import { detectedAgents, useInstalledAgents } from '../installed-agents'
 import { useAgentCatalog } from '../agent-models'
@@ -15,7 +15,7 @@ import { InstalledAgentsSettings } from './InstalledAgentsSettings'
 import { TitleNamingSettings } from './TitleNamingSettings'
 import { AutoArchiveSettings } from './AutoArchiveSettings'
 import { agentLabel } from '../labels'
-import { appVersion, canNotify, canShowRequestPopup } from '../desktop-bridge'
+import { appVersion, canNotify, canShowIsland, canShowRequestPopup } from '../desktop-bridge'
 import { formatBytes } from '../wire-entries'
 import {
   AgentIcon,
@@ -68,7 +68,13 @@ import './settings-page.css'
 
 function NotificationSettings() {
   const notifications = usePreferences((s) => s.notifications)
-  const requestPopup = usePreferences((s) => s.requestPopup)
+  const island = usePreferences((s) => s.island)
+  // Kept up always only where there is an island to keep: macOS.
+  const islandOptions: { value: Preferences['island']; label: string }[] = [
+    { value: 'off', label: t('SettingsPage.islandOff') },
+    { value: 'requests', label: t('SettingsPage.islandWhenNeeded') },
+    ...(canShowIsland() ? [{ value: 'always' as const, label: t('SettingsPage.always') }] : [])
+  ]
   return (
     <>
       {canNotify() && (
@@ -80,9 +86,9 @@ function NotificationSettings() {
       )}
       {canShowRequestPopup() && (
         <SettingsRow
-          label={t('SettingsPage.showPendingRequestsAtTheTopOfThe')}
-          description={t('SettingsPage.whileUsingAnotherAppApprovalRequestsAppearAs')}
-          control={(labelId) => <Toggle labelId={labelId} checked={requestPopup} onChange={(next) => setPreference('requestPopup', next)} />}
+          label={t('SettingsPage.islandLabel')}
+          description={t('SettingsPage.islandDescription')}
+          control={(labelId) => <Segmented labelId={labelId} value={island} options={islandOptions} onChange={(next) => setPreference('island', next)} />}
         />
       )}
     </>

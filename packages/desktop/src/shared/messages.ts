@@ -7117,14 +7117,19 @@ export const MESSAGES = {
     "zh": "窗口不在前台时，Agent 等你确认、做完一轮、异常退出或定时任务完成时通知你，点击回到对应会话。",
     "en": "When the window is in the background, notify you when Agent needs approval, finishes a turn, exits unexpectedly, or a routine finishes. Click to open the conversation."
   },
-  "SettingsPage.showPendingRequestsAtTheTopOfThe": {
-    "zh": "离开时在屏幕顶部弹出待处理的请求",
-    "en": "Show pending requests at the top of the screen when away"
+  "SettingsPage.islandLabel": {
+    "zh": "屏幕顶部的灵动岛",
+    "en": "Island at the top of the screen"
   },
-  "SettingsPage.whileUsingAnotherAppApprovalRequestsAppearAs": {
-    "zh": "在别的应用里时，待确认的请求以卡片弹出，可直接选择，不抢焦点；这类请求不再另发系统通知。",
-    "en": "While using another app, approval requests appear as cards you can answer without stealing focus. These requests do not also trigger system notifications."
+  "SettingsPage.islandDescription": {
+    "zh": "在别的应用里时，等待确认的请求以卡片弹出，可直接作答，不抢焦点；这类请求不再另发系统通知。「始终」时常驻刘海，显示在跑和等你的 Agent，鼠标移上去展开（仅 macOS）。",
+    "en": "While using another app, requests waiting on you come up as a card you can answer without losing focus; they do not also trigger system notifications. Always: it stays at the notch, shows the agents at work and waiting on you, and expands under the pointer (macOS only)."
   },
+  "SettingsPage.islandOff": {"zh": "关闭", "en": "Off"},
+  "SettingsPage.islandWhenNeeded": {"zh": "需要我时弹出", "en": "When needed"},
+  "RequestPopup.waitingOnYou": {"zh": "等你 {count}", "en": "{count} waiting"},
+  "RequestPopup.agentsWorking": {"zh": "{count} 在跑", "en": "{count} working"},
+  "RequestPopup.agentsAtWork": {"zh": "在跑的 Agent", "en": "Agents at work"},
   "SettingsPage.automatic": {
     "zh": "自动（{cheapestLabel}）",
     "en": "Automatic ({cheapestLabel})"

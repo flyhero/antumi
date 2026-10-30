@@ -1,7 +1,8 @@
 import { t } from './i18n'
 import { isHelper } from '@antumi/protocol'
 import { PLAN_TOOLS, type Conversation, type ConversationRequest } from '@antumi/protocol'
-import { actionableItems, waiting, type ActionableTarget, type Snapshot } from './attention'
+import { actionableItems, named, waiting, working, type ActionableTarget, type Snapshot } from './attention'
+import type { AgentKind } from '@antumi/protocol'
 
 // One conversation on the card of waiting requests, under its task's name when it has one.
 export type PopupEntry = { conversationId: string; title: string; target: ActionableTarget; request: ConversationRequest }
@@ -23,6 +24,20 @@ export function popupQueue(s: Pick<Snapshot, 'tasks' | 'conversations'>, closed:
     if (closed.has(popupKey(conversationId, request))) return []
     return [{ conversationId, title: item.title, target: item.target, request }]
   })
+}
+
+// One chat with an agent at work, on the island while nothing is asked: under its task's name
+// when it has one, most recently active first. A chat held up on the user is on the card instead.
+export type ActivityEntry = { conversationId: string; title: string; target: ActionableTarget; agent: AgentKind }
+
+export function islandActivity(s: Pick<Snapshot, 'tasks' | 'conversations'>): ActivityEntry[] {
+  return Object.values(s.conversations)
+    .filter((conversation) => !isHelper(conversation) && conversation.archivedAt == null && working(conversation) && !waiting(conversation))
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .map((conversation) => {
+      const { title, target } = named(conversation, s.tasks)
+      return { conversationId: conversation.id, title, target: target.kind === 'task' ? target : { kind: 'conversation', id: conversation.id }, agent: conversation.agent }
+    })
 }
 
 // What the card's header marks the request as: a question, a plan to approve, or a permission.

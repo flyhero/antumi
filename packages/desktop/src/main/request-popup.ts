@@ -1,5 +1,9 @@
 import { screen, type BrowserWindow, type BrowserWindowConstructorOptions, type WebContents } from 'electron'
-import { POPUP_WIDTH, popupArea, popupBounds, type PopupPlacement } from './popup-placement'
+import { islandDisplay, POPUP_WIDTH, popupArea, popupBounds, type PopupPlacement } from './popup-placement'
+
+// Up only when a request comes while the user is away, or kept up always, as an island at the
+// notch (macOS) that the page draws small until pointed at or asked to expand.
+export type PopupMode = 'requests' | 'always'
 
 // The card at the top of the screen with what agents wait on, for answering from another app.
 // The main window's renderer asks for it when a request comes in while the user is away; the
@@ -8,15 +12,19 @@ import { POPUP_WIDTH, popupArea, popupBounds, type PopupPlacement } from './popu
 export class RequestPopup {
   private window: BrowserWindow | null = null
   private wanted = false
+  private mode: PopupMode = 'requests'
   // The display it came up on, kept while it shows so a new height does not move it.
   private placement: PopupPlacement | null = null
+  // The page's last height, to put the window back together after the displays change.
+  private height = 0
 
   constructor(private readonly create: () => BrowserWindow) {}
 
-  // Asked for (a request came while the user was away) or put away (the user is back).
+  // Asked for (a request came while the user was away) or put away (the user is back). An
+  // island kept up always only expands and folds: the page does that on this word.
   want(wanted: boolean): void {
     this.wanted = wanted
-    if (!wanted) this.hide()
+    if (!wanted && this.mode === 'requests') this.hide()
     if (wanted && !this.window) {
       this.place()
       this.open()
@@ -25,16 +33,31 @@ export class RequestPopup {
     this.window?.webContents.send('antumi:request-popup-wanted', wanted)
   }
 
+  // Only macOS has the island, over the menu bar: elsewhere always means when asked.
+  setMode(mode: PopupMode): void {
+    const next = process.platform === 'darwin' ? mode : 'requests'
+    if (this.mode === next) return
+    this.mode = next
+    this.placement = null
+    if (next === 'always') {
+      this.place()
+      if (!this.window) this.open()
+    } else if (!this.wanted) {
+      this.hide()
+    }
+  }
+
   // The card's say: shown at its height, or put away with nothing left to show.
   layout(visible: boolean, height: number): void {
     const window = this.window
     if (!window) return
     // Down while it loads or between chats, it may still come up; once put away, a late word from
     // the card does not bring it back.
-    if (!visible || !this.wanted) {
+    if (!visible || (!this.wanted && this.mode === 'requests')) {
       this.hide()
       return
     }
+    this.height = height
     const { area, gap } = this.place()
     window.setBounds(popupBounds(area, height, gap))
     // Never takes the keyboard from the app the user is in: a number key there must not answer.
@@ -64,11 +87,13 @@ export class RequestPopup {
     if (this.window?.isVisible()) this.window.hide()
   }
 
-  // The display under the pointer, chosen once per showing and told to the page, which draws the
-  // card to fit: an island joined to the notch, or a plain card.
+  // The display the card is on, chosen once per showing and told to the page, which draws the
+  // card to fit: an island joined to the notch, or a plain card. When asked for, the display
+  // under the pointer, where the user is; kept up always, the built-in one with the notch.
   private place(): PopupPlacement {
     if (!this.placement) {
-      this.placement = popupArea(screen.getDisplayNearestPoint(screen.getCursorScreenPoint()), process.platform)
+      const display = this.mode === 'always' ? islandDisplay(screen.getAllDisplays(), screen.getPrimaryDisplay()) : screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
+      this.placement = popupArea(display, process.platform)
       this.tellGeometry()
     }
     return this.placement
@@ -80,6 +105,15 @@ export class RequestPopup {
     this.window.webContents.send('antumi:request-popup-geometry', { island, notch })
     // Clear until pointed at; a page that never asks (one too old to) keeps the whole window.
     this.setInteractive(false)
+  }
+
+  // The displays changed under an island kept up always: back onto the built-in one, where it
+  // belongs now. The page hears the new geometry and lays itself out again.
+  private readonly displaysChanged = (): void => {
+    if (this.mode !== 'always' || !this.window || !this.window.isVisible()) return
+    this.placement = null
+    const { area, gap } = this.place()
+    this.window.setBounds(popupBounds(area, this.height, gap))
   }
 
   private open(): void {
@@ -104,7 +138,13 @@ export class RequestPopup {
       this.placement = null
       this.place()
     })
+    screen.on('display-added', this.displaysChanged)
+    screen.on('display-removed', this.displaysChanged)
+    screen.on('display-metrics-changed', this.displaysChanged)
     window.once('closed', () => {
+      screen.off('display-added', this.displaysChanged)
+      screen.off('display-removed', this.displaysChanged)
+      screen.off('display-metrics-changed', this.displaysChanged)
       if (this.window === window) {
         this.window = null
         this.placement = null

@@ -9907,15 +9907,75 @@ summary.agent-group-head:focus-visible { outline: 2px solid var(--focus); outlin
    as the system's own island would be: dark whatever the theme, black like the notch, which it
    grows out of on a display that has one, its content starting under the camera housing
    (--notch-height, set by the page from what main measured). On a display without a notch it
-   floats just under the top edge. The corner radius follows the notch's rather than the card
-   scale: the island is a piece of the notch, not a card. No drawn corners at the top: the
-   hardware notch has them, and anything drawn beside it over the menu bar shows as a spur. */
-:root { --notch: #000000; --island-radius: 20px; }
+   floats just under the top edge. */
+:root { --notch: #000000; --island-radius: var(--radius-lg); }
+/* Open, the corner radius follows the notch's rather than the card scale: the island is a piece
+   of the notch, not a card. No drawn corners at the top: the hardware notch has them, and
+   anything drawn beside it over the menu bar shows as a spur. */
+:root[data-island] .request-popup-frame[data-expanded='true'] { --island-radius: 20px; }
 :root[data-island] { color-scheme: dark; }
-:root[data-island] .request-popup-frame { padding: 0 0 24px; }
-:root[data-island] .request-popup.chat-view { border: 0; border-radius: var(--island-radius); background: var(--notch); box-shadow: none; }
-:root[data-island='floating'] .request-popup.chat-view { margin-top: 6px; box-shadow: var(--shadow-float); }
-:root[data-island='notch'] .request-popup.chat-view { padding-top: var(--notch-height); border-radius: 0 0 var(--island-radius) var(--island-radius); }
+:root[data-island] .request-popup-frame { position: relative; display: flex; justify-content: center; padding: 0 0 24px; }
+:root[data-island] .island { position: relative; border-radius: var(--island-radius); background: var(--notch); }
+:root[data-island] .request-popup-frame[data-expanded='true'] .island { width: 100%; }
+:root[data-island] .request-popup.chat-view { border: 0; border-radius: inherit; background: transparent; box-shadow: none; }
+:root[data-island='floating'] .island { margin-top: 6px; box-shadow: var(--shadow-float); }
+:root[data-island='notch'] .island { border-radius: 0 0 var(--island-radius) var(--island-radius); }
+:root[data-island='notch'] .request-popup.chat-view,
+:root[data-island='notch'] .island-activity { padding-top: var(--notch-height); }
+/* Folded: an ear each side of the notch, as tall as the notch so the island reads as part of
+   it; floating, a pill. An empty ear takes no room, so with nothing to say the island is the
+   notch and no more. */
+.island-compact { display: flex; align-items: stretch; height: var(--notch-height); }
+:root[data-island='floating'] .island-compact { height: 30px; padding: 0 6px; }
+.island-notch { flex: none; width: var(--notch-width); }
+.island-ear { display: flex; align-items: center; gap: 6px; padding: 0 10px; font-size: 12px; white-space: nowrap; color: var(--text-muted); }
+.island-ear:empty { padding: 0; }
+.island-mark { display: grid; place-items: center; flex-shrink: 0; color: var(--text-3); }
+.island-mark .agent-mark { width: 16px; height: 16px; }
+.island-badge[data-tone='accent'] { color: var(--accent); font-weight: 600; }
+/* At rest: the ant's face on one side, its mood on the other. The face is a sprite on a pixel
+   grid, kept crisp, and blinks by showing its other frame for a moment. */
+.ant-mood-mark { width: 18px; height: 18px; shape-rendering: crispEdges; }
+.ant-mood-mark[data-mood='sun'] { fill: var(--warning); }
+.ant-mood-mark[data-mood='star'] { fill: var(--accent); }
+.ant-mood-mark[data-mood='heart'] { fill: var(--ant-blush); }
+.ant-mood-mark[data-mood='sleep'] { fill: var(--text-3); }
+.ant-head-mark { width: 22px; height: 22px; shape-rendering: crispEdges; }
+.ant-head-shell { fill: var(--ant-body); }
+.ant-head-antenna { fill: var(--ant-limb); }
+.ant-head-eye { fill: var(--ant-eye); }
+.ant-head-pupil { fill: var(--ant-pupil); }
+.ant-head-eyes-open { animation: ant-head-open 4.6s steps(1) infinite; }
+.ant-head-eyes-shut { animation: ant-head-shut 4.6s steps(1) infinite; }
+@keyframes ant-head-open { 0%, 93%, 100% { opacity: 1; } 94%, 98% { opacity: 0; } }
+@keyframes ant-head-shut { 0%, 93%, 100% { opacity: 0; } 94%, 98% { opacity: 1; } }
+/* Asleep at night: the shut frame stays. */
+.ant-head-mark[data-asleep='true'] .ant-head-eyes-open, .ant-head-mark[data-asleep='true'] .ant-head-eyes-shut { animation: none; }
+.ant-head-mark[data-asleep='true'] .ant-head-eyes-open { opacity: 0; }
+.ant-head-mark[data-asleep='true'] .ant-head-eyes-shut { opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .ant-head-eyes-open, .ant-head-eyes-shut { animation: none; }
+  .ant-head-mark:not([data-asleep='true']) .ant-head-eyes-shut { opacity: 0; }
+}
+/* Open with nothing to answer: the agents at work, each a row to its chat. */
+.island-activity { display: flex; flex-direction: column; gap: 2px; padding: 8px; }
+.island-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.island-row:hover { background: var(--fill); }
+.island-row-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.island-row-state { flex-shrink: 0; font-size: 12px; color: var(--text-3); }
 .request-popup-header {
   display: flex;
   align-items: center;

@@ -25,6 +25,12 @@ export function popupArea(display: PopupDisplay, platform: NodeJS.Platform): Pop
   return { area: display.bounds, gap: 0, island: true, notch: notchSize(display) }
 }
 
+// Where an island kept up always lives: the built-in display, whose notch it grows out of, or
+// with the lid closed the primary one.
+export function islandDisplay<D extends { internal: boolean }>(displays: readonly D[], primary: D): D {
+  return displays.find((display) => display.internal) ?? primary
+}
+
 // The notch of a built-in display in points, or null for a display without one.
 export function notchSize(display: Pick<PopupDisplay, 'bounds' | 'internal'>): NotchSize | null {
   const { width, height } = display.bounds

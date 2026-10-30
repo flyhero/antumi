@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { notchSize, POPUP_WIDTH, popupArea, popupBounds } from './popup-placement'
+import { islandDisplay, notchSize, POPUP_WIDTH, popupArea, popupBounds } from './popup-placement'
 
 describe('popupBounds', () => {
   it('centres the card at the top of the usable area', () => {
@@ -46,6 +46,15 @@ describe('notchSize', () => {
     expect(notchSize({ ...macbook14, bounds: { x: 0, y: 0, width: 1440, height: 900 } })).toBeNull()
     expect(notchSize({ ...macbook14, internal: false })).toBeNull()
     expect(notchSize({ ...macbook14, bounds: { x: 0, y: 0, width: 0, height: 0 } })).toBeNull()
+  })
+})
+
+describe('islandDisplay', () => {
+  it('prefers the built-in display, and takes the primary one with the lid closed', () => {
+    const builtIn = { id: 1, internal: true }
+    const external = { id: 2, internal: false }
+    expect(islandDisplay([external, builtIn], external)).toBe(builtIn)
+    expect(islandDisplay([external], external)).toBe(external)
   })
 })
 

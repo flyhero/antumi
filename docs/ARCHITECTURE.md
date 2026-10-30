@@ -426,9 +426,11 @@ Kimi Code 使用官方 `kimi acp` 和通用 ACP driver，dialect 负责四种原
 
 等待回答的请求卡片（`main/request-popup.ts`、`components/RequestPopup.tsx`）在 macOS 上画成贴着刘海的灵动岛；其他平台仍是菜单栏下方的普通卡片。
 
-- **窗口**：透明无边框的 NSPanel，`status` 层级才盖得住菜单栏，`enableLargerThanScreen` 让 macOS 允许窗口进菜单栏区域，`roundedCorners: false` 免得 Electron 自己给窗口加的圆角裁掉面板的顶角，`y` 取 `display.bounds.y`。
-- **刘海尺寸**：Electron 不知道刘海。`popup-placement.ts` 用内置屏的宽高比识别带刘海的 MacBook（以 14 寸的 1512×982、刘海 185×32 为基准，容差 1%），按屏幕宽度等比缩放，所以缩放档位和 13/15/16 寸都能对上；没有刘海的 Mac 屏幕画成浮岛。主进程通过 `antumi:request-popup-geometry` 把 `{ island, notch }` 告诉页面，页面在 `:root` 上标 `data-island`，内容从 `--notch-height` 以下开始，岛的底色是 `--notch`，不随配色变。
+- **窗口**：透明无边框的 NSPanel，`status` 层级才盖得住菜单栏，`enableLargerThanScreen` 让 macOS 允许窗口进菜单栏区域，`y` 取 `display.bounds.y`。
+- **刘海尺寸**：Electron 不知道刘海。`popup-placement.ts` 用内置屏的宽高比识别带刘海的 MacBook（以 14 寸的 1512×982、刘海 185×32 为基准，容差 1%），按屏幕宽度等比缩放，所以缩放档位和 13/15/16 寸都能对上；没有刘海的 Mac 屏幕画成浮岛，常驻时只在有东西可说时出现，免得顶上挂一粒黑点。主进程通过 `antumi:request-popup-geometry` 把 `{ island, notch }` 告诉页面，页面在 `:root` 上标 `data-island`，内容从 `--notch-height` 以下开始，岛的底色是 `--notch`，不随配色变。
 - **点击穿透**：岛的窗口默认 `setIgnoreMouseEvents(true, { forward: true })`，鼠标移动仍转发给页面；页面在指针进入岛时发 `antumi:request-popup-interactive`，指针离开且卡片里没有焦点时放开，所以岛旁边的菜单栏照常可点，正在卡片里打字时移开鼠标也不丢键盘。
+- **两种模式**（设置 → 通知）：「需要我时弹出」和以前一样，主窗口失焦时来了请求才出现，落在鼠标所在的屏幕，主窗口回到前台就收起。「始终」时主进程让窗口常驻内置屏（合盖时主屏，显示器增减时重新落位），页面折叠成刘海的高度：左耳是在跑的 Agent 标志，右耳是「等你 N」或「N 在跑」，什么都没有时和刘海一样大，看不见。指针移上去展开：有等待的请求就是请求卡片，没有就是在跑的 Agent 列表，点一行回到主窗口对应的聊天。
+- 折叠态只用 core 的状态（running / awaiting），不知道主窗口看过什么，所以不显示「新回复」；那仍由系统通知和 dock 角标负责。
 
 ### 桌面宠物资源
 

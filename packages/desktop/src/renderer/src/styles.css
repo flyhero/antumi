@@ -9402,9 +9402,11 @@ summary.agent-group-head:focus-visible { outline: 2px solid var(--focus); outlin
 .git-page-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px 8px; }
 .git-page-header h1 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: var(--chat-font-size, 14px); }
 .git-page-header h1 svg { width: 20px; height: 20px; }
-.git-page-projects, .git-workspace-bar { padding-inline: 20px; }
-.git-page-projects > .chat-picker { max-width: 420px; }
-.git-workspace-bar > .chat-picker { max-width: 640px; }
+.git-page-projects { padding-inline: 20px; flex-wrap: wrap; }
+/* Project / workspace sit side by side at their own width; the actions keep to the right. */
+.git-project-bar.git-page-projects > .chat-picker { flex: 0 1 auto; min-width: 0; max-width: 360px; }
+.git-page-separator { color: var(--text-3); }
+.git-page-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 .git-path-form { display: flex; flex: 1; gap: 8px; min-width: 0; }
 .git-path-form .input { flex: 1; min-width: 0; }
 .git-page-empty { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 24px; color: var(--text-muted); text-align: center; }

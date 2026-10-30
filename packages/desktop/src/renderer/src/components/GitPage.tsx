@@ -72,20 +72,24 @@ export function GitPage() {
       <h1><GitIcon /> Git</h1>
       <button className="tool-button" aria-label={t('GitPage.close')} onClick={openOverview}><CloseIcon /></button>
     </header>
+    {/* Project and workspace on one line, read as a path: antumi / dev. */}
     <div className="git-project-bar git-page-projects">
       {entries.length > 0 && <ChatPicker label={t('GitPage.project')} value={selected} placeholder={t('GitPage.project')} placement="below"
         options={entries.map((path) => ({ value: path, label: projectName(path), description: path, icon: <FolderIcon /> }))} onChange={choose} />}
-      {canPickFolder() ? <button className="button" onClick={() => void browse()}><FolderIcon />{t('GitPage.openProject')}</button>
-        : <form className="git-path-form" onSubmit={submit}><input className="input mono" aria-label={t('ProjectPicker.projectPath')} placeholder={t('ProjectPicker.absoluteProjectPathEGIdeaprojectsApp')} value={path} onChange={(event) => setPath(event.target.value)} /><button className="button" disabled={!path.trim()}>{t('GitPage.openProject')}</button></form>}
-      <button className="tool-button" aria-label={t('GitPage.refresh')} disabled={!selected} onClick={() => setRetry((value) => value + 1)}><RefreshIcon /></button>
+      {project && <>
+        <span className="git-page-separator" aria-hidden="true">/</span>
+        <ChatPicker label={t('GitPage.workspace')} value={active ?? ''} placeholder={t('GitPage.workspace')} placement="below"
+          options={project.workspaces.map((entry) => ({ value: entry.path, label: `${entry.branch ?? t('GitInspector.detachedHead')}${entry.taskId ? ` · ${tasks[entry.taskId]?.title ?? t('GitInspector.task')}` : ''}`, description: `${entry.path}${entry.missing ? ` · ${t('GitPage.missing')}` : ''}${entry.planning ? ` · ${t('GitPage.readOnly')}` : ''}${entry.locked ? ` · ${t('GitPage.locked')}` : ''}`, disabled: entry.missing }))}
+          onChange={(path) => setGitLocation(selected, path)} />
+        {owner && <button className="button ghost" onClick={() => selectTask(owner.id)}>{t('SourceInboxView.openTask')}</button>}
+        {!owner && chat && <button className="button ghost" onClick={() => selectConversation(chat.id)}>{t('WorktreeManager.openConversation')}</button>}
+      </>}
+      <span className="git-page-actions">
+        {canPickFolder() ? <button className="button" onClick={() => void browse()}><FolderIcon />{t('GitPage.openProject')}</button>
+          : <form className="git-path-form" onSubmit={submit}><input className="input mono" aria-label={t('ProjectPicker.projectPath')} placeholder={t('ProjectPicker.absoluteProjectPathEGIdeaprojectsApp')} value={path} onChange={(event) => setPath(event.target.value)} /><button className="button" disabled={!path.trim()}>{t('GitPage.openProject')}</button></form>}
+        <button className="tool-button" aria-label={t('GitPage.refresh')} disabled={!selected} onClick={() => setRetry((value) => value + 1)}><RefreshIcon /></button>
+      </span>
     </div>
-    {project && <div className="git-project-bar git-workspace-bar">
-      <ChatPicker label={t('GitPage.workspace')} value={active ?? ''} placeholder={t('GitPage.workspace')} placement="below"
-        options={project.workspaces.map((entry) => ({ value: entry.path, label: `${entry.branch ?? t('GitInspector.detachedHead')}${entry.taskId ? ` · ${tasks[entry.taskId]?.title ?? t('GitInspector.task')}` : ''}`, description: `${entry.path}${entry.missing ? ` · ${t('GitPage.missing')}` : ''}${entry.planning ? ` · ${t('GitPage.readOnly')}` : ''}${entry.locked ? ` · ${t('GitPage.locked')}` : ''}`, disabled: entry.missing }))}
-        onChange={(path) => setGitLocation(selected, path)} />
-      {owner && <button className="button ghost" onClick={() => selectTask(owner.id)}>{t('SourceInboxView.openTask')}</button>}
-      {!owner && chat && <button className="button ghost" onClick={() => selectConversation(chat.id)}>{t('WorktreeManager.openConversation')}</button>}
-    </div>}
     {project && !active && <p className="git-message" role="alert">{t('GitPage.workspaceGone')}</p>}
     {error && <p className="git-message" role="alert">{error} <button className="button" onClick={() => setRetry((value) => value + 1)}>{t('ChatContextMenu.retry')}</button></p>}
     {!rpc?.features.includes('git-projects') ? <p className="inspector-empty muted">{t('GitPage.unsupported')}</p>

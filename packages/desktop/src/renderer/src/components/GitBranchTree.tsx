@@ -45,6 +45,7 @@ export function GitBranchTree({ branches, tags, recent, selected, current, direc
     else next.add(row.id)
     setPreference('gitFoldedGroups', { ...foldedGroups, [directory]: [...next] })
   }
+  const anyOpen = groupIds.some((id) => !folded.has(id))
   const expandAll = (open: boolean) => {
     setPreference('gitFoldedGroups', { ...foldedGroups, [directory]: open ? [] : groupIds })
     setActive('')
@@ -71,8 +72,8 @@ export function GitBranchTree({ branches, tags, recent, selected, current, direc
         onChange={(event) => { setQuery(event.target.value); setActive('') }}
         onKeyDown={(event) => { if (event.key === 'ArrowDown') { event.preventDefault(); setActive(rows[0]?.id ?? ''); tree.current?.focus() } if (event.key === 'Escape') setQuery('') }} />
       {toggleFavorite && <button className="tool-button git-branch-star" aria-label={t('GitInspector.favoritesOnly')} title={t('GitInspector.favoritesOnly')} aria-pressed={favoritesOnly} onClick={() => setFavoritesOnly((value) => !value)}><StarIcon /></button>}
-      <button type="button" className="tool-button" aria-label={t('GitPage.expandAll')} data-tooltip={t(searching ? 'GitPage.searchAutoExpands' : 'GitPage.expandAll')} disabled={searching || groupIds.every((id) => !folded.has(id))} onClick={() => expandAll(true)}><ExpandAllIcon /></button>
-      <button type="button" className="tool-button" aria-label={t('GitPage.collapseAll')} data-tooltip={t(searching ? 'GitPage.searchAutoExpands' : 'GitPage.collapseAll')} disabled={searching || !groupIds.length || groupIds.every((id) => folded.has(id))} onClick={() => expandAll(false)}><CollapseAllIcon /></button>
+      {/* One button for both: while any group is open it folds them all, and once none is, opens them. */}
+      <button type="button" className="tool-button" aria-label={t(anyOpen ? 'GitPage.collapseAll' : 'GitPage.expandAll')} data-tooltip={t(searching ? 'GitPage.searchAutoExpands' : anyOpen ? 'GitPage.collapseAll' : 'GitPage.expandAll')} disabled={searching || !groupIds.length} onClick={() => expandAll(!anyOpen)}>{anyOpen ? <CollapseAllIcon /> : <ExpandAllIcon />}</button>
       <button className="tool-button" aria-label={t('GitPage.viewOptions')} onClick={(event) => setSettings(menuPoint(event))}><MoreIcon /></button>
     </div>
     <div ref={tree} className="git-branch-list" role="tree" aria-label={t('GitInspector.branches')} tabIndex={0} aria-activedescendant={rows.length ? `${prefix}-${activeIndex}` : undefined}

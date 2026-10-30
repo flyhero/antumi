@@ -9497,6 +9497,8 @@ summary.agent-group-head:focus-visible { outline: 2px solid var(--focus); outlin
 .git-summary > .mono { overflow: hidden; text-overflow: ellipsis; }
 .git-summary svg { width: 16px; height: 16px; }
 .git-toolbar .button { padding: 4px 8px; font-size: var(--chat-font-small, 12px); }
+/* Why the buttons are off, beside them; wraps under them once the row runs out of room. */
+.git-toolbar-note { min-width: 0; overflow-wrap: anywhere; font-size: var(--chat-font-small, 12px); }
 .git-message { margin: 0; padding: 8px 12px; overflow-wrap: anywhere; font-size: var(--chat-font-small, 12px); }
 .git-manager > .git-message { overflow: auto; }
 .git-layout { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; border-top: 1px solid var(--border); }

@@ -225,11 +225,11 @@ export function GitRepository({ target, updatedAt = 0, refresh = 0 }: { target: 
         <button className="button" disabled={!can({ kind: 'push' }) || !status.branch || !status.remotes.length} onClick={() => (pushTargetSupported ? openPush() : setDialog({ kind: 'push' }))}>Push</button>
         {target.kind !== 'project' && rpc?.features.includes('git-projects') && <button className="button ghost" onClick={() => openGit(status.directory)}>{t('GitPage.openInGit')}</button>}
         <button className="button" disabled={!can({ kind: 'commit', message: 'commit', push: false }) || !status.branch || !status.changes} onClick={() => setDialog({ kind: 'commit' })}>Commit</button>
+        {status.readOnly && <span className="git-toolbar-note muted" role="status">{t('GitPage.planningReadOnly')}</span>}
+        {status.taskId && target.kind === 'project' && <span className="git-toolbar-note muted">{t('GitPage.taskBound')}</span>}
+        {status.blocker && <span className="git-toolbar-note muted" role="status">{status.blocker}</span>}
+        {writing && <span className="git-toolbar-note muted" role="status">{t('ConversationBranches.writingCommitMessageThenCommitting')}</span>}
       </div>
-      {status.readOnly && <p className="git-message muted" role="status">{t('GitPage.planningReadOnly')}</p>}
-      {status.taskId && target.kind === 'project' && <p className="git-message muted">{t('GitPage.taskBound')}</p>}
-      {status.blocker && <p className="git-message muted" role="status">{status.blocker}</p>}
-      {writing && <p className="git-message muted" role="status">{t('ConversationBranches.writingCommitMessageThenCommitting')}</p>}
       {note?.persistent && <p className="git-message" role="status">{note.message}</p>}
       {note && !note.persistent && <div className="toast git-result-toast" role="status" aria-atomic="true">
         <span className="toast-icon" aria-hidden="true"><CheckIcon /></span>

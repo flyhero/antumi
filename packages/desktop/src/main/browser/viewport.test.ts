@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fitViewport } from './viewport'
+import { deviceOf, fitViewport } from './viewport'
 
 describe('fitViewport', () => {
   const panel = { x: 100, y: 50, width: 1000, height: 700 }
@@ -18,5 +18,15 @@ describe('fitViewport', () => {
     expect(fitted.width).toBe(1000)
     expect(fitted.height).toBe(563)
     expect(fitted.y).toBe(50 + Math.round((700 - 563) / 2))
+  })
+})
+
+describe('deviceOf', () => {
+  it('reads a phone, a tablet or a desktop off the width', () => {
+    expect(deviceOf(null)).toBe('desktop')
+    expect(deviceOf({ width: 390, height: 844 })).toBe('phone')
+    expect(deviceOf({ width: 768, height: 1024 })).toBe('tablet')
+    expect(deviceOf({ width: 1280, height: 800 })).toBe('desktop')
+    expect(deviceOf({ width: 1920, height: 1080 })).toBe('desktop')
   })
 })

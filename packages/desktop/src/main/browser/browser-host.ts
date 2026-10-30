@@ -122,7 +122,7 @@ export async function startBrowserHost(slot: WindowSlot, hostFile: string): Prom
       devtools,
       cancelCapture: () => capture.cancel(),
       setViewport: async (next) => {
-        await applyViewport(contents, next)
+        await applyViewport(contents, next, tab.viewport)
         registry.setViewport(tab, next)
         slot.setViewport(tab.id, next)
       }

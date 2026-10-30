@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { chromeUserAgent } from './user-agent'
+import { chromeUserAgent, mobileUserAgent } from './user-agent'
 
 describe('chromeUserAgent', () => {
   it('drops the app and Electron, keeping the platform and Chrome major', () => {
@@ -14,5 +14,12 @@ describe('chromeUserAgent', () => {
 
   it('at least drops Electron from a string of another shape', () => {
     expect(chromeUserAgent('Something Electron/44.4.3 Safari/537.36', '146.0.1.2')).toBe('Something Safari/537.36')
+  })
+})
+
+describe('mobileUserAgent', () => {
+  it('says Android Chrome, with Mobile only for a phone', () => {
+    expect(mobileUserAgent('146.0.7680.65', true)).toBe('Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Mobile Safari/537.36')
+    expect(mobileUserAgent('146.0.7680.65', false)).toBe('Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36')
   })
 })

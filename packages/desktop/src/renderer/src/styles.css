@@ -8855,6 +8855,30 @@ div.inspector-empty > p { margin: 0 0 8px; }
 .worktree-branch { font-size: 12px; }
 .worktree-state { font-size: 12px; color: var(--text-muted); }
 .worktree-state[data-warn] { color: var(--warning); }
+.worktree-state[data-failed] { color: var(--danger); }
+.worktree-state[data-cleaning] { display: inline-flex; align-items: center; gap: 6px; color: var(--status-running); }
+.worktree-state[data-cleaning] .chat-spinner { width: 12px; height: 12px; flex-shrink: 0; }
+.worktree-state[data-cleaning] svg { width: 14px; height: 14px; flex-shrink: 0; }
+.worktree-row[data-cleaning='removed'] .worktree-state { color: var(--status-done); }
+/* Queued for a clean under way: the user can no longer change it. */
+.worktree-row[data-cleaning='waiting'] { opacity: 0.55; }
+/* Cleaned: a beat to read 「已清理」, then the row folds away and the rows below close up. */
+.worktree-row[data-cleaning='removed'] { overflow: hidden; animation: worktree-row-leave 0.7s ease-in forwards; }
+@keyframes worktree-row-leave {
+  0%, 45% { opacity: 1; max-height: 80px; }
+  70% { opacity: 0; max-height: 80px; }
+  100% { opacity: 0; max-height: 0; padding-top: 0; padding-bottom: 0; border-top-color: transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .worktree-row[data-cleaning='removed'] { animation: none; display: none; }
+}
+/* At work rather than unavailable: full strength, the spinner in the button's own ink. */
+.worktrees-clean[data-cleaning]:disabled { opacity: 1; cursor: progress; }
+.worktrees-clean .chat-spinner { border-color: color-mix(in srgb, currentColor 35%, transparent); border-top-color: currentColor; }
+.worktrees-freed { display: inline-flex; align-items: center; gap: 4px; align-self: center; font-size: 13px; color: var(--status-done); white-space: nowrap; animation: worktrees-freed 6s ease forwards; }
+.worktrees-freed svg { width: 14px; height: 14px; }
+@keyframes worktrees-freed { 0% { opacity: 0; } 5%, 85% { opacity: 1; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .worktrees-freed { animation: none; } }
 .worktree-size { font-size: 12px; text-align: right; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .worktree-actions { display: flex; align-items: center; gap: 2px; }
 .worktree-actions .worktree-open { padding: 2px 8px; font-size: 12px; }

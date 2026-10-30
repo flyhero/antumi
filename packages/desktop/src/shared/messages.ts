@@ -12421,4 +12421,9 @@ export const MESSAGES = {
   "ConfirmDialog.startAnyway": {"zh": "仍要启动", "en": "Start anyway"},
   "ConfirmDialog.clearAndRestart": {"zh": "清空并重新开始", "en": "Clear and start over"},
   "ConfirmDialog.removeMember": {"zh": "移出讨论", "en": "Remove"},
+  "WorktreeManager.cleaningProgress": {"zh": "正在清理 {done}/{total}", "en": "Cleaning {done}/{total}"},
+  "WorktreeManager.cleaningRow": {"zh": "正在清理…", "en": "Cleaning…"},
+  "WorktreeManager.cleanedRow": {"zh": "已清理", "en": "Cleaned"},
+  "WorktreeManager.notCleaned": {"zh": "未清理：{reason}", "en": "Not cleaned: {reason}"},
+  "WorktreeManager.freed": {"zh": "已释放 {size}", "en": "Freed {size}"},
 } as const

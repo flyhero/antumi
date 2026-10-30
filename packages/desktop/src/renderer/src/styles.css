@@ -3562,6 +3562,11 @@ div.inspector-empty > p { margin: 0 0 8px; }
 
 .statusbar .statusbar-awake { position: relative; width: 24px; height: 24px; padding: 0 4px; }
 .statusbar .statusbar-awake svg { width: 15px; height: 15px; }
+/* Something live behind the button (an open page, a running shell, a listening port, the files
+   panel showing): the icon takes the running colour; the count stays grey. */
+.statusbar .tool-button[data-active='true'] svg { color: var(--status-running); }
+/* Keeping awake is a mode the user set, not work under way. */
+.statusbar .statusbar-awake[data-active='true'] svg { color: var(--accent); }
 .awake-dot {
   position: absolute;
   right: 2px;
@@ -3569,7 +3574,7 @@ div.inspector-empty > p { margin: 0 0 8px; }
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: var(--status-running);
+  background: var(--accent);
 }
 .statusbar-awake-anchor .menu {
   top: auto;

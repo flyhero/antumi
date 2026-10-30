@@ -111,6 +111,7 @@ function BrowserButton() {
       className="tool-button statusbar-browser"
       aria-label={t('BrowserSidePanel.browser')}
       aria-pressed={open}
+      data-active={count > 0}
       data-tooltip={[open ? t('BrowserSidePanel.hideBrowser') : t('BrowserSidePanel.browser'), shortcut].filter(Boolean).join(' ')}
       data-tooltip-side="top-end"
       onClick={toggleBrowserPanel}
@@ -130,6 +131,7 @@ function FilesButton() {
       className="tool-button statusbar-files"
       aria-label={t('FilesPanel.files')}
       aria-pressed={open}
+      data-active={open}
       data-tooltip={[open ? t('FilesPanel.hideFiles') : t('FilesPanel.files'), shortcut].filter(Boolean).join(' ')}
       data-tooltip-side="top-end"
       onClick={toggleFilesPanel}
@@ -143,12 +145,14 @@ function TerminalButton() {
   const shortcut = usePanelShortcut('toggle-terminal')
   const open = useCore((s) => s.terminalPanelOpen || s.panelWindows.includes('terminal'))
   const count = useCore((s) => s.terminals.length)
+  const running = useCore((s) => s.terminals.some((terminal) => !terminal.exited))
   return (
     <button
       type="button"
       className="tool-button statusbar-terminal"
       aria-label={t('SettingsPage.terminal')}
       aria-pressed={open}
+      data-active={running}
       data-tooltip={[open ? t('TerminalPanel.hideTerminal') : t('SettingsPage.terminal'), shortcut].filter(Boolean).join(' ')}
       data-tooltip-side="top-end"
       onClick={() => void toggleTerminalPanel()}
@@ -164,7 +168,7 @@ function PortsButton() {
   const open = useCore((s) => s.portsPanelOpen)
   const count = usePorts((s) => s.list.ports.length)
   if (!supported) return null
-  return <button type="button" className="tool-button statusbar-ports" aria-label={t('PortsPanel.ports')} aria-pressed={open} data-tooltip={open ? t('PortsPanel.hidePorts') : t('StatusBar.manageDevelopmentServicePorts')} data-tooltip-side="top-end" onClick={togglePortsPanel}><PortsIcon />{count > 0 && <span className="count">{count}</span>}</button>
+  return <button type="button" className="tool-button statusbar-ports" aria-label={t('PortsPanel.ports')} aria-pressed={open} data-active={count > 0} data-tooltip={open ? t('PortsPanel.hidePorts') : t('StatusBar.manageDevelopmentServicePorts')} data-tooltip-side="top-end" onClick={togglePortsPanel}><PortsIcon />{count > 0 && <span className="count">{count}</span>}</button>
 }
 
 const AWAKE_LABEL = localized(() => ({ on: t('SettingsPage.always'), auto: t('SettingsPage.whileAgentsWorkOrSchedulesArePending'), off: t('BackdropPicker.close') } as const))
@@ -178,6 +182,9 @@ function AwakeButton() {
     status.workingAgents > 0 && t('StatusBar.agentsWorking', { value1: status.workingAgents }),
     (status.scheduledRuns ?? 0) > 0 && t('StatusBar.schedulesPending', { value1: status.scheduledRuns })
   ].filter(Boolean).join('，')
+  // Lit while there is work the computer should stay up for, even with keeping awake off; the dot
+  // says whether it actually is.
+  const busy = status.active || status.workingAgents + (status.scheduledRuns ?? 0) > 0
   const detail = status.problem ?? (status.active ? t('StatusBar.keepingAwake', { value1: reasons ? ` · ${reasons}` : '' }) : t('StatusBar.keepAwake', { value1: AWAKE_LABEL[status.mode] }))
   return (
     <span className="menu-anchor statusbar-awake-anchor">
@@ -187,7 +194,7 @@ function AwakeButton() {
         aria-label={detail}
         aria-haspopup="dialog"
         aria-expanded={open}
-        data-active={status.active}
+        data-active={busy}
         data-tooltip={detail}
         data-tooltip-side="top-end"
         onClick={() => setOpen((value) => !value)}

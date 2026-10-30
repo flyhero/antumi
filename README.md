@@ -6,7 +6,7 @@
 
 issue 直接开工 · 多 Agent 协作 · 自己验证 · 额度不断档
 
-[![Version](https://img.shields.io/github/package-json/v/flyhero/antumi?label=version&color=blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.21.2-blue)](CHANGELOG.md)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%C2%B7%20Windows%20%C2%B7%20Linux-lightgrey)
 ![Agents](https://img.shields.io/badge/agents-10%20supported-8A2BE2)
 
@@ -322,6 +322,3 @@ Antumi 目前是**开发版**（0.21.x），主要在 macOS 上开发和测试�
 - **更多 Agent 与生态**：持续扩展主流 Agent CLI 与 ACP 生态支持。
 
 
-## 许可
-
-[Apache License 2.0](LICENSE)

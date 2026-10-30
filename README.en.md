@@ -6,7 +6,7 @@
 
 Issues straight to work · Agents working together · Self-verification · No quota stalls
 
-[![Version](https://img.shields.io/github/package-json/v/flyhero/antumi?label=version&color=blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.21.2-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%C2%B7%20Windows%20%C2%B7%20Linux-lightgrey)
 ![Agents](https://img.shields.io/badge/agents-10%20supported-8A2BE2)

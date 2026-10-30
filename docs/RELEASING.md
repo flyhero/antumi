@@ -87,6 +87,12 @@ node -e 'const fs=require("fs");for(const d of [".","packages/core","packages/da
 node -e 'for (const d of [".","packages/core","packages/daemon","packages/desktop","packages/protocol"]) console.log(d, require("./"+d+"/package.json").version)'
 ```
 
+两份 README 顶部的版本徽章是静态的（shields.io 读 GitHub 的动态徽章时常返回 520，图会裂），也要改成新版本：
+
+```bash
+sed -i '' 's#badge/version-[^-]*-blue#badge/version-X.Y.Z-blue#' README.md README.en.md
+```
+
 ### 3. 改 `CHANGELOG.md`
 
 在 `## 未发布` 下面插入一行版本标题，原来「未发布」里的条目就归到这个版本下；`## 未发布` 本身保留，下面留空。日期用今天（`date +%F`），中间是长破折号 `—`，工作流靠这个格式找发布说明：

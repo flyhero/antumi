@@ -664,6 +664,8 @@ body.stacked-panel-resizing * {
     linear-gradient(var(--border), var(--border)) top / 1px calc(var(--row-pad) + 2px) no-repeat,
     linear-gradient(var(--border), var(--border)) bottom / 1px calc(100% - var(--row-pad) - 20px) no-repeat;
 }
+/* The row in view floats above the guide, so its card covers it. */
+.conversation-group[data-tree] .conversation-row[aria-current='true']::before { display: none; }
 /* A project's group starts a conversation there; shown while the heading is pointed at, under the
    section's own ＋. */
 .conversation-group-new { margin-right: 4px; opacity: 0; }

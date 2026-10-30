@@ -7,7 +7,7 @@ import readline from 'node:readline'
 import { stat } from 'node:fs/promises'
 import { extname, isAbsolute } from 'node:path'
 import { z } from 'zod'
-import { connectRpc, coreUrl, isPreviewImage, PREVIEW_EXTENSIONS, SHOW_PREVIEW_TOOL, type Conversation, type RpcConnection } from '@antumi/protocol'
+import { connectRpc, coreUrl, isPreviewImage, PREVIEW_EXTENSIONS, PREVIEW_FILES_MAX, PREVIEW_LAYOUTS, previewLayout, PreviewInput, SHOW_PREVIEW_TOOL, type Conversation, type PreviewLayout, type RpcConnection } from '@antumi/protocol'
 import { readCoreEndpoint, antumiPaths } from '@antumi/protocol/node'
 import { AttachmentStore } from './attachment-store'
 import { BROWSER_ARGUMENTS, BROWSER_TOOL_SPECS, browserToolsOverCore, type BrowserTools, type ToolOutcome } from './mcp-browser-tools'
@@ -27,10 +27,11 @@ const Message = z.object({
 })
 const InitializeParams = z.object({ protocolVersion: z.string() })
 const CallParams = z.object({ name: z.string(), arguments: z.record(z.string(), z.unknown()).optional() })
-const PreviewArguments = z.object({ path: z.string().trim().min(1), title: z.string().trim().max(200).optional() })
 
 // Tools and basic lifecycle are the same in every published MCP revision.
 const FALLBACK_PROTOCOL_VERSION = '2025-06-18'
+
+const LAYOUT_NAMES: Record<PreviewLayout, string> = { compare: '并排', tabs: '页签', grid: '网格' }
 
 const PREVIEW_TOOL = {
   name: SHOW_PREVIEW_TOOL,
@@ -38,15 +39,32 @@ const PREVIEW_TOOL = {
   description:
     '把磁盘上的文件直接展示在用户的对话里：HTML 或 SVG 渲染成页面，用户能看到、能点；' +
     'PNG、JPEG、GIF、WebP 显示成图片，用户点开能放大。做完样稿、原型、图表，或截了图想让用户看时调用；中间产物不要调。' +
+    '一个文件用 path。几个相关的（改动前后、几种方案、一组截图）放进 files 一次展示，每个配一句 title；不要分开调多次，也不要自己把图拼成一张。' +
+    'layout 可选：compare 并排（2–4 张图）、tabs 一次一个来回切换、grid 缩略图网格；不填就按数量选。一组里有 HTML 时只能是 tabs。' +
     '文件要已经写到磁盘上，用绝对路径。HTML 里可以用相对路径引用同目录的样式和图片；页面跟随用户的浅色/深色主题，不能访问网络。' +
     '要给用户看截图就用它，不要只在回复里写文件路径。',
   inputSchema: {
     type: 'object',
     properties: {
-      path: { type: 'string', description: '文件的绝对路径：.html / .htm / .svg，或 .png / .jpg / .jpeg / .gif / .webp' },
-      title: { type: 'string', description: '给用户看的标题，可选' }
+      path: { type: 'string', description: '一个文件时：文件的绝对路径，.html / .htm / .svg，或 .png / .jpg / .jpeg / .gif / .webp' },
+      files: {
+        type: 'array',
+        description: `几个文件时用它代替 path，最多 ${PREVIEW_FILES_MAX} 个，按给用户看的顺序`,
+        items: {
+          type: 'object',
+          properties: {
+            path: { type: 'string', description: '文件的绝对路径' },
+            title: { type: 'string', description: '这一个的说明，比如「改动前」「方案 A」' }
+          },
+          required: ['path'],
+          additionalProperties: false
+        },
+        minItems: 1,
+        maxItems: PREVIEW_FILES_MAX
+      },
+      title: { type: 'string', description: '给用户看的标题，可选' },
+      layout: { type: 'string', enum: [...PREVIEW_LAYOUTS], description: '几个文件怎么排，可选：compare 并排、tabs 切换、grid 网格' }
     },
-    required: ['path'],
     additionalProperties: false
   },
   annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false }
@@ -106,16 +124,26 @@ function toolTable({ preview, browser, bookmarks, terminal, history, squad, agen
     {
       spec: PREVIEW_TOOL,
       run: async (raw) => {
-        const args = PreviewArguments.safeParse(raw)
-        if (!args.success) return textResult('path 需要是文件的绝对路径。', true)
-        try {
-          await preview(args.data.path)
-          return textResult(isPreviewImage(args.data.path)
-            ? '已在对话里展示给用户。用户会在这一条下面看到这张图片。'
-            : '已在对话里展示给用户，不用再截图。用户会在这一条下面看到页面。')
-        } catch (error) {
-          return textResult(`没能展示：${describe(error)}`, true)
+        const args = PreviewInput.safeParse(raw)
+        if (!args.success) return textResult(`path 需要是文件的绝对路径；files 是 1–${PREVIEW_FILES_MAX} 个 { path, title }。`, true)
+        const { path, files, layout } = args.data
+        if (Boolean(path) === Boolean(files)) return textResult('path 和 files 二选一：一个文件用 path，几个用 files。', true)
+        if (path) {
+          try {
+            await preview(path)
+            return textResult(isPreviewImage(path)
+              ? '已在对话里展示给用户。用户会在这一条下面看到这张图片。'
+              : '已在对话里展示给用户，不用再截图。用户会在这一条下面看到页面。')
+          } catch (error) {
+            return textResult(`没能展示：${describe(error)}`, true)
+          }
         }
+        const paths = (files ?? []).map((file) => file.path)
+        const refused = (await Promise.all(paths.map((each) => preview(each).then(() => null, (error: unknown) => `${each}：${describe(error)}`)))).filter((reason) => reason !== null)
+        if (refused.length > 0) return textResult(`没能展示，一个都没放出来：${refused.join('；')}`, true)
+        const used = previewLayout(paths, layout ?? null)
+        const changed = layout && layout !== used ? `（${LAYOUT_NAMES[layout]}放不下这一组，改成了${LAYOUT_NAMES[used]}）` : ''
+        return textResult(`已在对话里展示给用户：${paths.length} 个文件，${LAYOUT_NAMES[used]}排列${changed}。用户会在这一条下面看到它们。`)
       }
     }
   ]

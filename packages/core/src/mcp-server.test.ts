@@ -100,6 +100,27 @@ describe('antumi MCP server', () => {
     }
   })
 
+  it('shows a set of files at once, laid out where they fit, or none if one is missing', async () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'antumi-preview-'))
+    try {
+      const before = path.join(dir, 'before.png')
+      const after = path.join(dir, 'after.png')
+      const page = path.join(dir, 'page.html')
+      for (const file of [before, after, page]) writeFileSync(file, 'x')
+      const call = (args: object) => handle(frame('tools/call', { name: 'show_preview', arguments: args }))
+      const pair = await call({ title: '改动前后', files: [{ path: before, title: '前' }, { path: after, title: '后' }] })
+      expect(pair?.result).toMatchObject({ isError: false, content: [{ text: expect.stringContaining('2 个文件，并排') }] })
+      const mixed = await call({ files: [{ path: before }, { path: page }], layout: 'grid' })
+      expect(mixed?.result).toMatchObject({ isError: false, content: [{ text: expect.stringContaining('改成了页签') }] })
+      const missing = await call({ files: [{ path: before }, { path: path.join(dir, 'gone.png') }] })
+      expect(missing?.result).toMatchObject({ isError: true, content: [{ text: expect.stringContaining('gone.png') }] })
+      expect((await call({ path: before, files: [{ path: after }] }))?.result).toMatchObject({ isError: true, content: [{ text: expect.stringContaining('二选一') }] })
+      expect((await call({}))?.result).toMatchObject({ isError: true })
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   it('rejects unknown tools, unknown methods and garbage', async () => {
     expect((await handle(frame('tools/call', { name: 'rm_rf' })))?.error?.code).toBe(-32602)
     expect((await handle(frame('resources/list')))?.error?.code).toBe(-32601)

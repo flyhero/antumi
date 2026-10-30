@@ -379,6 +379,52 @@ export const PREVIEW_EXTENSIONS: ReadonlySet<string> = new Set(['html', 'htm', '
 export function isPreviewImage(path: string): boolean {
   return PREVIEW_IMAGE_EXTENSIONS.has(path.split('.').at(-1)?.toLowerCase() ?? '')
 }
+// A page runs (a frame of its own); a picture, and an SVG among others, only shows.
+export function isPreviewPage(path: string): boolean {
+  return ['html', 'htm'].includes(path.split('.').at(-1)?.toLowerCase() ?? '')
+}
+
+// A call shows one file (`path`) or a set (`files`), under one title. A set is laid out side by side
+// (`compare`), one at a time (`tabs`) or as thumbnails (`grid`).
+export const PREVIEW_LAYOUTS = ['compare', 'tabs', 'grid'] as const
+export type PreviewLayout = (typeof PREVIEW_LAYOUTS)[number]
+export const PREVIEW_FILES_MAX = 24
+// Side by side stops being comparable past this many.
+export const PREVIEW_COMPARE_MAX = 4
+const PreviewFileInput = z.object({ path: z.string().trim().min(1), title: z.string().trim().max(200).optional() })
+export const PreviewInput = z.object({
+  path: z.string().trim().min(1).optional(),
+  title: z.string().trim().max(200).optional(),
+  files: z.array(PreviewFileInput).min(1).max(PREVIEW_FILES_MAX).optional(),
+  layout: z.enum(PREVIEW_LAYOUTS).optional()
+})
+export type PreviewFile = { path: string; title: string | null }
+export type PreviewRequest = { title: string | null; files: PreviewFile[]; layout: PreviewLayout | null }
+
+// What a call asked to show, read from its input; `fallback` is the path its title gave, for an
+// agent that hands no input on.
+export function previewRequest(input: string | null | undefined, fallback: string): PreviewRequest {
+  let raw: unknown = null
+  try {
+    raw = input ? JSON.parse(input) : null
+  } catch {
+    raw = null
+  }
+  const parsed = PreviewInput.safeParse(raw)
+  const title = (text: string | undefined) => text || null
+  if (!parsed.success) return { title: null, files: [{ path: fallback, title: null }], layout: null }
+  const { data } = parsed
+  const files = data.files?.map((file) => ({ path: file.path, title: title(file.title) })) ?? [{ path: data.path ?? fallback, title: null }]
+  return { title: title(data.title), files, layout: data.layout ?? null }
+}
+
+// How a set is laid out: a page runs only where one shows at a time; otherwise as asked, where it
+// fits, or by how many there are.
+export function previewLayout(paths: readonly string[], asked: PreviewLayout | null): PreviewLayout {
+  if (paths.some(isPreviewPage)) return 'tabs'
+  if (asked && (asked !== 'compare' || paths.length <= PREVIEW_COMPARE_MAX)) return asked
+  return paths.length === 2 ? 'compare' : paths.length <= PREVIEW_COMPARE_MAX ? 'tabs' : 'grid'
+}
 
 // The tools that read the user's own history in Antumi, across agents: what had activity in a
 // stretch of time, and what was said in one of them. Read-only, and off where the user turned it off.

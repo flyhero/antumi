@@ -1219,6 +1219,7 @@ export const MESSAGES = {
   "BrowserActions.sharedWith": {"zh": "已共享给「{name}」", "en": "Shared with “{name}”"},
   "BrowserActions.shareHint": {"zh": "所选会话的 Agent 将可以读取和操作此页面；停止共享后立即收回访问权限。", "en": "The selected conversation’s Agent can read and interact with this page. Stop sharing to revoke access."},
   "BrowserActions.chooseConversation": {"zh": "选择会话", "en": "Choose a conversation"},
+  "BrowserActions.moreConversations": {"zh": "显示更多（还有 {count} 个）", "en": "Show more ({count} left)"},
   "BrowserActions.stopSharing": {"zh": "停止共享", "en": "Stop sharing"},
   "BrowserActions.shareConfirm": {"zh": "共享页面", "en": "Share page"},
   "BrowserActions.developerTools": {"zh": "开发者工具", "en": "Developer tools"},

@@ -9015,6 +9015,15 @@ div.inspector-empty > p { margin: 0 0 8px; }
 .browser-address .tool-button[data-tone='held'] { color: var(--accent); }
 /* A page an agent can read and drive: marked the same way. */
 .browser-share-button[data-shared] { color: var(--accent); }
+/* As wide as its note, whatever the titles: a long one ends in an ellipsis. */
+.browser-share-menu { width: 300px; display: flex; flex-direction: column; gap: 10px; padding: 6px 8px 8px; }
+.browser-share-menu .menu-note { padding: 0; }
+.browser-share-menu .browser-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.browser-share-choices { display: flex; flex-direction: column; max-height: 220px; overflow-y: auto; margin: 0 -4px; padding: 2px 0; border-block: 1px solid var(--border); }
+.browser-share-choice { flex: none; font-size: 13px; color: var(--text); }
+.browser-share-choice[aria-checked='true'] { background: var(--accent-bg); }
+.browser-share-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.browser-share-more { flex: none; font-size: 12px; color: var(--accent); }
 .browser-address .menu-anchor { flex-shrink: 0; }
 /* Inside the field's right end, as browsers place it; the text stops short of it. */
 .browser-url-field:has(.browser-bookmark-star) .browser-url { padding-right: 30px; }

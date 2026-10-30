@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { BrowserCaptureMode, BrowserTab } from '@antumi/protocol'
-import { browserContextText, browserConversationChoices, browserConversationTarget, sendBrowserContextToComposer } from '../browser-context'
+import { browserContextText, browserConversationChoices, browserConversationTarget, sendBrowserContextToComposer, shownChoices } from '../browser-context'
 import { perform, useCore } from '../core-store'
 import { t } from '../i18n'
 import { CheckIcon, CodeIcon, QuoteIcon, RobotIcon } from './icons'
@@ -51,6 +51,10 @@ export function BrowserCaptureButton({ tab }: { tab: BrowserTab }) {
   </>
 }
 
+// Conversations the list shows at first, and how many more each 「显示更多」 adds. A list in the
+// popover rather than a select: a native select's menu closes on every pick, 「显示更多」 too.
+const CHOICES_PAGE = 15
+
 export function BrowserShareButton({ tab }: { tab: BrowserTab }) {
   const [open, setOpen] = useState(false)
   const close = useCallback(() => setOpen(false), [])
@@ -59,7 +63,9 @@ export function BrowserShareButton({ tab }: { tab: BrowserTab }) {
   const current = useCore((state) => browserConversationTarget(state, tab))
   const [target, setTarget] = useState(current ?? '')
   const [busy, setBusy] = useState(false)
+  const [count, setCount] = useState(CHOICES_PAGE)
   if (!tab.userOwned) return null
+  const { shown: choices, more } = shownChoices(browserConversationChoices({ ...useCore.getState(), conversations, tasks }), count, target || null)
   const shared = tab.conversationId !== null
   const change = async (id: string | null) => {
     setBusy(true)
@@ -68,14 +74,19 @@ export function BrowserShareButton({ tab }: { tab: BrowserTab }) {
     if (changed) close()
   }
   return <span className="menu-anchor">
-    <button type="button" className="tool-button browser-share-button" data-shared={shared || undefined} aria-pressed={shared} aria-label={t(shared ? 'BrowserActions.shared' : 'BrowserActions.share')} data-tooltip={shared ? t('BrowserActions.sharedWith', { name: conversations[tab.conversationId ?? '']?.title ?? t('BrowserPanel.conversation') }) : t('BrowserActions.share')} aria-haspopup="dialog" aria-expanded={open} onClick={() => { setTarget(current ?? ''); setOpen(!open) }}><RobotIcon /></button>
+    <button type="button" className="tool-button browser-share-button" data-shared={shared || undefined} aria-pressed={shared} aria-label={t(shared ? 'BrowserActions.shared' : 'BrowserActions.share')} data-tooltip={shared ? t('BrowserActions.sharedWith', { name: conversations[tab.conversationId ?? '']?.title ?? t('BrowserPanel.conversation') }) : t('BrowserActions.share')} aria-haspopup="dialog" aria-expanded={open} onClick={() => { setTarget(current ?? ''); setCount(CHOICES_PAGE); setOpen(!open) }}><RobotIcon /></button>
     {open && <Popover label={t('BrowserActions.share')} onClose={close} align="end">
       <div className="browser-share-menu">
         <p className="menu-note">{t('BrowserActions.shareHint')}</p>
-        <label className="squad-field">{t('BrowserPanel.conversation')}<select className="input" value={target} disabled={busy} onChange={(event) => setTarget(event.target.value)}>
-          <option value="">{t('BrowserActions.chooseConversation')}</option>
-          {browserConversationChoices({ ...useCore.getState(), conversations, tasks }).map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
-        </select></label>
+        <div className="browser-share-choices" role="radiogroup" aria-label={t('BrowserActions.chooseConversation')}>
+          {choices.map((item) => (
+            <button key={item.id} type="button" role="radio" aria-checked={item.id === target} className="menu-item browser-share-choice" title={item.title} disabled={busy} onClick={() => setTarget(item.id)}>
+              <span className="browser-share-title">{item.title}</span>
+              {item.id === target && <span className="menu-check"><CheckIcon /></span>}
+            </button>
+          ))}
+          {more > 0 && <button type="button" className="menu-item browser-share-more" onClick={() => setCount(count + CHOICES_PAGE)}>{t('BrowserActions.moreConversations', { count: more })}</button>}
+        </div>
         <div className="browser-dialog-actions">
           {shared && <button type="button" className="button" disabled={busy || tab.agentActing} onClick={() => void change(null)}>{t('BrowserActions.stopSharing')}</button>}
           <button type="button" className="button primary" disabled={!target || busy || tab.agentActing || target === tab.conversationId} onClick={() => void change(target)}>{t('BrowserActions.shareConfirm')}</button>

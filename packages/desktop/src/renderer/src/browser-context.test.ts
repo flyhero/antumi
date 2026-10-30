@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BrowserTab, Conversation, Task } from '@antumi/protocol'
-import { browserContextText, browserConversationChoices, browserConversationTarget, sendBrowserContextToComposer } from './browser-context'
+import { browserContextText, browserConversationChoices, browserConversationTarget, sendBrowserContextToComposer, shownChoices } from './browser-context'
 import { useCore } from './core-store'
 import { takeComposerInsertions } from './composer-insertions'
 
@@ -73,4 +73,21 @@ describe('browser feedback in the chat composer', () => {
     expect(takeComposerInsertions(null)).toEqual([])
   })
 
+})
+
+describe('conversations a page can be shared with', () => {
+  it('lists task chats among the rest by time, the latest first', () => {
+    const at = (id: string, title: string, updatedAt: number) => ({ ...conversation, id, title, updatedAt })
+    const task = Task.parse({ id: 'task', title: 'Fix checkout', details: '', status: 'running', agent: 'claude', repos: [], dependsOn: [], conversationId: 'task-conversation', createdAt: 1, updatedAt: 20 })
+    useCore.setState({ conversations: { old: at('old', 'Old', 10), new: at('new', 'New', 30) }, tasks: { [task.id]: task } })
+    expect(browserConversationChoices(useCore.getState()).map((item) => item.title)).toEqual(['New', 'Fix checkout', 'Old'])
+  })
+
+  it('shows the first few and counts the rest, keeping the picked one listed', () => {
+    const choices = ['a', 'b', 'c', 'd', 'e'].map((id) => ({ id, title: id }))
+    expect(shownChoices(choices, 2, null)).toEqual({ shown: [choices[0], choices[1]], more: 3 })
+    expect(shownChoices(choices, 2, 'a')).toEqual({ shown: [choices[0], choices[1]], more: 3 })
+    expect(shownChoices(choices, 2, 'd')).toEqual({ shown: [choices[0], choices[1], choices[3]], more: 2 })
+    expect(shownChoices(choices, 10, null)).toEqual({ shown: choices, more: 0 })
+  })
 })

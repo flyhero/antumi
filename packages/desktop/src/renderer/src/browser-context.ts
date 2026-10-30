@@ -18,10 +18,22 @@ export function browserConversationTarget(state: CoreState, tab: BrowserTab): st
   return conversation.parentConversationId ?? conversation.id
 }
 
-export function browserConversationChoices(state: CoreState): Array<{ id: string; title: string }> {
-  const choices = new Map(Object.values(state.conversations).filter((item) => item.archivedAt == null && !item.parentConversationId).sort((a, b) => b.updatedAt - a.updatedAt).map((item) => [item.id, { id: item.id, title: item.title }]))
-  for (const task of Object.values(state.tasks)) if (task.conversationId && !choices.has(task.conversationId)) choices.set(task.conversationId, { id: task.conversationId, title: task.title })
-  return [...choices.values()]
+type ConversationChoice = { id: string; title: string }
+
+// Every chat a page can be shared with, the latest first: a task's chat among the rest by when its
+// task last moved, not after them all.
+export function browserConversationChoices(state: CoreState): ConversationChoice[] {
+  const choices = new Map(Object.values(state.conversations).filter((item) => item.archivedAt == null && !item.parentConversationId).map((item) => [item.id, { id: item.id, title: item.title, at: item.updatedAt }]))
+  for (const task of Object.values(state.tasks)) if (task.conversationId && !choices.has(task.conversationId)) choices.set(task.conversationId, { id: task.conversationId, title: task.title, at: task.updatedAt })
+  return [...choices.values()].sort((a, b) => b.at - a.at).map(({ id, title }) => ({ id, title }))
+}
+
+// The first of them, and how many more there are to show. The picked one stays listed wherever it
+// falls, or the select could not show it.
+export function shownChoices(choices: readonly ConversationChoice[], count: number, picked: string | null): { shown: ConversationChoice[]; more: number } {
+  const shown = choices.slice(0, count)
+  const keep = picked && !shown.some((item) => item.id === picked) ? choices.find((item) => item.id === picked) : undefined
+  return { shown: keep ? [...shown, keep] : shown, more: Math.max(0, choices.length - count - (keep ? 1 : 0)) }
 }
 
 export function browserContextText(context: BrowserPageContext, tabId: string): string {

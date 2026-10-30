@@ -8,7 +8,7 @@ import { PetPlayground } from './components/PetPlayground'
 import { startAppearance } from './appearance'
 import { startBackgroundRest } from './background-rest'
 import { startCodeFont } from './code-font'
-import { followRequestPopupWanted, RequestPopup } from './components/RequestPopup'
+import { followRequestPopup, RequestPopup } from './components/RequestPopup'
 import { startCoreConnection, useCore } from './core-store'
 import { startPanelWindowHost } from './panel-window-host'
 import { startPanelWindowPage, thisPanelKind } from './panel-window-page'
@@ -42,7 +42,7 @@ if (playground) {
   startCodeFont()
 } else if (popup) {
   document.documentElement.dataset.window = 'request-popup'
-  followRequestPopupWanted()
+  followRequestPopup()
   startCoreConnection('requests')
   startAppearance()
   startCodeFont()

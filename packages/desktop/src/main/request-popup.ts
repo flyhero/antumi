@@ -1,5 +1,5 @@
 import { screen, type BrowserWindow, type BrowserWindowConstructorOptions, type WebContents } from 'electron'
-import { POPUP_WIDTH, popupBounds, type Area } from './popup-placement'
+import { POPUP_WIDTH, popupArea, popupBounds, type PopupPlacement } from './popup-placement'
 
 // The card at the top of the screen with what agents wait on, for answering from another app.
 // The main window's renderer asks for it when a request comes in while the user is away; the
@@ -9,7 +9,7 @@ export class RequestPopup {
   private window: BrowserWindow | null = null
   private wanted = false
   // The display it came up on, kept while it shows so a new height does not move it.
-  private area: Area | null = null
+  private placement: PopupPlacement | null = null
 
   constructor(private readonly create: () => BrowserWindow) {}
 
@@ -18,6 +18,7 @@ export class RequestPopup {
     this.wanted = wanted
     if (!wanted) this.hide()
     if (wanted && !this.window) {
+      this.place()
       this.open()
       return
     }
@@ -34,10 +35,17 @@ export class RequestPopup {
       this.hide()
       return
     }
-    if (!this.area) this.area = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea
-    window.setBounds(popupBounds(this.area, height))
+    const { area, gap } = this.place()
+    window.setBounds(popupBounds(area, height, gap))
     // Never takes the keyboard from the app the user is in: a number key there must not answer.
     if (!window.isVisible()) window.showInactive()
+  }
+
+  // From the card: whether the pointer is on it. An island's window lies over the menu bar and
+  // whatever is under the card, so its clear parts let clicks through until the card is pointed
+  // at. Pointer moves still reach the page, which is how it knows.
+  setInteractive(interactive: boolean): void {
+    if (this.placement?.island) this.window?.setIgnoreMouseEvents(!interactive, { forward: true })
   }
 
   owns(contents: WebContents): boolean {
@@ -47,33 +55,59 @@ export class RequestPopup {
   destroy(): void {
     this.window?.destroy()
     this.window = null
-    this.area = null
+    this.placement = null
   }
 
   private hide(): void {
-    this.area = null
+    this.setInteractive(false)
+    this.placement = null
     if (this.window?.isVisible()) this.window.hide()
+  }
+
+  // The display under the pointer, chosen once per showing and told to the page, which draws the
+  // card to fit: an island joined to the notch, or a plain card.
+  private place(): PopupPlacement {
+    if (!this.placement) {
+      this.placement = popupArea(screen.getDisplayNearestPoint(screen.getCursorScreenPoint()), process.platform)
+      this.tellGeometry()
+    }
+    return this.placement
+  }
+
+  private tellGeometry(): void {
+    if (!this.window || !this.placement) return
+    const { island, notch } = this.placement
+    this.window.webContents.send('antumi:request-popup-geometry', { island, notch })
+    // Clear until pointed at; a page that never asks (one too old to) keeps the whole window.
+    this.setInteractive(false)
   }
 
   private open(): void {
     const window = this.create()
     this.window = window
     // Above other apps' windows. On macOS a panel also floats over a full-screen app, on every
-    // Space. Wayland lets no app place or raise its own window: there the card is a plain window
-    // wherever the compositor puts it. Left to itself, Electron turns the whole app into a UI
-    // element to reach full-screen Spaces, and does not always turn it back: the app lost its Dock
-    // icon. A panel reaches them as it is, so the app's type is left alone.
+    // Space; at the status level it draws over the menu bar too, where the island sits. Wayland
+    // lets no app place or raise its own window: there the card is a plain window wherever the
+    // compositor puts it. Left to itself, Electron turns the whole app into a UI element to reach
+    // full-screen Spaces, and does not always turn it back: the app lost its Dock icon. A panel
+    // reaches them as it is, so the app's type is left alone.
     if (process.platform === 'darwin') {
-      window.setAlwaysOnTop(true, 'floating')
+      window.setAlwaysOnTop(true, 'status')
       window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true })
     } else {
       window.setAlwaysOnTop(true)
     }
-    window.webContents.on('did-finish-load', () => window.webContents.send('antumi:request-popup-wanted', this.wanted))
+    // A fresh page is a fresh showing: placed again, so it hears where it is even after the last
+    // one was put away (which forgets the display).
+    window.webContents.on('did-finish-load', () => {
+      window.webContents.send('antumi:request-popup-wanted', this.wanted)
+      this.placement = null
+      this.place()
+    })
     window.once('closed', () => {
       if (this.window === window) {
         this.window = null
-        this.area = null
+        this.placement = null
       }
     })
   }
@@ -97,7 +131,10 @@ export function popupWindowOptions(preload: string): BrowserWindowConstructorOpt
     skipTaskbar: true,
     title: 'Antumi',
     // An NSPanel: floats over full-screen apps without bringing Antumi's other windows forward.
-    ...(process.platform === 'darwin' ? { type: 'panel' } : {}),
+    // macOS keeps a window out of the menu bar unless told it may be larger than the screen, and
+    // Electron rounds a frameless window's corners by itself, which would clip the island's top
+    // corners where it is flush with the screen's edge.
+    ...(process.platform === 'darwin' ? { type: 'panel', enableLargerThanScreen: true, roundedCorners: false } : {}),
     webPreferences: {
       preload,
       sandbox: true,

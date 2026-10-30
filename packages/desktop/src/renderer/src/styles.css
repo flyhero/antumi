@@ -9903,6 +9903,19 @@ summary.agent-group-head:focus-visible { outline: 2px solid var(--focus); outlin
   box-shadow: var(--shadow-float);
   overflow: hidden;
 }
+/* On macOS the window is at the very top of the screen, over the menu bar, and the card is drawn
+   as the system's own island would be: dark whatever the theme, black like the notch, which it
+   grows out of on a display that has one, its content starting under the camera housing
+   (--notch-height, set by the page from what main measured). On a display without a notch it
+   floats just under the top edge. The corner radius follows the notch's rather than the card
+   scale: the island is a piece of the notch, not a card. No drawn corners at the top: the
+   hardware notch has them, and anything drawn beside it over the menu bar shows as a spur. */
+:root { --notch: #000000; --island-radius: 20px; }
+:root[data-island] { color-scheme: dark; }
+:root[data-island] .request-popup-frame { padding: 0 0 24px; }
+:root[data-island] .request-popup.chat-view { border: 0; border-radius: var(--island-radius); background: var(--notch); box-shadow: none; }
+:root[data-island='floating'] .request-popup.chat-view { margin-top: 6px; box-shadow: var(--shadow-float); }
+:root[data-island='notch'] .request-popup.chat-view { padding-top: var(--notch-height); border-radius: 0 0 var(--island-radius) var(--island-radius); }
 .request-popup-header {
   display: flex;
   align-items: center;

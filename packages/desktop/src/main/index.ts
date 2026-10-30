@@ -457,6 +457,10 @@ ipcMain.on('antumi:request-popup-layout', (event, layout: unknown) => {
   if (!requestPopup.owns(event.sender) || !parsed.success) return
   requestPopup.layout(parsed.data.visible, parsed.data.height)
 })
+ipcMain.on('antumi:request-popup-interactive', (event, interactive: unknown) => {
+  if (!requestPopup.owns(event.sender) || typeof interactive !== 'boolean') return
+  requestPopup.setInteractive(interactive)
+})
 // The target goes to the main window as a notification's would, which checks it the same way.
 ipcMain.handle('antumi:request-popup-open', (event, target: unknown) => {
   if (!requestPopup.owns(event.sender)) return

@@ -4,7 +4,7 @@ import { create } from 'zustand'
 import type { ChatItem, Conversation } from '@antumi/protocol'
 import { dropChat, pathShortener, setChatPage, useChat } from '../chat-state'
 import { dismissError, perform, useCore } from '../core-store'
-import { layoutRequestPopup, onRequestPopupWanted, openFromRequestPopup } from '../desktop-bridge'
+import { layoutRequestPopup, onRequestPopupGeometry, onRequestPopupWanted, openFromRequestPopup, setRequestPopupInteractive } from '../desktop-bridge'
 import { agentLabel } from '../labels'
 import { usePreferences } from '../preferences'
 import { popupKey, popupKind, popupLabel, popupQueue, type PopupEntry, type PopupKind } from '../request-popup'
@@ -30,8 +30,16 @@ const KIND_ICON: Record<PopupKind, JSX.Element> = { question: <HelpIcon />, plan
 const useWanted = create<boolean>()(() => false)
 const setWanted = (wanted: boolean) => useWanted.setState(wanted, true)
 
-export function followRequestPopupWanted(): void {
+export function followRequestPopup(): void {
   onRequestPopupWanted(setWanted)
+  // How the card is drawn (styles.css): an island, joined to the notch when there is one.
+  onRequestPopupGeometry(({ island, notch }) => {
+    const root = document.documentElement
+    if (island) root.dataset.island = notch ? 'notch' : 'floating'
+    else delete root.dataset.island
+    root.style.setProperty('--notch-width', `${notch?.width ?? 0}px`)
+    root.style.setProperty('--notch-height', `${notch?.height ?? 0}px`)
+  })
 }
 
 // The card's chat does what the card cannot in the main window, where the whole of it is.
@@ -133,6 +141,39 @@ export function RequestPopup() {
     return () => observer.disconnect()
   }, [active, ready])
 
+  // An island's window lets clicks through until the pointer is on the card, which keeps them
+  // while the pointer stays, or something on it still has the keyboard (a reply being typed).
+  const card = useRef<HTMLElement>(null)
+  const pointerOn = useRef(false)
+  useEffect(() => {
+    const node = card.current
+    if (!node) return
+    const enter = () => {
+      pointerOn.current = true
+      setRequestPopupInteractive(true)
+    }
+    const leave = () => {
+      pointerOn.current = false
+      if (!node.contains(document.activeElement)) setRequestPopupInteractive(false)
+    }
+    const focusLeft = (event: FocusEvent) => {
+      if (!pointerOn.current && !(event.relatedTarget instanceof Node && node.contains(event.relatedTarget))) setRequestPopupInteractive(false)
+    }
+    const blurred = () => {
+      if (!pointerOn.current) setRequestPopupInteractive(false)
+    }
+    node.addEventListener('mouseenter', enter)
+    node.addEventListener('mouseleave', leave)
+    node.addEventListener('focusout', focusLeft)
+    window.addEventListener('blur', blurred)
+    return () => {
+      node.removeEventListener('mouseenter', enter)
+      node.removeEventListener('mouseleave', leave)
+      node.removeEventListener('focusout', focusLeft)
+      window.removeEventListener('blur', blurred)
+    }
+  }, [active])
+
   // All answered: done until asked again. Asked for but nothing came up in time: the same.
   useEffect(() => {
     if (!wanted || queue.length > 0) return
@@ -148,7 +189,7 @@ export function RequestPopup() {
   const step = (by: number) => setPicked(queue[(at + by + queue.length) % queue.length]?.conversationId ?? null)
   return (
     <div ref={frame} className="request-popup-frame">
-      <section className="chat-view request-popup" data-font-size={fontSize} aria-label={t('ChatDock.requestsAwaitingYourResponse')}>
+      <section ref={card} className="chat-view request-popup" data-font-size={fontSize} aria-label={t('ChatDock.requestsAwaitingYourResponse')}>
         <header className="request-popup-header">
           <span className="request-popup-label" role="img" aria-label={popupLabel(entry.request)} title={popupLabel(entry.request)}>{KIND_ICON[popupKind(entry.request)]}</span>
           <span className="request-popup-title" title={entry.title}>{entry.title}</span>

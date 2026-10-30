@@ -422,6 +422,14 @@ Kimi Code 使用官方 `kimi acp` 和通用 ACP driver，dialect 负责四种原
 
 查询先验证 `/user`，再读取固定仓库的 Star 状态；写入前重新核对上次检测的来源、实例与账号，不静默换号。界面平时不展示来源和账号，仅在点击 Star 失败时说明原因。请求固定发往 `api.github.com`，拒绝重定向，总时限 15 秒，gh 子进程上限 5 秒；并发查询合并。只有 GitHub 确认成功才显示感谢，权限或网络失败保留重试和网页入口。接口语义见 [GitHub Starring REST API](https://docs.github.com/en/rest/activity/starring)。
 
+### 屏幕顶部的灵动岛
+
+等待回答的请求卡片（`main/request-popup.ts`、`components/RequestPopup.tsx`）在 macOS 上画成贴着刘海的灵动岛；其他平台仍是菜单栏下方的普通卡片。
+
+- **窗口**：透明无边框的 NSPanel，`status` 层级才盖得住菜单栏，`enableLargerThanScreen` 让 macOS 允许窗口进菜单栏区域，`roundedCorners: false` 免得 Electron 自己给窗口加的圆角裁掉面板的顶角，`y` 取 `display.bounds.y`。
+- **刘海尺寸**：Electron 不知道刘海。`popup-placement.ts` 用内置屏的宽高比识别带刘海的 MacBook（以 14 寸的 1512×982、刘海 185×32 为基准，容差 1%），按屏幕宽度等比缩放，所以缩放档位和 13/15/16 寸都能对上；没有刘海的 Mac 屏幕画成浮岛。主进程通过 `antumi:request-popup-geometry` 把 `{ island, notch }` 告诉页面，页面在 `:root` 上标 `data-island`，内容从 `--notch-height` 以下开始，岛的底色是 `--notch`，不随配色变。
+- **点击穿透**：岛的窗口默认 `setIgnoreMouseEvents(true, { forward: true })`，鼠标移动仍转发给页面；页面在指针进入岛时发 `antumi:request-popup-interactive`，指针离开且卡片里没有焦点时放开，所以岛旁边的菜单栏照常可点，正在卡片里打字时移开鼠标也不丢键盘。
+
 ### 桌面宠物资源
 
 内置软陶宠物的图片和配准随桌面端发布；MOSS、ZIP 等可选宠物由 `PetLibrary` 从资源目录下载到 `ANTUMI_HOME/pets/<id>/<version>/`，校验 ZIP、清单、每张图片的哈希和尺寸后才交给渲染进程。Format 1 的基础资源仍是 `poses.webp`、`walk.webp` 和 `face.webp`。工作打字姿势是向后兼容的可选扩展：清单同时声明 `rig.typing`、`typing.webp` 和 `typing-base.webp` 才会启用；两张图分别提供完整姿势和移除手臂后的底图，渲染器按资源里的裁切轮廓、肩部支点、抬手角度和周期让两只手交替落键。旧三图资源继续显示图集里的工作帧。

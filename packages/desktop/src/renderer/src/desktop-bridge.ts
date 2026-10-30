@@ -30,7 +30,9 @@ declare global {
       onNotificationClick?(listener: (target: unknown) => void): () => void
       requestPopup?(wanted: boolean): Promise<unknown>
       onRequestPopupWanted?(listener: (wanted: boolean) => void): () => void
+      onRequestPopupGeometry?(listener: (geometry: unknown) => void): () => void
       requestPopupLayout?(layout: { visible: boolean; height: number }): void
+      requestPopupInteractive?(interactive: boolean): void
       openFromRequestPopup?(target: unknown): Promise<unknown>
       // The built-in browser's tab on show, a native view main places over the panel.
       browserShow?(tabId: string | null): Promise<unknown>
@@ -184,9 +186,26 @@ export function onRequestPopupWanted(listener: (wanted: boolean) => void): () =>
   return window.antumi?.onRequestPopupWanted?.(listener) ?? (() => {})
 }
 
+// From main: how the card is drawn where it came up. On macOS an island over the menu bar, grown
+// out of the notch when the display has one; elsewhere a plain card under the menu bar.
+export type PopupGeometry = { island: boolean; notch: { width: number; height: number } | null }
+const PopupGeometry = z.object({ island: z.boolean(), notch: z.object({ width: z.number(), height: z.number() }).nullable() })
+export function onRequestPopupGeometry(listener: (geometry: PopupGeometry) => void): () => void {
+  return window.antumi?.onRequestPopupGeometry?.((geometry) => {
+    const parsed = PopupGeometry.safeParse(geometry)
+    if (parsed.success) listener(parsed.data)
+  }) ?? (() => {})
+}
+
 // From the card: whether it has anything to show, and how tall it is in CSS pixels.
 export function layoutRequestPopup(visible: boolean, height: number): void {
   window.antumi?.requestPopupLayout?.({ visible, height })
+}
+
+// From the card: whether the pointer is on it, for an island's window to take clicks or let them
+// through to the menu bar and whatever is under the card.
+export function setRequestPopupInteractive(interactive: boolean): void {
+  window.antumi?.requestPopupInteractive?.(interactive)
 }
 
 // From the card: the main window, brought up on a task or conversation.

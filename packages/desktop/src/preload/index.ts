@@ -31,7 +31,13 @@ contextBridge.exposeInMainWorld('antumi', {
     ipcRenderer.on('antumi:request-popup-wanted', handler)
     return () => ipcRenderer.removeListener('antumi:request-popup-wanted', handler)
   },
+  onRequestPopupGeometry: (listener: (geometry: unknown) => void): (() => void) => {
+    const handler = (_event: IpcRendererEvent, geometry: unknown) => listener(geometry)
+    ipcRenderer.on('antumi:request-popup-geometry', handler)
+    return () => ipcRenderer.removeListener('antumi:request-popup-geometry', handler)
+  },
   requestPopupLayout: (layout: { visible: boolean; height: number }): void => ipcRenderer.send('antumi:request-popup-layout', layout),
+  requestPopupInteractive: (interactive: boolean): void => ipcRenderer.send('antumi:request-popup-interactive', interactive),
   openFromRequestPopup: (target: unknown): Promise<unknown> => ipcRenderer.invoke('antumi:request-popup-open', target),
   // The built-in browser's tab on show, placed over the panel by main.
   browserShow: (tabId: string | null): Promise<unknown> => ipcRenderer.invoke('antumi:browser-show', tabId),

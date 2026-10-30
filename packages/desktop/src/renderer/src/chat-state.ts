@@ -5,7 +5,7 @@ import { isCompaction } from './chat-notices'
 import { diffCounts, isSubagent } from './chat-tools'
 import { isBackgroundCommand, keepsInView } from './background-work'
 import { browserOperation } from './browser-activity'
-import { parseHandoffMessage, type AgentCall, type AgentKind, type ChatDiff, type ChatItem, type ChatQuestion, type ChatTodo, type ConversationStage, browserToolKind, isPlanApproval, isPreviewTool, toolImagePath, CODEX_IMAGE_GENERATION, terminalToolKind, todoToolKind } from '@antumi/protocol'
+import { parseHandoffMessage, type AgentCall, type AgentKind, type ChatDiff, type ChatItem, type ChatQuestion, type ChatTodo, type ConversationStage, browserToolKind, isPlanApproval, isPreviewTool, previewRequest, toolImagePath, CODEX_IMAGE_GENERATION, terminalToolKind, todoToolKind } from '@antumi/protocol'
 
 // A conversation's chat items as this window holds them, in the order core first saw them;
 // `before` pages further back, null when nothing older is left.
@@ -271,6 +271,8 @@ export type ChatBlock =
   | { kind: 'browser'; key: string; tools: ToolItem[] }
   | { kind: 'agents'; key: string; tools: ToolItem[] }
   | { kind: 'edits'; key: string; path: string; tools: ToolItem[] }
+  // Files shown one call at a time, back to back: one set, as if shown together.
+  | { kind: 'previews'; key: string; tools: ToolItem[] }
   // steps: the calls the turn made on the way, and workMs how long the work ran before the answer
   // began, for the line that stands for them. The turn's own outcome reads under the answer.
   | { kind: 'fold'; key: string; turn: TurnItem; blocks: ChatBlock[]; steps: number; workMs: number | null }
@@ -284,6 +286,11 @@ function runTool(entry: TimelineEntry): ToolItem | null {
   return entry.kind === 'item' && entry.item.kind === 'tool' && entry.item.diffs.length === 0 && !isSubagent(entry.item.name) && !isPreviewTool(entry.item.name) && !entry.item.images?.length && !toolImagePath(entry.item) && entry.item.name !== CODEX_IMAGE_GENERATION && browserToolKind(entry.item.name) !== 'navigate' && terminalToolKind(entry.item.name) !== 'run'
     ? entry.item
     : null
+}
+
+// A call that showed one file; one that showed a set keeps it as the agent grouped it.
+function singlePreview(item: ChatItem | null | undefined): item is ToolItem {
+  return item?.kind === 'tool' && isPreviewTool(item.name) && previewRequest(item.input, item.title).files.length === 1
 }
 
 function subagentTool(entry: TimelineEntry): ToolItem | null {
@@ -302,7 +309,7 @@ export function foldsOfTools(blocks: readonly ChatBlock[]): Map<string, string> 
 }
 
 function toolsOf(block: ChatBlock): ToolItem[] {
-  if (block.kind === 'tools' || block.kind === 'browser' || block.kind === 'edits' || block.kind === 'agents') return block.tools
+  if (block.kind === 'tools' || block.kind === 'browser' || block.kind === 'edits' || block.kind === 'agents' || block.kind === 'previews') return block.tools
   if (block.kind === 'fold') return block.blocks.flatMap(toolsOf)
   const item = itemOf(block)
   return item?.kind === 'tool' ? [item] : []
@@ -337,7 +344,7 @@ function itemOf(block: ChatBlock): ChatItem | null {
 // its reply rather than among its steps: a preview the agent showed, a picture it drew, and the
 // browser's page, a way into the browser panel (its history is already folded).
 function deliverable(block: ChatBlock): boolean {
-  if (block.kind === 'browser' || block.kind === 'delegation') return true
+  if (block.kind === 'browser' || block.kind === 'delegation' || block.kind === 'previews') return true
   const item = itemOf(block)
   if (item?.kind !== 'tool') return false
   return isPreviewTool(item.name) || (item.name === CODEX_IMAGE_GENERATION && item.status === 'done' && toolImagePath(item) !== null)
@@ -453,6 +460,8 @@ export function chatBlocks(entries: readonly TimelineEntry[], { foldTurns = true
     else if (tool) runs.push({ kind: 'tools', key: `tools:${entryKey(entry)}`, tools: [tool] })
     else if (subagent && last?.kind === 'agents') last.tools.push(subagent)
     else if (subagent) runs.push({ kind: 'agents', key: `agents:${entryKey(entry)}`, tools: [subagent] })
+    else if (singlePreview(call) && last?.kind === 'previews') last.tools.push(call)
+    else if (singlePreview(call) && last && singlePreview(previous)) runs[runs.length - 1] = { kind: 'previews', key: `previews:${last.key}`, tools: [previous, call] }
     else if (edit && file && last?.kind === 'edits' && last.path === file) last.tools.push(edit)
     else if (edit && file && last && previous?.kind === 'tool' && editedFile(previous) === file) {
       runs[runs.length - 1] = { kind: 'edits', key: `edits:${last.key}`, path: file, tools: [previous, edit] }

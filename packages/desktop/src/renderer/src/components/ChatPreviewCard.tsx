@@ -1,6 +1,6 @@
 import { t, tr } from '../i18n'
 import { useContext, useState } from 'react'
-import { isPreviewImage, type ChatItem } from '@antumi/protocol'
+import { isPreviewImage, previewLayout, previewRequest, type ChatItem } from '@antumi/protocol'
 import { openFileInBrowser } from '../browser-state'
 import { useBrowserSupported } from '../core-store'
 import { canRevealFile, revealFile } from '../desktop-bridge'
@@ -9,23 +9,10 @@ import { LocalImageViewer } from './ChatMarkdown'
 import { ChatPaths } from './ChatToolCard'
 import { RefreshIcon } from './icons'
 import { ChatToolIcon } from './ChatToolIcon'
+import { ChatPreviewSet } from './ChatPreviewSet'
+import { toolRunStatus } from '../chat-tools'
 
 type ToolItem = Extract<ChatItem, { kind: 'tool' }>
-
-// What the agent asked to show: the file, and a title if it gave one.
-function previewArgs(item: ToolItem): { path: string; title: string | null } {
-  try {
-    const parsed: unknown = item.input ? JSON.parse(item.input) : null
-    if (parsed && typeof parsed === 'object') {
-      const path = 'path' in parsed && typeof parsed.path === 'string' ? parsed.path : item.title
-      const title = 'title' in parsed && typeof parsed.title === 'string' && parsed.title.trim() ? parsed.title.trim() : null
-      return { path, title }
-    }
-  } catch {
-    // The title is the path the agent gave, as describeClaudeTool took it.
-  }
-  return { path: item.title, title: null }
-}
 
 // A picture the agent asked to show: fitted to the card, opened full size on a click.
 function PreviewImage({ path, src, label }: { path: string; src: string; label: string }) {
@@ -42,12 +29,35 @@ function PreviewImage({ path, src, label }: { path: string; src: string; label: 
   )
 }
 
+// Files shown one call at a time, back to back, as one set.
+export function ChatPreviewRun({ conversationId, tools }: { conversationId: string; tools: readonly ToolItem[] }) {
+  // Each call's own title names its file within the set.
+  const files = tools.flatMap((tool) => {
+    const request = previewRequest(tool.input, tool.title)
+    return request.files.map((file) => ({ path: file.path, title: request.title ?? file.title, status: tool.status, output: tool.output }))
+  })
+  const [first] = tools
+  // A set that grows while the turn runs is laid out anew, the view the user picked with it.
+  const placed = previewLayout(files.map((file) => file.path), null)
+  return first ? <ChatPreviewSet key={placed} conversationId={conversationId} name={first.name} status={toolRunStatus(tools).status} title={null} files={files} layout={null} /> : null
+}
+
+// What a call asked to show: a set of files in a card of its own, or one file.
+export function ChatPreviewCard({ conversationId, item }: { conversationId: string; item: ToolItem }) {
+  const request = previewRequest(item.input, item.title)
+  const [only] = request.files
+  if (request.files.length > 1 || !only) {
+    const files = request.files.map((file) => ({ ...file, status: item.status, output: item.output }))
+    return <ChatPreviewSet conversationId={conversationId} name={item.name} status={item.status} title={request.title} files={files} layout={request.layout} />
+  }
+  return <SinglePreview conversationId={conversationId} item={item} path={only.path} title={request.title ?? only.title} />
+}
+
 // A file the agent asked to show, rendered where it asked. A page or an SVG is a frame that is a
 // page of its own, with no way to the app around it or to the network (main's antumi-preview
 // protocol sets the policy), following the app's light or dark scheme; a picture is an image. It
 // reads the file as it stands now, so a later edit shows on refresh.
-export function ChatPreviewCard({ conversationId, item }: { conversationId: string; item: ToolItem }) {
-  const { path, title } = previewArgs(item)
+function SinglePreview({ conversationId, item, path, title }: { conversationId: string; item: ToolItem; path: string; title: string | null }) {
   const browsable = useBrowserSupported() && !isPreviewImage(path)
   const shorten = useContext(ChatPaths)
   const [generation, setGeneration] = useState(0)

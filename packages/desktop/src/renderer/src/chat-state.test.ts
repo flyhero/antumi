@@ -184,7 +184,7 @@ describe('chatBlocks', () => {
   const turn = (id: string): ChatItem => ({ ...base, id, kind: 'turn', state: 'completed', error: null, durationMs: 70_800 })
   const blocksOf = (items: ChatItem[]) => chatBlocks(items.map((item) => ({ kind: 'item' as const, item })))
   const shape = (blocks: ReturnType<typeof chatBlocks>): unknown[] => blocks.map((block) =>
-    block.kind === 'tools' || block.kind === 'browser' ? `${block.kind}:${block.tools.map((each) => each.id).join('+')}`
+    block.kind === 'tools' || block.kind === 'browser' || block.kind === 'previews' ? `${block.kind}:${block.tools.map((each) => each.id).join('+')}`
       : block.kind === 'edits' ? `edits:${block.path}:${block.tools.map((each) => each.id).join('+')}`
       : block.kind === 'agents' ? `agents:${block.tools.map((each) => each.id).join('+')}`
       : block.kind === 'fold' ? { fold: shape(block.blocks) }
@@ -234,6 +234,13 @@ describe('chatBlocks', () => {
       { ...tool('b', 'Bash'), at: 300 }, { ...tool('q', 'antumi.show_preview'), at: 350 }, { ...reply('answer'), at: 400 }, { ...turn('end'), at: 500 }]
     expect(shape(blocksOf(items))).toEqual(['u', { fold: ['tools:a', 'tools:b'] }, 'p', 'q', 'answer', 'end'])
     expect(blocksOf(items).find((block) => block.kind === 'fold')).toMatchObject({ steps: 2 })
+  })
+
+  it('shows files shown back to back as one set, and a set the agent sent as it came', () => {
+    const shown = (id: string, input: object) => ({ ...tool(id, 'mcp__antumi__show_preview'), input: JSON.stringify(input) })
+    const set = shown('s', { files: [{ path: '/c.png' }, { path: '/d.png' }] })
+    const items = [user('u'), shown('p', { path: '/a.png' }), shown('q', { path: '/b.png' }), shown('r', { path: '/b.html' }), set, shown('t', { path: '/e.png' }), { ...reply('answer'), at: 400 }, { ...turn('end'), at: 500 }]
+    expect(shape(blocksOf(items))).toEqual(['u', 'previews:p+q+r', 's', 't', 'answer', 'end'])
   })
 
   it('keeps a picture Codex drew with the answer, and folds one that never came', () => {

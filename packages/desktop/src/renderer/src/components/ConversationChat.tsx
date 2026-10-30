@@ -38,7 +38,7 @@ import { ChatUsageLimitEntry } from './ChatUsageLimit'
 import { ChatWorking, type WorkingPhase } from './ChatWorking'
 import { CopyButton } from './CopyButton'
 import { ChatEditsCard, ChatPaths, ChatToolCard, ChatToolRun, editDisclosures } from './ChatToolCard'
-import { ChatPreviewCard } from './ChatPreviewCard'
+import { ChatPreviewCard, ChatPreviewRun } from './ChatPreviewCard'
 import { SelectionComment } from './SelectionComment'
 import { effortLabel } from './ChatOptionsBar'
 import { ChatMessageRelay, useMessageRelay } from './chat-message-relay'
@@ -555,6 +555,7 @@ function Block({ conversationId, block, task, replies, fresh }: { conversationId
   if (block.kind === 'browser') return <ChatCopyRegion text={block.tools.map(copyTextForItem).join('\n\n')}><div className="chat-entry" data-fresh={entering}><ChatBrowserRun tools={block.tools} /></div></ChatCopyRegion>
   if (block.kind === 'tools') return <ChatCopyRegion text={block.tools.map(copyTextForItem).join('\n\n')}><div className="chat-entry" data-fresh={entering}><ChatToolRun tools={block.tools} /></div></ChatCopyRegion>
   if (block.kind === 'agents') return <ChatCopyRegion text={block.tools.map(copyTextForItem).join('\n\n')}><div className="chat-entry" data-fresh={entering}><ChatSubagents tools={block.tools} fresh={fresh} /></div></ChatCopyRegion>
+  if (block.kind === 'previews') return <ChatCopyRegion text={block.tools.map(copyTextForItem).join('\n\n')}><div className="chat-entry" data-entry-key={block.key} data-fresh={entering}><ChatPreviewRun conversationId={conversationId} tools={block.tools} /></div></ChatCopyRegion>
   if (block.kind === 'edits') return <ChatCopyRegion text={block.tools.map(copyTextForItem).join('\n\n')}><div className="chat-entry" data-fresh={entering}><ChatEditsCard path={block.path} tools={block.tools} /></div></ChatCopyRegion>
   if (block.kind === 'changes') return <ChatCopyRegion text={block.files.map((file) => `${file.path} +${file.added} −${file.removed}`).join('\n')}><div className="chat-entry" data-fresh={entering}><TurnChanges conversationId={conversationId} fold={block.fold} files={block.files} turn={block.turn} reply={block.reply} collapsible={block.collapsible} /></div></ChatCopyRegion>
   if (block.kind === 'fold') return <TurnFold foldKey={block.key} conversationId={conversationId} turn={block.turn} blocks={block.blocks} task={task} replies={replies} steps={block.steps} workMs={block.workMs} />

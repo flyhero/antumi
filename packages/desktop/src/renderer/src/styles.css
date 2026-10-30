@@ -8637,6 +8637,47 @@ div.inspector-empty > p { margin: 0 0 8px; }
 /* A picture fits the card's width, short ones keeping their size; a click opens it full size. */
 .chat-preview-image { display: block; width: 100%; padding: 8px; border: 0; background: var(--bg); cursor: zoom-in; }
 .chat-preview-image img { display: block; max-width: 100%; max-height: 480px; margin: 0 auto; border-radius: var(--radius-sm); }
+/* A set of files (ChatPreviewSet), in the single card's shell: side by side, one at a time in tabs,
+   or as thumbnails. Captions and the count are the small size; pictures open in the viewer. */
+.chat-preview-count { flex: none; color: var(--text-3); }
+.chat-preview-set .segmented button { height: 20px; padding: 0 8px; font-size: var(--chat-font-small, 12px); }
+.chat-preview-body { background: var(--bg); }
+.chat-preview-shot { display: block; width: 100%; padding: 0; border: 0; background: transparent; cursor: zoom-in; }
+.chat-preview-shot img { display: block; max-width: 100%; max-height: 480px; margin: 0 auto; border-radius: var(--radius-sm); }
+.chat-preview-set figure { min-width: 0; margin: 0; }
+.chat-preview-set figcaption { padding-top: 4px; overflow: hidden; color: var(--text-muted); font-size: var(--chat-font-small, 12px); text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+.chat-preview-compare { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 12px; }
+.chat-preview-compare[data-count='3'] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.chat-preview-compare[data-count='4'] { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.chat-preview-compare .chat-preview-shot img { max-height: 420px; }
+/* The wipe: the second picture over the first, cut at the handle. */
+.chat-preview-wipe { position: relative; width: fit-content; max-width: calc(100% - 24px); margin: 12px auto; cursor: ew-resize; touch-action: none; user-select: none; }
+.chat-preview-wipe:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.chat-preview-wipe img { display: block; max-width: 100%; max-height: 480px; border-radius: var(--radius-sm); }
+.chat-preview-wipe .chat-preview-wipe-over { position: absolute; inset: 0; width: 100%; height: 100%; max-height: none; }
+.chat-preview-wipe-handle { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--accent); pointer-events: none; }
+.chat-preview-wipe-handle::after { content: ''; position: absolute; top: 50%; left: 50%; width: 16px; height: 16px; border: 2px solid var(--accent); border-radius: 999px; background: var(--surface); transform: translate(-50%, -50%); }
+.chat-preview-wipe-tag { position: absolute; top: 8px; padding: 0 6px; border-radius: var(--radius-xs); background: color-mix(in srgb, var(--surface) 88%, transparent); box-shadow: 0 0 0 1px var(--border); color: var(--text); font-size: var(--chat-font-small, 12px); line-height: 20px; pointer-events: none; }
+.chat-preview-wipe-tag[data-side='start'] { left: 8px; }
+.chat-preview-wipe-tag[data-side='end'] { right: 8px; }
+/* Tabs: one file at a time, a page alone live in its frame. */
+.chat-preview-tabs { display: flex; gap: 4px; padding: 0 12px; overflow-x: auto; border-bottom: 1px solid var(--border); background: var(--surface); }
+.chat-preview-tabs button { flex: none; height: 32px; padding: 0 8px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--text-muted); font: inherit; font-size: var(--chat-font-small, 12px); cursor: pointer; }
+.chat-preview-tabs button:hover { color: var(--text); }
+.chat-preview-tabs button[aria-selected='true'] { border-bottom-color: var(--accent); color: var(--text); }
+.chat-preview-tabs button:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.chat-preview-tab-key { margin-left: 4px; color: var(--text-3); }
+.chat-preview-current { padding: 12px; }
+.chat-preview-current[data-page] { padding: 0; }
+.chat-preview-current[data-page] .chat-preview-frame { height: 440px; }
+.chat-preview-foot { display: flex; align-items: center; gap: 8px; min-height: 28px; padding: 0 12px; border-top: 1px solid var(--border); background: var(--surface); color: var(--text-muted); font-size: var(--chat-font-small, 12px); }
+.chat-preview-foot > span:first-child { flex: none; }
+/* Thumbnails, cut to the same shape from the top, the rest behind the last as +N. */
+.chat-preview-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; padding: 12px; }
+.chat-preview-grid figure { position: relative; }
+.chat-preview-grid .chat-preview-shot { aspect-ratio: 3 / 4; overflow: hidden; border-radius: var(--radius-sm); background: var(--surface); box-shadow: 0 0 0 1px var(--border); }
+.chat-preview-grid .chat-preview-shot img { width: 100%; height: 100%; max-height: none; object-fit: cover; object-position: top; border-radius: 0; }
+.chat-preview-grid figure[data-more]::after { content: attr(data-more); position: absolute; top: 0; left: 0; right: 0; aspect-ratio: 3 / 4; display: grid; place-items: center; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--text) 55%, transparent); color: var(--bg); font-size: var(--chat-font-size, 14px); font-weight: 500; pointer-events: none; }
 
 /* The plan waiting for an answer: read where it is decided, clipped to a screen's share until opened. */
 .chat-plan-preview { position: relative; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg); }

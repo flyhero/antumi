@@ -2448,6 +2448,46 @@ export const MESSAGES = {
     "zh": "查看图片 {label}",
     "en": "View image {label}"
   },
+  "ChatPreviewSet.images": {
+    "zh": "{count} 张图片",
+    "en": "{count} {count, plural, one {image} other {images}}"
+  },
+  "ChatPreviewSet.pages": {
+    "zh": "{count} 个页面",
+    "en": "{count} {count, plural, one {page} other {pages}}"
+  },
+  "ChatPreviewSet.files": {
+    "zh": "{count} 个文件",
+    "en": "{count} {count, plural, one {file} other {files}}"
+  },
+  "ChatPreviewSet.layout": {
+    "zh": "排列方式",
+    "en": "Layout"
+  },
+  "ChatPreviewSet.sideBySide": {
+    "zh": "并排",
+    "en": "Side by side"
+  },
+  "ChatPreviewSet.wipe": {
+    "zh": "滑块",
+    "en": "Slider"
+  },
+  "ChatPreviewSet.oneAtATime": {
+    "zh": "切换",
+    "en": "One at a time"
+  },
+  "ChatPreviewSet.tiled": {
+    "zh": "平铺",
+    "en": "Tiled"
+  },
+  "ChatPreviewSet.more": {
+    "zh": "更多",
+    "en": "More"
+  },
+  "ChatPreviewSet.position": {
+    "zh": "{label} · {index} / {count}",
+    "en": "{label} · {index} of {count}"
+  },
   "ChatPreviewCard.reload": {
     "zh": "重新加载",
     "en": "Reload"

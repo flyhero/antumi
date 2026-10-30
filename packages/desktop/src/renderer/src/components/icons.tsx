@@ -998,3 +998,58 @@ export function CommentAddIcon() {
     </svg>
   )
 }
+
+// The page sizes the browser can hold a tab at, each drawn as the device it stands for.
+// Following the panel: corners only, the page taking whatever room there is.
+export function FitPanelIcon() {
+  return (
+    <svg {...stroked}>
+      <path d="M3 7V4.5A1.5 1.5 0 0 1 4.5 3H7M13 3h2.5A1.5 1.5 0 0 1 17 4.5V7M17 13v2.5a1.5 1.5 0 0 1-1.5 1.5H13M7 17H4.5A1.5 1.5 0 0 1 3 15.5V13" />
+    </svg>
+  )
+}
+
+export function PhoneIcon() {
+  return (
+    <svg {...stroked}>
+      <rect x="6" y="2.5" width="8" height="15" rx="2" />
+      <path d="M9.2 14.5h1.6" />
+    </svg>
+  )
+}
+
+export function TabletIcon() {
+  return (
+    <svg {...stroked}>
+      <rect x="3.5" y="2.5" width="13" height="15" rx="2" />
+      <path d="M9 14.5h2" />
+    </svg>
+  )
+}
+
+export function LaptopIcon() {
+  return (
+    <svg {...stroked}>
+      <rect x="4" y="4" width="12" height="8.5" rx="1.2" />
+      <path d="M2 15.5h16" />
+    </svg>
+  )
+}
+
+export function MonitorIcon() {
+  return (
+    <svg {...stroked}>
+      <rect x="2" y="3.5" width="16" height="10" rx="1.5" />
+      <path d="M10 13.5v3M7 16.5h6" />
+    </svg>
+  )
+}
+
+// A size of no preset, as an agent may set: the outline dashed.
+export function CustomSizeIcon() {
+  return (
+    <svg {...stroked}>
+      <rect x="3" y="4" width="14" height="12" rx="1.5" strokeDasharray="2.4 2.2" />
+    </svg>
+  )
+}

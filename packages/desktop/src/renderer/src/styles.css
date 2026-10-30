@@ -8990,6 +8990,11 @@ div.inspector-empty > p { margin: 0 0 8px; }
 /* A page held at a size instead of following the panel: easy to forget, so it is marked. */
 .browser-address .tool-button[data-tone='held'] { color: var(--accent); }
 .browser-address .menu-anchor { flex-shrink: 0; }
+/* Inside the field's right end, as browsers place it; the text stops short of it. */
+.browser-url-field:has(.browser-bookmark-star) .browser-url { padding-right: 30px; }
+.browser-url-field .browser-bookmark-star { position: absolute; top: 2px; right: 2px; width: 24px; height: 24px; border-radius: var(--radius-xs); }
+.browser-url-field .browser-bookmark-star svg { width: 15px; height: 15px; }
+.browser-url-field .browser-bookmark-star:hover { background: var(--fill-2); }
 .browser-bookmark-star[data-kept] { color: var(--accent); }
 .browser-bookmark-star[data-kept] svg { fill: currentColor; }
 /* The search and the import stay put; only the list scrolls. */

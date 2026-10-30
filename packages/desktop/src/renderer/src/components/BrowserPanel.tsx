@@ -1,12 +1,12 @@
 import { localized, t, tr } from '../i18n'
-import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
 import type { BrowserTab, BrowserViewport } from '@antumi/protocol'
 import { ALL_TABS, openUserBrowserTab, selectBrowserTab, useBrowserTabs, useConversationNames, useWatchAllBrowser } from '../browser-state'
 import { perform, useCore } from '../core-store'
 import { canShowNativeBrowser, onBrowserFocused, reportBrowserBounds, showNativeBrowserTab } from '../desktop-bridge'
 import { BookmarksButton, BookmarkStar } from './BrowserBookmarks'
 import { ChatPicker } from './ChatPicker'
-import { ArrowLeftIcon, ArrowRightIcon, CameraIcon, CloseIcon, GlobeIcon, PlusIcon, RefreshIcon } from './icons'
+import { ArrowLeftIcon, ArrowRightIcon, CameraIcon, CloseIcon, CustomSizeIcon, FitPanelIcon, GlobeIcon, LaptopIcon, MonitorIcon, PhoneIcon, PlusIcon, RefreshIcon, TabletIcon } from './icons'
 import { Spinner } from './Spinner'
 import { BrowserCaptureButton, BrowserDeveloperButton, BrowserShareButton } from './BrowserActions'
 import { BrowserDownloadsButton, useBrowserDownloads } from './BrowserDownloads'
@@ -67,11 +67,11 @@ function tabState(tab: BrowserTab, focused: boolean): string {
 
 // The sizes a page can be held at from the panel, besides following it. A size the agent chose
 // that is none of these is offered as it is.
-const PRESETS: ReadonlyArray<{ label: string; viewport: BrowserViewport }> = localized(() => ([
-  { label: t('BrowserPanel.phone390844'), viewport: { width: 390, height: 844 } },
-  { label: t('BrowserPanel.tablet7681024'), viewport: { width: 768, height: 1024 } },
-  { label: t('BrowserPanel.desktop1280800'), viewport: { width: 1280, height: 800 } },
-  { label: t('BrowserPanel.wide19201080'), viewport: { width: 1920, height: 1080 } }
+const PRESETS: ReadonlyArray<{ label: string; viewport: BrowserViewport; icon: ReactNode }> = localized(() => ([
+  { label: t('BrowserPanel.phone390844'), viewport: { width: 390, height: 844 }, icon: <PhoneIcon /> },
+  { label: t('BrowserPanel.tablet7681024'), viewport: { width: 768, height: 1024 }, icon: <TabletIcon /> },
+  { label: t('BrowserPanel.desktop1280800'), viewport: { width: 1280, height: 800 }, icon: <LaptopIcon /> },
+  { label: t('BrowserPanel.wide19201080'), viewport: { width: 1920, height: 1080 }, icon: <MonitorIcon /> }
 ]))
 const FOLLOW = 'panel'
 const keyOf = (viewport: BrowserViewport | null) => (viewport ? `${viewport.width}x${viewport.height}` : FOLLOW)
@@ -79,16 +79,16 @@ const keyOf = (viewport: BrowserViewport | null) => (viewport ? `${viewport.widt
 function ViewportPicker({ tab }: { tab: BrowserTab }) {
   const current = keyOf(tab.viewport)
   const options = [
-    { value: FOLLOW, label: t('BrowserPanel.matchPanel'), description: t('BrowserPanel.pageMatchesPanelSize') },
-    ...PRESETS.map((preset) => ({ value: keyOf(preset.viewport), label: preset.label })),
-    ...(tab.viewport && !PRESETS.some((preset) => keyOf(preset.viewport) === current) ? [{ value: current, label: `${tab.viewport.width}×${tab.viewport.height}`, description: t('BrowserPanel.setByAgent') }] : [])
+    { value: FOLLOW, label: t('BrowserPanel.matchPanel'), description: t('BrowserPanel.pageMatchesPanelSize'), icon: <FitPanelIcon /> },
+    ...PRESETS.map((preset) => ({ value: keyOf(preset.viewport), label: preset.label, icon: preset.icon })),
+    ...(tab.viewport && !PRESETS.some((preset) => keyOf(preset.viewport) === current) ? [{ value: current, label: `${tab.viewport.width}×${tab.viewport.height}`, description: t('BrowserPanel.setByAgent'), icon: <CustomSizeIcon /> }] : [])
   ]
   const choose = (value: string) => {
     const match = /^(\d+)x(\d+)$/.exec(value)
     const viewport = match ? { width: Number(match[1]), height: Number(match[2]) } : null
     void perform((rpc) => rpc.call('browser.userViewport', { tabId: tab.id, viewport }))
   }
-  return <ChatPicker label={t('BrowserPanel.pageSize')} value={current} placeholder={t('BrowserPanel.matchPanel')} options={options} onChange={choose} align="end" placement="below" disabled={tab.debugging} />
+  return <ChatPicker label={t('BrowserPanel.pageSize')} value={current} placeholder={t('BrowserPanel.matchPanel')} options={options} onChange={choose} align="end" placement="below" disabled={tab.debugging} tone={tab.viewport ? 'held' : undefined} iconOnly />
 }
 
 // How long the per-frame watch keeps measuring after the rectangle last moved, so a drag or a
@@ -249,9 +249,9 @@ export function BrowserPanel() {
                   setAddress(event.target.value)
                 }}
               />
+              <BookmarkStar tab={tab} />
               {suggesting && <AddressSuggestions entries={suggestions} picked={picked} onPick={(entry) => navigate(entry.url)} />}
             </div>
-            <BookmarkStar tab={tab} />
             <BookmarksButton tab={tab} />
             <BrowserDownloadsButton downloads={downloads} />
             <div className="browser-page-actions">

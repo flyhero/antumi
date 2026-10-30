@@ -10,7 +10,7 @@ export type PickerSize = 'large' | 'field'
 // A choice in the composer's toolbar: its value as a small button as wide as its words, and a menu
 // above it. A native select is as wide as its longest option, which left most values far from their
 // arrow.
-function PickerShell({ label, spoken, tone, disabled, title, align, placement = 'above', size, value, onClose, children }: {
+function PickerShell({ label, spoken, tone, disabled, title, align, placement = 'above', size, iconOnly = false, value, onClose, children }: {
   label: string
   // The button's name for a screen reader, which cannot see the value's colour or suffix.
   spoken: string
@@ -23,6 +23,8 @@ function PickerShell({ label, spoken, tone, disabled, title, align, placement = 
   // Large: as tall as a button, for a row of buttons rather than the composer's toolbar. Field: as
   // large, and as wide as its form, for a labelled field in a dialog or editor.
   size?: PickerSize
+  // A toolbar button showing only the value's icon, named by its tooltip.
+  iconOnly?: boolean
   value: ReactNode
   onClose?: () => void
   children: (close: () => void) => ReactNode
@@ -42,9 +44,10 @@ function PickerShell({ label, spoken, tone, disabled, title, align, placement = 
       <button
         ref={button}
         type="button"
-        className="chat-picker"
+        className={iconOnly ? 'tool-button' : 'chat-picker'}
         data-tone={tone}
         data-size={size}
+        data-tooltip={iconOnly && !at ? spoken : undefined}
         aria-haspopup="menu"
         aria-expanded={at !== null}
         aria-label={spoken}
@@ -52,8 +55,7 @@ function PickerShell({ label, spoken, tone, disabled, title, align, placement = 
         disabled={disabled}
         onClick={() => (at ? close() : open())}
       >
-        <span className="chat-picker-value">{value}</span>
-        <ChevronDownIcon />
+        {iconOnly ? value : <><span className="chat-picker-value">{value}</span><ChevronDownIcon /></>}
       </button>
       {at && (
         <ContextMenu at={at} align={align} above={placement === 'above'} trigger={button.current} label={label} onClose={close}>
@@ -85,7 +87,7 @@ export function PickerItem({ option, checked, onSelect }: { option: PickerOption
 }
 
 // One setting: its options listed with what each means, the current one checked.
-export function ChatPicker({ label, value, placeholder, options, onChange, disabled = false, title, tone, align = 'start', placement, size, footer }: {
+export function ChatPicker({ label, value, placeholder, options, onChange, disabled = false, title, tone, align = 'start', placement, size, iconOnly = false, footer }: {
   label: string
   value: string | null
   placeholder: string
@@ -98,14 +100,16 @@ export function ChatPicker({ label, value, placeholder, options, onChange, disab
   align?: 'start' | 'end'
   placement?: 'above' | 'below'
   size?: PickerSize
+  // Only the picked option's icon on the button; every option then needs one.
+  iconOnly?: boolean
   // What else the menu offers below the choices, as a folder picker beside recent projects.
   footer?: (close: () => void) => ReactNode
 }) {
   const picked = options.find((option) => option.value === value)
   const current = picked?.label ?? placeholder
-  const shown = picked?.icon ? <><span className="chat-picker-icon" aria-hidden="true">{picked.icon}</span>{current}</> : current
+  const shown = iconOnly ? picked?.icon : picked?.icon ? <><span className="chat-picker-icon" aria-hidden="true">{picked.icon}</span>{current}</> : current
   return (
-    <PickerShell label={label} spoken={`${label}：${current}`} tone={tone} disabled={disabled} title={title} align={align} placement={placement} size={size} value={shown}>
+    <PickerShell label={label} spoken={`${label}：${current}`} tone={tone} disabled={disabled} title={title} align={align} placement={placement} size={size} iconOnly={iconOnly} value={shown}>
       {(close) => (
         <>
           <div className="chat-picker-heading">{label}</div>

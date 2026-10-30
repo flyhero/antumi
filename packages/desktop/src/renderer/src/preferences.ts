@@ -79,6 +79,8 @@ const Preferences = z.object({
   // On, the browser panel appears with the agent's first tab; off, the page's card in the chat
   // offers to open it and the browser works in the background.
   openBrowserOnTab: z.boolean().catch(false),
+  // On, the browser's history lists and suggests the pages agents opened too, not only the user's.
+  browserHistoryAgents: z.boolean().catch(false),
   // Set once Antumi has decided whether to show the guide at first launch, so it never comes up
   // unasked again.
   guideSeen: z.boolean().catch(false),

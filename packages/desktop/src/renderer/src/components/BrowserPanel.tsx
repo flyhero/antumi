@@ -1,7 +1,7 @@
 import { localized, t, tr } from '../i18n'
-import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import type { BrowserTab, BrowserViewport } from '@antumi/protocol'
-import { ALL_TABS, openUserBrowserTab, selectBrowserTab, useBrowserTabs, useWatchAllBrowser } from '../browser-state'
+import { ALL_TABS, openUserBrowserTab, selectBrowserTab, useBrowserTabs, useConversationNames, useWatchAllBrowser } from '../browser-state'
 import { perform, useCore } from '../core-store'
 import { canShowNativeBrowser, onBrowserFocused, reportBrowserBounds, showNativeBrowserTab } from '../desktop-bridge'
 import { BookmarksButton, BookmarkStar } from './BrowserBookmarks'
@@ -10,6 +10,7 @@ import { ArrowLeftIcon, ArrowRightIcon, CameraIcon, CloseIcon, GlobeIcon, PlusIc
 import { Spinner } from './Spinner'
 import { BrowserCaptureButton, BrowserDeveloperButton, BrowserShareButton } from './BrowserActions'
 import { BrowserDownloadsButton, useBrowserDownloads } from './BrowserDownloads'
+import { ADDRESS_SUGGESTIONS, AddressSuggestions, FrequentPages, useBrowserHistory } from './BrowserHistory'
 
 // The hostname a tab shows in its strip, or what it has while it has no page.
 function tabName(tab: BrowserTab): string {
@@ -26,7 +27,7 @@ function tabName(tab: BrowserTab): string {
 // plus for a tab of the user's own after them. The pills share the width and shrink as tabs come,
 // so the plus stays in reach however many there are.
 export function BrowserTabStrip() {
-  const ownerName = useOwnerNames()
+  const ownerName = useConversationNames()
   const { tabs, selectedId } = useBrowserTabs((s) => s[ALL_TABS]) ?? { tabs: [], selectedId: null }
   const strip = useRef<HTMLDivElement>(null)
   // The shown tab is scrolled into the strip when there are more than fit.
@@ -41,7 +42,7 @@ export function BrowserTabStrip() {
         <div key={each.id} className="browser-tab" data-tab-id={each.id} data-active={each.id === selectedId || undefined} data-loading={each.loading || undefined}>
           <button type="button" role="tab" aria-selected={each.id === selectedId} title={each.url} onClick={() => selectBrowserTab(ALL_TABS, each.id)}>
             <span className="browser-tab-icon" aria-hidden="true"><GlobeIcon /></span>
-            {ownerName(each) && <span className="browser-tab-owner">{ownerName(each)}</span>}
+            {ownerName(each.conversationId) && <span className="browser-tab-owner">{ownerName(each.conversationId)}</span>}
             <span className="browser-tab-name">{tabName(each)}</span>
           </button>
           <button type="button" className="browser-tab-close" aria-label={t('BrowserPanel.closeTab', { value1: tabName(each) })} onClick={() => void perform((rpc) => rpc.call('browser.closeTab', { tabId: each.id }))}>
@@ -159,20 +160,6 @@ function NativeStage({ tab }: { tab: BrowserTab }) {
   )
 }
 
-// Whose a tab is, for the browser panel that shows everyone's: a conversation by its title, the
-// user's own by nothing.
-function useOwnerNames(): (tab: BrowserTab) => string | null {
-  const conversations = useCore((s) => s.conversations)
-  const tasks = useCore((s) => s.tasks)
-  return (tab) => {
-    if (tab.conversationId === null) return null
-    const conversation = conversations[tab.conversationId]
-    if (conversation) return conversation.title
-    const task = Object.values(tasks).find((each) => each.conversationId === tab.conversationId)
-    return task?.title ?? t('BrowserPanel.conversation')
-  }
-}
-
 // Every tab there is, the agents' and the user's own: the one chosen shown with the address and
 // the usual buttons, and a word on who is driving. The strip of tabs is the panel's top bar.
 export function BrowserPanel() {
@@ -188,12 +175,35 @@ export function BrowserPanel() {
     if (!editing) setAddress(tab?.url ?? '')
   }, [tab?.url, editing])
   useEffect(() => onBrowserFocused((tabId, focused) => setFocusedTab((was) => (focused ? tabId : was === tabId ? null : was))), [])
+  // What is typed, once it differs from the page, is looked up in the history; Esc puts the list away until the next keystroke.
+  const [picked, setPicked] = useState(-1)
+  const [dismissed, setDismissed] = useState(false)
+  const typed = editing && !dismissed && address.trim() !== '' && address !== tab?.url
+  const suggestions = useBrowserHistory(address.trim(), ADDRESS_SUGGESTIONS, typed) ?? []
+  const suggesting = typed && suggestions.length > 0
 
+  const navigate = (url: string) => {
+    if (!tab) return
+    setEditing(false)
+    setAddress(url)
+    void perform((rpc) => rpc.call('browser.userNavigate', { tabId: tab.id, to: { url } }))
+  }
   const go = (event: FormEvent) => {
     event.preventDefault()
-    if (!tab || !address.trim()) return
-    setEditing(false)
-    void perform((rpc) => rpc.call('browser.userNavigate', { tabId: tab.id, to: { url: address.trim() } }))
+    const chosen = suggesting ? suggestions[picked] : undefined
+    if (chosen) navigate(chosen.url)
+    else if (address.trim()) navigate(address.trim())
+  }
+  const suggestionKeys = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (!suggesting) return
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault()
+      const step = event.key === 'ArrowDown' ? 1 : -1
+      setPicked((was) => Math.max(-1, Math.min(suggestions.length - 1, was + step)))
+    } else if (event.key === 'Escape') {
+      event.preventDefault()
+      setDismissed(true)
+    }
   }
   const history = (step: 'back' | 'forward' | 'reload') => {
     if (tab) void perform((rpc) => rpc.call('browser.userNavigate', { tabId: tab.id, to: { history: step } }))
@@ -217,20 +227,30 @@ export function BrowserPanel() {
             <button type="button" className="tool-button" disabled={tab.debugging} aria-label={t('BrowserPanel.back')} data-tooltip={t('BrowserPanel.back')} onClick={() => history('back')}><ArrowLeftIcon /></button>
             <button type="button" className="tool-button" disabled={tab.debugging} aria-label={t('BrowserPanel.forward')} data-tooltip={t('BrowserPanel.forward')} onClick={() => history('forward')}><ArrowRightIcon /></button>
             <button type="button" className="tool-button" disabled={tab.debugging} aria-label={t('BrowserPanel.reload')} data-tooltip={t('BrowserPanel.reload')} onClick={() => history('reload')}><RefreshIcon /></button>
-            <input
-              className="input browser-url mono"
-              disabled={tab.debugging}
-              value={address}
-              aria-label={t('BrowserPanel.address')}
-              spellCheck={false}
-              // Selected whole on focus, as a browser's own address bar is: typing replaces it.
-              onFocus={(event) => {
-                setEditing(true)
-                event.currentTarget.select()
-              }}
-              onBlur={() => setEditing(false)}
-              onChange={(event) => setAddress(event.target.value)}
-            />
+            <div className="browser-url-field">
+              <input
+                className="input browser-url mono"
+                disabled={tab.debugging}
+                value={address}
+                aria-label={t('BrowserPanel.address')}
+                aria-autocomplete="list"
+                aria-expanded={suggesting}
+                spellCheck={false}
+                // Selected whole on focus, as a browser's own address bar is: typing replaces it.
+                onFocus={(event) => {
+                  setEditing(true)
+                  event.currentTarget.select()
+                }}
+                onBlur={() => setEditing(false)}
+                onKeyDown={suggestionKeys}
+                onChange={(event) => {
+                  setDismissed(false)
+                  setPicked(-1)
+                  setAddress(event.target.value)
+                }}
+              />
+              {suggesting && <AddressSuggestions entries={suggestions} picked={picked} onPick={(entry) => navigate(entry.url)} />}
+            </div>
             <BookmarkStar tab={tab} />
             <BookmarksButton tab={tab} />
             <BrowserDownloadsButton downloads={downloads} />
@@ -263,6 +283,7 @@ export function BrowserPanel() {
           {downloads.length > 0 && <div className="browser-empty-actions"><BrowserDownloadsButton downloads={downloads} /></div>}
           <p>{t('BrowserPanel.noTabsOpenYet')}</p>
           <button type="button" className="button" onClick={() => void openUserBrowserTab()}>{t('BrowserPanel.newTab')}</button>
+          <FrequentPages />
         </div>
       )}
     </div>

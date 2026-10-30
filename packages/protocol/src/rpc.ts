@@ -42,6 +42,7 @@ import { AgentAccount, AgentAccountId, AgentAccounts } from './agent-account'
 import { ExternalSession, ExternalSessionRef } from './session-import'
 import { ProjectStarIdentity, ProjectStarResult, ProjectStarStatus } from './project-star'
 import { Bookmark, BookmarkFields, BookmarkImport, MAX_BOOKMARKS } from './bookmarks'
+import { BrowserHistoryEntry, BrowserHistorySearch } from './browser-history'
 
 // Bump only for breaking changes; additive optional fields keep the version.
 export const PROTOCOL_VERSION = 18
@@ -108,7 +109,7 @@ const UsageParams = z.object({ windowKinds: z.array(z.string()).optional() })
 // suggests what to fill it with (projects.suggestConfig).
 // conversation-references: history_read resolves explicit antumi://conversation/<id> references.
 // chat-references: user messages and queues retain the composer's explicit reference targets.
-export const CORE_FEATURES = ['chat-references', 'conversation-references', 'agent-profiles', 'pets', 'plugins', 'plugin-recommendations', 'chat-options', 'chat-images', 'task-start', 'worktrees', 'conversation-branches', 'conversation-commit-push', 'find-file', 'conversation-projects', 'browser', 'browser-collaboration', 'browser-file-transfers', 'keep-awake', 'terminal-commands', 'bookmarks', 'usage-limit', 'agent-stats', 'conversation-stats', 'prompt-suggestions', 'environment', 'conversation-pin', 'schedules', 'chat-commands', 'file-mentions', 'plan-modes', 'agent-terminals', 'schedule-images', 'dashboard', 'task-conversation-summaries', 'routines', 'ports', 'conversation-fork', 'conversation-configuration', 'conversation-commit-steps', 'conversation-worktrees', 'conversation-start-branch', 'wire-log', 'file-preview', 'deferred-conversation-start', 'agent-cli-installation', 'agent-cli-maintenance', 'task-launch-options', 'git-management', 'git-commit-branches', 'task-handoff', 'handoff-model', 'handoff-mode', 'task-launch', 'discussions', 'discussion-members', 'discussion-projects', 'discussion-topics', 'discussion-requirements', 'task-cancel', 'task-redo-in-place', 'conversation-archive', 'discussion-archive', 'translate', 'commit-message', 'squads', 'squad-leader-planning', 'conversation-todos', 'knowledge-base', 'knowledge-base-kind', 'skills-library', 'skills-search', 'skills-activation', 'mcp-servers', 'source-investigate', 'todo-overview', 'conversation-helper', 'small-model-stats', 'terminal-color-prompt', 'git-commit-actions', 'file-editor', 'project-config', 'project-config-edit', 'model-providers', 'git-update', 'git-push-target', 'task-auto-run', 'session-import', 'agent-accounts', 'usage-analytics', 'task-references', 'release-idle-chats', 'project-star', 'git-favorites', 'project-files', 'git-projects', 'git-branch-browser', 'git-rebase'] as const
+export const CORE_FEATURES = ['chat-references', 'conversation-references', 'agent-profiles', 'pets', 'plugins', 'plugin-recommendations', 'chat-options', 'chat-images', 'task-start', 'worktrees', 'conversation-branches', 'conversation-commit-push', 'find-file', 'conversation-projects', 'browser', 'browser-collaboration', 'browser-file-transfers', 'keep-awake', 'terminal-commands', 'bookmarks', 'browser-history', 'usage-limit', 'agent-stats', 'conversation-stats', 'prompt-suggestions', 'environment', 'conversation-pin', 'schedules', 'chat-commands', 'file-mentions', 'plan-modes', 'agent-terminals', 'schedule-images', 'dashboard', 'task-conversation-summaries', 'routines', 'ports', 'conversation-fork', 'conversation-configuration', 'conversation-commit-steps', 'conversation-worktrees', 'conversation-start-branch', 'wire-log', 'file-preview', 'deferred-conversation-start', 'agent-cli-installation', 'agent-cli-maintenance', 'task-launch-options', 'git-management', 'git-commit-branches', 'task-handoff', 'handoff-model', 'handoff-mode', 'task-launch', 'discussions', 'discussion-members', 'discussion-projects', 'discussion-topics', 'discussion-requirements', 'task-cancel', 'task-redo-in-place', 'conversation-archive', 'discussion-archive', 'translate', 'commit-message', 'squads', 'squad-leader-planning', 'conversation-todos', 'knowledge-base', 'knowledge-base-kind', 'skills-library', 'skills-search', 'skills-activation', 'mcp-servers', 'source-investigate', 'todo-overview', 'conversation-helper', 'small-model-stats', 'terminal-color-prompt', 'git-commit-actions', 'file-editor', 'project-config', 'project-config-edit', 'model-providers', 'git-update', 'git-push-target', 'task-auto-run', 'session-import', 'agent-accounts', 'usage-analytics', 'task-references', 'release-idle-chats', 'project-star', 'git-favorites', 'project-files', 'git-projects', 'git-branch-browser', 'git-rebase'] as const
 // session-import: core lists the sessions agents ran outside Antumi and imports them as conversations (sessionImports.*).
 // agent-accounts: Claude and Codex sign in to several accounts, one active each, and a usage limit
 // moves the agent to the next with quota (accounts.*); usage readings name their account.
@@ -618,6 +619,10 @@ export const rpcMethods = {
   'bookmarks.add': { params: BookmarkFields, result: Bookmark },
   'bookmarks.delete': { params: z.object({ id: z.string().uuid() }), result: Ok },
   'bookmarks.import': { params: z.object({ bookmarks: z.array(BookmarkFields).max(MAX_BOOKMARKS) }), result: BookmarkImport },
+  // The pages the browser went to, latest or most visited first. Deleting names a page by its address and who opened it.
+  'browserHistory.search': { params: BrowserHistorySearch, result: z.array(BrowserHistoryEntry) },
+  'browserHistory.delete': { params: BrowserHistoryEntry.pick({ url: true, conversationId: true }), result: Ok },
+  'browserHistory.clear': { params: z.object({}), result: Ok },
   // The user's own chat commands, oldest first. Saving without an id adds one.
   'chatCommands.list': { params: z.object({}), result: z.array(SavedChatCommand) },
   'chatCommands.save': { params: ChatCommandFields.extend({ id: z.string().uuid().optional() }), result: SavedChatCommand },
@@ -841,6 +846,8 @@ export const rpcNotifications = {
   'terminals.changed': z.object({ terminals: z.array(Terminal) }),
   'terminalCommands.changed': z.object({ commands: z.array(TerminalCommand) }),
   'bookmarks.changed': z.object({ bookmarks: z.array(Bookmark) }),
+  // Only that it changed: a client asks again for what it shows.
+  'browserHistory.changed': z.object({}),
   'chatCommands.changed': z.object({ commands: z.array(SavedChatCommand) }),
   // The hosted browser: its status to every connection; a conversation's tabs to the connections
   // watching them (browser.watch).

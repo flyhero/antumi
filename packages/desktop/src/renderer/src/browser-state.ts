@@ -5,6 +5,7 @@ import { perform, showBrowserPanel, useCore } from './core-store'
 import { urlPath } from './file-links'
 import { usePreferences } from './preferences'
 import { browserHomepage } from './desktop-bridge'
+import { t } from './i18n'
 
 // Browser tabs as core reports them while a view watches: a conversation's under its id, the
 // user's own under USER_TABS, every tab there is under ALL_TABS (the browser panel's scope); and
@@ -176,4 +177,18 @@ export function firstBrowserCall(items: readonly { kind: string; name?: string; 
 // Whether the panel should open on its own for that call, as the user prefers.
 export function shouldOpenBrowser(): boolean {
   return usePreferences.getState().openBrowserOnTab
+}
+
+// Whose a tab or a visited page is, where everyone's show: a conversation by its title, the
+// user's own by nothing.
+export function useConversationNames(): (conversationId: string | null) => string | null {
+  const conversations = useCore((s) => s.conversations)
+  const tasks = useCore((s) => s.tasks)
+  return (conversationId) => {
+    if (conversationId === null) return null
+    const conversation = conversations[conversationId]
+    if (conversation) return conversation.title
+    const task = Object.values(tasks).find((each) => each.conversationId === conversationId)
+    return task?.title ?? t('BrowserPanel.conversation')
+  }
 }

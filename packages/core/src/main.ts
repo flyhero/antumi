@@ -52,6 +52,7 @@ import { ConversationStore } from './conversation-store'
 import { ConversationService } from './conversation-service'
 import { TerminalCommandStore } from './terminal-commands'
 import { BookmarkStore } from './bookmarks'
+import { BrowserHistoryStore } from './browser-history'
 import { ChatCommandStore } from './chat-commands'
 import { ShellPrompt } from './shell-prompt'
 import { TerminalService } from './terminal-service'
@@ -174,6 +175,7 @@ const conversations = new ConversationService(
   wire
 )
 
+const browserHistory = new BrowserHistoryStore(paths.database, () => server?.broadcast('browserHistory.changed', {}))
 const browser = new BrowserService(
   paths,
   attachments,
@@ -185,6 +187,7 @@ const browser = new BrowserService(
     }
     else {
       const { conversationId, tabs } = event
+      browserHistory.record(conversationId, tabs)
       ;[...(server?.connections ?? [])]
         .filter((c) => c.browsing.has(WATCH_ALL) || (conversationId !== null && c.browsing.has(conversationId)))
         .forEach((c) => c.notify('browser.tabsChanged', { conversationId, tabs }))
@@ -503,7 +506,7 @@ server = await startRpcServer({
   handlers: createRpcHandlers(service, conversations, projects, gitFavorites, daemon, usage, sources, {
     store: attachments,
     uploads: new AttachmentUploads(attachments)
-  }, terminals, worktrees, browser, awake, terminalCommands, limits, runs, turns, chatSettings, environment, schedules, chatCommands, routines, discussions, wire, () => server?.broadcast('git.changed', {}), squads, todos, plugins, skills, mcpServers, smallModels, projectConfigs, modelProviders, new SessionImports(conversationsStore, conversations, paths.home), accounts, cliMaintenance, analytics, automation, pets, new ProjectStar(sources), profiles, bookmarks)
+  }, terminals, worktrees, browser, awake, terminalCommands, limits, runs, turns, chatSettings, environment, schedules, chatCommands, routines, discussions, wire, () => server?.broadcast('git.changed', {}), squads, todos, plugins, skills, mcpServers, smallModels, projectConfigs, modelProviders, new SessionImports(conversationsStore, conversations, paths.home), accounts, cliMaintenance, analytics, automation, pets, new ProjectStar(sources), profiles, bookmarks, browserHistory)
 })
 await writeCoreEndpoint({ port: server.port, token, pid: process.pid, protocolVersion: PROTOCOL_VERSION, version: packageJson.version })
 daemon.start()
@@ -563,6 +566,7 @@ async function shutdown(): Promise<void> {
   projects.close()
   gitFavorites.close()
   bookmarks.close()
+  browserHistory.close()
   process.exit(0)
 }
 process.on('SIGINT', () => void shutdown())

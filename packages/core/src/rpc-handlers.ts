@@ -26,6 +26,7 @@ import { readableUsage, type UsageService } from './usage-service'
 import type { ConversationService } from './conversation-service'
 import type { TerminalCommandStore } from './terminal-commands'
 import type { BookmarkStore } from './bookmarks'
+import type { BrowserHistoryStore } from './browser-history'
 import type { ChatCommandStore } from './chat-commands'
 import type { TerminalService } from './terminal-service'
 import type { ProjectConfigStore } from './project-config'
@@ -101,7 +102,8 @@ export function createRpcHandlers(
   pets?: PetLibrary,
   projectStar?: ProjectStar,
   profiles?: AgentProfileService,
-  bookmarks?: BookmarkStore
+  bookmarks?: BookmarkStore,
+  browserHistory?: BrowserHistoryStore
 ): RpcHandlers {
   const profileService = () => {
     if (!profiles) throw new Rejection('profile-unavailable')
@@ -110,6 +112,10 @@ export function createRpcHandlers(
   const bookmarkStore = (): BookmarkStore => {
     if (!bookmarks) throw new Rejection('bookmarks-unavailable')
     return bookmarks
+  }
+  const historyStore = (): BrowserHistoryStore => {
+    if (!browserHistory) throw new Rejection('browser-history-unavailable')
+    return browserHistory
   }
   const petLibrary = (): PetLibrary => {
     if (!pets) throw new Rejection('pets-unavailable')
@@ -260,7 +266,7 @@ export function createRpcHandlers(
     'pets.cancel': ({ id }) => { petLibrary().cancel(id); return OK },
     'pets.remove': ({ id }) => petLibrary().remove(id),
     'pets.read': ({ id }) => petLibrary().read(id),
-    'system.hello': () => ({ protocolVersion: PROTOCOL_VERSION, serverVersion: packageJson.version, features: CORE_FEATURES.filter((feature) => (feature !== 'agent-profiles' || Boolean(profiles)) && (feature !== 'project-star' || Boolean(projectStar)) && (feature !== 'bookmarks' || Boolean(bookmarks)) && (feature !== 'pets' || Boolean(pets)) && (feature !== 'squads' || Boolean(squads)) && (!['plugins', 'plugin-recommendations'].includes(feature) || Boolean(plugins)) && (!['skills-library', 'skills-search', 'skills-activation'].includes(feature) || Boolean(skills)) && (feature !== 'mcp-servers' || Boolean(mcpServers)) && (feature !== 'small-model-stats' || Boolean(smallModels)) && (feature !== 'model-providers' || Boolean(modelProviders)) && (feature !== 'agent-accounts' || Boolean(accounts))) }),
+    'system.hello': () => ({ protocolVersion: PROTOCOL_VERSION, serverVersion: packageJson.version, features: CORE_FEATURES.filter((feature) => (feature !== 'agent-profiles' || Boolean(profiles)) && (feature !== 'project-star' || Boolean(projectStar)) && (feature !== 'bookmarks' || Boolean(bookmarks)) && (feature !== 'browser-history' || Boolean(browserHistory)) && (feature !== 'pets' || Boolean(pets)) && (feature !== 'squads' || Boolean(squads)) && (!['plugins', 'plugin-recommendations'].includes(feature) || Boolean(plugins)) && (!['skills-library', 'skills-search', 'skills-activation'].includes(feature) || Boolean(skills)) && (feature !== 'mcp-servers' || Boolean(mcpServers)) && (feature !== 'small-model-stats' || Boolean(smallModels)) && (feature !== 'model-providers' || Boolean(modelProviders)) && (feature !== 'agent-accounts' || Boolean(accounts))) }),
     'files.resolve': ({ conversationId, roots, path }) => files.resolve(fileScope(conversationId, roots), path),
     'files.read': ({ conversationId, roots, path }) => files.read(fileScope(conversationId, roots), path),
     'files.list': ({ conversationId, roots, path }) => files.list(fileScope(conversationId, roots), path),
@@ -550,6 +556,15 @@ export function createRpcHandlers(
       return OK
     },
     'bookmarks.import': ({ bookmarks: imported }) => bookmarkStore().import(imported),
+    'browserHistory.search': ({ query, agents, limit, order }) => historyStore().search(query, agents, limit, order),
+    'browserHistory.delete': ({ url, conversationId }) => {
+      historyStore().delete(url, conversationId)
+      return OK
+    },
+    'browserHistory.clear': () => {
+      historyStore().clear()
+      return OK
+    },
     'chatCommands.list': () => chatCommands.list(),
     'chatCommands.save': (params) => chatCommands.save(params),
     'chatCommands.delete': ({ id }) => {

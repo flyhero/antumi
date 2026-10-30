@@ -223,6 +223,8 @@ export type CoreState = {
   terminalCommands: TerminalCommand[]
   // Pages kept for the built-in browser, oldest first; empty from a core that keeps none.
   bookmarks: Bookmark[]
+  // Bumped when core says the browser history changed, so what shows it asks again.
+  browserHistoryVersion: number
   // The user's own chat commands, oldest first; empty from a core that keeps none.
   chatCommands: SavedChatCommand[]
   // The skills repositories core installed; empty from a core without a library.
@@ -323,6 +325,7 @@ export const useCore = create<CoreState>()(() => ({
   activeTerminalId: null,
   terminalCommands: [],
   bookmarks: [],
+  browserHistoryVersion: 0,
   chatCommands: [],
   skillRepos: [],
   mcpServers: [],
@@ -1293,6 +1296,10 @@ export function useBookmarksSupported(): boolean {
   return useCore((s) => s.rpc?.features.includes('bookmarks') ?? false)
 }
 
+export function useBrowserHistorySupported(): boolean {
+  return useCore((s) => s.rpc?.features.includes('browser-history') ?? false)
+}
+
 export function useTerminalCommandsSupported(): boolean {
   return useCore((s) => s.rpc?.features.includes('terminal-commands') ?? false)
 }
@@ -1470,6 +1477,7 @@ export function startCoreConnection(scope: 'app' | 'requests' = 'app'): void {
         )
         rpc.on('terminalCommands.changed', ({ commands }) => useCore.setState({ terminalCommands: commands }))
         rpc.on('bookmarks.changed', ({ bookmarks }) => useCore.setState({ bookmarks }))
+        rpc.on('browserHistory.changed', () => useCore.setState((s) => ({ browserHistoryVersion: s.browserHistoryVersion + 1 })))
         rpc.on('chatCommands.changed', ({ commands }) => useCore.setState({ chatCommands: commands }))
         rpc.on('skills.changed', ({ repos }) => useCore.setState({ skillRepos: repos }))
         rpc.on('mcpServers.changed', ({ servers }) => useCore.setState({ mcpServers: servers }))

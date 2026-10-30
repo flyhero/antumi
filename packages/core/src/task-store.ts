@@ -364,7 +364,10 @@ export const MIGRATIONS = [
   // A started run stops holding its agent once the user carries its conversation on; a waiting
   // run names the run it waits behind.
   `ALTER TABLE scheduled_runs ADD COLUMN released_at INTEGER;
-   ALTER TABLE scheduled_runs ADD COLUMN held_by TEXT;`
+   ALTER TABLE scheduled_runs ADD COLUMN held_by TEXT;`,
+  // Pages the built-in browser went to, one row per address and who opened it ('' for the user).
+  `CREATE TABLE browser_history (url TEXT NOT NULL, opened_by TEXT NOT NULL, title TEXT NOT NULL, visited_at INTEGER NOT NULL, visits INTEGER NOT NULL, PRIMARY KEY (url, opened_by));
+   CREATE INDEX browser_history_visited ON browser_history (visited_at);`
 ]
 
 

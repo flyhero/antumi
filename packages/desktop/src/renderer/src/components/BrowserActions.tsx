@@ -3,7 +3,7 @@ import type { BrowserCaptureMode, BrowserTab } from '@antumi/protocol'
 import { browserContextText, browserConversationChoices, browserConversationTarget, sendBrowserContextToComposer } from '../browser-context'
 import { perform, useCore } from '../core-store'
 import { t } from '../i18n'
-import { CheckIcon, CodeIcon, LinkIcon, QuoteIcon } from './icons'
+import { CheckIcon, CodeIcon, QuoteIcon, RobotIcon } from './icons'
 import { Popover } from './Popover'
 import { Spinner } from './Spinner'
 import { BrowserDiagnostics } from './BrowserDiagnostics'
@@ -68,7 +68,7 @@ export function BrowserShareButton({ tab }: { tab: BrowserTab }) {
     if (changed) close()
   }
   return <span className="menu-anchor">
-    <button type="button" className="tool-button browser-share-button" data-shared={shared || undefined} aria-pressed={shared} aria-label={t(shared ? 'BrowserActions.shared' : 'BrowserActions.share')} data-tooltip={shared ? t('BrowserActions.sharedWith', { name: conversations[tab.conversationId ?? '']?.title ?? t('BrowserPanel.conversation') }) : t('BrowserActions.share')} aria-haspopup="dialog" aria-expanded={open} onClick={() => { setTarget(current ?? ''); setOpen(!open) }}><LinkIcon /></button>
+    <button type="button" className="tool-button browser-share-button" data-shared={shared || undefined} aria-pressed={shared} aria-label={t(shared ? 'BrowserActions.shared' : 'BrowserActions.share')} data-tooltip={shared ? t('BrowserActions.sharedWith', { name: conversations[tab.conversationId ?? '']?.title ?? t('BrowserPanel.conversation') }) : t('BrowserActions.share')} aria-haspopup="dialog" aria-expanded={open} onClick={() => { setTarget(current ?? ''); setOpen(!open) }}><RobotIcon /></button>
     {open && <Popover label={t('BrowserActions.share')} onClose={close} align="end">
       <div className="browser-share-menu">
         <p className="menu-note">{t('BrowserActions.shareHint')}</p>

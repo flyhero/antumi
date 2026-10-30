@@ -9013,6 +9013,8 @@ div.inspector-empty > p { margin: 0 0 8px; }
 .browser-address .chat-picker { flex-shrink: 0; }
 /* A page held at a size instead of following the panel: easy to forget, so it is marked. */
 .browser-address .tool-button[data-tone='held'] { color: var(--accent); }
+/* A page an agent can read and drive: marked the same way. */
+.browser-share-button[data-shared] { color: var(--accent); }
 .browser-address .menu-anchor { flex-shrink: 0; }
 /* Inside the field's right end, as browsers place it; the text stops short of it. */
 .browser-url-field:has(.browser-bookmark-star) .browser-url { padding-right: 30px; }

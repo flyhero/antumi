@@ -274,21 +274,14 @@ A machine with the app installed needs neither Node nor pnpm.
 
 ## Docs
 
-The documentation is in Chinese for now.
+Apart from the user guide, the documentation is in Chinese for now.
 
-| I want to… | Read |
+| | |
 |---|---|
-| Install agents, connect a provider, add accounts, import issues | [User guide](docs/GETTING-STARTED.en.md) (English) |
-| Understand the architecture, process boundaries and protocol | [Architecture · Overview](docs/ARCHITECTURE.md#1-总体架构) |
-| Learn how tasks flow: planning, review, dependencies | [Architecture · Task model](docs/ARCHITECTURE.md#2-任务模型) |
-| Manage worktrees, branches and merge conflicts | [Architecture · Worktrees and Git](docs/ARCHITECTURE.md#3-worktree-与-git) |
-| See how each agent is integrated and what the permission modes map to | [Architecture · Agents and chat](docs/ARCHITECTURE.md#4-agent-接入与聊天) |
-| Let agents verify pages in the browser | [Architecture · Built-in browser](docs/ARCHITECTURE.md#5-内置浏览器) |
-| Connect task or bug sources | [Task source plugins](docs/PLUGINS.md) |
-| Write a task-source plugin | [Plugin development](docs/PLUGINS.md#开发一个任务来源插件) |
-| Package, install, uninstall | [Architecture · Packaging](docs/ARCHITECTURE.md#8-打包与安装) |
-| Publish a release | [Architecture · Automated releases](docs/ARCHITECTURE.md#自动发布) |
-| See what changed in each release | [CHANGELOG.md](CHANGELOG.md) |
+| **Using** | [User guide](docs/GETTING-STARTED.en.md): installing agents, providers, accounts, importing issues, everyday features · [Usage ledger](docs/USAGE-ANALYTICS.md) · Per-agent notes: [Antigravity](docs/ANTIGRAVITY.md), [DeepSeek Harness](docs/DEEPSEEK.md), [ZCode](docs/ZCODE.md), [Kimi Code](docs/KIMI.md), [Gemini CLI](docs/GEMINI.md) |
+| **Extending** | [Task source plugins](docs/PLUGINS.md): connect GitHub, Jira, Linear or ZenTao, or write your own |
+| **Developing** | [Architecture](docs/ARCHITECTURE.md): process boundaries, task model, agent integration, built-in browser, packaging · [AGENTS.md](AGENTS.md) · [DESIGN.md](DESIGN.md) |
+| **Releasing** | [Releasing and packaging](docs/RELEASING.md) · [Changelog](CHANGELOG.md) |
 
 ## Community
 

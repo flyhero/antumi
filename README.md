@@ -288,19 +288,12 @@ pnpm dist:linux   # 产物在 packages/desktop/dist/Antumi-<版本>-x86_64.AppIm
 
 ## 文档
 
-| 我想…… | 看这里 |
+| | |
 |---|---|
-| 装 Agent、接服务商、配多个账号、导入 issue | [使用指南](docs/GETTING-STARTED.md) |
-| 了解整体架构、进程边界和通信协议 | [技术架构 · 总体架构](docs/ARCHITECTURE.md#1-总体架构) |
-| 弄清任务怎么流转、规划、验收、处理依赖 | [技术架构 · 任务模型](docs/ARCHITECTURE.md#2-任务模型) |
-| 管理 worktree、分支、合并冲突 | [技术架构 · Worktree 与 Git](docs/ARCHITECTURE.md#3-worktree-与-git) |
-| 了解各 Agent 怎么接入、权限模式对应什么 | [技术架构 · Agent 接入与聊天](docs/ARCHITECTURE.md#4-agent-接入与聊天) |
-| 让 Agent 用浏览器验证页面 | [技术架构 · 内置浏览器](docs/ARCHITECTURE.md#5-内置浏览器) |
-| 接入任务或 Bug 来源 | [任务来源插件](docs/PLUGINS.md) |
-| 写一个任务来源插件 | [插件开发指南](docs/PLUGINS.md#开发一个任务来源插件) |
-| 打包、安装、卸载 | [技术架构 · 打包与安装](docs/ARCHITECTURE.md#8-打包与安装) |
-| 发布新版本 | [技术架构 · 自动发布](docs/ARCHITECTURE.md#自动发布) |
-| 看每个版本改了什么 | [CHANGELOG.md](CHANGELOG.md) |
+| **使用** | [使用指南](docs/GETTING-STARTED.md)：装 Agent、接服务商、配账号、导入 issue、常用功能 · [用量账本](docs/USAGE-ANALYTICS.md) · 各 Agent 的说明：[Antigravity](docs/ANTIGRAVITY.md)、[DeepSeek Harness](docs/DEEPSEEK.md)、[ZCode](docs/ZCODE.md)、[Kimi Code](docs/KIMI.md)、[Gemini CLI](docs/GEMINI.md) |
+| **扩展** | [任务来源插件](docs/PLUGINS.md)：接入 GitHub、Jira、Linear、禅道，或自己写一个 |
+| **开发** | [技术架构](docs/ARCHITECTURE.md)：进程边界、任务模型、Agent 接入、内置浏览器、打包与安装 · [AGENTS.md](AGENTS.md) · [DESIGN.md](DESIGN.md) |
+| **发布** | [发版与打包](docs/RELEASING.md) · [更新日志](CHANGELOG.md) |
 
 ## 社区
 

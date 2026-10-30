@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentUsage, UsageWindow } from '@antumi/protocol'
-import { spendNote, windowLabel } from './usage-format'
+import { elapsedPercent, spendNote, windowLabel } from './usage-format'
 
 const window = (kind: UsageWindow['kind'], model: string | null = null): UsageWindow => ({ kind, model, usedPercent: 9, windowMinutes: 1, resetsAt: null })
 
@@ -28,5 +28,16 @@ describe('spendNote', () => {
 
   it('points out the room left by the window closest to its cap', () => {
     expect(spendNote(usage(62.4), ['session', 'weekly'])).toBe('用掉一张，立即清零 5h 和每周额度，用掉后不能退回。现在额度还剩 38%，用完再用更划算。')
+  })
+})
+
+describe('elapsedPercent', () => {
+  it('measures the share of the window gone, and has none without a clock to go by', () => {
+    const now = Date.parse('2026-10-30T12:00:00Z')
+    const weekly: UsageWindow = { kind: 'weekly', model: null, usedPercent: 36, windowMinutes: 10_080, resetsAt: now + 140 * 3600_000 }
+    expect(elapsedPercent(weekly, now)).toBeCloseTo(100 / 6)
+    expect(elapsedPercent({ ...weekly, resetsAt: null }, now)).toBeNull()
+    expect(elapsedPercent({ ...weekly, resetsAt: now }, now)).toBeNull()
+    expect(elapsedPercent({ ...weekly, resetsAt: now + 200 * 3600_000 }, now)).toBe(0)
   })
 })

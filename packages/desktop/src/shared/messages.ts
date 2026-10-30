@@ -9685,8 +9685,8 @@ export const MESSAGES = {
     "en": "(Data as of {value1})"
   },
   "UsageBar.runsOutAt": {
-    "zh": "按目前速度，约{value1}用完",
-    "en": "At this rate, runs out around {value1}"
+    "zh": "约{value1}用完",
+    "en": "Runs out around {value1}"
   },
   "UsageBar.updatedAgo": {
     "zh": "{value1}前更新",
@@ -9696,9 +9696,25 @@ export const MESSAGES = {
     "zh": "{value1} 用量额度",
     "en": "{value1} usage quota"
   },
-  "UsageBar.usedRemaining": {
-    "zh": "已用 {used}%，剩余 {value2}%{value3}",
-    "en": "{used}% used, {value2}% remaining{value3}"
+  "UsageBar.usedAndElapsed": {
+    "zh": "已用 {used}%，时间已过 {elapsed}%",
+    "en": "{used}% used, {elapsed}% of the window elapsed"
+  },
+  "UsageBar.legendUsed": {
+    "zh": "已用",
+    "en": "Used"
+  },
+  "UsageBar.legendLeft": {
+    "zh": "剩余",
+    "en": "Left"
+  },
+  "UsageBar.legendTimeElapsed": {
+    "zh": "时间已过",
+    "en": "Time elapsed"
+  },
+  "UsageBar.legendTimeLeft": {
+    "zh": "时间剩余",
+    "en": "Time left"
   },
   "UsageBar.refreshing": {
     "zh": "刷新中…",

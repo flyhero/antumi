@@ -22,6 +22,11 @@ export function spacedText(text: string): string {
   return text.replace(/([\u4e00-\u9fff])(?=[A-Za-z0-9])/g, '$1 ').replace(/([A-Za-z0-9%])(?=[\u4e00-\u9fff])/g, '$1 ')
 }
 
+// What slow-down advice asks for, alone where its window's row already says when the quota runs out.
+export function lighterWorkStep(alternative: AgentKind | null): string {
+  return alternative ? t('quotaAdviceText.useForLighterWork', { other: agentLabel(alternative) }) : t('quotaAdviceText.useASmallerModelForLighterWork')
+}
+
 const quotaOf = (advice: QuotaAdvice) => t('quotaAdviceText.quota', { value1: windowLabel(advice.window) })
 
 export function adviceText(advice: QuotaAdvice, now: number, alternative: AgentKind | null): string {
@@ -42,7 +47,7 @@ function rawAdviceText(advice: QuotaAdvice, now: number, alternative: AgentKind 
     case 'slow-down': {
       const early = advice.at !== null && window.resetsAt !== null ? t('quotaAdviceText.beforeReset', { value1: formatDuration(window.resetsAt - advice.at) }) : ''
       const at = advice.at === null ? '' : t('quotaAdviceText.at', { value1: formatClock(advice.at, now) })
-      return t('quotaAdviceText.atThisPaceQuotaRunsOut', { value1: quotaOf(advice), at: at, early: early, value4: other ? t('quotaAdviceText.useForLighterWork', { other: other }) : t('quotaAdviceText.useASmallerModelForLighterWork') })
+      return t('quotaAdviceText.atThisPaceQuotaRunsOut', { value1: quotaOf(advice), at: at, early: early, value4: lighterWorkStep(alternative) })
     }
     case 'wait-reset': {
       const head = window.usedPercent >= 100 ? t('quotaAdviceText.5hQuotaExhaustedResets', { reset: reset }) : t('quotaAdviceText.atThisPace5hQuotaRunsOutBefore', { reset: reset })

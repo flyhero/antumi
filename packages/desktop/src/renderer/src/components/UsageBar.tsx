@@ -19,16 +19,17 @@ import {
   type ResetCredit,
   type ResetCreditOutcome,
   type ResetCredits,
+  type UsageForecast,
   type UsageWindow
 } from '@antumi/protocol'
 import { activateAccount, openUsageCard, refreshUsage, setSettingsOpen, spendResetCredit, useCore } from '../core-store'
 import { accountName, accountsOf } from '../agent-accounts'
 import { useInstalledAgents } from '../installed-agents'
 import { agentLabel } from '../labels'
-import { usePreferences } from '../preferences'
-import { adviceText, alternativeAgent, paceText } from '../quota-advice-text'
-import { clearsText, formatClock, formatDuration, globalResetText, percentText, resetText, shownPercent, SPEND_OUTCOME_TEXT, spendNote, useNow, windowLabel } from '../usage-format'
-import { AgentIcon, CheckIcon, InfoIcon } from './icons'
+import { usePreferences, type Preferences } from '../preferences'
+import { adviceText, alternativeAgent, lighterWorkStep, paceText, spacedText } from '../quota-advice-text'
+import { clearsText, elapsedPercent, formatClock, formatDuration, globalResetText, percentText, resetText, shownPercent, SPEND_OUTCOME_TEXT, spendNote, useNow, windowLabel } from '../usage-format'
+import { AgentIcon, CheckIcon, InfoIcon, WarningIcon } from './icons'
 import { Spinner } from './Spinner'
 import { forecastRunsOut, useQuotaForecasts } from '../quota-forecast'
 
@@ -194,14 +195,51 @@ export function GlobalResetList({ resets, now }: { resets: GlobalResets; now: nu
   )
 }
 
-// How to spend this agent's quota against its clock, most pressing first.
-function AdviceList({ advice, now, alternative }: { advice: readonly QuotaAdvice[]; now: number; alternative: AgentKind | null }) {
+// One window in the card: its meter against the clock, when it resets, and what to do about it.
+export function UsageWindowRow({ window, now, display, showPace, forecast, advice, alternative }: {
+  window: UsageWindow
+  now: number
+  display: Preferences['usageDisplay']
+  showPace: boolean
+  forecast: UsageForecast | undefined
+  advice: readonly QuotaAdvice[]
+  alternative: AgentKind | null
+}) {
+  const elapsed = elapsedPercent(window, now)
+  const mark = elapsed === null ? null : display === 'remaining' ? 100 - elapsed : elapsed
+  const pace = showPace ? windowPace(window, now) : null
+  const paceLabel = paceText(pace, now)
+  // Said only where the window runs out before it resets: that it lasts, the bar already shows.
+  const runsOut = showPace && window.usedPercent < 100 ? forecastRunsOut(forecast) : null
   return (
-    <div className="usage-card-advice">
-      <div className="usage-card-credits-title">{t('UsageBar.advice')}</div>
+    <div className="usage-card-row" data-level={usageLevel(window.usedPercent)}>
+      <span className="usage-card-label">{windowLabel(window)}</span>
+      <span
+        className="usage-meter"
+        aria-hidden="true"
+        title={elapsed === null ? undefined : t('UsageBar.usedAndElapsed', { used: Math.round(window.usedPercent), elapsed: Math.round(elapsed) })}
+      >
+        <span style={{ width: `${shownPercent(window, display)}%` }} />
+        {mark !== null && <span className="usage-meter-time" style={{ left: `${mark}%` }} />}
+      </span>
+      <span className="usage-card-value">{percentText(window, display)}</span>
+      {(paceLabel || window.resetsAt !== null) && (
+        <span className="usage-card-reset">
+          {paceLabel && pace && <span className="usage-card-pace" data-pace={pace.pace} title={paceLabel.detail}>{paceLabel.label}</span>}
+          {resetText(window, now)}
+        </span>
+      )}
+      {runsOut && (
+        <span className="usage-card-forecast" title={runsOut.basis}>
+          <WarningIcon />
+          {spacedText(`${t('UsageBar.runsOutAt', { value1: formatClock(runsOut.at, now) })}${window.resetsAt === null ? '' : t('quotaAdviceText.beforeReset', { value1: formatDuration(window.resetsAt - runsOut.at) })}`)}
+        </span>
+      )}
       {advice.map((item) => (
-        <div key={`${item.kind}-${item.window.kind}-${item.window.model}`} className="usage-card-advice-line" data-kind={item.kind}>
-          {adviceText(item, now, alternative)}
+        <div key={item.kind} className="usage-card-advice-line" data-kind={item.kind}>
+          <span className="usage-card-advice-label">{t('UsageBar.advice')}</span>
+          {/* The row above already says when it runs out: only what to do about it is left. */}
+          {item.kind === 'slow-down' && runsOut ? lighterWorkStep(alternative) : adviceText(item, now, alternative)}
         </div>
       ))}
     </div>
@@ -283,6 +321,9 @@ function UsageCard({ usage, accounts, accountLabel, now, advice, alternative, sh
   onSpendingChange: (spending: Spending | null) => void
 }) {
   const left = Math.max(8, Math.min(anchor.left, window.innerWidth - CARD_WIDTH - 8))
+  const display = usePreferences((s) => s.usageDisplay)
+  // Read against its time mark, a meter's fill shows the pace at a glance.
+  const timed = usage.windows.some((window) => elapsedPercent(window, now) !== null)
   const forecasts = useQuotaForecasts().filter((entry) => entry.agent === usage.agent && entry.account === usageAccount(usage))
   const bottom = window.innerHeight - anchor.top + 6
   const footer =
@@ -307,31 +348,24 @@ function UsageCard({ usage, accounts, accountLabel, now, advice, alternative, sh
         {accountLabel && <span className="muted"> · {accountLabel}</span>}
         {usage.plan && <span className="muted"> · {usage.plan}</span>}
       </div>
-      {usage.windows.map((window) => {
-        const used = Math.round(window.usedPercent)
-        const pace = showPace ? paceText(windowPace(window, now), now) : null
-        // Said only where the window runs out before it resets: that it lasts, the bar already shows.
-        const runsOut = showPace && window.usedPercent < 100
-          ? forecastRunsOut(forecasts.find((forecast) => forecast.window.kind === window.kind && forecast.window.model === window.model))
-          : null
-        return (
-          <div key={`${window.kind}-${window.model}`} className="usage-card-row" data-level={usageLevel(window.usedPercent)}>
-            <span className="usage-card-label">{windowLabel(window)}</span>
-            <span className="usage-meter" aria-hidden="true">
-              <span style={{ width: `${used}%` }} />
-            </span>
-            <span className="usage-card-value">{tr('UsageBar.usedRemaining', { used: used, value2: 100 - used, value3: pace && (
-                <span className="usage-card-pace" title={pace.detail}>
-                  {' · '}
-                  {pace.label}
-                </span>
-              ) })}</span>
-            {window.resetsAt !== null && <span className="usage-card-reset">{resetText(window, now)}</span>}
-            {runsOut && <span className="usage-card-forecast" title={runsOut.basis}>{t('UsageBar.runsOutAt', { value1: formatClock(runsOut.at, now) })}</span>}
-          </div>
-        )
-      })}
-      {advice.length > 0 && <AdviceList advice={advice} now={now} alternative={alternative} />}
+      {usage.windows.map((window) => (
+        <UsageWindowRow
+          key={`${window.kind}-${window.model}`}
+          window={window}
+          now={now}
+          display={display}
+          showPace={showPace}
+          forecast={forecasts.find((forecast) => forecast.window.kind === window.kind && forecast.window.model === window.model)}
+          advice={advice.filter((item) => item.window.kind === window.kind && item.window.model === window.model)}
+          alternative={alternative}
+        />
+      ))}
+      {timed && (
+        <div className="usage-card-legend" aria-hidden="true">
+          <span><i className="usage-card-legend-fill" />{display === 'remaining' ? t('UsageBar.legendLeft') : t('UsageBar.legendUsed')}</span>
+          <span><i className="usage-card-legend-time" />{display === 'remaining' ? t('UsageBar.legendTimeLeft') : t('UsageBar.legendTimeElapsed')}</span>
+        </div>
+      )}
       {usage.resetCredits && (usage.resetCredits.available > 0 || usage.resetCredits.blockedBy || spending) && (
         <ResetCreditList usage={usage} credits={usage.resetCredits} now={now} spending={spending} onSpend={onSpend} onChange={onSpendingChange} />
       )}

@@ -61,6 +61,13 @@ export function shownPercent(window: UsageWindow, display: Preferences['usageDis
   return display === 'remaining' ? 100 - window.usedPercent : window.usedPercent
 }
 
+// How much of the window's time has gone, the mark its meter's fill is read against; null once it
+// has no clock to go by.
+export function elapsedPercent(window: UsageWindow, now: number): number | null {
+  if (window.resetsAt === null || window.resetsAt <= now) return null
+  return Math.min(100, Math.max(0, 100 - ((window.resetsAt - now) / (window.windowMinutes * 60_000)) * 100))
+}
+
 export function percentText(window: UsageWindow, display: Preferences['usageDisplay']): string {
   const value = Math.round(shownPercent(window, display))
   return display === 'remaining' ? t('usageFormat.remaining', { value: value }) : `${value}%`

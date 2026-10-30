@@ -6,7 +6,7 @@ import { formatBytes, worktreeRows, worktreeSummary } from '../worktree-groups'
 import { useWorktrees } from '../worktree-store'
 import { useShortcutLabel } from '../keyboard-shortcuts'
 import { usePanelShortcut } from '../panel-shortcuts'
-import { BoltIcon, BookIcon, WorktreeIcon, ChatIcon, CheckIcon, ClockIcon, CoffeeIcon, FolderIcon, GearIcon, GlobeIcon, HelpIcon, PortsIcon, PulseIcon, TerminalIcon } from './icons'
+import { BoltIcon, BookIcon, WorktreeIcon, ChatIcon, CheckIcon, ClockIcon, CoffeeIcon, FilesIcon, GearIcon, GlobeIcon, HelpIcon, PortsIcon, PulseIcon, TerminalIcon } from './icons'
 import { usePorts } from '../port-state'
 import { UsageBar } from './UsageBar'
 import { openRuns } from '../schedules'
@@ -136,7 +136,7 @@ function FilesButton() {
       data-tooltip-side="top-end"
       onClick={toggleFilesPanel}
     >
-      <FolderIcon />
+      <FilesIcon />
     </button>
   )
 }

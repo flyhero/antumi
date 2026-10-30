@@ -301,8 +301,9 @@ export function TerminalIcon() {
   )
 }
 
+// Rings around a point: something listening.
 export function PortsIcon() {
-  return <svg {...stroked}><rect x="6.5" y="3" width="7" height="5" rx="1" /><path d="M10 8v4M4 12h12M4 12v4M10 12v4M16 12v4" /></svg>
+  return <svg {...stroked}><circle cx="10" cy="10" r="1.6" /><path d="M6.6 6.6a4.8 4.8 0 0 0 0 6.8M13.4 6.6a4.8 4.8 0 0 1 0 6.8M4.1 4.1a8.4 8.4 0 0 0 0 11.8M15.9 4.1a8.4 8.4 0 0 1 0 11.8" /></svg>
 }
 
 // An open book, for reading. Its last page lies on the right one and turns over the spine while a
@@ -546,6 +547,17 @@ export function FolderIcon() {
   return (
     <svg {...stroked}>
       <path d="M2.8 5.6A1.6 1.6 0 0 1 4.4 4h3l1.7 1.9h6.5a1.6 1.6 0 0 1 1.6 1.6v6.9a1.6 1.6 0 0 1-1.6 1.6H4.4a1.6 1.6 0 0 1-1.6-1.6z" />
+    </svg>
+  )
+}
+
+// An open folder, for the files panel: a project's tree to browse and edit, where FolderIcon stands
+// for the project itself.
+export function FilesIcon() {
+  return (
+    <svg {...stroked}>
+      <path d="M2.8 14.4V5.6A1.6 1.6 0 0 1 4.4 4h3l1.7 1.9h5.3a1.6 1.6 0 0 1 1.6 1.6V9" />
+      <path d="M2.9 15 5 10a1.6 1.6 0 0 1 1.5-1h10a.9.9 0 0 1 .8 1.3l-2 4.8a1.6 1.6 0 0 1-1.5.9H4.4A1.5 1.5 0 0 1 2.9 15z" />
     </svg>
   )
 }

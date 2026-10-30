@@ -82,7 +82,8 @@ In a terminal, a turn that hits the limit just stops and waits for you. In Antum
 
 ## More features
 
-[Side assistant](#side-assistant) · [Translation](#translation) · [Split view](#split-view) · [Group chat](#group-chat) · [Teams](#teams) · [Routines and scheduling](#routines-and-scheduling) · [To-dos](#to-dos)
+<details>
+<summary><b>Side assistant · Translation · Split view · Group chat · Teams · Routines and scheduling · To-dos</b></summary>
 
 <sub>Looping demos use real UI components with sample data: the pointer makes real clicks, and small areas are zoomed in. The interface shown is in Chinese.</sub>
 
@@ -141,6 +142,8 @@ When an agent's reply mentions things for you to do later (before release, to ve
 [Docs →](docs/ARCHITECTURE.md#待办)
 
 <img src="docs/assets/features/todos.webp" alt="To-dos: an agent records to-dos, the header inspector opens the to-dos tab to tick one off, and the overview lists them all" width="100%" />
+
+</details>
 
 <details>
 <summary><b>More: from running tasks to reviewing results</b></summary>

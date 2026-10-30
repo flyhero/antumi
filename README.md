@@ -80,7 +80,8 @@ Antumi 驱动的就是你装好、登录好的 Agent CLI，配置和登录都不
 
 ## 更多功能
 
-[小助手](#小助手) · [翻译](#翻译) · [分屏](#分屏) · [群聊](#群聊) · [团队](#团队) · [定时与预约](#定时与预约) · [待办](#待办)
+<details>
+<summary><b>小助手 · 翻译 · 分屏 · 群聊 · 团队 · 定时与预约 · 待办</b></summary>
 
 ### 小助手
 
@@ -137,6 +138,8 @@ Agent 在回复里提到要你之后处理的事（上线前要做的、要你�
 [详细 →](docs/ARCHITECTURE.md#待办)
 
 <img src="docs/assets/features/todos.webp" alt="待办演示：Agent 记下待办，点头部检查器按钮打开「待办」页签勾掉一项，再在总览里查看所有会话的待办" width="100%" />
+
+</details>
 
 <details>
 <summary><b>还有这些：从推进任务到验收成果</b></summary>

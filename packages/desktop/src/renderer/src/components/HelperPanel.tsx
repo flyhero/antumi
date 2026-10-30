@@ -16,6 +16,7 @@ import { HelperModePicker, HelperModelPicker, helperMode, helperModes, useHelper
 import { sendsMessage } from './ChatComposer'
 import { EnterIcon } from './icons'
 import { composerDraft, saveComposerDraft, EMPTY_DRAFT } from '../composer-drafts'
+import { askConfirm } from '../confirm-dialog'
 
 function HelperDraft({ parent }: { parent: Conversation }) {
   const sendLabel = useShortcutHint('send-message', t('ChatComposer.send'))
@@ -32,7 +33,7 @@ function HelperDraft({ parent }: { parent: Conversation }) {
   const offered = helperModes(parent.agent, catalog, model)
   const permissionMode = helperMode(offered, picked)
   const send = async () => {
-    if (busy || !text.trim() || !rpc || catalog === undefined || !confirmQuota(parent.agent, model)) return
+    if (busy || !text.trim() || !rpc || catalog === undefined || !await confirmQuota(parent.agent, model)) return
     setBusy(true)
     const helper = await ensureHelper(parent, { model, effort, permissionMode })
     if (helper) {
@@ -70,7 +71,7 @@ export function HelperPanel({ parent }: { parent: Conversation }) {
   const reset = async () => {
     if (!helper || busy) return
     const hasContent = Boolean(quotes.length || composerDraft(helper.id).text.trim() || helper.sessionId || helper.lastExit || helper.starting || page?.items.some((item) => item.kind === 'user'))
-    if (hasContent && !window.confirm(t('HelperPanel.clearHelperHistoryAndStartANewConversation'))) return
+    if (hasContent && !await askConfirm({ message: t('HelperPanel.clearHelperHistoryAndStartANewConversation'), confirm: t('ConfirmDialog.clearAndRestart'), danger: true })) return
     setBusy(true)
     const deleted = await perform((rpc) => rpc.call('conversations.delete', { id: helper.id }))
     if (deleted) {

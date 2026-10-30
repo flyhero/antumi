@@ -10,9 +10,10 @@ import { AgentIcon, ArchiveIcon, ChevronDownIcon, GroupChatIcon, PencilIcon, Pin
 import { SidebarCollapseButton } from './SidebarCollapseButton'
 import { TitleEditor } from './TitleEditor'
 import { useSidebarEntryMenu } from './SidebarEntryMenu'
+import { askConfirm } from '../confirm-dialog'
 
 export async function removeDiscussion(discussion: Discussion): Promise<void> {
-  if (!window.confirm(t('SidebarDiscussions.deleteGroupChatMemberConversationsAndPostsAre', { value1: discussion.title }))) return
+  if (!await askConfirm({ message: t('SidebarDiscussions.deleteGroupChatMemberConversationsAndPostsAre', { value1: discussion.title }), confirm: t('ChatCommandSettings.delete'), danger: true })) return
   await deleteDiscussion(discussion.id)
 }
 

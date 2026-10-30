@@ -12402,4 +12402,11 @@ export const MESSAGES = {
   "AgentProfiles.summaryAwaiting": {"zh": "等你 {count}", "en": "{count} need you"},
   "AgentProfiles.summaryDone": {"zh": "完成 {count}", "en": "{count} done"},
   "AgentProfiles.summaryFailed": {"zh": "失败 {count}", "en": "{count} failed"},
+  "ConfirmDialog.back": {"zh": "返回", "en": "Go back"},
+  "ConfirmDialog.discardAndClose": {"zh": "丢弃并关闭", "en": "Discard and close"},
+  "ConfirmDialog.discardAndReload": {"zh": "丢弃并重新载入", "en": "Discard and reload"},
+  "ConfirmDialog.stopAndHandOff": {"zh": "停止并交接", "en": "Stop and hand off"},
+  "ConfirmDialog.startAnyway": {"zh": "仍要启动", "en": "Start anyway"},
+  "ConfirmDialog.clearAndRestart": {"zh": "清空并重新开始", "en": "Clear and start over"},
+  "ConfirmDialog.removeMember": {"zh": "移出讨论", "en": "Remove"},
 } as const

@@ -13,6 +13,7 @@ import { EMPTY_DRAFT, saveComposerDraft } from '../composer-drafts'
 import { keepInitialMessage, sendInitialMessage } from '../initial-messages'
 import { PRIMARY_KEY_LABEL } from '../shortcut-keys'
 import { currentInstalledAgents, otherInstalledAgent, useInstalledAgents } from '../installed-agents'
+import { askConfirm } from '../confirm-dialog'
 
 // Every way into a handoff ends in the conversation's composer, with the agent picked there (by
 // default the other one here), to be sent from it with whatever the user adds.
@@ -80,7 +81,7 @@ export async function sendToNewConversation(conversation: Conversation, text: st
   if (!configuration) return false
   const { agent, projectPaths, modelProvider, model, effort } = configuration
   // A start on a provider spends its plan, not the agent's own quota.
-  if (!modelProvider && !confirmQuota(agent)) return false
+  if (!modelProvider && !await confirmQuota(agent)) return false
   const options = useCore.getState().rpc?.features.includes('chat-options') ?? false
   const mode = ChatPermissionMode.safeParse(configuration.permissionMode)
   const deferred = deferredStartSupported()
@@ -110,9 +111,9 @@ export function startOptions(): { allowBypass?: boolean } {
   return options ? { allowBypass: true } : {}
 }
 
-export function continueConversation(id: string) {
+export async function continueConversation(id: string) {
   const agent = useCore.getState().conversations[id]?.agent
-  if (agent && !confirmQuota(agent)) return Promise.resolve(null)
+  if (agent && !await confirmQuota(agent)) return null
   return perform((rpc) => rpc.call('conversations.continue', { id, ...startOptions() }))
 }
 
@@ -133,7 +134,7 @@ export function archiveConversation(id: string, archived: boolean) {
 }
 
 export async function deleteConversation(conversation: Conversation): Promise<boolean> {
-  if (!window.confirm(t('ConversationActions.deleteThisConversationAndItsChatHistoryProject'))) return false
+  if (!await askConfirm({ message: t('ConversationActions.deleteThisConversationAndItsChatHistoryProject'), confirm: t('ChatCommandSettings.delete'), danger: true })) return false
   return (await perform((rpc) => rpc.call('conversations.delete', { id: conversation.id }))) !== null
 }
 

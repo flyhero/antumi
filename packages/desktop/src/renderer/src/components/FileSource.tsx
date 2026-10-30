@@ -16,6 +16,7 @@ import { CheckIcon, CopyIcon, DocumentIcon } from './icons'
 import { isShortcut, useShortcutLabel } from '../keyboard-shortcuts'
 import { createFileSearchPanel, runFileSearchShortcut } from '../file-search-panel'
 import { FileImage } from './FileImage'
+import { askConfirm } from '../confirm-dialog'
 
 const FileMarkdown = lazy(() => import('./FileMarkdown').then((module) => ({ default: module.FileMarkdown })))
 
@@ -245,7 +246,7 @@ export function FileSource({ scope, tab, disk, wrap, writable, preview, ref }: {
   return <>
     {notice && <div className="file-notice" role="alert">
       <span>{notice === 'conflict' ? t('FileSource.saveFailedFileChangedOnDisk') : t('FileSource.fileChangedOnDiskAndYouHaveUnsaved')}</span>
-      <button type="button" className="link-button" onClick={() => { if (window.confirm(t('FileSource.discardUnsavedChangesAndReloadTheFileFrom'))) void reload() }}>{t('FileSource.reload')}</button>
+      <button type="button" className="link-button" onClick={() => void askConfirm({ message: t('FileSource.discardUnsavedChangesAndReloadTheFileFrom'), confirm: t('ConfirmDialog.discardAndReload'), danger: true }).then((confirmed) => { if (confirmed) void reload() })}>{t('FileSource.reload')}</button>
       {notice === 'conflict'
         ? <button type="button" className="link-button" onClick={() => void save(true)}>{t('FileSource.overwrite')}</button>
         : <button type="button" className="link-button" onClick={() => setNotice(null)}>{t('FileSource.keepMyChanges')}</button>}

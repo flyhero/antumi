@@ -11,6 +11,7 @@ import { ChatModelPicker, ChatPicker } from './ChatPicker'
 import { AgentIcon } from './icons'
 import { defaultStartMode, effortLabel, modeOptions, modeTone, startModes } from './ChatOptionsBar'
 import { startOptions } from './ConversationActions'
+import { askConfirm } from '../confirm-dialog'
 
 export type ComposerHandoff = {
   // The agent at work now: a task's, for a task's chat.
@@ -76,8 +77,8 @@ export function useComposerHandoff(conversation: Conversation): ComposerHandoff 
   }
   const send = async (note: string, references?: ChatReference[]) => {
     if (!target || found) return false
-    if (stopsRunning && !window.confirm(t('ChatHandoff.stopTheCurrentAndHandOffTo', { value1: agentLabel(from), value2: agentLabel(target.agent) }))) return false
-    if (!targetProvider && !confirmQuota(target.agent, modelText(target.model))) return false
+    if (stopsRunning && !await askConfirm({ message: t('ChatHandoff.stopTheCurrentAndHandOffTo', { value1: agentLabel(from), value2: agentLabel(target.agent) }), confirm: t('ConfirmDialog.stopAndHandOff') })) return false
+    if (!targetProvider && !await confirmQuota(target.agent, modelText(target.model))) return false
     const result = task
       ? await perform((rpc) => rpc.call('tasks.handoff', { id: task.id, agent: target.agent, note, ...(rpc.features.includes('chat-references') ? { references } : {}), ...startOptions(), ...target.options }))
       : await perform((rpc) => rpc.call('conversations.handoff', { id, agent: target.agent, note, ...(rpc.features.includes('chat-references') ? { references } : {}), stopRunning: stopsRunning, ...startOptions(), ...target.options }))

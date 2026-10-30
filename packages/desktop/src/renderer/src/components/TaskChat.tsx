@@ -61,7 +61,7 @@ function taskSurface(task: Task, dependencies: readonly Task[], planOnly: boolea
     changesHint: t('TaskChat.uncommittedTaskWorktreeChangesClickToViewIn'),
     prepareSend: async (stopped) => {
       if (!stopped && task.status === 'running') return true
-      if (stopped && task.agent && !confirmQuota(task.agent)) return false
+      if (stopped && task.agent && !await confirmQuota(task.agent)) return false
       const allowBypass = bypassable ? { allowBypass: true } : {}
       return Boolean(await perform((rpc) => rpc.call('tasks.resumeChat', { id: task.id, ...allowBypass })))
     },

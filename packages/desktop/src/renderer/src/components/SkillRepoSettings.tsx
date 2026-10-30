@@ -4,6 +4,7 @@ import { perform } from '../core-store'
 import { t, tr } from '../i18n'
 import { Toggle } from './SettingsControls'
 import { agentLabel } from '../labels'
+import { askConfirm } from '../confirm-dialog'
 
 const short = (commit: string) => commit.slice(0, 7)
 
@@ -41,7 +42,7 @@ export function SkillRepoSettings({ repo, managed, fallback, onConfigure }: { re
         <button type="button" className="button" disabled={busy} onClick={() => void run(async () => { if (readme !== null) { setReadme(null); return } const found = await perform((rpc) => rpc.call('skills.readme', { id: repo.id })); setReadme(found?.text ?? t('SkillsSettingsSection.noReadme')) })}>{readme === null ? t('ChatCommandSettings.description') : t('ChatPlan.collapse')}</button>
         <button type="button" className="button" disabled={busy} onClick={() => void inspect()}>{t('SkillsSettingsSection.checkForUpdates')}</button>
         {repo.previousCommit && <button type="button" className="button" disabled={busy} onClick={() => void run(() => perform((rpc) => rpc.call('skills.rollback', { id: repo.id })))}>{tr('SkillsSettingsSection.rollBackTo', { value1: short(repo.previousCommit) })}</button>}
-        <button type="button" className="button" disabled={busy} onClick={() => void run(async () => { if (window.confirm(t('SkillsSettingsSection.removeAgentsUsingItLoseTheseSkillsAt', { value1: repo.plugin?.name ?? repo.id }))) await perform((rpc) => rpc.call('skills.remove', { id: repo.id })) })}>{t('ChatQuoteCards.remove')}</button>
+        <button type="button" className="button" disabled={busy} onClick={() => void run(async () => { if (await askConfirm({ message: t('SkillsSettingsSection.removeAgentsUsingItLoseTheseSkillsAt', { value1: repo.plugin?.name ?? repo.id }), confirm: t('ChatQuoteCards.remove'), danger: true })) await perform((rpc) => rpc.call('skills.remove', { id: repo.id })) })}>{t('ChatQuoteCards.remove')}</button>
       </div>
       {managed ? <>
         <p className="settings-note">{repo.activation ? `${repo.activation.mode === 'all' ? t('SkillsSettingsSection.enableAll') : t('SkillsSettingsSection.selectSkills')} · ${repo.activation.agents === null ? t('SkillsSettingsSection.allCompatibleAgents') : t('SkillsSettingsSection.specificAgentCount', { count: repo.activation.agents.length })}` : t('SkillsSettingsSection.legacyActivation')}</p>

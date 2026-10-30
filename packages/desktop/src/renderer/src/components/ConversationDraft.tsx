@@ -152,16 +152,16 @@ export function ConversationDraft() {
     ...(profile ? { profileId: profile.id } : {})
   }
   // A start on a provider spends its plan, not the agent's own quota.
-  const quotaAllows = (kind: AgentKind) => providerOf(kind) !== null || confirmQuota(kind, modelFor(kind))
+  const quotaAllows = async (kind: AgentKind) => providerOf(kind) !== null || confirmQuota(kind, modelFor(kind))
   const where = { projectPaths, ...(inWorktree ? { worktree: true } : {}), ...(startBranch ? { branch: startBranch } : {}) }
   // The page is how a chat start begins, as settings choose; a terminal start has its dialog.
-  const create = () => {
-    if (!agent || !quotaAllows(agent)) return Promise.resolve(null)
+  const create = async () => {
+    if (!agent || !await quotaAllows(agent)) return null
     return perform((rpc) => rpc.call('conversations.create', { agent, ...where, ...(deferStart ? { deferStart: true } : {}), ...startOptions(), ...chosen }))
   }
   // Core fetches the issue and starts the agent on it before answering, so the page waits.
   const investigate = async () => {
-    if (!agent || !issue || !quotaAllows(agent)) return
+    if (!agent || !issue || !await quotaAllows(agent)) return
     setBusy(true)
     const note = written.trim()
     const opened = await perform((rpc) => rpc.call('sources.investigate', {

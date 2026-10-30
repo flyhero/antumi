@@ -41,6 +41,7 @@ import { useTaskHandoff, type TaskHandoff } from './TaskHandoff'
 import { launchOptions, TaskModelPicker, useEditsInPlace, useTaskLaunch, type TaskLaunch } from './TaskLaunch'
 import { createSchedule, openRunForTask, scheduleState } from '../schedules'
 import { useOpenTodoCount, useTodosShown } from '../conversation-todos'
+import { askConfirm } from '../confirm-dialog'
 
 function blockerText(blocker: string, waitingOn: readonly Task[]): string {
   if (blocker === 'blocked' && waitingOn.length > 0) {
@@ -140,7 +141,7 @@ function bypassOption(bypassable: boolean): { allowBypass?: boolean } {
 
 // A task's agent with its quota used up would stall at once; the user decides. One on a model
 // provider spends the provider's plan instead.
-function quotaAllows(taskId: string): boolean {
+async function quotaAllows(taskId: string): Promise<boolean> {
   const task = useCore.getState().tasks[taskId]
   return !task?.agent || onProvider(task) || confirmQuota(task.agent)
 }
@@ -198,7 +199,7 @@ export function cardAction(task: Task, dependencies: readonly Task[], turn: Chat
 
 // Deleting stops a live agent, so it asks first. Worktrees stay on disk either way.
 async function deleteTask(task: Task): Promise<void> {
-  if (window.confirm(t('TaskActions.deleteTaskExistingWorktreesAreKept', { value1: task.title, value2: task.status === 'running' ? t('TaskActions.theRunningAgentWillBeStopped') : '' }))) {
+  if (await askConfirm({ message: t('TaskActions.deleteTaskExistingWorktreesAreKept', { value1: task.title, value2: task.status === 'running' ? t('TaskActions.theRunningAgentWillBeStopped') : '' }), confirm: t('ChatCommandSettings.delete'), danger: true })) {
     await perform((rpc) => rpc.call('tasks.delete', { id: task.id }))
   }
 }
@@ -206,7 +207,7 @@ async function deleteTask(task: Task): Promise<void> {
 // Cancelling stops the agent and keeps the rest, so it asks first, saying what stays.
 async function cancelTask(task: Task): Promise<void> {
   const stops = task.status === 'running' ? t('TaskActions.agentWillStop') : ''
-  if (window.confirm(t('TaskActions.cancelTaskChatHistoryAndWorktreesAreKept', { value1: task.title, stops: stops }))) {
+  if (await askConfirm({ message: t('TaskActions.cancelTaskChatHistoryAndWorktreesAreKept', { value1: task.title, stops: stops }), confirm: t('TaskActions.cancelTask'), cancel: t('ConfirmDialog.back') })) {
     await perform((rpc) => rpc.call('tasks.cancel', { id: task.id }))
   }
 }
@@ -388,7 +389,7 @@ function ScheduleButton({ task, dependencies, labelled }: { task: Task; dependen
 
 // Started from the details as the task keeps its launch, so the dialog is not needed there.
 async function startNow(task: Task, launch: TaskLaunch): Promise<void> {
-  if (!task.agent || (!onProvider(task) && !confirmQuota(task.agent, modelText(launch.model)))) return
+  if (!task.agent || (!onProvider(task) && !await confirmQuota(task.agent, modelText(launch.model)))) return
   const bypass = useCore.getState().rpc?.features.includes('chat-options') ? { allowBypass: true } : {}
   await openChatWhileStarting(task.id, () => perform((rpc) => rpc.call('tasks.start', { id: task.id, ...bypass, ...launchOptions(launch) })))
 }

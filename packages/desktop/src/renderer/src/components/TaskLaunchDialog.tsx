@@ -89,7 +89,7 @@ function LaunchForm({ task, onSquad }: { task: Task; onSquad(): void }) {
   // from then on is the app's, not the closed dialog's.
   const submit = async () => {
     // On a provider it spends the provider's plan, not the agent's own quota.
-    if (!agent || busy || blocker || (!provider && !confirmQuota(agent, modelText(model)))) return
+    if (!agent || busy || blocker || (!provider && !await confirmQuota(agent, modelText(model)))) return
     setBusy(true)
     dismissError()
     if ((agent !== task.agent || task.squadId) && !await updateTask(task.id, { agent, ...(task.squadId ? { squadId: null } : {}) })) {

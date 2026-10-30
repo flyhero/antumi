@@ -18,6 +18,7 @@ import { agentLabel } from '../labels'
 import { usePreferences, type Preferences } from '../preferences'
 import { adviceText, alternativeAgent, recommendationText } from '../quota-advice-text'
 import { formatClock, resetText, useNow, windowLabel } from '../usage-format'
+import { askConfirm } from '../confirm-dialog'
 
 // What quotaVerdict matches a model-specific window against: everything the catalog says of it,
 // since the default model names the real one only in its description.
@@ -104,7 +105,7 @@ function spaced(label: string): string {
 
 // Asked before starting an agent whose quota is used up: it would stall at once. Only a nudge; the
 // user may know better (a reset about to land, a credit to spend).
-export function confirmQuota(agent: AgentKind, model?: string | null): boolean {
+export async function confirmQuota(agent: AgentKind, model?: string | null): Promise<boolean> {
   const now = Date.now()
   const verdict = verdictOf(agent, now, model)
   if (verdict.state !== 'exhausted' || !verdict.window) {
@@ -123,7 +124,8 @@ export function confirmQuota(agent: AgentKind, model?: string | null): boolean {
   const later = useCore.getState().rpc?.features.includes('schedules')
     ? t('AgentQuota.youCanAlsoCancelAndUseTheClock')
     : ''
-  return window.confirm(
-    t('AgentQuota.hasUsedItsQuotaStartWithAnyway', { value1: agentLabel(agent), value2: spaced(windowLabel(verdict.window)), value3: reset ? `，${reset}` : '', suggestion: suggestion, later: later, value6: agentLabel(agent) })
-  )
+  return askConfirm({
+    message: t('AgentQuota.hasUsedItsQuotaStartWithAnyway', { value1: agentLabel(agent), value2: spaced(windowLabel(verdict.window)), value3: reset ? `，${reset}` : '', suggestion: suggestion, later: later, value6: agentLabel(agent) }),
+    confirm: t('ConfirmDialog.startAnyway')
+  })
 }

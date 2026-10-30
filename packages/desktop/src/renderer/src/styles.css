@@ -10251,6 +10251,46 @@ button.squad-member-main { cursor: pointer; }
   overflow-wrap: anywhere;
 }
 .project-trust-note { margin: 0; font-size: 13px; color: var(--text-muted); }
+
+/* The app's confirm box (ConfirmDialog): the question as the title, what it means under it, the
+   actions on the right. A destructive one gets a warning mark and a danger-tinted button. */
+.confirm-dialog { width: min(420px, calc(100vw - 32px)); border-radius: var(--radius-lg); }
+.confirm-dialog[open] { animation: confirm-dialog-in 0.16s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.confirm-dialog[open]::backdrop { animation: confirm-dialog-fade 0.16s ease-out; }
+.confirm-dialog-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px 14px;
+  padding: 22px 22px 18px;
+}
+.confirm-dialog[data-danger] .confirm-dialog-body { grid-template-columns: 36px minmax(0, 1fr); }
+.confirm-dialog-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
+}
+.confirm-dialog-icon svg { width: 18px; height: 18px; }
+.confirm-dialog-text { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding-top: 1px; }
+.confirm-dialog-text h2 { margin: 0; font-size: 15px; font-weight: 600; line-height: 1.45; overflow-wrap: anywhere; }
+.confirm-dialog-text p { margin: 0; font-size: 13px; line-height: 1.6; color: var(--text-muted); white-space: pre-line; overflow-wrap: anywhere; }
+.confirm-dialog-footer { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 8px; }
+.confirm-dialog-footer .button { min-width: 76px; }
+.button.danger {
+  border-color: color-mix(in srgb, var(--danger) 35%, transparent);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
+  font-weight: 500;
+}
+.button.danger:hover:not(:disabled) { background: color-mix(in srgb, var(--danger) 20%, transparent); }
+@keyframes confirm-dialog-in { from { opacity: 0; transform: translateY(6px) scale(0.98); } }
+@keyframes confirm-dialog-fade { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .confirm-dialog[open], .confirm-dialog[open]::backdrop { animation: none; }
+}
 /* Lined up with the composer under it (.chat-dock). */
 .project-run-notice { margin: 8px max(16px, calc((100% - var(--chat-width)) / 2)) 0; }
 

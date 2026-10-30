@@ -16,6 +16,7 @@ import { ContextMenu, MenuItem, type MenuPoint } from './ContextMenu'
 import { FileMenu, FileMenuItems } from './FileMenu'
 import { Segmented } from './SettingsControls'
 import { CheckIcon, CloseIcon, MoreIcon, RefreshIcon, SearchIcon, SidebarIcon } from './icons'
+import { askConfirm } from '../confirm-dialog'
 
 const REASON: Record<Extract<FileRead, { kind: 'unavailable' }>['reason'], string> = localized(() => ({
   'not-found': t('FileEditor.fileDoesNotExistItMayHaveBeen'),
@@ -122,8 +123,8 @@ export function FileEditor({ scope, updatedAt, editor }: { scope: FileScope; upd
     if (editor && active) updateFileTabs(key, (state) => revealedFile(state, roots, active.file.path))
   }, [editor, key, active?.file.path, active?.reveal, roots.join('\0')])
 
-  const close = (tab: FileTab) => {
-    if (tab.dirty && !window.confirm(t('FileEditor.hasUnsavedChangesCloseAndDiscardThem', { value1: tab.file.path.split(/[\\/]/).at(-1) }))) return
+  const close = async (tab: FileTab) => {
+    if (tab.dirty && !await askConfirm({ message: t('FileEditor.hasUnsavedChangesCloseAndDiscardThem', { value1: tab.file.path.split(/[\\/]/).at(-1) }), confirm: t('ConfirmDialog.discardAndClose'), danger: true })) return
     updateFileTabs(key, (state) => closedFile(state, tab.file.path))
     dropFileDraft(key, tab.file.path)
   }

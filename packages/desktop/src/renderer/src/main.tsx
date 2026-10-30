@@ -13,6 +13,7 @@ import { startCoreConnection, useCore } from './core-store'
 import { startPanelWindowHost } from './panel-window-host'
 import { startPanelWindowPage, thisPanelKind } from './panel-window-page'
 import { PanelWindow } from './components/PanelWindow'
+import { ConfirmDialog } from './components/ConfirmDialog'
 import { SettingsPage } from './components/SettingsPage'
 import { applyTitleBar } from './desktop-bridge'
 import { startNotifications } from './notifications'
@@ -70,5 +71,6 @@ if (!root) {
 createRoot(root).render(
   <StrictMode>
     {settingsPreview ? <div className="app"><SettingsPage /></div> : playground ? <PetPlayground /> : popup ? <RequestPopup /> : panelKind ? <PanelWindow kind={panelKind} /> : <App />}
+    <ConfirmDialog />
   </StrictMode>
 )

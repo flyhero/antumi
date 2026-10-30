@@ -19,6 +19,7 @@ import { AddMemberButton } from './DiscussionMemberForm'
 import { ArchivedBar } from './ArchivedBar'
 import { CopyButton } from './CopyButton'
 import { ChatFind, useChatFindState } from './ChatFind'
+import { askConfirm } from '../confirm-dialog'
 
 const ACTIONS: Array<{ action: DiscussionAction; label: string; hint: string }> = localized(() => ([
   { action: 'pause', label: t('DiscussionView.pause'), hint: t('DiscussionView.pauseAfterThisRoundFinishes') },
@@ -73,7 +74,7 @@ const LEAVE_BLOCKER: Record<'too-few' | 'chair' | 'busy', string> = localized(()
 
 // Takes a member out once the user agrees; what it said stays.
 async function leave(discussion: Discussion, member: DiscussionMember): Promise<void> {
-  if (window.confirm(t('DiscussionView.removeFromTheDiscussionTheirPostsWillBe', { value1: member.name }))) await removeDiscussionMember(discussion.id, member.id)
+  if (await askConfirm({ message: t('DiscussionView.removeFromTheDiscussionTheirPostsWillBe', { value1: member.name }), confirm: t('ConfirmDialog.removeMember') })) await removeDiscussionMember(discussion.id, member.id)
 }
 
 function MemberChip({ member, chair, onMention, leaveBlocker, onLeave }: {

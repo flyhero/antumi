@@ -345,6 +345,8 @@ export const MESSAGES = {
   "SupportSettings.feedback": {"zh": "问题反馈", "en": "Feedback"},
   "SupportSettings.feedbackDescription": {"zh": "报告问题或提出建议，在 GitHub Issues 中跟进。", "en": "Report a problem or suggest an improvement on GitHub Issues."},
   "SupportSettings.openFeedback": {"zh": "提交反馈", "en": "Submit feedback"},
+  "SupportSettings.name": {"zh": "关于名字", "en": "The name"},
+  "SupportSettings.nameDescription": {"zh": "Antumi（安图米）是受 ant（蚂蚁）启发的自造词。单只蚂蚁很小，合力却能完成大活。Antumi 把不同的 AI 编程 Agent 集中到同一个工作台，让任务分头推进，进度和成果都看得清楚。图标上抱着三个 Agent 方块的小蚂蚁，就是它。", "en": "Antumi is a coined word inspired by \"ant\". One ant is small; together they move things far bigger than themselves. Antumi brings different AI coding agents onto one workbench so work moves forward in parallel while progress and results stay visible. The little ant holding three agent blocks on the app icon is it."},
   "SupportSettings.community": {"zh": "交流", "en": "Community"},
   "SupportSettings.communityDescription": {"zh": "交流入口将在开放后显示在这里。", "en": "Community links will appear here when available."},
   "SupportSettings.comingSoon": {"zh": "即将开放", "en": "Coming soon"},

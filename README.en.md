@@ -310,12 +310,6 @@ Antumi is currently in **development preview** (0.21.x), developed and tested ma
 - **More agents and ecosystem**: Expanding support for more agent CLIs and ACP servers.
 
 
-## The name
-
-**Antumi is a coined word inspired by "ant".** One ant is small; together they move things far bigger than themselves. Antumi brings different AI coding agents onto one workbench so work can move forward in parallel while progress and results stay visible.
-
-The mascot is a little ant: it holds three agent blocks on the app icon.
-
 ## License
 
 [Apache License 2.0](LICENSE)

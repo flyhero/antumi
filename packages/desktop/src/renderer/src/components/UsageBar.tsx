@@ -480,7 +480,8 @@ function UsageSegment({ usage, now }: { usage: AgentUsage; now: number }) {
     }
   }, [anchor, close])
   useEffect(() => {
-    if (pinned) card.current?.querySelector('button')?.focus()
+    // Past the info buttons: focused, one would open its tooltip over the card unasked.
+    if (pinned) card.current?.querySelector<HTMLButtonElement>('button:not(.usage-card-meter-info, .usage-card-global-info)')?.focus()
   }, [pinned])
   // A quota notification clicked: open this card as a click on it would.
   useEffect(() => {

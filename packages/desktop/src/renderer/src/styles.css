@@ -3922,7 +3922,7 @@ div.inspector-empty > p { margin: 0 0 8px; }
 .usage-card-meter-info:hover, .usage-card-meter-info:focus-visible { background: var(--fill); color: var(--text-muted); }
 .usage-card-meter-info:focus-visible { outline: 2px solid var(--focus); outline-offset: 0; }
 .usage-card-meter-tooltip { position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 1; visibility: hidden; padding: 8px 12px; border: 1px solid var(--border-2); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow-float); color: var(--text-muted); font-weight: 400; line-height: 1.5; }
-.usage-card-meter-hint:hover .usage-card-meter-tooltip, .usage-card-meter-hint:focus-within .usage-card-meter-tooltip { visibility: visible; }
+.usage-card-meter-hint:hover .usage-card-meter-tooltip, .usage-card-meter-info:focus-visible + .usage-card-meter-tooltip { visibility: visible; }
 
 .usage-card-row[data-level='critical'] .usage-card-value,
 .usage-card-row[data-level='warning'] .usage-card-value {

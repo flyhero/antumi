@@ -649,17 +649,21 @@ body.stacked-panel-resizing * {
 .conversation-group-mark .agent-mark { width: 14px; height: 14px; }
 .conversation-group-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* The rows keep their place, titles in line with the folder's name: the guide runs down their icon
-   column, an idle row shows nothing on it, and any other mark sits on the guide, which breaks around
-   it. `--row-pad` is the row's top padding, where the mark starts. */
+   column, each row's mark sits on it, and it breaks around the mark. `--row-pad` is the row's top
+   padding, where the mark starts. */
 .conversation-group[data-tree] .conversation-row { position: relative; padding-left: 11px; --row-pad: 8px; }
 .conversation-list[data-density='compact'] .conversation-group[data-tree] .conversation-row { --row-pad: 5px; }
-.conversation-group[data-tree] .conversation-row::before { content: ''; position: absolute; top: -1px; bottom: -1px; left: 19px; width: 1px; background: var(--border); }
-.conversation-group[data-tree] .conversation-row:has(.conversation-status:not([data-glyph='idle']))::before {
+.conversation-group[data-tree] .conversation-row::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  left: 19px;
+  width: 1px;
   background:
     linear-gradient(var(--border), var(--border)) top / 1px calc(var(--row-pad) + 2px) no-repeat,
     linear-gradient(var(--border), var(--border)) bottom / 1px calc(100% - var(--row-pad) - 20px) no-repeat;
 }
-.conversation-group[data-tree] .conversation-status[data-glyph='idle'] { box-shadow: none; }
 /* A project's group starts a conversation there; shown while the heading is pointed at, under the
    section's own ＋. */
 .conversation-group-new { margin-right: 4px; opacity: 0; }
@@ -674,8 +678,7 @@ body.stacked-panel-resizing * {
 /* Show less beside show more: only as wide as its word. */
 .conversation-group-more[data-beside] { width: auto; flex-shrink: 0; padding-left: 12px; }
 /* Centered in the row's 16px icon column, on the title's first line, like a task's status icon. */
-/* The mark before a conversation's name: a ring when nothing is going on (nothing in a project's
-   folder, whose guide stands for it), a spinner while its agent
+/* The mark before a conversation's name: a ring when nothing is going on, a spinner while its agent
    works, a dot for what wants the user: amber and pulsing when it waits on them, red when it failed,
    the accent when a turn finished unseen. */
 .conversation-status {

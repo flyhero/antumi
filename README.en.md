@@ -7,7 +7,6 @@
 Issues straight to work · Agents working together · Self-verification · No quota stalls
 
 [![Version](https://img.shields.io/badge/version-0.21.2-blue)](CHANGELOG.md)
-[![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%C2%B7%20Windows%20%C2%B7%20Linux-lightgrey)
 ![Agents](https://img.shields.io/badge/agents-10%20supported-8A2BE2)
 
@@ -308,8 +307,3 @@ Antumi is currently in **development preview** (0.21.x), developed and tested ma
 - **Windows testing**: Polishing auto-updates, real-machine installation and CI.
 - **Remote execution**: Let agents work on repositories over SSH / WSL while the board stays local.
 - **More agents and ecosystem**: Expanding support for more agent CLIs and ACP servers.
-
-
-## License
-
-[Apache License 2.0](LICENSE)

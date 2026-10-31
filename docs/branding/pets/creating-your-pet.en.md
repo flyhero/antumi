@@ -44,7 +44,7 @@ Registration uses **256 × 256 cell coordinates**, with the origin at the top le
 | `faces` | At least the idle neck position; eye centers, radii, angles, and local material tone adjustments for each pose as needed; closed-eye poses may omit eyes |
 | `eyes` | Style: textured (original iris), stitched, or ink; colors, facial material column, and sampling offsets |
 | `armEdge` | Arm clipping boundary as a percentage from 0 to 100 |
-| Optional `typing` | Vertical offsetY, typing cycleMs, and each arm's clipping path (clip), shoulder pivot, and lift angle |
+| Optional `typing` | Vertical offsetY, overall scale (optional, defaults to 1, anchored at the bottom center of the canvas), typing cycleMs, and each arm's clipping path (clip), shoulder pivot, and lift angle |
 
 Coordinates range from 0 to 256. Necks must be above the foot baseline, head rectangles must have positive width and height, and `walkNecks` must contain exactly 12 entries. See the [Format 1 definition](https://github.com/flyhero/antumi/blob/main/packages/protocol/src/pet.ts) for all fields and ranges.
 

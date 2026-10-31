@@ -44,7 +44,7 @@
 | `faces` | 至少提供 idle 的颈部位置；按各姿势填写眼睛中心、半径、角度及局部材质明暗修正；闭眼姿势可不提供眼睛 |
 | `eyes` | 眼睛样式 textured（保留原虹膜）、stitched（绣眼）或 ink（漫画），以及配色、面部材质列号和取样偏移 |
 | `armEdge` | 手臂裁切边界，0–100 的百分比 |
-| 可选 `typing` | 姿势垂直偏移 offsetY、一轮打字时间 cycleMs，以及两只手臂的裁切路径 clip、肩部支点 pivot、抬手角度 lift |
+| 可选 `typing` | 姿势垂直偏移 offsetY、整体缩放 scale（可省略，默认 1，以画布底部中央为支点）、一轮打字时间 cycleMs，以及两只手臂的裁切路径 clip、肩部支点 pivot、抬手角度 lift |
 
 坐标范围为 0–256，颈部需在脚底上方，头部矩形需有正宽高；`walkNecks` 必须恰好 12 项。完整字段和取值范围以 [Format 1 定义](https://github.com/flyhero/antumi/blob/main/packages/protocol/src/pet.ts) 为准。
 

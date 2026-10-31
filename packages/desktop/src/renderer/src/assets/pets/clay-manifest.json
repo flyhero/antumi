@@ -362,6 +362,7 @@
     "armEdge": 84,
     "typing": {
       "offsetY": 10.8,
+      "scale": 0.9,
       "cycleMs": 1600,
       "near": {
         "pivot": {

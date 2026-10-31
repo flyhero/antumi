@@ -32,7 +32,7 @@
   83.333333% { background-position: 66.666667% 100%; transform: var(--pet-step-10); }
   91.666667% { background-position: 100% 100%; transform: var(--pet-step-11); }
 }
-.pet-workstation { position: absolute; inset: 0; width: 100%; height: 100%; }
+.pet-workstation { position: absolute; inset: 0; width: 100%; height: 100%; transform-origin: 50% 100%; }
 .pet-workstation-base, .pet-typing-arms { position: absolute; inset: 0; width: 100%; height: 100%; }
 .pet-typing-arm { transform-box: view-box; animation: pet-type-near var(--pet-typing-cycle) ease-in-out infinite; }
 .pet-typing-far { animation-name: pet-type-far; }

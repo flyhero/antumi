@@ -3,7 +3,7 @@ import { agentCallOpen, type AgentCall, type Conversation } from '@antumi/protoc
 import { perform, useCore } from '../core-store'
 import { t } from '../i18n'
 import { chatDayAndTime } from '../labels'
-import { AgentIcon, CheckIcon, ClockIcon, CloseIcon, WarningIcon } from './icons'
+import { AgentIcon } from './icons'
 import { openAgentCall, useAgentCalls } from '../agent-calls'
 import './agent-calls.css'
 
@@ -29,9 +29,8 @@ export function AgentCalls({ conversation }: { conversation: Conversation }) {
     {error && <p className="inspector-empty" role="alert">{error}</p>}
     {!error && calls === null && <p className="inspector-empty muted">{t('AgentProfiles.loadingCalls')}</p>}
     {calls?.length === 0 && <p className="inspector-empty muted">{t('AgentProfiles.noCalls')}</p>}
-    {ordered.length > 0 && <ol ref={list} className="delegation-timeline" aria-label={t('AgentProfiles.history')}>
-    {ordered.map((call) => <li className="delegation-timeline-item" key={call.id} data-call-id={call.id} data-focused={call.id === focus || undefined} data-state={call.state} data-active={call.state === 'running' || call.state === 'starting' || undefined}>
-      <span className="delegation-timeline-node" aria-hidden="true">{call.state === 'completed' ? <CheckIcon /> : call.state === 'awaiting' || call.state === 'failed' ? <WarningIcon /> : call.state === 'cancelled' ? <CloseIcon /> : call.state === 'queued' ? <ClockIcon /> : <span className="delegation-timeline-dot" />}</span>
+    {ordered.length > 0 && <ol ref={list} className="delegation-list" aria-label={t('AgentProfiles.history')}>
+    {ordered.map((call) => <li className="delegation-item" key={call.id} data-call-id={call.id} data-focused={call.id === focus || undefined}>
       <article className="delegation-record">
       <div className="delegation-record-head"><AgentIcon agent={call.profile.agent} /><strong>{call.profile.name}</strong><span className="delegation-status" data-state={call.state}>{t(`AgentProfiles.${call.state}`)}</span></div>
       <time className="muted" dateTime={new Date(call.createdAt).toISOString()}>{chatDayAndTime(call.createdAt)}</time>

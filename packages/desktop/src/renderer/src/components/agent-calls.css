@@ -11,21 +11,11 @@
 .delegation-panel { padding: 0 16px 24px; }
 .delegation-panel-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 16px 0 12px; font-size: 12px; }
 .delegation-panel-header strong { font-weight: 500; }
-.delegation-timeline { list-style: none; margin: 8px 0 0; padding: 0; }
-.delegation-timeline-item { --delegation-node-tone: var(--text-3); position: relative; min-width: 0; padding: 0 0 28px 32px; }
-.delegation-timeline-item::before { content: ''; position: absolute; left: 9px; top: 24px; bottom: 4px; width: 1px; background: var(--border-2); }
-.delegation-timeline-item:last-child { padding-bottom: 0; }
-.delegation-timeline-item:last-child::before { display: none; }
-.delegation-timeline-item[data-active] { --delegation-node-tone: var(--status-running); }
-/* The one a chat card's 详情 named: a tint and the accent down its side. */
-.delegation-timeline-item[data-focused] .delegation-record { margin: -8px -10px; padding: 8px 10px; border-radius: var(--radius); background: var(--fill); box-shadow: inset 2px 0 0 var(--accent); }
-.delegation-timeline-item[data-state='completed'] { --delegation-node-tone: var(--status-done); }
-.delegation-timeline-item[data-state='awaiting'] { --delegation-node-tone: var(--warning); }
-.delegation-timeline-item[data-state='failed'] { --delegation-node-tone: var(--danger); }
-.delegation-timeline-node { position: absolute; top: 0; left: 0; display: grid; place-items: center; width: 20px; height: 20px; border: 1px solid color-mix(in srgb, var(--delegation-node-tone) 24%, transparent); border-radius: 50%; color: var(--delegation-node-tone); background: color-mix(in srgb, var(--delegation-node-tone) 6%, transparent); }
-.delegation-timeline-node > svg { width: 12px; height: 12px; }
-.delegation-timeline-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
-.delegation-timeline-item[data-active] .delegation-timeline-node::after { content: ''; position: absolute; inset: -4px; border: 1px solid var(--delegation-node-tone); border-radius: 50%; animation: delegation-node-breathe 2.4s ease-out infinite; pointer-events: none; }
+.delegation-list { list-style: none; margin: 8px 0 0; padding: 0; }
+.delegation-item { min-width: 0; padding: 0 0 28px; }
+.delegation-item:last-child { padding-bottom: 0; }
+/* A card's 详情 marks its record without changing its alignment. */
+.delegation-item[data-focused] .delegation-record { margin: -8px 0; padding: 8px 0; border-radius: var(--radius); background: var(--fill); }
 .delegation-record { min-width: 0; font-size: 12px; }
 .delegation-record-head { display: flex; align-items: center; gap: 8px; }
 .delegation-record-head > svg { width: 18px; height: 18px; flex-shrink: 0; }
@@ -46,9 +36,8 @@
 .delegation-result summary { padding: 8px 10px; cursor: pointer; color: var(--text-muted); }
 .delegation-result p { margin: 0; padding: 0 10px 10px; }
 .delegation-record-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
-.delegation-record-actions .link-button { font-size: 12px; }
+.delegation-record-actions .link-button { margin-left: 0; font-size: 12px; }
 .delegation-delivery { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; color: var(--text-muted); font-size: 12px; }
 .delegation-delivery > svg { width: 16px; height: 16px; }
 .delegation-delivery .link-button { font-size: inherit; }
-@keyframes delegation-node-breathe { from { opacity: 0.4; transform: scale(0.9); } to { opacity: 0; transform: scale(1.2); } }
-@media (prefers-reduced-motion: reduce) { .delegation-timeline-item[data-active] .delegation-timeline-node::after { animation: none; opacity: 0; } .delegation-instruction summary::before { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .delegation-instruction summary::before { transition: none; } }

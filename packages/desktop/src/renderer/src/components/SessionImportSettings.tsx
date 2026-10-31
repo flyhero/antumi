@@ -4,7 +4,8 @@ import { t } from '../i18n'
 import { perform, selectConversation, useCore } from '../core-store'
 import { agentLabel } from '../labels'
 import { timeAgo } from '../conversation-state'
-import { AgentIcon, ChevronRightIcon, RefreshIcon } from './icons'
+import { AgentIcon, CheckIcon, ChevronRightIcon, RefreshIcon } from './icons'
+import { Spinner } from './Spinner'
 import { projectName } from './ProjectPicker'
 import { useExternalSessions } from '../external-sessions'
 import { Toggle } from './SettingsControls'
@@ -64,11 +65,15 @@ export function SessionImportSettings() {
     return next
   })
 
-  const toggle = (keys: readonly string[], on: boolean) => setChosen((current) => {
-    const next = new Set(current)
-    keys.forEach((key) => (on ? next.add(key) : next.delete(key)))
-    return next
-  })
+  // A new pick starts the next import: the last one's result has been seen.
+  const toggle = (keys: readonly string[], on: boolean) => {
+    setImported(null)
+    setChosen((current) => {
+      const next = new Set(current)
+      keys.forEach((key) => (on ? next.add(key) : next.delete(key)))
+      return next
+    })
+  }
 
   const submit = async () => {
     if (!picked.length || busy) return
@@ -119,26 +124,27 @@ export function SessionImportSettings() {
           <button type="button" className="button ghost" disabled={groups.every(([cwd]) => !isExpanded(cwd))} onClick={() => expandAll(false)}>{t('SessionImportSettings.collapseAll')}</button>
         </div>
       )}
-      {imported && imported.length > 0 && (
-        <p className="settings-note">
-          {t('SessionImportSettings.imported', { count: imported.length })}
-          <button type="button" className="button" onClick={() => selectConversation(imported[0]!.id)}>{t('SessionImportSettings.open')}</button>
-        </p>
-      )}
       {sessions === null ? <p className="settings-empty">{t('SessionImportSettings.scanning')}</p>
         : visible.length === 0 ? <p className="settings-empty">{sessions.length ? t('SessionImportSettings.noneMatch') : t('SessionImportSettings.none')}</p>
           : groups.map(([cwd, members]) => (
             <SessionImportGroup key={cwd} cwd={cwd} members={members} chosen={chosen} busy={busy} expanded={isExpanded(cwd)} toggle={toggle}
               onExpand={() => setExpanded((current) => new Map(current).set(cwd, !isExpanded(cwd)))} />
           ))}
+      {/* The outcome where the import was asked for: the rows it took leave the list, so up there it went unseen. */}
       <div className="session-import-actions">
         <span className="session-import-summary" aria-live="polite">
-          {t('SessionImportSettings.selectedCount', { count: picked.length })}
+          {imported && imported.length > 0 && (
+            <span className="session-import-result"><CheckIcon />{t('SessionImportSettings.imported', { count: imported.length })}</span>
+          )}
+          {(picked.length > 0 || !imported?.length) && <span>{t('SessionImportSettings.selectedCount', { count: picked.length })}</span>}
           {hiddenPicked > 0 && <span> · {t('SessionImportSettings.hiddenSelected', { count: hiddenPicked })}</span>}
         </span>
+        {imported && imported.length > 0 && !busy && (
+          <button type="button" className="button" onClick={() => selectConversation(imported[0]!.id)}>{t('SessionImportSettings.open')}</button>
+        )}
         {picked.length > 0 && <button type="button" className="button ghost" disabled={busy} onClick={() => setChosen(new Set())}>{t('SessionImportSettings.clearSelection')}</button>}
         <button type="button" className="button primary" disabled={!picked.length || busy} onClick={() => void submit()}>
-          {busy ? t('SessionImportSettings.importing') : t('SessionImportSettings.importSelected', { count: picked.length })}
+          {busy ? <><Spinner />{t('SessionImportSettings.importing')}</> : t('SessionImportSettings.importSelected', { count: picked.length })}
         </button>
       </div>
     </>

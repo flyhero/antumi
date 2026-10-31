@@ -9669,8 +9669,8 @@ export const MESSAGES = {
     "en": "Use one reset card"
   },
   "UsageBar.upcomingSource": {
-    "zh": "预告来源",
-    "en": "Announcement source"
+    "zh": "来源",
+    "en": "Source"
   },
   "UsageBar.latestSource": {
     "zh": "上次来源",

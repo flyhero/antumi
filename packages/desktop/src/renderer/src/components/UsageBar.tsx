@@ -163,6 +163,7 @@ const fullDate = (at: number) => new Date(at).toLocaleString(getLocale(), { hour
 // and the credit the tracker asks for.
 export function GlobalResetList({ resets, now }: { resets: GlobalResets; now: number }) {
   const sourceId = useId()
+  const quoteId = useId()
   const text = globalResetText(resets, now)
   const source = (url: string | null, label: string) => url && <a className="usage-card-global-source" href={url} target="_blank" rel="noreferrer">{label}</a>
   const attribution = (
@@ -178,10 +179,17 @@ export function GlobalResetList({ resets, now }: { resets: GlobalResets; now: nu
       <div className="usage-card-credits-title">{t('SettingsPage.serviceWideReset')}{!text.upcoming && !text.latest && !text.chance && attribution}</div>
       {resets.upcoming && text.upcoming && (
         <div className="usage-card-global-upcoming" title={fullDate(resets.upcoming.at)}>
-          {text.upcoming}
-          {resets.upcoming.text && <q>{resets.upcoming.text}</q>}
-          {source(resets.upcoming.sourceUrl, t('UsageBar.upcomingSource'))}
-          {!text.latest && !text.chance && attribution}
+          <div className="usage-card-global-heading">
+            <span>{text.upcoming}</span>
+            {source(resets.upcoming.sourceUrl, t('UsageBar.upcomingSource'))}
+            {!text.latest && !text.chance && attribution}
+          </div>
+          {resets.upcoming.text && (
+            <span className="usage-card-global-quote" tabIndex={0} aria-describedby={quoteId} title="">
+              <q>{resets.upcoming.text}</q>
+              <span id={quoteId} role="tooltip" className="usage-card-global-tooltip usage-card-global-quote-tooltip">{resets.upcoming.text}</span>
+            </span>
+          )}
         </div>
       )}
       {resets.latest && text.latest && (

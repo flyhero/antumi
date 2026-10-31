@@ -310,7 +310,47 @@ textarea {
   flex-shrink: 0;
   display: grid;
   min-height: 0;
-  margin: 8px 8px 8px 0;
+}
+
+/* Flush with the window's top, its right edge and the status bar, as the chat beside it is: square
+   there, and no border of its own to double the status bar's. Docked rather than floating, it
+   casts no shadow, which would fall across the status bar. */
+:root:not([data-backdrop]) .utility-panel-dock > .side-panel {
+  border-right: 0;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  box-shadow: none;
+}
+
+:root:not([data-backdrop]) .utility-panel-dock > .side-panel:first-child {
+  border-top: 0;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+:root:not([data-backdrop]) .utility-panel-dock > .side-panel:last-child {
+  border-bottom: 0;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+/* No gap before the dock either: the panel's own left border is the line, and the grip straddles
+   it, wider than it looks, coloured only to drag. Split panes and the inspector keep their gaps. */
+:root:not([data-backdrop]) .workspace { --side-panel-separator-size: 0px; }
+/* Above the chat's sticky header (2), which would hide the half of the line over the chat. */
+:root:not([data-backdrop]) .workspace > .side-panel-separator { z-index: 3; }
+:root:not([data-backdrop]) .workspace > .side-panel-separator::before { content: ''; position: absolute; inset: 0 -4px; }
+:root:not([data-backdrop]) .workspace > .side-panel-separator::after { top: 0; bottom: 0; }
+:root:not([data-backdrop]) .workspace > .side-panel-separator:not(:hover, :focus-visible, [data-dragging='true'])::after { background: transparent; }
+
+/* Maximized it fills the window, which has nothing else to set it off from. */
+:root:not([data-backdrop]) .utility-panel-dock[data-maximized] {
+  margin-left: 0;
+}
+
+:root:not([data-backdrop]) .utility-panel-dock[data-maximized] > .side-panel {
+  border-left: 0;
+  border-radius: 0;
 }
 
 .utility-panel-dock[data-maximized] {
@@ -4946,7 +4986,8 @@ div.inspector-empty > p { margin: 0 0 8px; }
 :root[data-backdrop] .workspace > .side-panel-separator:not(:hover, :focus-visible, [data-dragging='true'])::after { background: transparent; }
 :root[data-backdrop] .workspace > :first-child:not(.sidebar),
 :root[data-backdrop] .workspace > .sidebar[hidden] + * { margin-left: 8px; }
-:root[data-backdrop] .utility-panel-dock { margin-bottom: 0; }
+/* In line with the panes, which keep a margin above and beside them here. */
+:root[data-backdrop] .utility-panel-dock { margin: 8px 8px 0 0; }
 
 .settings-resettable { display: inline-flex; align-items: center; gap: 6px; }
 /* Hidden keeps its room: the control beside it stays put as it comes and goes. */

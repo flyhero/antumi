@@ -104,7 +104,9 @@ export function globalResetText(resets: GlobalResets, now: number): { upcoming: 
   const ago = (at: number) => t('usageFormat.ago', { value1: formatDuration(Math.max(0, now - at)) })
   return {
     upcoming: upcoming
-      ? t('usageFormat.serviceWideResetAnnouncedPosted', { value1: upcoming.scheduledFor !== null && upcoming.scheduledFor > now ? t('usageFormat.expected', { value1: formatClock(upcoming.scheduledFor, now) }) : '', value2: ago(upcoming.at) })
+      ? t(upcoming.resetType === 'banked' ? 'usageFormat.resetCardDistributionAnnouncedPosted'
+        : upcoming.resetType === 'reset' ? 'usageFormat.serviceWideResetAnnouncedPosted' : 'usageFormat.resetTypeUnknownAnnouncedPosted',
+      { value1: upcoming.scheduledFor !== null && upcoming.scheduledFor > now ? t('usageFormat.expected', { value1: formatClock(upcoming.scheduledFor, now) }) : '', value2: ago(upcoming.at) })
       : null,
     latest: latest ? `${latest.kind === 'banked' ? t('usageFormat.latestResetCardDistributionToAllPaidAccounts') : t('usageFormat.latestServiceWideReset')}：${ago(latest.at)}` : null,
     chance: !upcoming && chance48h !== null ? t('usageFormat.aboutChanceOfAnotherResetWithin48Hours', { value1: Math.round(chance48h * 100) }) : null

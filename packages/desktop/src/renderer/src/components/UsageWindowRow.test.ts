@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
-import type { QuotaAdvice, UsageForecast, UsageWindow } from '@antumi/protocol'
+import { agentAdvice, forecastUsage, type AgentUsage, type QuotaAdvice, type UsageForecast, type UsageWindow } from '@antumi/protocol'
 import { MeterHint, UsageWindowRow } from './UsageBar'
 
 vi.hoisted(() => {
@@ -46,6 +46,31 @@ describe('UsageWindowRow', () => {
 
   it('draws no time mark for a window without a reset time', () => {
     expect(render({ window: { ...weekly, resetsAt: null }, forecast: undefined, advice: [] })).not.toContain('usage-meter-time')
+  })
+
+  it('accounts for an announced automatic reset before exhaustion, including an older forecast', () => {
+    const usage: AgentUsage = { agent: 'codex', status: 'ok', windows: [weekly], plan: null, error: null, updatedAt: now, resetCredits: null,
+      globalResets: { latest: null, upcoming: { kind: 'upcoming', resetType: 'reset', at: now - 3600_000, scheduledFor: now + 24 * 3600_000, text: null, sourceUrl: null }, checkedAt: now, chance48h: null } }
+    const html = render({ usage, advice: agentAdvice(usage, now) })
+    expect(html).not.toContain('usage-card-forecast')
+    expect(html).not.toContain('偏快')
+    expect(html).not.toContain('轻活可以交给')
+    expect(html).toContain('若按期生效')
+    expect(html).toContain('以实际到账为准')
+    const delayed = { ...usage, globalResets: { latest: null, upcoming: { kind: 'upcoming' as const, resetType: 'reset' as const, at: now - 3600_000, scheduledFor: now - 1, text: null, sourceUrl: null }, checkedAt: now, chance48h: null } }
+    expect(render({ usage: delayed, advice: agentAdvice(delayed, now), forecast: forecastUsage(usage, weekly, [], now) })).toContain('usage-card-forecast')
+  })
+
+  it('keeps exhaustion visible for a banked reset and offers a held card instead of a handoff', () => {
+    const usage: AgentUsage = { agent: 'codex', status: 'ok', windows: [weekly], plan: null, error: null, updatedAt: now,
+      resetCredits: { available: 1, blockedBy: null, credits: [{ expiresAt: now + 168 * 3600_000, clears: ['weekly', 'session'], label: null }] },
+      globalResets: { latest: null, upcoming: { kind: 'upcoming', resetType: 'banked', at: now - 3600_000, scheduledFor: now + 24 * 3600_000, text: null, sourceUrl: null }, checkedAt: now, chance48h: null } }
+    const html = render({ usage, advice: agentAdvice(usage, now) })
+    expect(html).toContain('usage-card-forecast')
+    expect(html).toContain('手动使用')
+    expect(html).not.toContain('轻活可以交给')
+    const noCard = { ...usage, resetCredits: null }
+    expect(render({ usage: noCard, advice: agentAdvice(noCard, now) })).toContain('到账后需手动使用')
   })
 })
 

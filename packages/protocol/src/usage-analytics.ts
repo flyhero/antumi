@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { AgentKind } from './agent'
 import { ModelTokens } from './model-cost'
 import { UsageWindow, type AgentUsage } from './usage'
+import { ScheduledQuotaReset, scheduledQuotaReset } from './quota-resets'
 
 export const UsageEvent = ModelTokens.extend({
   id: z.string(), agent: AgentKind, account: z.string().nullable(), identity: z.string().nullable(),
@@ -42,13 +43,16 @@ export type UsageHistory = z.infer<typeof UsageHistory>
 export const UsageForecast = z.object({
   window: UsageWindow, account: z.string(), agent: AgentKind,
   basis: z.enum(['recent', 'window', 'idle', 'insufficient', 'stale']),
-  percentPerHour: z.number().nullable(), runsOutAt: z.number().nullable(), beforeReset: z.boolean()
+  percentPerHour: z.number().nullable(), runsOutAt: z.number().nullable(), beforeReset: z.boolean(),
+  scheduledReset: ScheduledQuotaReset.optional()
 })
 export type UsageForecast = z.infer<typeof UsageForecast>
 export type QuotaSample = { at: number; used: number; reset: number | null }
 
 export function forecastUsage(usage: AgentUsage, window: z.infer<typeof UsageWindow>, samples: readonly QuotaSample[], now: number): UsageForecast {
-  const base = { agent: usage.agent, account: usage.account ?? 'default', window, percentPerHour: null, runsOutAt: null, beforeReset: false }
+  const planned = scheduledQuotaReset(usage, window, now)
+  const base = { agent: usage.agent, account: usage.account ?? 'default', window, percentPerHour: null, runsOutAt: null, beforeReset: false,
+    ...(planned ? { scheduledReset: planned } : {}) }
   if (usage.status !== 'ok' || now - usage.updatedAt > 30 * 60_000 || window.resetsAt === null || window.resetsAt <= now) return { ...base, basis: 'stale' }
   if (window.usedPercent >= 100) return { ...base, basis: 'recent', runsOutAt: now, beforeReset: true }
   const recent = samples.filter((sample) => sample.at >= now - 3600_000 && sample.at <= now && sample.reset === window.resetsAt)
@@ -66,7 +70,8 @@ export function forecastUsage(usage: AgentUsage, window: z.infer<typeof UsageWin
   }
   if (!rate) return { ...base, basis }
   const runsOutAt = now + (100 - window.usedPercent) / rate
-  return { ...base, basis, percentPerHour: rate * 3600_000, runsOutAt, beforeReset: runsOutAt < window.resetsAt }
+  const resetAt = planned?.kind === 'reset' ? planned.at : window.resetsAt
+  return { ...base, basis, percentPerHour: rate * 3600_000, runsOutAt, beforeReset: runsOutAt < resetAt }
 }
 
 export const UsageAutomationPolicy = z.object({

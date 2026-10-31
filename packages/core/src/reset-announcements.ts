@@ -62,7 +62,9 @@ function globalReset(event: z.infer<typeof Event> | null | undefined): GlobalRes
     text: event.text?.trim() || null,
     // Shown as a link: nothing but a web address.
     sourceUrl: event.sourceUrl?.startsWith('https://') ? event.sourceUrl : null,
-    scheduledFor: time(event.metadata?.scheduledFor)
+    scheduledFor: time(event.metadata?.scheduledFor),
+    resetType: event.metadata?.resetType === 'banked' || kind === 'banked' ? 'banked'
+      : event.metadata?.resetType === 'regular' || event.metadata?.resetType === 'reset' || kind === 'reset' ? 'reset' : null
   }
 }
 

@@ -11152,6 +11152,30 @@ export const MESSAGES = {
     "zh": "{value1}额度",
     "en": "{value1} quota"
   },
+  "quotaAdviceText.resetCreditOption": {
+    "zh": "有覆盖此额度的重置卡，可在额度用完时手动使用；不会自动恢复",
+    "en": "A reset card covers this quota; use it manually when exhausted. Quota will not restore automatically."
+  },
+  "quotaAdviceText.scheduledCreditOption": {
+    "zh": "预计 {at} 发放重置卡，到账后需手动使用；若未到账，仍可能在常规重置前用完",
+    "en": "Reset cards are expected {at} and require manual use after arrival; quota may still run out before its regular reset if they do not arrive."
+  },
+  "quotaAdviceText.unknownResetOption": {
+    "zh": "预计 {at} 有重置活动，尚未确认是自动恢复还是发卡；仍需留意额度",
+    "en": "A reset event is expected {at}; automatic restoration versus card distribution is unconfirmed. Keep an eye on quota."
+  },
+  "quotaAdviceText.scheduledResetOption": {
+    "zh": "预计 {at} 全员重置；若按期生效，当前额度可撑到那时，无需因此分流；以实际到账为准",
+    "en": "A service-wide reset is expected {at}. Current quota should last until then if it arrives on time, so no handoff is needed on that basis; restoration is unconfirmed."
+  },
+  "quotaAdviceText.beforeExpectedReset": {
+    "zh": "，比预计全员重置早 {value1}",
+    "en": ", {value1} before the expected service-wide reset"
+  },
+  "quotaAdviceText.expectedResetFirst": {
+    "zh": "若预告按期生效，预计先全员重置",
+    "en": "The announced service-wide reset is expected first, if it arrives on time"
+  },
   "quotaAdviceText.isAlsoAvailable": {
     "zh": "，也可以放心用 {value1}",
     "en": "; {value1} is also available"
@@ -11635,6 +11659,14 @@ export const MESSAGES = {
   "usageFormat.serviceWideResetAnnouncedPosted": {
     "zh": "已预告全员重置{value1} · {value2}发布",
     "en": "Service-wide reset announced{value1} · Posted {value2}"
+  },
+  "usageFormat.resetCardDistributionAnnouncedPosted": {
+    "zh": "已预告发放重置卡{value1} · {value2}发布",
+    "en": "Reset card distribution announced{value1} · Posted {value2}"
+  },
+  "usageFormat.resetTypeUnknownAnnouncedPosted": {
+    "zh": "已预告重置活动（类型待确认）{value1} · {value2}发布",
+    "en": "Reset event announced (type unconfirmed){value1} · Posted {value2}"
   },
   "usageFormat.expected": {
     "zh": "，预计{value1}",

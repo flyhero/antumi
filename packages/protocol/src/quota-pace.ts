@@ -1,5 +1,6 @@
 import type { AgentKind } from './task'
 import { quotaVerdict, type AgentUsage, type QuotaState, type UsageWindow } from './usage'
+import { quotaRecovery, scheduledQuotaReset, type QuotaRecovery } from './quota-resets'
 
 // How a window is being spent against its clock, from the rate so far:
 // over: at this rate it runs out before it resets · under: it resets soon with much left over,
@@ -27,11 +28,11 @@ const UNDER_REMAINING = 0.25
 const UNDER_WASTE = 25
 
 // null for a window with no reset time, or one past it (it has started over).
-export function windowPace(window: UsageWindow, now: number): WindowPace | null {
+export function windowPace(window: UsageWindow, now: number, expectedResetAt = window.resetsAt): WindowPace | null {
   if (window.resetsAt === null || window.resetsAt <= now) return null
   const length = window.windowMinutes * 60_000
-  const remaining = window.resetsAt - now
-  const elapsed = length - remaining
+  const remaining = (expectedResetAt ?? window.resetsAt) - now
+  const elapsed = length - (window.resetsAt - now)
   const base = { window, projected: null, runsOutAt: null, wastePercent: null }
   if (window.usedPercent >= 100) return { ...base, pace: 'exhausted' }
   const recent = window.recentRate && window.recentRate.measuredAt <= now && now - window.recentRate.measuredAt <= 30 * 60_000 ? window.recentRate : null
@@ -53,7 +54,7 @@ export function windowPace(window: UsageWindow, now: number): WindowPace | null 
 // switch-model: a model's own cap is near or reached while the shared ones have room
 // use-more: a weekly or monthly window resets soon with `percent` of it left over; `model` names a
 // model whose own cap has room too, to spend it on.
-export type QuotaAdviceKind = 'wait-reset' | 'slow-down' | 'switch-model' | 'use-more'
+export type QuotaAdviceKind = 'wait-reset' | 'slow-down' | 'switch-model' | 'use-more' | 'reset-option'
 
 export type QuotaAdvice = {
   agent: AgentKind
@@ -62,6 +63,7 @@ export type QuotaAdvice = {
   at: number | null
   percent: number | null
   model: string | null
+  recovery?: QuotaRecovery
 }
 
 const longWindow = (window: UsageWindow) => window.kind !== 'session'
@@ -74,8 +76,8 @@ export function agentAdvice(usage: AgentUsage | null | undefined, now: number): 
   const verdict = quotaVerdict(usage, now)
   const paces = usage.windows.map((window) => windowPace(window, now)).filter((pace) => pace !== null)
   const shared = paces.filter((pace) => pace.window.model === null)
-  if (shared.some((pace) => longWindow(pace.window) && pace.pace === 'exhausted')) return []
-  const advice = (kind: QuotaAdviceKind, window: UsageWindow, fields: Partial<Pick<QuotaAdvice, 'at' | 'percent' | 'model'>> = {}): QuotaAdvice => ({
+  const exhausted = shared.find((pace) => longWindow(pace.window) && pace.pace === 'exhausted')
+  const advice = (kind: QuotaAdviceKind, window: UsageWindow, fields: Partial<Pick<QuotaAdvice, 'at' | 'percent' | 'model' | 'recovery'>> = {}): QuotaAdvice => ({
     agent: usage.agent,
     kind,
     window,
@@ -84,6 +86,10 @@ export function agentAdvice(usage: AgentUsage | null | undefined, now: number): 
     model: null,
     ...fields
   })
+  if (exhausted) {
+    const recovery = quotaRecovery(usage, exhausted.window, now, now)
+    return recovery ? [advice('reset-option', exhausted.window, { recovery })] : []
+  }
   const out: QuotaAdvice[] = []
   const session = shared.find((pace) => pace.window.kind === 'session')
   const sessionTight = session !== undefined && (session.pace === 'exhausted' || session.pace === 'over' || session.window.usedPercent >= TIGHT_PERCENT)
@@ -106,7 +112,27 @@ export function agentAdvice(usage: AgentUsage | null | undefined, now: number): 
       .sort((a, b) => a.window.usedPercent - b.window.usedPercent)[0]
     out.push(advice('use-more', under.window, { at: under.window.resetsAt, percent: under.wastePercent, model: roomy?.window.model ?? null }))
   }
-  return out
+  const adjusted = out.map((item) => {
+    const pace = paces.find((entry) => entry.window === item.window)
+    const planned = scheduledQuotaReset(usage, item.window, now)
+    if (item.kind === 'use-more' && planned?.kind === 'reset') return { ...item, kind: 'reset-option' as const, recovery: planned }
+    const recovery = quotaRecovery(usage, item.window, pace?.runsOutAt ?? now, now)
+    return recovery && item.kind !== 'use-more' ? { ...item, kind: 'reset-option' as const, recovery } : item
+  })
+  for (const pace of shared.filter((entry) => longWindow(entry.window))) {
+    const planned = scheduledQuotaReset(usage, pace.window, now)
+    if (planned?.kind !== 'reset' || adjusted.some((item) => item.window === pace.window)) continue
+    const expected = windowPace(pace.window, now, planned.at)
+    if (expected?.pace === 'under' && !verdict.stale && !sessionTight && verdict.state === 'ok') {
+      adjusted.push(advice('reset-option', pace.window, { recovery: planned, percent: expected.wastePercent }))
+    }
+  }
+  return adjusted
+}
+
+export function quotaAdvicePressed(advice: readonly QuotaAdvice[]): boolean {
+  return advice.some((item) => item.kind === 'wait-reset' || item.kind === 'slow-down' ||
+    (item.kind === 'reset-option' && (item.recovery?.kind === 'banked' || item.recovery?.kind === 'unknown')))
 }
 
 // A quota state's place in line: room first, then unknown (signed out, no reading yet) ahead of
@@ -123,7 +149,7 @@ function standing(agent: AgentKind, usage: AgentUsage | undefined, now: number):
     state: verdict.state,
     resetsAt: verdict.window?.resetsAt ?? Infinity,
     used: verdict.window?.usedPercent ?? 0,
-    pressed: advice.some((item) => item.kind === 'wait-reset' || item.kind === 'slow-down'),
+    pressed: quotaAdvicePressed(advice),
     expiring: advice.find((item) => item.kind === 'use-more')?.percent ?? 0
   }
 }

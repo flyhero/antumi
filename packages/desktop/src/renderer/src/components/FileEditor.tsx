@@ -173,7 +173,7 @@ export function FileEditor({ scope, updatedAt, editor }: { scope: FileScope; upd
     <div className="file-editor-main">
       {tree && <>
         <div className="file-editor-tree" style={{ width: treeWidth }}>
-          <FileTree scope={scope} roots={roots} expanded={expanded} active={active?.file.path ?? null} refresh={refresh}
+          <FileTree scope={scope} roots={roots} expanded={expanded} active={active?.file.path ?? null} reveal={active?.reveal ?? 0} refresh={refresh}
             onToggle={(folder) => updateFileTabs(key, (state) => toggledFolder(state, roots, folder))} onOpen={open} />
         </div>
         <TreeResizer width={treeWidth} onWidth={(width) => setPreference('fileTreeWidth', width)} />

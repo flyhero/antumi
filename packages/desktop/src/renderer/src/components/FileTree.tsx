@@ -14,11 +14,13 @@ function relativeTo(root: string, path: string): string {
   return path === root ? '.' : path.slice(root.length + 1)
 }
 
-export function FileTree({ scope, roots, expanded, active, refresh, onToggle, onOpen }: {
+export function FileTree({ scope, roots, expanded, active, reveal, refresh, onToggle, onOpen }: {
   scope: FileScope
   roots: readonly string[]
   expanded: readonly string[]
   active: string | null
+  // Goes up each time the active file is opened, again too: each time is one to scroll to.
+  reveal: number
   // Changes whenever the folders may have changed on disk.
   refresh: string
   onToggle(folder: string): void
@@ -66,10 +68,19 @@ export function FileTree({ scope, roots, expanded, active, refresh, onToggle, on
       ? rows.filter((row) => row.depth > 0 && row.kind !== 'other' && row.name.toLowerCase().includes(filter.trim().toLowerCase())).map((row) => ({ ...row, depth: 0, detail: relativeTo(row.root, row.path) }))
       : rows
 
+  // A file opened is scrolled to once: tried again as rows change, since its folders open and load
+  // one by one, but no more once it is shown, or every folder opened after (and every refresh)
+  // would pull the tree back to it. A filter cleared brings it back into view.
+  const revealed = useRef<string | null>(null)
   useEffect(() => {
-    if (!active || filter) return
-    list.current?.querySelector(`[data-path="${CSS.escape(active)}"]`)?.scrollIntoView({ block: 'nearest' })
-  }, [active, filter, rows])
+    if (filter) revealed.current = null
+    const opening = active && `${reveal}\0${active}`
+    if (!opening || filter || revealed.current === opening) return
+    const row = list.current?.querySelector(`[data-path="${CSS.escape(active)}"]`)
+    if (!row) return
+    row.scrollIntoView({ block: 'nearest' })
+    revealed.current = opening
+  }, [active, reveal, filter, rows])
 
   // A compacted chain acts as its last folder: what it shows, and what its menu reveals.
   const resolved = (row: Row): ResolvedFile => {

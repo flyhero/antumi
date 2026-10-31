@@ -29,6 +29,7 @@ declare global {
       setBadge?(count: number): Promise<unknown>
       onNotificationClick?(listener: (target: unknown) => void): () => void
       requestPopup?(wanted: boolean): Promise<unknown>
+      requestPopupDefaultMode?(): Promise<unknown>
       requestPopupMode?(mode: 'requests' | 'always'): Promise<unknown>
       requestPopupAttention?(unseen: string[]): void
       onRequestPopupAttention?(listener: (unseen: unknown) => void): () => void

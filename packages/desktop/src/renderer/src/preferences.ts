@@ -16,6 +16,9 @@ export const CONVERSATION_SORTS = ['recent', 'created', 'title'] as const
 export const CONVERSATION_DENSITIES = ['comfortable', 'compact'] as const
 export const TASK_SORTS = ['recent', 'created', 'title'] as const
 
+const IslandPreference = z.enum(['off', 'requests', 'always'])
+let defaultIsland: z.infer<typeof IslandPreference> = 'requests'
+
 // This window's UI preferences. They shape how the desktop looks and behaves,
 // not what a task is, so they stay on this client instead of going to core.
 const Preferences = z.object({
@@ -66,7 +69,7 @@ const Preferences = z.object({
   // Where an agent held up on the user shows outside the window: on a card at the top of the
   // screen when its request comes while they are in another app; on macOS always, as an island at
   // the notch that also shows the agents at work (components/RequestPopup.tsx); or nowhere.
-  island: z.enum(['off', 'requests', 'always']).catch('requests'),
+  island: IslandPreference.catch(() => defaultIsland),
   usageDisplay: z.enum(['used', 'remaining']).catch('used'),
   // On, the usage card says how to spend each agent's quota against its clock, pickers mark the
   // agent best used now, and notifications tell of quota about to go unused or running out early.
@@ -135,6 +138,7 @@ const Preferences = z.object({
 export type Preferences = z.infer<typeof Preferences>
 
 const STORAGE_KEY = 'antumi.preferences'
+let islandChosen = false
 
 // Each field falls back on its own, so one bad or outdated value never resets the rest.
 function load(): Preferences {
@@ -152,6 +156,7 @@ function load(): Preferences {
   if (typeof saved === 'object' && saved !== null && 'requestPopup' in saved && !('island' in saved)) {
     saved = { ...saved, island: saved.requestPopup === false ? 'off' : 'requests' }
   }
+  islandChosen = typeof saved === 'object' && saved !== null && 'island' in saved && IslandPreference.safeParse(saved.island).success
   const parsed = Preferences.safeParse(saved)
   return parsed.success ? parsed.data : Preferences.parse({})
 }
@@ -164,6 +169,13 @@ export const usePreferences = create<Preferences>()(() => load())
 // Another window of the app changed them (the card of waiting requests follows the main window's
 // theme and settings); storage events come only from other windows.
 export function followPreferences(): void {
+  // The display is known only to main. A saved or newly picked mode wins over this late default.
+  void window.antumi?.requestPopupDefaultMode?.().then((mode) => {
+    if (mode !== 'requests' && mode !== 'always') return
+    defaultIsland = mode
+    DEFAULT_PREFERENCES.island = mode
+    if (!islandChosen) usePreferences.setState({ island: mode })
+  }).catch(() => {})
   window.addEventListener('storage', (event) => {
     if (event.key === STORAGE_KEY) usePreferences.setState(load())
   })
@@ -178,5 +190,6 @@ usePreferences.subscribe((preferences) => {
 })
 
 export function setPreference<K extends keyof Preferences>(key: K, value: Preferences[K]): void {
+  if (key === 'island') islandChosen = true
   usePreferences.setState({ [key]: value })
 }

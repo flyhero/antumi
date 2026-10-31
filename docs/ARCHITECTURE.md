@@ -445,6 +445,8 @@ Kimi Code 使用官方 `kimi acp` 和通用 ACP driver，dialect 负责四种原
 
 等待回答的请求卡片（`main/request-popup.ts`、`components/RequestPopup.tsx`）在 macOS 上画成贴着刘海的灵动岛；其他平台仍是菜单栏下方的普通卡片。
 
+未保存灵动岛设置时，带刘海的 Mac 默认「始终」，无刘海的 Mac、仅有外接屏以及 Windows/Linux 默认「需要我时弹出」。通过与常驻窗口相同的内置屏优先规则判断，主进程异步返回默认模式；已有选择、旧版请求卡片开关及查询期间的新选择均优先，不随屏幕插拔改写。macOS 无刘海屏仍可手动选「始终」使用浮岛，其他平台不提供此选项。
+
 - **窗口**：透明无边框的 NSPanel，`status` 层级才盖得住菜单栏，`enableLargerThanScreen` 让 macOS 允许窗口进菜单栏区域，`y` 取 `display.bounds.y`。
 - **刘海尺寸**：Electron 不知道刘海。`popup-placement.ts` 用内置屏的宽高比识别带刘海的 MacBook（以 14 寸的 1512×982、刘海 185×32 为基准，容差 1%），按屏幕宽度等比缩放，所以缩放档位和 13/15/16 寸都能对上；没有刘海的 Mac 屏幕画成浮岛，常驻时只在有东西可说时出现，免得顶上挂一粒黑点。主进程通过 `antumi:request-popup-geometry` 把 `{ island, notch }` 告诉页面，页面在 `:root` 上标 `data-island`，内容从 `--notch-height` 以下开始，岛的底色是 `--notch`，不随配色变。
 - **点击穿透**：岛的窗口默认 `setIgnoreMouseEvents(true, { forward: true })`，鼠标移动仍转发给页面；页面在指针进入岛时发 `antumi:request-popup-interactive`，指针离开且卡片里没有焦点时放开，所以岛旁边的菜单栏照常可点，正在卡片里打字时移开鼠标也不丢键盘。

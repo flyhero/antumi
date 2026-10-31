@@ -31,6 +31,10 @@ export function islandDisplay<D extends { internal: boolean }>(displays: readonl
   return displays.find((display) => display.internal) ?? primary
 }
 
+export function defaultIslandMode(display: PopupDisplay, platform: NodeJS.Platform): 'requests' | 'always' {
+  return platform === 'darwin' && notchSize(display) !== null ? 'always' : 'requests'
+}
+
 // The notch of a built-in display in points, or null for a display without one.
 export function notchSize(display: Pick<PopupDisplay, 'bounds' | 'internal'>): NotchSize | null {
   const { width, height } = display.bounds

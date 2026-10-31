@@ -10,6 +10,7 @@ import { ShortcutAction, ShortcutSettings } from '../shared/keyboard-shortcuts'
 import { antumiPaths, readCoreEndpoint } from '@antumi/protocol/node'
 import { ensureBackend, replaceOldDaemon, stopBackendForInstall } from './backend'
 import { popupWindowOptions, RequestPopup } from './request-popup'
+import { defaultIslandMode, islandDisplay } from './popup-placement'
 import { PanelWindows, parseDockPayload, parseHandoff, parsePanelCommands, parsePanelKind } from './panel-windows'
 import { panelWindowBounds, panelWindowHash, type PanelKind } from '../shared/panel-window'
 import { PanelBrowserContext, PanelQuote, PanelReceipt } from '../shared/panel-window'
@@ -447,6 +448,9 @@ ipcMain.handle('antumi:set-badge', (_event, count: unknown) => {
 
 // The card of waiting requests (request-popup.ts). Only the main window asks for it or puts it
 // away, and only the card says how it is laid out or where a click on it leads.
+ipcMain.handle('antumi:request-popup-default-mode', () => {
+  return defaultIslandMode(islandDisplay(screen.getAllDisplays(), screen.getPrimaryDisplay()), process.platform)
+})
 ipcMain.handle('antumi:request-popup', (event, wanted: unknown) => {
   if (event.sender !== mainWindow?.webContents || typeof wanted !== 'boolean') return
   requestPopup.want(wanted)

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { islandDisplay, notchSize, POPUP_WIDTH, popupArea, popupBounds } from './popup-placement'
+import { defaultIslandMode, islandDisplay, notchSize, POPUP_WIDTH, popupArea, popupBounds } from './popup-placement'
 
 describe('popupBounds', () => {
   it('centres the card at the top of the usable area', () => {
@@ -24,6 +24,21 @@ describe('popupBounds', () => {
 })
 
 const macbook14 = { bounds: { x: 0, y: 0, width: 1512, height: 982 }, workArea: { x: 0, y: 32, width: 1512, height: 950 }, internal: true }
+
+describe('defaultIslandMode', () => {
+  it('defaults to always on a notched Mac display, including when an external display is primary', () => {
+    const external = { ...macbook14, internal: false }
+    expect(defaultIslandMode(islandDisplay([external, macbook14], external), 'darwin')).toBe('always')
+  })
+
+  it('defaults to requests on other platforms and displays without a notch', () => {
+    expect(defaultIslandMode(macbook14, 'win32')).toBe('requests')
+    expect(defaultIslandMode(macbook14, 'linux')).toBe('requests')
+    expect(defaultIslandMode({ ...macbook14, bounds: { x: 0, y: 0, width: 1440, height: 900 } }, 'darwin')).toBe('requests')
+    const external = { ...macbook14, internal: false }
+    expect(defaultIslandMode(islandDisplay([external], external), 'darwin')).toBe('requests')
+  })
+})
 
 describe('notchSize', () => {
   it('measures the notch of a 14-inch MacBook Pro', () => {

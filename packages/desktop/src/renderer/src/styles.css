@@ -9984,6 +9984,7 @@ summary.agent-group-head:focus-visible { outline: 2px solid var(--focus); outlin
   box-shadow: var(--shadow-float);
   overflow: hidden;
 }
+.request-popup[hidden] { display: none; }
 /* On macOS the window is at the very top of the screen, over the menu bar, and the card is drawn
    as the system's own island would be: dark whatever the theme, black like the notch, which it
    grows out of on a display that has one, its content starting under the camera housing
@@ -10007,6 +10008,8 @@ summary.agent-group-head:focus-visible { outline: 2px solid var(--focus); outlin
    it; floating, a pill. An empty ear takes no room, so with nothing to say the island is the
    notch and no more. */
 .island-compact { display: flex; align-items: stretch; height: var(--notch-height); }
+button.island-compact { padding: 0; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+button.island-compact:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; border-radius: inherit; }
 :root[data-island='floating'] .island-compact { height: 30px; padding: 0 6px; }
 .island-notch { flex: none; width: var(--notch-width); }
 .island-ear { display: flex; align-items: center; gap: 6px; padding: 0 10px; font-size: 12px; white-space: nowrap; color: var(--text-muted); }

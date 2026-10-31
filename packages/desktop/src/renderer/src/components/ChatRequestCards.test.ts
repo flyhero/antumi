@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import type { ChatItem } from '@antumi/protocol'
-import { ChatApprovalCard, ChatRequestLine } from './ChatRequestCards'
+import { ChatApprovalCard, ChatQuestionCard, ChatRequestLine } from './ChatRequestCards'
 
 vi.mock('../core-store', () => ({ perform: vi.fn() }))
 
@@ -49,4 +49,17 @@ it('offers only one-time approval for the helper, without suggesting a permissio
   expect(html).not.toContain('本会话都允许')
   expect(html).not.toContain('保存规则')
   expect(html).not.toContain('换个权限模式')
+})
+
+it('keeps skipping available without advertising Escape in a popup that uses it to collapse', () => {
+  const item: Extract<ChatItem, { kind: 'question' }> = {
+    id: 'q:1', stageId: 'stage', revision: 1, at: 0, kind: 'question', requestId: 'question',
+    questions: [{ id: 'q', header: '', question: 'Which option?', options: [{ label: 'First', description: null }], multiSelect: false }],
+    answers: null, resolution: null
+  }
+  const main = renderToStaticMarkup(createElement(ChatQuestionCard, { conversationId: 'conversation', item }))
+  const popup = renderToStaticMarkup(createElement(ChatQuestionCard, { conversationId: 'conversation', item, escapeToSkip: false }))
+  expect(main).toContain('<kbd>Esc</kbd>')
+  expect(popup).not.toContain('<kbd>Esc</kbd>')
+  expect(popup).toContain('不回答')
 })

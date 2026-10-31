@@ -258,7 +258,7 @@ function OptionLabel({ label }: { label: string }) {
 // A question waiting in the dock, one at a time behind a tab per question: each option a row with
 // its number, which becomes a check when picked, and a last row to type an answer of one's own.
 // Picking one of a single choice moves on; the number keys pick, Enter goes on from what is typed.
-export function ChatQuestionCard({ conversationId, item }: { conversationId: string; item: QuestionItem }) {
+export function ChatQuestionCard({ conversationId, item, escapeToSkip = true }: { conversationId: string; item: QuestionItem; escapeToSkip?: boolean }) {
   const { busy, respond } = useResponder(conversationId, item.requestId)
   const { questions } = item
   const [index, setIndex] = useState(0)
@@ -321,7 +321,7 @@ export function ChatQuestionCard({ conversationId, item }: { conversationId: str
     else if (unanswered === 0) submit()
   }
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === 'Escape' && !event.nativeEvent.isComposing) {
+    if (escapeToSkip && event.key === 'Escape' && !event.nativeEvent.isComposing) {
       event.preventDefault()
       if (!busy) void respond('deny')
       return
@@ -463,7 +463,7 @@ export function ChatQuestionCard({ conversationId, item }: { conversationId: str
         </div>
       </div>}
       <div className="chat-request-actions">
-        <button type="button" className="button ghost" disabled={busy} onClick={() => void respond('deny')}>{tr('ChatRequestCards.skip', { value1: <kbd>Esc</kbd> })}</button>
+        <button type="button" className="button ghost" disabled={busy} onClick={() => void respond('deny')}>{tr('ChatRequestCards.skip', { value1: escapeToSkip ? <kbd>Esc</kbd> : null })}</button>
         <span className="chat-dock-spacer" />
         {!free && index > 0 && <button type="button" className="button ghost" disabled={busy} onClick={() => setIndex(index - 1)}>{t('ChatRequestCards.previous')}</button>}
         {free || last ? (

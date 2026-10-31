@@ -234,8 +234,8 @@ export function setRequestPopupInteractive(interactive: boolean): void {
   window.antumi?.requestPopupInteractive?.(interactive)
 }
 
-// From the card: the main window, brought up on a task or conversation.
-export function openFromRequestPopup(target: ActionableTarget): void {
+// Without a target, keep the main window on its current page.
+export function openFromRequestPopup(target?: ActionableTarget): void {
   void window.antumi?.openFromRequestPopup?.(target).catch(() => {})
 }
 

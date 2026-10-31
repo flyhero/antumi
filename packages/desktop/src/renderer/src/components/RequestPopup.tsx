@@ -1,5 +1,5 @@
 import { getLocale, useLocale, t } from '../i18n'
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type JSX } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type JSX } from 'react'
 import { create } from 'zustand'
 import type { AgentKind, ChatItem, Conversation } from '@antumi/protocol'
 import { dropChat, pathShortener, setChatPage, useChat } from '../chat-state'
@@ -113,6 +113,7 @@ export function RequestPopup() {
   const islandSetting = usePreferences((s) => s.island)
   const always = island && islandSetting === 'always'
   const [hovered, setHovered] = useState(false)
+  const [focused, setFocused] = useState(false)
   const [closed, setClosed] = useState(NONE_CLOSED)
   const [picked, setPicked] = useState<string | null>(null)
   const tasks = useCore((s) => s.tasks)
@@ -123,7 +124,8 @@ export function RequestPopup() {
   const unseen = useUnseen()
   const activity = useMemo(() => (always ? islandActivity({ tasks, conversations }, unseen) : []), [always, tasks, conversations, unseen, getLocale()])
   const at = Math.max(0, queue.findIndex((each) => each.conversationId === picked))
-  const entry = wanted || (always && hovered) ? queue[at] : undefined
+  // Keep the selected request mounted when folded so its unfinished answer survives Escape.
+  const entry = queue[at]
   const conversation = entry ? conversations[entry.conversationId] : undefined
   const items = useWatchedChat(entry?.conversationId ?? null)
   const pending = useMemo(
@@ -148,10 +150,11 @@ export function RequestPopup() {
   // so there it is up only with something to say.
   const frame = useRef<HTMLDivElement>(null)
   const shown = useRef(false)
-  const active = entry !== undefined && conversation !== undefined
+  const active = entry !== undefined && conversation !== undefined && (wanted || (always && (hovered || focused)))
   const ready = active && pending.length > 0
   const kept = always && (notch !== null || queue.length > 0 || activity.length > 0)
   const present = kept || active
+  const expanded = active || ((hovered || focused) && activity.length > 0)
   useLayoutEffect(() => {
     const node = frame.current
     if (!node || !(kept || (active && (ready || shown.current)))) {
@@ -172,6 +175,25 @@ export function RequestPopup() {
   // The pointer on it also opens an island kept up always.
   const card = useRef<HTMLDivElement>(null)
   const pointerOn = useRef(false)
+  const collapse = useCallback(() => {
+    const active = document.activeElement
+    if (active instanceof HTMLElement && card.current?.contains(active)) active.blur()
+    setFocused(false)
+    setHovered(false)
+    setWanted(false)
+  }, [])
+  useEffect(() => {
+    if (!expanded) return
+    // Capture before the question card sees Escape as a refusal.
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.isComposing) return
+      event.preventDefault()
+      event.stopPropagation()
+      collapse()
+    }
+    document.addEventListener('keydown', escape, true)
+    return () => document.removeEventListener('keydown', escape, true)
+  }, [expanded, collapse])
   useEffect(() => {
     const node = card.current
     if (!node) return
@@ -186,18 +208,29 @@ export function RequestPopup() {
       if (!node.contains(document.activeElement)) setRequestPopupInteractive(false)
     }
     const focusLeft = (event: FocusEvent) => {
-      if (!pointerOn.current && !(event.relatedTarget instanceof Node && node.contains(event.relatedTarget))) setRequestPopupInteractive(false)
+      if (!(event.relatedTarget instanceof Node && node.contains(event.relatedTarget))) {
+        setFocused(false)
+        if (!pointerOn.current) setRequestPopupInteractive(false)
+      }
+    }
+    const focusEntered = () => {
+      setFocused(true)
+      setRequestPopupInteractive(true)
     }
     const blurred = () => {
+      setFocused(false)
       if (!pointerOn.current) setRequestPopupInteractive(false)
     }
     node.addEventListener('mouseenter', enter)
     node.addEventListener('mouseleave', leave)
+    node.addEventListener('focusin', focusEntered)
     node.addEventListener('focusout', focusLeft)
+    if (node.contains(document.activeElement)) focusEntered()
     window.addEventListener('blur', blurred)
     return () => {
       node.removeEventListener('mouseenter', enter)
       node.removeEventListener('mouseleave', leave)
+      node.removeEventListener('focusin', focusEntered)
       node.removeEventListener('focusout', focusLeft)
       window.removeEventListener('blur', blurred)
     }
@@ -210,9 +243,7 @@ export function RequestPopup() {
     return () => clearTimeout(timer)
   }, [wanted, queue.length])
 
-  if (!present) return <div ref={frame} />
-  // With nothing to open on, the pointer leaves the island as it is: the ant at rest.
-  const expanded = active || (hovered && activity.length > 0)
+  if (!present && !entry) return <div ref={frame} />
   // The folded island's leading ear: the agents of what its trailing ear speaks of, those
   // waiting on the user first, then those with a reply not looked at, then those at work.
   const marks = [...new Set([
@@ -224,50 +255,48 @@ export function RequestPopup() {
   // again once the pointer leaves and comes back.
   const close = () => {
     setClosed(new Set([...closed, ...queue.map((each) => popupKey(each.conversationId, each.request))]))
-    setWanted(false)
-    setHovered(false)
+    collapse()
   }
   const open = (target: ActionableTarget) => {
-    setHovered(false)
+    collapse()
     openFromRequestPopup(target)
   }
   const step = (by: number) => setPicked(queue[(at + by + queue.length) % queue.length]?.conversationId ?? null)
   return (
     <div ref={frame} className="request-popup-frame" data-expanded={expanded}>
       <div ref={card} className="island">
-        {entry && conversation && surface
-          ? (
-              <section className="chat-view request-popup" data-font-size={fontSize} aria-label={t('ChatDock.requestsAwaitingYourResponse')}>
-                <header className="request-popup-header">
-                  <span className="request-popup-label" role="img" aria-label={popupLabel(entry.request)} title={popupLabel(entry.request)}>{KIND_ICON[popupKind(entry.request)]}</span>
-                  <span className="request-popup-title" title={entry.title}>{entry.title}</span>
-                  <span className="request-popup-agent" role="img" aria-label={agentLabel(conversation.agent)} title={agentLabel(conversation.agent)}><AgentIcon agent={conversation.agent} /></span>
-                  <span className="request-popup-spacer" />
-                  {queue.length > 1 && (
-                    <span className="request-popup-pager">
-                      <button type="button" className="request-popup-step" data-direction="previous" aria-label={t('ChatRequestCards.previous')} onClick={() => step(-1)}><ChevronRightIcon /></button>
-                      <span className="request-popup-count">{at + 1} / {queue.length}</span>
-                      <button type="button" className="request-popup-step" aria-label={t('ChatRequestCards.next')} onClick={() => step(1)}><ChevronRightIcon /></button>
-                    </span>
-                  )}
-                  <button type="button" className="request-popup-open" aria-label={t('RequestPopup.openInAntumi')} title={t('RequestPopup.openInAntumi')} onClick={() => open(entry.target)}><PopInIcon /></button>
-                  <button type="button" className="request-popup-close" aria-label={t('RequestPopup.collapseShowAgainForNewRequests')} title={t('RequestPopup.collapseShowAgainForNewRequests')} onClick={close}><CloseIcon /></button>
-                </header>
-                {error && <p className="request-popup-error" role="alert">{error}</p>}
-                <ChatSurfaceContext.Provider value={surface}>
-                  <ChatPaths.Provider value={shorten}>
-                    <ChatRoots.Provider value={roots}>
-                      {pending.length > 0
-                        ? <PendingRequests conversation={conversation} pending={pending} tools={tools} modes={state?.permissionModes ?? []} />
-                        : <p className="request-popup-loading">{t('DashboardPanel.loading')}</p>}
-                    </ChatRoots.Provider>
-                  </ChatPaths.Provider>
-                </ChatSurfaceContext.Provider>
-              </section>
-            )
-          : expanded
-            ? <Activity entries={activity} onOpen={open} />
-            : <Compact waiting={queue.length} activity={activity} agents={marks} />}
+        {entry && conversation && surface && (
+          <section key={entry.conversationId} className="chat-view request-popup" hidden={!active} data-font-size={fontSize} aria-label={t('ChatDock.requestsAwaitingYourResponse')}>
+            <header className="request-popup-header">
+              <span className="request-popup-label" role="img" aria-label={popupLabel(entry.request)} title={popupLabel(entry.request)}>{KIND_ICON[popupKind(entry.request)]}</span>
+              <span className="request-popup-title" title={entry.title}>{entry.title}</span>
+              <span className="request-popup-agent" role="img" aria-label={agentLabel(conversation.agent)} title={agentLabel(conversation.agent)}><AgentIcon agent={conversation.agent} /></span>
+              <span className="request-popup-spacer" />
+              {queue.length > 1 && (
+                <span className="request-popup-pager">
+                  <button type="button" className="request-popup-step" data-direction="previous" aria-label={t('ChatRequestCards.previous')} onClick={() => step(-1)}><ChevronRightIcon /></button>
+                  <span className="request-popup-count">{at + 1} / {queue.length}</span>
+                  <button type="button" className="request-popup-step" aria-label={t('ChatRequestCards.next')} onClick={() => step(1)}><ChevronRightIcon /></button>
+                </span>
+              )}
+              <button type="button" className="request-popup-open" aria-label={t('RequestPopup.openInAntumi')} title={t('RequestPopup.openInAntumi')} onClick={() => open(entry.target)}><PopInIcon /></button>
+              <button type="button" className="request-popup-close" aria-label={t('RequestPopup.collapseShowAgainForNewRequests')} title={t('RequestPopup.collapseShowAgainForNewRequests')} onClick={close}><CloseIcon /></button>
+            </header>
+            {error && <p className="request-popup-error" role="alert">{error}</p>}
+            <ChatSurfaceContext.Provider value={surface}>
+              <ChatPaths.Provider value={shorten}>
+                <ChatRoots.Provider value={roots}>
+                  {pending.length > 0
+                    ? <PendingRequests conversation={conversation} pending={pending} tools={tools} modes={state?.permissionModes ?? []} escapeToSkip={false} />
+                    : <p className="request-popup-loading">{t('DashboardPanel.loading')}</p>}
+                </ChatRoots.Provider>
+              </ChatPaths.Provider>
+            </ChatSurfaceContext.Provider>
+          </section>
+        )}
+        {present && !active && (expanded
+          ? <Activity entries={activity} onOpen={open} />
+          : <Compact waiting={queue.length} activity={activity} agents={marks} />)}
       </div>
     </div>
   )
@@ -283,8 +312,7 @@ function Compact({ waiting, activity, agents }: { waiting: number; activity: rea
   // At rest the ant keeps the notch company, with a mood that turns with the hour.
   const idle = waiting === 0 && activity.length === 0
   const mood = antMood(new Date().getHours())
-  return (
-    <div className="island-compact" data-idle={idle}>
+  const ears = <>
       <span className="island-ear island-ear-leading">
         {idle
           ? <AntHead asleep={mood === 'sleep'} />
@@ -300,8 +328,10 @@ function Compact({ waiting, activity, agents }: { waiting: number; activity: rea
               ? <span className="island-badge">{t('RequestPopup.agentsWorking', { count: running })}</span>
               : idle && <AntMoodMark mood={mood} />}
       </span>
-    </div>
-  )
+  </>
+  return idle
+    ? <button type="button" className="island-compact" data-idle aria-label={t('RequestPopup.openInAntumi')} title={t('RequestPopup.openInAntumi')} onClick={() => openFromRequestPopup()}>{ears}</button>
+    : <div className="island-compact" data-idle={false}>{ears}</div>
 }
 
 // The island open with nothing to answer: each agent at work or reply not looked at, leading to

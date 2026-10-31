@@ -35,7 +35,7 @@ export function AgentCalls({ conversation }: { conversation: Conversation }) {
       <article className="delegation-record">
       <div className="delegation-record-head"><AgentIcon agent={call.profile.agent} /><strong>{call.profile.name}</strong><span className="delegation-status" data-state={call.state}>{t(`AgentProfiles.${call.state}`)}</span></div>
       <time className="muted" dateTime={new Date(call.createdAt).toISOString()}>{chatDayAndTime(call.createdAt)}</time>
-      <details key={`instruction:${call.id === focus}`} className="delegation-instruction" open={call.id === focus || undefined}><summary title={call.instruction}>{call.instruction.split('\n').filter((line) => line.trim()).slice(0, 2).join(' · ')}</summary><p>{call.instruction}</p></details>
+      <details className="delegation-instruction"><summary title={call.instruction}>{call.instruction.split('\n').filter((line) => line.trim()).slice(0, 2).join(' · ')}</summary><p>{call.instruction}</p></details>
       {call.result && <details key={`result:${call.id === focus}`} className="delegation-result" open={call.id === focus || undefined}><summary>{t('AgentProfiles.result')}</summary><p>{call.result}</p></details>}
       {call.error && <p className="modal-error" role="status">{call.error}</p>}
       <footer className="delegation-record-actions">

@@ -1,17 +1,21 @@
-import { useEffect, useId, useRef, useState } from 'react'
-import type { Conversation, DelegationTarget } from '@antumi/protocol'
-import { showAgentCalls, useAgentCallsSupported } from '../agent-calls'
+import { Fragment, useEffect, useId, useRef, useState } from 'react'
+import type { ChatItem, Conversation, DelegationTarget } from '@antumi/protocol'
+import { showAgentCalls, useAgentCalls, useAgentCallsSupported } from '../agent-calls'
 import { useOccludesBrowser } from '../browser-occlusion'
+import { useDisclosure } from '../chat-disclosure'
 import { useCore } from '../core-store'
+import { agentResultCallIds, deliveredResults } from '../delegation-delivery'
 import { usePreferences } from '../preferences'
 import { t } from '../i18n'
 import { agentLabel } from '../labels'
 import { useNow } from '../usage-format'
 import { delegationQuotaText } from './AgentQuota'
+import { ChatCopyRegion } from './ChatCopyRegion'
+import { ChatMarkdown } from './ChatMarkdown'
 import { ChatPicker } from './ChatPicker'
 import { useChatSurface } from './chat-surface'
 import { useConversationPane } from './conversation-pane'
-import { AgentIcon, CloseIcon, SquadIcon } from './icons'
+import { AgentIcon, ChevronRightIcon, CloseIcon, SquadIcon } from './icons'
 import './agent-calls.css'
 
 function DelegationDialog({ conversation, onClose, onHistory }: { conversation: Conversation; onClose(): void; onHistory(): void }) {
@@ -100,8 +104,48 @@ export function AgentDelegation({ conversation }: { conversation: Conversation }
   </>
 }
 
-export function AgentDelegationResult() {
+const ENDED = { completed: 'AgentProfiles.completed', failed: 'AgentProfiles.failed', cancelled: 'AgentProfiles.cancelled' } as const
+const endedText = (state: string) => state === 'completed' || state === 'failed' || state === 'cancelled' ? t(ENDED[state]) : state
+
+// Results back in the main conversation: one row for the message they came in, saying whose and
+// how each ended, opening on what the main agent was given. Each one's details open its call in
+// the inspector.
+export function AgentDelegationResult({ conversationId, item }: { conversationId: string; item: Extract<ChatItem, { kind: 'user' }> }) {
   const surface = useChatSurface()
   const pane = useConversationPane()
-  return <div className="delegation-delivery"><SquadIcon /><span>{t('AgentProfiles.resultReturned')}</span><button type="button" className="link-button" onClick={() => { pane?.focus(); showAgentCalls(surface.inspector) }}>{t('AgentProfiles.history')}</button></div>
+  const [open, setOpen] = useDisclosure(`delivery:${item.id}`)
+  const calls = useAgentCalls(conversationId).calls
+  const delivered = deliveredResults(item.text)
+  const results = agentResultCallIds(item).flatMap((id) => {
+    const given = delivered.find((each) => each.callId === id)
+    const call = calls?.find((each) => each.id === id)
+    const name = given?.name ?? call?.profile.name
+    return name ? [{ id, name, agent: call?.profile.agent ?? null, state: given?.state ?? call?.state ?? '', result: given?.result ?? null, error: given?.error ?? null }] : []
+  })
+  const show = (callId: string | null) => { pane?.focus(); showAgentCalls(surface.inspector, callId) }
+  if (!results.length) {
+    return <div className="delegation-delivery-plain"><SquadIcon /><span>{t('AgentProfiles.resultReturned')}</span><button type="button" className="link-button" onClick={() => show(null)}>{t('AgentProfiles.history')}</button></div>
+  }
+  return <div className="chat-tool-line delegation-delivery" data-open={open || undefined}>
+    <button type="button" className="chat-tool-row" aria-expanded={open} onClick={() => setOpen(!open)}>
+      <span className="chat-tool-icon" aria-hidden="true"><SquadIcon /></span>
+      <span className="chat-tool-name">{results.length > 1 ? t('AgentProfiles.resultsReceived', { count: results.length }) : t('AgentProfiles.resultReceived')}</span>
+      <span className="chat-tool-summary">{results.map((each, index) => <Fragment key={each.id}>
+        {index > 0 && ' · '}
+        <span className="delegation-delivery-agent"><AgentIcon agent={each.agent} />{each.name} <span className="delegation-delivery-state" data-state={each.state}>{endedText(each.state)}</span></span>
+      </Fragment>)}</span>
+      <span className="chat-tool-chevron" aria-hidden="true"><ChevronRightIcon /></span>
+    </button>
+    {open && <div className="delegation-delivery-body">{results.map((each) => <section key={each.id} className="delegation-delivery-result">
+      <header>
+        <AgentIcon agent={each.agent} />
+        <strong>{each.name}</strong>
+        <span className="delegation-delivery-state" data-state={each.state}>{endedText(each.state)}</span>
+        <button type="button" className="link-button" onClick={() => show(each.id)}>{t('AgentProfiles.details')}</button>
+      </header>
+      {each.result
+        ? <ChatCopyRegion text={each.result}><div className="chat-subagent-result"><ChatMarkdown text={each.result} /></div></ChatCopyRegion>
+        : <div className="chat-subagent-text">{each.error ?? t('AgentProfiles.noResult')}</div>}
+    </section>)}</div>}
+  </div>
 }

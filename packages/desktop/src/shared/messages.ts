@@ -282,6 +282,8 @@ export const MESSAGES = {
   "AgentProfiles.contextPlaceholder": {"zh": "必要背景、文件范围、交付要求等", "en": "Background, file scope, expected output…"},
   "AgentProfiles.noAvailable": {"zh": "当前会话没有可调用的智能体。可在「智能体」中新建智能体或调整调用范围。", "en": "No agents are available to this conversation. Create an agent or adjust callable agents in Agents."},
   "AgentProfiles.resultReturned": {"zh": "委派结果已返回，主会话将继续处理", "en": "Delegation result returned; the main conversation will continue"},
+  "AgentProfiles.resultReceived": {"zh": "收到委派结果", "en": "Delegation result received"},
+  "AgentProfiles.resultsReceived": {"zh": "收到 {count} 个委派结果", "en": "{count} delegation results received"},
   "AgentProfiles.history": {"zh": "委派记录", "en": "Delegation history"},
   "AgentProfiles.result": {"zh": "结果", "en": "Result"},
   "AgentProfiles.loadingCalls": {"zh": "正在读取委派记录…", "en": "Loading delegation history…"},

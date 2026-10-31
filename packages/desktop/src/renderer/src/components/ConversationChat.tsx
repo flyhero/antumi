@@ -361,7 +361,7 @@ function Item({ conversationId, item, completedAt, blockKey }: { conversationId:
   const compact = useContext(ChatVariant) === 'compact'
   switch (item.kind) {
     case 'user':
-      if (isAgentCallResult(item)) return <AgentDelegationResult />
+      if (isAgentCallResult(item)) return <AgentDelegationResult conversationId={conversationId} item={item} />
       return <UserMessage item={item} />
     case 'assistant':
       return <AssistantReply conversationId={conversationId} item={item} completedAt={completedAt} ending={ending} blockKey={blockKey} />

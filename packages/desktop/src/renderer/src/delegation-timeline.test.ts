@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { AgentCall, type ChatItem } from '@antumi/protocol'
 import { chatBlocks, type ChatBlock } from './chat-state'
+import { agentResultCallIds } from './delegation-delivery'
 import { withDelegations } from './delegation-timeline'
 
 const call = AgentCall.parse({ result: null, error: null, delivered: false,
@@ -36,6 +37,12 @@ describe('delegation placement', () => {
   it('only adds older cards to a partial history when their delivery is visible, then moves them to their dispatch', () => {
     const tail = grouped([user(`u:agent-result:${call.id}`, 50), reply('b', 60)])
     expect(cards(withDelegations(tail, [call, { ...call, id: '55555555-5555-4555-8555-555555555555' }], true))).toHaveLength(1)
+    // Results that came back together share one delivery.
+    const other = { ...call, id: '55555555-5555-4555-8555-555555555555' }
+    const together = grouped([user(`u:agent-result:${call.id},${other.id}`, 50), reply('b', 60)])
+    expect(agentResultCallIds({ kind: 'user', id: `u:agent-result:${call.id},${other.id}` })).toEqual([call.id, other.id])
+    expect(cards(withDelegations(together, [call, other], true))).toHaveLength(1)
+    expect(cards(withDelegations(together, [call, other], true))[0]).toMatchObject({ calls: [call, other] })
     const full = grouped([user('u', 0), dispatch(JSON.stringify(call)), ...tail.flatMap((block) => block.kind === 'entry' && block.entry.kind === 'item' ? [block.entry.item] : [])])
     const shown = withDelegations(full, [call], false)
     expect(cards(shown)).toHaveLength(1)

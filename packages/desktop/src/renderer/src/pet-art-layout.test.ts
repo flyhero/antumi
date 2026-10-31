@@ -8,7 +8,7 @@ describe('pet artwork alignment', () => {
       const source = PET_ART_LAYOUT[style]
       for (const [frame, neck] of source.walkNecks.entries()) {
         const placement = petWalkLayout(source, frame)
-        for (const size of [80, 120, 192]) {
+        for (const size of [60, 80, 120, 192]) {
           const scale = size / PET_FRAME_SIZE
           expect((neck.x + placement.x) * scale).toBeCloseTo(source.idleNeck.x * scale)
           expect((neck.y * placement.scaleY + placement.y) * scale).toBeCloseTo(source.idleNeck.y * scale)

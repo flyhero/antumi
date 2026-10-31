@@ -35,9 +35,13 @@ function terminalCommand(item: Extract<ChatItem, { kind: 'approval' }>, input: s
   return item.title
 }
 // Antumi's own tools go by what the timeline names their calls by (a delegation by its reference),
-// not by the title the agent gave its request (Cursor's "antumi-antumi_agent_dispatch: …").
-function antumiSubject(item: ApprovalItem, tool: ToolItem | undefined): string | null {
-  return tool && antumiToolPresentation(item.tool) ? antumiToolTitle(tool) : null
+// not by the title the agent gave its request (Cursor's "antumi-antumi_agent_dispatch: …"). A
+// request may name only the kind of call, as Codex's `mcpToolCall` for any MCP tool: then the call
+// it is about says which tool it is.
+function antumiCall(item: ApprovalItem, tool: ToolItem | undefined): { name: string; title: string | null } | null {
+  if (!tool) return null
+  const name = antumiToolPresentation(item.tool) ? item.tool : antumiToolPresentation(tool.name) ? tool.name : null
+  return name ? { name, title: antumiToolTitle(tool) } : null
 }
 function decisionLabel(item: ApprovalItem, decision: ChatDecision): string {
   return (isHostApproval(item) ? HOST_DECISION_LABEL : isTerminalRunTool(item.tool) ? TERMINAL_DECISION_LABEL : DECISION_LABEL)[decision]
@@ -72,8 +76,9 @@ export function ChatRequestLine({ item, tool }: { item: RequestItem; tool?: Tool
   }
   // A command is named by the program it runs; the card below has it in full. Antumi's own
   // question about a site names the site.
-  const subject = antumiSubject(item, tool) ?? (isCommandTool(item.tool) ? commandKeyword(item.title) : isHostApproval(item) ? item.title : shorten(item.title))
-  const what = <>{toolLabel(item.tool)}{subject && <> <span className="mono">{subject}</span></>}</>
+  const antumi = antumiCall(item, tool)
+  const subject = antumi?.title ?? (isCommandTool(item.tool) ? commandKeyword(item.title) : isHostApproval(item) ? item.title : shorten(item.title))
+  const what = <>{toolLabel(antumi?.name ?? item.tool)}{subject && <> <span className="mono">{subject}</span></>}</>
   return item.resolution === null
     ? <div className="chat-request-line" data-waiting>{tr('ChatRequestCards.approvalNeededRespondBelow', { what: what })}</div>
     : <div className="chat-request-line">{what} · {chosenText(item) ?? RESOLUTION_TEXT[item.resolution]}</div>
@@ -135,7 +140,8 @@ export function ChatApprovalCard({ conversationId, item, tool, singleApproval = 
   const command = isCommandTool(item.tool)
   const host = isHostApproval(item)
   const terminal = terminalCommand(item, tool?.input)
-  const title = antumiSubject(item, tool) ?? (command ? commandKeyword(item.title) : host ? item.title : shorten(item.title))
+  const antumi = antumiCall(item, tool)
+  const title = antumi?.title ?? (command ? commandKeyword(item.title) : host ? item.title : shorten(item.title))
   // Claude describes a file call by the file's name, which the title already has. A site's card
   // says the site in the headline and the whole address below.
   const detail = host ? null : item.detail && !title.includes(shorten(item.detail)) ? shorten(item.detail) : null
@@ -143,7 +149,7 @@ export function ChatApprovalCard({ conversationId, item, tool, singleApproval = 
     ? <>{tr('ChatRequestCards.agentWantsToOpen', { value1: <span className="mono">{title}</span> })}</>
     : terminal !== null
       ? <>{tr('ChatRequestCards.agentWantsToRunInTheTerminal', { value1: <span className="mono">{commandKeyword(terminal)}</span> })}</>
-      : <>{toolLabel(item.tool)}{title && <> <span className="mono">{title}</span></>}</>
+      : <>{toolLabel(antumi?.name ?? item.tool)}{title && <> <span className="mono">{title}</span></>}</>
   const submit = () => {
     if (!current) return
     void respond(current.decision, {

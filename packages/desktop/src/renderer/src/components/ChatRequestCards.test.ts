@@ -31,6 +31,27 @@ describe('approval card', () => {
       expect(html).not.toContain('antumi-antumi_agent_dispatch')
     }
   })
+  it('knows a call to Antumi\'s tools by the call where the request names only an MCP call', () => {
+    const input = JSON.stringify({ agent: 'claude', instruction: '计算 1+2', ref: 'calc-1-plus-2' })
+    // As Codex asks before any MCP call: the kind for its tool, the raw name for its title.
+    const item: ApprovalItem = { ...approval, tool: 'mcpToolCall', title: 'antumi.antumi_agent_dispatch', detail: 'agent: claude\ninstruction: 计算 1+2', toolItemId: 'tool:call' }
+    const tool: ToolItem = { id: 'tool:call', stageId: 'stage', revision: 1, at: 0, kind: 'tool', name: 'antumi.antumi_agent_dispatch', title: 'calc-1-plus-2', input, status: 'running', output: null, diffs: [] }
+    const card = renderToStaticMarkup(createElement(ChatApprovalCard, { conversationId: 'conversation', item, tool }))
+    const line = renderToStaticMarkup(createElement(ChatRequestLine, { item, tool }))
+    for (const html of [card, line]) {
+      expect(html).toContain('委派智能体')
+      expect(html).not.toContain('antumi.antumi_agent_dispatch')
+      expect(html).not.toContain('MCP 工具')
+    }
+    expect(line).toContain('calc-1-plus-2')
+  })
+  it('keeps another MCP server\'s call as the request names it', () => {
+    const item: ApprovalItem = { ...approval, tool: 'mcpToolCall', title: 'github.create_issue', detail: null, toolItemId: 'tool:call' }
+    const tool: ToolItem = { id: 'tool:call', stageId: 'stage', revision: 1, at: 0, kind: 'tool', name: 'github.create_issue', title: 'github.create_issue', input: '{}', status: 'running', output: null, diffs: [] }
+    const line = renderToStaticMarkup(createElement(ChatRequestLine, { item, tool }))
+    expect(line).toContain('MCP 工具')
+    expect(line).toContain('github.create_issue')
+  })
   it('takes the command from the call when the chat has it', () => {
     const tool: ToolItem = { id: 'tool:inner', stageId: 'stage', revision: 1, at: 0, kind: 'tool', name: 'commandExecution', title: 'rg', input: 'rg -n session', status: 'running', output: null, diffs: [] }
     expect(render(tool)).toContain('<pre>rg -n session</pre>')

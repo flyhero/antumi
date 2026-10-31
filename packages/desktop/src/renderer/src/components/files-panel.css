@@ -9,7 +9,7 @@
 
 /* Its status bar button, before the browser in the right-hand group: first of the group
    it takes the auto margin, and the one after it gives that up. */
-.statusbar .statusbar-files { display: inline-flex; align-items: center; width: auto; height: 24px; margin-left: auto; padding: 0 6px; }
+.statusbar .statusbar-files { display: inline-flex; align-items: center; gap: 4px; width: auto; height: 24px; margin-left: auto; padding: 0 6px; }
 .statusbar .statusbar-files svg { width: 15px; height: 15px; }
 .statusbar .statusbar-schedules + .statusbar-files,
 .statusbar .statusbar-worktrees + .statusbar-files,

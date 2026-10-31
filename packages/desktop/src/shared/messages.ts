@@ -12364,6 +12364,8 @@ export const MESSAGES = {
   "UsageAnalytics.state.failed": {"zh": "未完成", "en": "Not completed"},
   "FilesPanel.files": {"zh": "文件", "en": "Files"},
   "FilesPanel.hideFiles": {"zh": "隐藏文件", "en": "Hide files"},
+  "StatusBar.uncommittedFiles": {"zh": "{count} 个文件未提交", "en": "{count} uncommitted {count, plural, one {file} other {files}}"},
+  "StatusBar.filesWithUncommitted": {"zh": "文件，{count} 个文件未提交", "en": "Files, {count} uncommitted {count, plural, one {file} other {files}}"},
   "FilesPanel.whichFolders": {"zh": "查看哪份代码", "en": "Which checkout to show"},
   "FilesPanel.followsWhatYouLookAt": {"zh": "当前会话或任务的目录，跟随切换", "en": "The open conversation's or task's folders; follows as you switch"},
   "FilesPanel.pickAProject": {"zh": "选择项目", "en": "Pick a project"},

@@ -18,14 +18,15 @@ import { WireLogView } from './WireLogView'
 import { DiffCommentConversation } from './DiffComments'
 
 // Read again whenever the conversation changes (every agent turn and exit), the window regains
-// focus, or the user refreshes. An older core without the method has nothing to show.
-export function useFolderChanges(id: string, updatedAt: number, refreshCount: number): FolderChanges[] | null {
+// focus, or the user refreshes. An older core without the method has nothing to show; nor does
+// no conversation (null).
+export function useFolderChanges(id: string | null, updatedAt: number, refreshCount: number): FolderChanges[] | null {
   const gitRevision = useCore((state) => state.gitRevision)
   const rpc = useCore((state) => state.rpc)
   const focusCount = useFocusCount()
   const [changes, setChanges] = useState<{ id: string; changes: FolderChanges[] } | null>(null)
   useEffect(() => {
-    if (!rpc) return
+    if (!rpc || id === null) return
     let current = true
     void rpc.call('conversations.changes', { id })
       .catch(() => [])

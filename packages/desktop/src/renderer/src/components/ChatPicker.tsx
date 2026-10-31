@@ -58,7 +58,7 @@ function PickerShell({ label, spoken, tone, disabled, title, align, placement = 
         {iconOnly ? value : <><span className="chat-picker-value">{value}</span><ChevronDownIcon /></>}
       </button>
       {at && (
-        <ContextMenu at={at} align={align} above={placement === 'above'} trigger={button.current} label={label} onClose={close}>
+        <ContextMenu at={at} align={align} above={placement === 'above'} trigger={button.current} width={size === 'field' ? button.current?.getBoundingClientRect().width : undefined} label={label} onClose={close}>
           {children(close)}
         </ContextMenu>
       )}
@@ -79,7 +79,7 @@ export function PickerItem({ option, checked, onSelect }: { option: PickerOption
       {option.icon && <span className="chat-picker-icon" aria-hidden="true">{option.icon}</span>}
       <span className="chat-picker-item-text">
         <span className="chat-picker-item-label">{option.label}</span>
-        {option.description && <span className="chat-picker-item-description">{option.description}</span>}
+        {option.description && <span className="chat-picker-item-description" title={option.description}>{option.description}</span>}
       </span>
       {checked && <span className="menu-check"><CheckIcon /></span>}
     </button>

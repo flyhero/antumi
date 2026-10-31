@@ -45,7 +45,7 @@ describe('divider peeking', () => {
   })
 
   it('fits the head and preserves the neck anchor across supported pet sizes', () => {
-    for (const size of [80, 120, 192]) {
+    for (const size of [60, 80, 120, 192]) {
       const scale = size / 120
       const scaled = { bounds: { left: 20 * scale, top: 10 * scale, right: 95 * scale, bottom: 70 * scale }, neck: { x: 55 * scale, y: 70 * scale } }
       const plan = planPeek(wall(240, 1), scaled, size, size, stage, [], .5)

@@ -1,8 +1,8 @@
-import { attentionCount, noticesBetween } from './attention'
+import { attentionCount, noticesBetween, unseenConversations } from './attention'
 import { openUsageCard, selectConversation, selectTask, setRoutinesOpen, useCore } from './core-store'
-import { canNotify, canShowRequestPopup, notify, onNotificationClick, setBadge, wantRequestPopup } from './desktop-bridge'
+import { canNotify, canShowIsland, canShowRequestPopup, notify, onNotificationClick, setBadge, setRequestPopupMode, tellRequestPopupAttention, wantRequestPopup } from './desktop-bridge'
 import { currentInstalledAgents } from './installed-agents'
-import { usePreferences } from './preferences'
+import { usePreferences, type Preferences } from './preferences'
 import { quotaNoticesBetween } from './quota-notices'
 import { newlyWaiting } from './request-popup'
 import { routineNoticesBetween } from './routines'
@@ -27,7 +27,7 @@ export function startNotifications(): void {
     }
     const away = usePreferences.getState().notifications && !document.hasFocus()
     if (next.conversations !== prev.conversations && away) {
-      noticesBetween(prev, next, !popupOn()).forEach(notify)
+      noticesBetween(prev, next, !popupOn(), !islandUp()).forEach(notify)
     }
     if (next.schedules !== prev.schedules && away) {
       scheduleNoticesBetween(prev.schedules, next.schedules).forEach(notify)
@@ -74,18 +74,36 @@ function saveSentAdvice(): void {
   }
 }
 
-const popupOn = () => canShowRequestPopup() && usePreferences.getState().requestPopup
+const popupOn = () => canShowRequestPopup() && usePreferences.getState().island !== 'off'
+// The island is up at the notch, showing what waits and what replied: those need no notification.
+const islandUp = () => canShowIsland() && usePreferences.getState().island === 'always'
 
 // The card comes up for a request that arrives while the user is elsewhere, and goes when the
-// setting is turned off; main puts it away when the window is back in front.
+// setting is turned off; main puts it away when the window is back in front. Kept always, main
+// holds the island up by itself and the card only expands it; the island hears from here which
+// replies the user has not looked at, since only this window knows what it showed them.
 function startRequestPopup(): void {
   if (!canShowRequestPopup()) return
+  const tell = (island: Preferences['island']) => setRequestPopupMode(island === 'always' ? 'always' : 'requests')
+  tell(usePreferences.getState().island)
+  let told = ''
+  const tellUnseen = (s: Parameters<typeof unseenConversations>[0]) => {
+    const unseen = unseenConversations(s)
+    const key = unseen.join('\n')
+    if (key === told) return
+    told = key
+    tellRequestPopupAttention(unseen)
+  }
+  tellUnseen(useCore.getState())
   useCore.subscribe((next, prev) => {
     if (next.conversations !== prev.conversations && popupOn() && !document.hasFocus() && newlyWaiting(prev.conversations, next.conversations)) {
       wantRequestPopup(true)
     }
+    if (next.conversations !== prev.conversations || next.unseen !== prev.unseen || next.tasks !== prev.tasks) tellUnseen(next)
   })
   usePreferences.subscribe((next, prev) => {
-    if (prev.requestPopup && !next.requestPopup) wantRequestPopup(false)
+    if (next.island === prev.island) return
+    tell(next.island)
+    if (next.island === 'off') wantRequestPopup(false)
   })
 }

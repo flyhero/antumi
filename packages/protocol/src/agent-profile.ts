@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { AgentKind } from './agent'
 import { SkillRef } from './skills'
 import { ModelProviderId } from './model-provider'
+import { UsageWindow } from './usage'
 
 export const AgentProfileFields = z.object({
   name: z.string().trim().min(1).max(60),
@@ -21,6 +22,28 @@ export const AgentProfile = AgentProfileFields.extend({
   id: z.string().uuid(), archivedAt: z.number().nullable(), createdAt: z.number(), updatedAt: z.number()
 })
 export type AgentProfile = z.infer<typeof AgentProfile>
+
+// How much an agent has left as a delegation to it would find it: its account's tightest window as
+// quotaVerdict reads it, or `provider` where it runs on a model provider, which has no such quota.
+export const DelegationQuota = z.object({
+  state: z.enum(['ok', 'tight', 'exhausted', 'unknown', 'provider']), window: UsageWindow.nullable(), stale: z.boolean()
+})
+export type DelegationQuota = z.infer<typeof DelegationQuota>
+// Whom a conversation can delegate to: a saved profile, or (profileId null) an agent ready on this
+// machine called as it is. capability: the profile's, null where the caller picks it. readOnly:
+// whether it can work with its folders read-only.
+export const DelegationTarget = z.object({
+  profileId: z.string().uuid().nullable(), name: z.string(), description: z.string(), agent: AgentKind,
+  capability: z.enum(['readOnly', 'develop']).nullable(), readOnly: z.boolean(), quota: DelegationQuota
+})
+export type DelegationTarget = z.infer<typeof DelegationTarget>
+export const DirectAgentCall = z.object({
+  agent: AgentKind,
+  model: z.string().trim().min(1).max(200).optional(),
+  effort: z.string().trim().min(1).max(200).optional(),
+  capability: z.enum(['readOnly', 'develop']).optional()
+})
+export type DirectAgentCall = z.infer<typeof DirectAgentCall>
 
 export const AgentCall = z.object({
   id: z.string().uuid(), parentId: z.string().uuid(), conversationId: z.string().uuid(),

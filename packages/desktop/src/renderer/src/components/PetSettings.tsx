@@ -81,7 +81,7 @@ export function PetSettings() {
         )} />
         <SettingsRow label={t('Pet.size')} description={t('Pet.sizeDescription')} control={(labelId) => (
           <span className="pet-size-control">
-            <input type="range" min={80} max={192} step={8} value={size} aria-labelledby={labelId} onChange={(e) => setPreference('petSize', Number(e.target.value))} />
+            <input type="range" min={60} max={192} step={4} value={size} aria-labelledby={labelId} onChange={(e) => setPreference('petSize', Number(e.target.value))} />
             <output>{size} px</output>
           </span>
         )} />

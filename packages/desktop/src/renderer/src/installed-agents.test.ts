@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { AGENT_KINDS, type Environment, type EnvironmentCheck } from '@antumi/protocol'
-import { detectedAgents, installedAgents, otherInstalledAgent } from './installed-agents'
+import { AGENT_KINDS, createRpcClient, RpcRequest, type Environment, type EnvironmentCheck, type RpcConnection } from '@antumi/protocol'
+import { useCore } from './core-store'
+import { detectedAgents, installedAgents, otherInstalledAgent, startDisabledAgentsMirror } from './installed-agents'
+import { usePreferences } from './preferences'
 
 const check = (tool: EnvironmentCheck['tool'], status: EnvironmentCheck['status']): EnvironmentCheck => ({ tool, status, version: null, path: null, signedIn: null })
 const environment = (...checks: EnvironmentCheck[]): Environment => ({ checks, searchPath: [], checkedAt: 0 })
@@ -41,5 +43,27 @@ describe('otherInstalledAgent', () => {
     expect(otherInstalledAgent('claude', ['claude', 'codex'])).toBe('codex')
     expect(otherInstalledAgent('claude', ['claude'])).toBeNull()
     expect(otherInstalledAgent('codex', ['claude'])).toBe('claude')
+  })
+})
+
+describe('startDisabledAgentsMirror', () => {
+  it('tells core the agents turned off once it keeps the list, and again on each change', async () => {
+    const sent: Array<ReturnType<typeof RpcRequest.parse>> = []
+    const client = createRpcClient((frame) => sent.push(RpcRequest.parse(JSON.parse(frame))))
+    const rpc: RpcConnection = { ...client, features: [], close() {}, closed: new Promise(() => {}) }
+    usePreferences.setState({ disabledAgents: ['codex'] })
+    useCore.setState({ rpc, chatSettings: null })
+    startDisabledAgentsMirror()
+    // An older core keeps no such list.
+    useCore.setState({ chatSettings: { promptSuggestions: true } })
+    expect(sent).toEqual([])
+    useCore.setState({ chatSettings: { promptSuggestions: true, disabledAgents: [] } })
+    expect(sent.map((frame) => frame.params)).toEqual([{ disabledAgents: ['codex'] }])
+    useCore.setState({ chatSettings: { promptSuggestions: true, disabledAgents: [] } })
+    expect(sent).toHaveLength(1)
+    rpc.receive(JSON.stringify({ jsonrpc: '2.0', id: sent[0]?.id, result: { promptSuggestions: true, disabledAgents: ['codex'] } }))
+    await expect.poll(() => useCore.getState().chatSettings?.disabledAgents).toEqual(['codex'])
+    usePreferences.setState({ disabledAgents: [] })
+    expect(sent.map((frame) => frame.params)).toEqual([{ disabledAgents: ['codex'] }, { disabledAgents: [] }])
   })
 })

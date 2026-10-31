@@ -63,9 +63,10 @@ const Preferences = z.object({
   sidebarDiscussions: z.boolean().catch(true),
   // Off, nothing is said when the window is not in front; the dock count stays.
   notifications: z.boolean().catch(true),
-  // On, an agent held up on the user while they are in another app comes up on a card at the top
-  // of the screen, to answer there.
-  requestPopup: z.boolean().catch(true),
+  // Where an agent held up on the user shows outside the window: on a card at the top of the
+  // screen when its request comes while they are in another app; on macOS always, as an island at
+  // the notch that also shows the agents at work (components/RequestPopup.tsx); or nowhere.
+  island: z.enum(['off', 'requests', 'always']).catch('requests'),
   usageDisplay: z.enum(['used', 'remaining']).catch('used'),
   // On, the usage card says how to spend each agent's quota against its clock, pickers mark the
   // agent best used now, and notifications tell of quota about to go unused or running out early.
@@ -146,6 +147,10 @@ function load(): Preferences {
   // 0.15.8 kept them as translateModels, before commit messages used them too.
   if (typeof saved === 'object' && saved !== null && 'translateModels' in saved && !('quickModels' in saved)) {
     saved = { ...saved, quickModels: saved.translateModels }
+  }
+  // 0.21.3 had the card as a switch, requestPopup, before the island could stay up.
+  if (typeof saved === 'object' && saved !== null && 'requestPopup' in saved && !('island' in saved)) {
+    saved = { ...saved, island: saved.requestPopup === false ? 'off' : 'requests' }
   }
   const parsed = Preferences.safeParse(saved)
   return parsed.success ? parsed.data : Preferences.parse({})

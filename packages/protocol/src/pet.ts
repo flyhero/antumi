@@ -26,6 +26,7 @@ const TypingArm = z.object({
 })
 export const PetTyping = z.object({
   offsetY: z.number().min(-64).max(64),
+  scale: z.number().min(0.5).max(2).optional(),
   cycleMs: z.number().int().min(600).max(6000),
   near: TypingArm, far: TypingArm
 })

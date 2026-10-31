@@ -1,6 +1,6 @@
 import { localized, t, tr } from '../i18n'
-import { useRef, useState } from 'react'
-import { openGuide, setAwakeMode, setSchedulesOpen, setSettingsOpen, setWorktreesOpen, toggleBrowserPanel, toggleFilesPanel, togglePortsPanel, toggleTerminalPanel, useAwakeSupported, useBrowserSupported, useCore, useSchedulesOpen, useSchedulesSupported, useWorktreesSupported, type ConnectionState } from '../core-store'
+import { useEffect, useRef, useState } from 'react'
+import { openGuide, setAwakeMode, setSchedulesOpen, setSettingsOpen, setWorktreesOpen, toggleBrowserPanel, toggleFilesPanel, togglePortsPanel, toggleTerminalPanel, useAwakeSupported, useFilesScope, useBrowserSupported, useCore, useSchedulesOpen, useSchedulesSupported, useWorktreesSupported, type ConnectionState } from '../core-store'
 import { ALL_TABS, useBrowserTabs } from '../browser-state'
 import { formatBytes, worktreeRows, worktreeSummary } from '../worktree-groups'
 import { useWorktrees } from '../worktree-store'
@@ -9,6 +9,7 @@ import { usePanelShortcut } from '../panel-shortcuts'
 import { BoltIcon, BookIcon, WorktreeIcon, ChatIcon, CheckIcon, ClockIcon, CoffeeIcon, FilesIcon, GearIcon, GlobeIcon, HelpIcon, PortsIcon, PulseIcon, TerminalIcon } from './icons'
 import { usePorts } from '../port-state'
 import { UsageBar } from './UsageBar'
+import { useFolderChanges } from './ConversationInspector'
 import { openRuns } from '../schedules'
 import { Popover } from './Popover'
 import { UpdateButton } from './UpdateNotice'
@@ -122,21 +123,41 @@ function BrowserButton() {
   )
 }
 
+// A turn records many messages, each touching the conversation: counting waits for them to settle.
+const CHANGES_SETTLE_MS = 2000
+
+// The files the conversation the panel follows has changed and not committed, as its inspector
+// lists them; 0 without one. What the panel is most often opened to look at.
+function useUncommittedFiles(): number {
+  const conversationId = useFilesScope()?.conversationId ?? null
+  const updatedAt = useCore((s) => conversationId ? s.conversations[conversationId]?.updatedAt ?? 0 : 0)
+  const [settled, setSettled] = useState(updatedAt)
+  useEffect(() => {
+    const timer = setTimeout(() => setSettled(updatedAt), CHANGES_SETTLE_MS)
+    return () => clearTimeout(timer)
+  }, [updatedAt])
+  const changes = useFolderChanges(conversationId, settled, 0)
+  return changes?.reduce((sum, folder) => sum + folder.files.length, 0) ?? 0
+}
+
 function FilesButton() {
   const shortcut = usePanelShortcut('toggle-files')
   const open = useCore((s) => s.filesPanelOpen || s.panelWindows.includes('files'))
+  const count = useUncommittedFiles()
   return (
     <button
       type="button"
       className="tool-button statusbar-files"
-      aria-label={t('FilesPanel.files')}
+      aria-label={count > 0 ? t('StatusBar.filesWithUncommitted', { count }) : t('FilesPanel.files')}
       aria-pressed={open}
-      data-active={open}
-      data-tooltip={[open ? t('FilesPanel.hideFiles') : t('FilesPanel.files'), shortcut].filter(Boolean).join(' ')}
+      data-active={open || count > 0}
+      data-tooltip={[open ? t('FilesPanel.hideFiles') : t('FilesPanel.files'), count > 0 && `· ${t('StatusBar.uncommittedFiles', { count })}`, shortcut].filter(Boolean).join(' ')}
       data-tooltip-side="top-end"
       onClick={toggleFilesPanel}
     >
       <FilesIcon />
+      <span className="statusbar-files-label">{t('FilesPanel.files')}</span>
+      {count > 0 && <span className="count">{count}</span>}
     </button>
   )
 }

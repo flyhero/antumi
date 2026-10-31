@@ -29,8 +29,13 @@ declare global {
       setBadge?(count: number): Promise<unknown>
       onNotificationClick?(listener: (target: unknown) => void): () => void
       requestPopup?(wanted: boolean): Promise<unknown>
+      requestPopupMode?(mode: 'requests' | 'always'): Promise<unknown>
+      requestPopupAttention?(unseen: string[]): void
+      onRequestPopupAttention?(listener: (unseen: unknown) => void): () => void
       onRequestPopupWanted?(listener: (wanted: boolean) => void): () => void
+      onRequestPopupGeometry?(listener: (geometry: unknown) => void): () => void
       requestPopupLayout?(layout: { visible: boolean; height: number }): void
+      requestPopupInteractive?(interactive: boolean): void
       openFromRequestPopup?(target: unknown): Promise<unknown>
       // The built-in browser's tab on show, a native view main places over the panel.
       browserShow?(tabId: string | null): Promise<unknown>
@@ -180,13 +185,53 @@ export function wantRequestPopup(wanted: boolean): void {
   void window.antumi?.requestPopup?.(wanted).catch(() => {})
 }
 
+// Whether the card can stay up as an island at the notch: on macOS, with a main new enough.
+export function canShowIsland(): boolean {
+  return window.antumi?.platform === 'darwin' && window.antumi.requestPopupMode !== undefined
+}
+
+// Up only when asked for, or kept up always, as an island that the card expands.
+export function setRequestPopupMode(mode: 'requests' | 'always'): void {
+  void window.antumi?.requestPopupMode?.(mode).catch(() => {})
+}
+
+// From the main window: the chats with a reply the user has not looked at, for the island to
+// show. Only the main window knows, since it is where they are looked at.
+export function tellRequestPopupAttention(unseen: string[]): void {
+  window.antumi?.requestPopupAttention?.(unseen)
+}
+
+export function onRequestPopupAttention(listener: (unseen: string[]) => void): () => void {
+  return window.antumi?.onRequestPopupAttention?.((unseen) => {
+    const parsed = z.array(z.string()).safeParse(unseen)
+    if (parsed.success) listener(parsed.data)
+  }) ?? (() => {})
+}
+
 export function onRequestPopupWanted(listener: (wanted: boolean) => void): () => void {
   return window.antumi?.onRequestPopupWanted?.(listener) ?? (() => {})
+}
+
+// From main: how the card is drawn where it came up. On macOS an island over the menu bar, grown
+// out of the notch when the display has one; elsewhere a plain card under the menu bar.
+export type PopupGeometry = { island: boolean; notch: { width: number; height: number } | null }
+const PopupGeometry = z.object({ island: z.boolean(), notch: z.object({ width: z.number(), height: z.number() }).nullable() })
+export function onRequestPopupGeometry(listener: (geometry: PopupGeometry) => void): () => void {
+  return window.antumi?.onRequestPopupGeometry?.((geometry) => {
+    const parsed = PopupGeometry.safeParse(geometry)
+    if (parsed.success) listener(parsed.data)
+  }) ?? (() => {})
 }
 
 // From the card: whether it has anything to show, and how tall it is in CSS pixels.
 export function layoutRequestPopup(visible: boolean, height: number): void {
   window.antumi?.requestPopupLayout?.({ visible, height })
+}
+
+// From the card: whether the pointer is on it, for an island's window to take clicks or let them
+// through to the menu bar and whatever is under the card.
+export function setRequestPopupInteractive(interactive: boolean): void {
+  window.antumi?.requestPopupInteractive?.(interactive)
 }
 
 // From the card: the main window, brought up on a task or conversation.

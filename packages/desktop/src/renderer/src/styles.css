@@ -310,7 +310,48 @@ textarea {
   flex-shrink: 0;
   display: grid;
   min-height: 0;
-  margin: 8px 8px 8px 0;
+}
+
+/* Flush with the window's top, its right edge and the status bar, as the chat beside it is: square
+   there, and no border of its own to double the status bar's. Docked rather than floating, it
+   casts no shadow, which would fall across the status bar. */
+:root:not([data-backdrop]) .utility-panel-dock > .side-panel {
+  border-right: 0;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  box-shadow: none;
+}
+
+:root:not([data-backdrop]) .utility-panel-dock > .side-panel:first-child {
+  border-top: 0;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+:root:not([data-backdrop]) .utility-panel-dock > .side-panel:last-child {
+  border-bottom: 0;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+/* No gap before the dock either: the panel's own left border is the line, and the grip straddles
+   it, wider than it looks, coloured only to drag. Split panes and the inspector keep their gaps. */
+:root:not([data-backdrop]) .workspace { --side-panel-separator-size: 0px; }
+/* Above the chat's sticky header (2), which would hide the half of the line over the chat. */
+:root:not([data-backdrop]) .workspace > .side-panel-separator { z-index: 3; }
+:root:not([data-backdrop]) .workspace > .side-panel-separator::before { content: ''; position: absolute; inset: 0 -4px; }
+/* The border lighting up, 2px whatever the state, as the sidebar's edge does. */
+:root:not([data-backdrop]) .workspace > .side-panel-separator::after { top: 0; bottom: 0; width: 2px; }
+:root:not([data-backdrop]) .workspace > .side-panel-separator:not(:hover, :focus-visible, [data-dragging='true'])::after { background: transparent; }
+
+/* Maximized it fills the window, which has nothing else to set it off from. */
+:root:not([data-backdrop]) .utility-panel-dock[data-maximized] {
+  margin-left: 0;
+}
+
+:root:not([data-backdrop]) .utility-panel-dock[data-maximized] > .side-panel {
+  border-left: 0;
+  border-radius: 0;
 }
 
 .utility-panel-dock[data-maximized] {
@@ -4060,8 +4101,33 @@ div.inspector-empty > p { margin: 0 0 8px; }
   font-weight: 600;
 }
 
-.usage-card-global-upcoming q {
+.usage-card-global-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.usage-card-global-heading > span:first-child { flex: 1; min-width: 0; }
+.usage-card-global-heading > .usage-card-global-source { flex: none; margin-left: 0; white-space: nowrap; }
+
+.usage-card-global-quote {
+  position: relative;
   display: block;
+  cursor: help;
+}
+
+.usage-card-global-quote:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 0;
+  border-radius: var(--radius-xs);
+}
+
+.usage-card-global-upcoming q {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
   color: var(--text-muted);
   font-weight: 400;
 }
@@ -4084,6 +4150,15 @@ div.inspector-empty > p { margin: 0 0 8px; }
 .usage-card-global-tooltip::after { content: ''; position: absolute; top: 100%; left: 0; right: 0; height: 8px; }
 .usage-card-global-attribution:hover .usage-card-global-tooltip, .usage-card-global-attribution:focus-within .usage-card-global-tooltip { visibility: visible; }
 .usage-card-global-tooltip a { color: inherit; text-decoration: underline; }
+.usage-card-global-quote-tooltip {
+  bottom: 100%;
+  max-height: min(50vh, 320px);
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.usage-card-global-quote:hover .usage-card-global-quote-tooltip,
+.usage-card-global-quote:focus-within .usage-card-global-quote-tooltip { visibility: visible; }
 
 .usage-card-credits-hint a {
   color: inherit;
@@ -4946,7 +5021,8 @@ div.inspector-empty > p { margin: 0 0 8px; }
 :root[data-backdrop] .workspace > .side-panel-separator:not(:hover, :focus-visible, [data-dragging='true'])::after { background: transparent; }
 :root[data-backdrop] .workspace > :first-child:not(.sidebar),
 :root[data-backdrop] .workspace > .sidebar[hidden] + * { margin-left: 8px; }
-:root[data-backdrop] .utility-panel-dock { margin-bottom: 0; }
+/* In line with the panes, which keep a margin above and beside them here. */
+:root[data-backdrop] .utility-panel-dock { margin: 8px 8px 0 0; }
 
 .settings-resettable { display: inline-flex; align-items: center; gap: 6px; }
 /* Hidden keeps its room: the control beside it stays put as it comes and goes. */
@@ -8178,8 +8254,8 @@ div.inspector-empty > p { margin: 0 0 8px; }
 .chat-picker-chip:disabled { cursor: default; opacity: 0.5; }
 .chat-picker-item { align-items: flex-start; }
 .chat-picker-item-text { display: flex; flex: 1; flex-direction: column; gap: 1px; min-width: 0; }
-.chat-picker-item-label { white-space: nowrap; }
-.chat-picker-item-description { color: var(--text-muted); font-size: 11px; line-height: 1.4; white-space: normal; }
+.chat-picker-item-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-picker-item-description { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; color: var(--text-muted); font-size: 11px; line-height: 1.4; white-space: normal; overflow-wrap: anywhere; }
 .chat-picker-item .menu-check { align-self: center; }
 
 .chat-context {
@@ -9903,6 +9979,90 @@ summary.agent-group-head:focus-visible { outline: 2px solid var(--focus); outlin
   box-shadow: var(--shadow-float);
   overflow: hidden;
 }
+/* On macOS the window is at the very top of the screen, over the menu bar, and the card is drawn
+   as the system's own island would be: dark whatever the theme, black like the notch, which it
+   grows out of on a display that has one, its content starting under the camera housing
+   (--notch-height, set by the page from what main measured). On a display without a notch it
+   floats just under the top edge. */
+:root { --notch: #000000; --island-radius: var(--radius-lg); }
+/* Open, the corner radius follows the notch's rather than the card scale: the island is a piece
+   of the notch, not a card. No drawn corners at the top: the hardware notch has them, and
+   anything drawn beside it over the menu bar shows as a spur. */
+:root[data-island] .request-popup-frame[data-expanded='true'] { --island-radius: 20px; }
+:root[data-island] { color-scheme: dark; }
+:root[data-island] .request-popup-frame { position: relative; display: flex; justify-content: center; padding: 0 0 24px; }
+:root[data-island] .island { position: relative; border-radius: var(--island-radius); background: var(--notch); }
+:root[data-island] .request-popup-frame[data-expanded='true'] .island { width: 100%; }
+:root[data-island] .request-popup.chat-view { border: 0; border-radius: inherit; background: transparent; box-shadow: none; }
+:root[data-island='floating'] .island { margin-top: 6px; box-shadow: var(--shadow-float); }
+:root[data-island='notch'] .island { border-radius: 0 0 var(--island-radius) var(--island-radius); }
+:root[data-island='notch'] .request-popup.chat-view,
+:root[data-island='notch'] .island-activity { padding-top: var(--notch-height); }
+/* Folded: an ear each side of the notch, as tall as the notch so the island reads as part of
+   it; floating, a pill. An empty ear takes no room, so with nothing to say the island is the
+   notch and no more. */
+.island-compact { display: flex; align-items: stretch; height: var(--notch-height); }
+:root[data-island='floating'] .island-compact { height: 30px; padding: 0 6px; }
+.island-notch { flex: none; width: var(--notch-width); }
+.island-ear { display: flex; align-items: center; gap: 6px; padding: 0 10px; font-size: 12px; white-space: nowrap; color: var(--text-muted); }
+.island-ear:empty { padding: 0; }
+.island-mark { display: grid; place-items: center; flex-shrink: 0; color: var(--text-3); }
+.island-mark .agent-mark { width: 16px; height: 16px; }
+.island-badge[data-tone='accent'] { color: var(--accent); font-weight: 600; }
+/* At rest: the ant's face on one side, its mood on the other. The face is a sprite on a pixel
+   grid, kept crisp, and blinks by showing its other frame for a moment. */
+.ant-mood-mark { width: 18px; height: 18px; shape-rendering: crispEdges; }
+.ant-mood-mark[data-mood='sun'] { fill: var(--warning); }
+.ant-mood-mark[data-mood='star'] { fill: var(--accent); }
+.ant-mood-mark[data-mood='heart'] { fill: var(--ant-blush); }
+.ant-mood-mark[data-mood='sleep'] { fill: var(--text-3); }
+.ant-head-mark { width: 22px; height: 22px; shape-rendering: crispEdges; }
+.ant-head-shell { fill: var(--ant-body); }
+.ant-head-antenna { fill: var(--ant-limb); }
+.ant-head-eye { fill: var(--ant-eye); }
+.ant-head-pupil { fill: var(--ant-pupil); }
+.ant-head-eyes-open { animation: ant-head-open 4.6s steps(1) infinite; }
+.ant-head-eyes-shut { animation: ant-head-shut 4.6s steps(1) infinite; }
+@keyframes ant-head-open { 0%, 93%, 100% { opacity: 1; } 94%, 98% { opacity: 0; } }
+@keyframes ant-head-shut { 0%, 93%, 100% { opacity: 0; } 94%, 98% { opacity: 1; } }
+/* Asleep at night: the shut frame stays. */
+.ant-head-mark[data-asleep='true'] .ant-head-eyes-open, .ant-head-mark[data-asleep='true'] .ant-head-eyes-shut { animation: none; }
+.ant-head-mark[data-asleep='true'] .ant-head-eyes-open { opacity: 0; }
+.ant-head-mark[data-asleep='true'] .ant-head-eyes-shut { opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .ant-head-eyes-open, .ant-head-eyes-shut { animation: none; }
+  .ant-head-mark:not([data-asleep='true']) .ant-head-eyes-shut { opacity: 0; }
+}
+/* Opening: what unfolds settles in from just above, as the window has already grown to fit it;
+   folding is at once, so the island is out of the way as soon as the pointer leaves. */
+:root[data-island] .request-popup-frame[data-expanded='true'] .island > * { animation: island-unfold 160ms ease-out; }
+@keyframes island-unfold {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  :root[data-island] .request-popup-frame[data-expanded='true'] .island > * { animation: none; }
+}
+/* Open with nothing to answer: the agents at work and the replies not yet looked at, each a row
+   to its chat. */
+.island-activity { display: flex; flex-direction: column; gap: 2px; padding: 8px; }
+.island-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.island-row:hover { background: var(--fill); }
+.island-row-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.island-row-state { flex-shrink: 0; font-size: 12px; color: var(--text-3); }
 .request-popup-header {
   display: flex;
   align-items: center;
@@ -9913,14 +10073,15 @@ summary.agent-group-head:focus-visible { outline: 2px solid var(--focus); outlin
   font-size: var(--chat-font-small);
   white-space: nowrap;
 }
-.request-popup-label { flex-shrink: 0; color: var(--accent); font-weight: 600; }
+.request-popup-label { display: grid; place-items: center; flex-shrink: 0; color: var(--accent); }
+.request-popup-label svg { width: 16px; height: 16px; }
 .request-popup-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
 .request-popup-agent { flex-shrink: 0; display: grid; place-items: center; color: var(--text-3); }
 .request-popup-agent .agent-mark { width: 16px; height: 16px; }
 .request-popup-spacer { flex: 1; }
 .request-popup-pager { display: flex; flex-shrink: 0; align-items: center; gap: 4px; color: var(--text-3); font-variant-numeric: tabular-nums; }
-.request-popup-header .link-button { flex-shrink: 0; margin-left: 4px; }
 .request-popup-step,
+.request-popup-open,
 .request-popup-close {
   display: grid;
   place-items: center;
@@ -9936,6 +10097,7 @@ summary.agent-group-head:focus-visible { outline: 2px solid var(--focus); outlin
 }
 .request-popup-step { width: 24px; height: 24px; }
 .request-popup-step:hover,
+.request-popup-open:hover,
 .request-popup-close:hover { background: var(--fill); color: var(--text); }
 .request-popup-step[data-direction='previous'] svg { transform: scaleX(-1); }
 .request-popup .chat-intervention { max-height: none; border: 0; border-radius: 0; }

@@ -23,8 +23,8 @@ describe('parseResetStatus', () => {
       forecast: { p48: 0.22, basis: 'empirical' }
     })
     expect(parseResetStatus(body, 'codex', now)).toEqual({
-      latest: { kind: 'reset', at: Date.parse('2026-10-15T06:28:13Z'), text: 'Done', sourceUrl: 'https://x.com/thsottiaux/status/1', scheduledFor: null },
-      upcoming: { kind: 'upcoming', at: Date.parse('2026-10-17T16:21:13Z'), text: 'Landing sometime today by EOD PST', sourceUrl: 'https://x.com/thsottiaux/status/1', scheduledFor: Date.parse('2026-10-18T07:00:00Z') },
+      latest: { kind: 'reset', resetType: 'reset', at: Date.parse('2026-10-15T06:28:13Z'), text: 'Done', sourceUrl: 'https://x.com/thsottiaux/status/1', scheduledFor: null },
+      upcoming: { kind: 'upcoming', resetType: null, at: Date.parse('2026-10-17T16:21:13Z'), text: 'Landing sometime today by EOD PST', sourceUrl: 'https://x.com/thsottiaux/status/1', scheduledFor: Date.parse('2026-10-18T07:00:00Z') },
       chance48h: 0.22,
       checkedAt: now
     })
@@ -42,6 +42,8 @@ describe('parseResetStatus', () => {
     expect(banked?.latest).toMatchObject({ kind: 'banked', sourceUrl: null })
     const typed = parseResetStatus(status({ latestEvent: event('reset', '2026-10-07T19:19:17Z', { metadata: { resetType: 'banked' } }) }), 'codex', now)
     expect(typed?.latest?.kind).toBe('banked')
+    const announced = parseResetStatus(status({ upcomingEvent: event('upcoming', '2026-10-17T16:21:13Z', { metadata: { resetType: 'banked', scheduledFor: '2026-10-18T07:00:00Z' } }) }), 'codex', now)
+    expect(announced?.upcoming).toMatchObject({ kind: 'upcoming', resetType: 'banked' })
   })
 
   it('has nothing for a product the tracker knows nothing of, or a reply it cannot read', () => {
@@ -68,8 +70,8 @@ describe('parseCodexResetsStatus', () => {
   it('reads the latest reset and one scheduled, with no odds', () => {
     const body = codexResets(cr('2026-10-15T06:28:13Z'), cr('2026-10-17T16:21:13Z', { status: 'scheduled', text: 'Landing today', scheduled_for: '2026-10-18T07:00:00Z' }))
     expect(parseCodexResetsStatus(body, now)).toEqual({
-      latest: { kind: 'reset', at: Date.parse('2026-10-15T06:28:13Z'), text: 'Done', sourceUrl: 'https://x.com/thsottiaux/status/2', scheduledFor: null },
-      upcoming: { kind: 'upcoming', at: Date.parse('2026-10-17T16:21:13Z'), text: 'Landing today', sourceUrl: 'https://x.com/thsottiaux/status/2', scheduledFor: Date.parse('2026-10-18T07:00:00Z') },
+      latest: { kind: 'reset', resetType: 'reset', at: Date.parse('2026-10-15T06:28:13Z'), text: 'Done', sourceUrl: 'https://x.com/thsottiaux/status/2', scheduledFor: null },
+      upcoming: { kind: 'upcoming', resetType: 'reset', at: Date.parse('2026-10-17T16:21:13Z'), text: 'Landing today', sourceUrl: 'https://x.com/thsottiaux/status/2', scheduledFor: Date.parse('2026-10-18T07:00:00Z') },
       chance48h: null,
       checkedAt: now
     })
@@ -78,7 +80,7 @@ describe('parseCodexResetsStatus', () => {
   it('tells a banked reset apart, and keeps a banked one announced as announced', () => {
     expect(parseCodexResetsStatus(codexResets(cr('2026-10-07T19:19:17Z', { reset_type: 'banked' })), now)?.latest?.kind).toBe('banked')
     const scheduled = codexResets(null, cr('2026-10-17T16:21:13Z', { reset_type: 'banked' }))
-    expect(parseCodexResetsStatus(scheduled, now)?.upcoming?.kind).toBe('upcoming')
+    expect(parseCodexResetsStatus(scheduled, now)?.upcoming).toMatchObject({ kind: 'upcoming', resetType: 'banked' })
   })
 
   it('has nothing for a reply it cannot read', () => {

@@ -1,6 +1,7 @@
 import { useMemo, useSyncExternalStore } from 'react'
 import type { AgentCall, ChatItem, Conversation, RpcConnection } from '@antumi/protocol'
 import { perform, selectConversation, useCore } from './core-store'
+import { agentResultCallIds } from './delegation-delivery'
 
 export async function openAgentCall(call: AgentCall): Promise<void> {
   const child = await perform((rpc) => rpc.call('conversations.get', { id: call.conversationId }))
@@ -57,7 +58,7 @@ export function useAgentCalls(id: string | null): CallsSnapshot {
 }
 
 export function isAgentCallResult(item: Pick<ChatItem, 'kind' | 'id'>): boolean {
-  return item.kind === 'user' && /^u:agent-result:[0-9a-f-]{36}$/.test(item.id)
+  return agentResultCallIds(item).length > 0
 }
 
 // The inspector on its 委派 page; with a call, on that one, picked out and open.

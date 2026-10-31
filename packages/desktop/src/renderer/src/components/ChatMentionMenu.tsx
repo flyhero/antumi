@@ -1,7 +1,7 @@
 import { getLocale, t, tr } from '../i18n'
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode, type RefObject, type HTMLAttributes } from 'react'
 import type { EditorView } from '@codemirror/view'
-import type { AgentKind, ProjectFileMatch } from '@antumi/protocol'
+import type { AgentKind, DelegationTarget, ProjectFileMatch } from '@antumi/protocol'
 import { useCore, useFileMentionsSupported } from '../core-store'
 import { fileTarget, insertMention, matchConversations, matchProjects, mentionQuery, placeMention, type MentionedText, type MentionTarget } from '../chat-mentions'
 import type { SetText } from './ChatMentionField'
@@ -10,6 +10,9 @@ import { AgentIcon, ChatIcon, FolderIcon } from './icons'
 import { FileTypeIcon } from './FileTypeIcon'
 import { isDarkTheme, onThemeChange } from '../appearance'
 import { agentLabel } from '../labels'
+import { usePreferences } from '../preferences'
+import { useNow } from '../usage-format'
+import { delegationQuotaText } from './AgentQuota'
 import './chat-mention-menu.css'
 
 // Long enough that a word typed at speed asks once.
@@ -105,8 +108,17 @@ export function useChatMentionMenu({ value, setText, setValue, roots, cwd, agent
   const conversation = useCore((s) => conversationId ? s.conversations[conversationId] : null)
   const delegates = Boolean(rpc?.features.includes('agent-profiles') && conversation
     && !conversation.parentConversationId && !conversation.discussionId && !conversation.squadRunId && !conversation.routineId && !conversation.helperOf)
+  const disabledAgents = usePreferences((s) => s.disabledAgents)
   const callable = Object.values(profiles).filter((profile) => delegates && profile.archivedAt === null && profile.id !== conversation?.profile?.id
-    && (!conversation?.profile || conversation.profile.callableProfiles.includes(profile.id)))
+    && !disabledAgents.includes(profile.agent) && (!conversation?.profile || conversation.profile.callableProfiles.includes(profile.id)))
+  // What core says of whom it can delegate to: their quota, and the agents called as they are.
+  const [targets, setTargets] = useState<readonly DelegationTarget[]>([])
+  const display = usePreferences((s) => s.usageDisplay)
+  const now = useNow(60_000)
+  const quotaOf = (target: DelegationTarget | undefined) => target ? delegationQuotaText(target.quota, display, now) : null
+  // Less those the user turned off and any a profile already goes by.
+  const direct = targets.filter((entry) => entry.profileId === null && !disabledAgents.includes(entry.agent)
+    && !callable.some((profile) => profile.name.toLocaleLowerCase() === entry.name.toLocaleLowerCase()))
   const range = supported ? mentionQuery(text, Math.min(caret, text.length)) : null
   const query = range?.query ?? null
   const rootsKey = roots.join('\0')
@@ -147,6 +159,14 @@ export function useChatMentionMenu({ value, setText, setValue, roots, cwd, agent
     return () => { current = false }
   }, [asking, rpc, projects])
 
+  const directSupported = delegates && Boolean(rpc?.features.includes('direct-agent-calls'))
+  useEffect(() => {
+    if (!asking || !rpc || !conversationId || !directSupported) return
+    let current = true
+    rpc.call('agentCalls.targets', { id: conversationId }).then((found) => current && setTargets(found), () => current && setTargets([]))
+    return () => { current = false }
+  }, [asking, rpc, conversationId, directSupported])
+
   const entries = useMemo(() => {
     if (query === null) return { profiles: [], files: [], projects: [], conversations: [] }
     const fileRows = rootsKey ? files.map((match) => fileEntry(match, cwd, roots.length > 1, dark)) : []
@@ -160,8 +180,14 @@ export function useChatMentionMenu({ value, setText, setValue, roots, cwd, agent
       icon: <FolderIcon />
     }))
     const profileRows = callable.filter((profile) => profile.name.toLocaleLowerCase().includes(query.toLocaleLowerCase())).map((profile): MentionEntry => ({
-      key: `profile:${profile.id}`, group: 'profiles', target: { kind: 'agent', id: profile.id, name: profile.name }, name: profile.name, detail: profile.description || agentLabel(profile.agent), opens: null,
+      key: `profile:${profile.id}`, group: 'profiles', target: { kind: 'agent', id: profile.id, name: profile.name }, name: profile.name, opens: null,
+      detail: [profile.description || agentLabel(profile.agent), quotaOf(targets.find((each) => each.profileId === profile.id))].filter(Boolean).join(' · '),
       icon: <AgentIcon agent={profile.agent} />
+    }))
+    // Named in the text only: the agent finds it by name among those antumi_agent_list returns.
+    const directRows = direct.filter((entry) => entry.name.toLocaleLowerCase().includes(query.toLocaleLowerCase())).map((entry): MentionEntry => ({
+      key: `agent:${entry.agent}`, group: 'profiles', target: null, name: entry.name, detail: [t('AgentProfiles.engine'), quotaOf(entry)].filter(Boolean).join(' · '), opens: null,
+      icon: <AgentIcon agent={entry.agent} />
     }))
     const conversationRows = references ? matchConversations(Object.values(conversations), query, conversationId).map((entry): MentionEntry => ({
       key: `conversation:${entry.id}`, group: 'conversations', target: { kind: 'conversation', id: entry.id, title: entry.title },
@@ -169,15 +195,15 @@ export function useChatMentionMenu({ value, setText, setValue, roots, cwd, agent
       detail: [agentLabel(entry.agent), ...entry.projectPaths.map(projectName), entry.archivedAt != null ? t('ConversationList.archived') : '', entry.id.slice(0, 8)].filter(Boolean).join(' · '),
       opens: null, icon: <ChatIcon />
     })) : []
-    return { profiles: profileRows, files: fileRows, projects: projectRows, conversations: conversationRows }
-  }, [query, files, projects, cwd, rootsKey, roots.length, profiles, conversation, delegates, conversations, conversationId, references, dark, getLocale()])
+    return { profiles: [...profileRows, ...directRows], files: fileRows, projects: projectRows, conversations: conversationRows }
+  }, [query, files, projects, cwd, rootsKey, roots.length, profiles, conversation, delegates, targets, disabledAgents, display, now, conversations, conversationId, references, dark, getLocale()])
   const tabs: { id: MentionGroup; label: string; loading: boolean }[] = [
     ...(delegates ? [{ id: 'profiles' as const, label: t('AgentProfiles.title'), loading: false }] : []),
     { id: 'files', label: t('ChatMentionMenu.files'), loading: filesLoading },
     { id: 'projects', label: t('ChatMentionMenu.projects'), loading: projects === null },
     ...(references ? [{ id: 'conversations' as const, label: t('ChatMentionMenu.conversations'), loading: false }] : [])
   ]
-  const preferred: MentionGroup = delegates && callable.length ? 'profiles' : rootsKey ? 'files' : 'projects'
+  const preferred: MentionGroup = delegates && (callable.length || direct.length) ? 'profiles' : rootsKey ? 'files' : 'projects'
   // Until the user picks a category, one with something for what they typed rather than an empty one.
   const fallback = !query || entries[preferred].length > 0 ? preferred : tabs.find((tab) => entries[tab.id].length > 0)?.id ?? preferred
   const selectedGroup = tabs.some((tab) => tab.id === group) && group !== null ? group : fallback

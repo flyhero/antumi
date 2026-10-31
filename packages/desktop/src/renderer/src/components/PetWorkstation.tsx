@@ -7,7 +7,7 @@ import type { PetTypingImages } from '../pet-resource-cache'
 export function PetWorkstation({ images, rig }: { images: PetTypingImages; rig: PetTyping }) {
   const id = useId()
   const armStyle = (arm: PetTyping['near']): CSSProperties & { '--pet-typing-angle': string } => ({ transformOrigin: `${arm.pivot.x}px ${arm.pivot.y}px`, '--pet-typing-angle': `${-arm.lift}deg` })
-  const timing: CSSProperties & { '--pet-typing-cycle': string } = { '--pet-typing-cycle': `${rig.cycleMs}ms` }
+  const timing: CSSProperties & { '--pet-typing-cycle': string } = { '--pet-typing-cycle': `${rig.cycleMs}ms`, transform: `scale(${rig.scale ?? 1})` }
   return <span className="pet-workstation" style={timing} aria-hidden="true">
     <img className="pet-workstation-base" src={images.base} alt="" draggable={false} style={{ transform: `translateY(${rig.offsetY / 256 * 100}%)` }} />
     <svg className="pet-typing-arms" viewBox="0 0 256 256" focusable="false">

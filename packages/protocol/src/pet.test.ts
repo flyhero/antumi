@@ -20,7 +20,8 @@ describe('optional pet typing animation', () => {
   it('bounds animation geometry, duration and clip syntax', () => {
     const rig = manifest.rig.typing
     expect(PetTyping.safeParse(rig).success).toBe(true)
-    for (const patch of [{ cycleMs: 0 }, { cycleMs: 100_000 }, { offsetY: 300 }, { near: { ...rig.near, pivot: { x: -1, y: 0 } } }, { far: { ...rig.far, lift: 90 } }, { near: { ...rig.near, clip: '<script>alert(1)</script>' } }]) {
+    expect(PetTyping.safeParse({ ...rig, scale: undefined }).success).toBe(true)
+    for (const patch of [{ scale: 0 }, { scale: 2.1 }, { cycleMs: 0 }, { cycleMs: 100_000 }, { offsetY: 300 }, { near: { ...rig.near, pivot: { x: -1, y: 0 } } }, { far: { ...rig.far, lift: 90 } }, { near: { ...rig.near, clip: '<script>alert(1)</script>' } }]) {
       expect(PetTyping.safeParse({ ...rig, ...patch }).success).toBe(false)
     }
   })

@@ -805,10 +805,12 @@ export class AcpDriver implements ChatDriver {
           return
         }
         this.pending.set(id, { rawId: frame.id, itemId, kind: 'permission', options: request.data.options, ...(prompt?.kind === 'plan' ? { planRunMode: prompt.runMode } : {}) })
-        // The agent's reason for asking, as Cursor's "Not in allowlist: rg".
-        const reason = z.array(z.looseObject({ content: z.unknown().optional() })).safeParse(tool.content).data?.map((entry) => Content.safeParse(entry.content).data?.text ?? '').find(Boolean)
+        // The agent's reason for asking, as Cursor's "Not in allowlist: rg". For an MCP call Cursor puts
+        // the arguments here, fenced: no reason, and the card shows the announced call's input.
+        const said = z.array(z.looseObject({ content: z.unknown().optional() })).safeParse(tool.content).data?.map((entry) => Content.safeParse(entry.content).data?.text ?? '').find(Boolean)
+        const reason = said && !/^```[^\n]*\n[\s\S]*```$/.test(said.trim()) ? said : undefined
         const promptText = prompt && 'path' in prompt ? this.fileContents.get(prompt.path) ?? `计划文件：${prompt.path}` : prompt?.text
-        const detail = promptText ?? (announced ? (tool.rawInput === undefined ? reason ?? null : clip(JSON.stringify(tool.rawInput))) : reason ? `子 Agent 的请求：${reason}` : '子 Agent 的请求')
+        const detail = promptText ?? (announced ? (tool.rawInput === undefined ? reason ?? null : clip(JSON.stringify(tool.rawInput))) : said ? `子 Agent 的请求：${said}` : '子 Agent 的请求')
         // A command quoted in backticks (as Cursor does); the bare command is what the request line names.
         const title = tool.title?.match(/^`([\s\S]+)`$/)?.[1] ?? tool.title ?? `${this.name} 工具调用`
         this.items.put({ id: itemId, kind: 'approval', requestId: id, tool: name, title, detail, toolItemId: tool.toolCallId ? `tool:${tool.toolCallId}` : null, decisions: ['allow', 'deny'], choices: request.data.options.map((option) => ({ id: option.optionId, label: option.name, decision: option.kind === 'allow_once' ? 'allow' : option.kind === 'allow_always' ? 'allowForSession' : 'deny', grants: option.kind.endsWith('_always') ? [{ kind: 'other', values: [option.name], scope: 'agent', behavior: option.kind === 'reject_always' ? 'deny' : 'allow' }] : [] })), ...(prompt?.kind === 'plan' ? { runModes: [prompt.runMode] } : {}), resolution: null }, at)

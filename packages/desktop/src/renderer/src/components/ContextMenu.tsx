@@ -27,13 +27,15 @@ function focusedMenuItems(root: HTMLElement): HTMLElement[] {
 // `above`, over the point, as for a control at the bottom whose menu should not cover what is below.
 // Portaled outside clipped, scrolling boxes. A native modal dialog is itself in the browser's top
 // layer, so its menus must stay inside that dialog; anything portaled to <body> would sit behind it.
-export function ContextMenu({ at, align = 'start', above = false, trigger, scrollBoundary, label, onClose, children }: {
+export function ContextMenu({ at, align = 'start', above = false, trigger, scrollBoundary, width, label, onClose, children }: {
   at: MenuPoint
   align?: 'start' | 'end'
   above?: boolean
   // The button that toggles the menu; pressing it isn't an outside click.
   trigger?: HTMLElement | null
   scrollBoundary?: HTMLElement | null
+  // Form pickers keep their menu as wide as the field, including in narrow dialogs.
+  width?: number
   label: string
   onClose: () => void
   children: ReactNode
@@ -107,7 +109,7 @@ export function ContextMenu({ at, align = 'start', above = false, trigger, scrol
       ref={panel}
       role="menu"
       aria-label={label}
-      style={{ left: place.x, top: place.y }}
+      style={{ left: place.x, top: place.y, width, minWidth: width, maxWidth: width }}
       onContextMenu={(event) => { event.preventDefault(); event.stopPropagation() }}
     >
       {children}

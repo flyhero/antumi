@@ -8,7 +8,7 @@ import { PetPlayground } from './components/PetPlayground'
 import { startAppearance } from './appearance'
 import { startBackgroundRest } from './background-rest'
 import { startCodeFont } from './code-font'
-import { followRequestPopupWanted, RequestPopup } from './components/RequestPopup'
+import { followRequestPopup, RequestPopup } from './components/RequestPopup'
 import { startCoreConnection, useCore } from './core-store'
 import { startPanelWindowHost } from './panel-window-host'
 import { startPanelWindowPage, thisPanelKind } from './panel-window-page'
@@ -17,6 +17,7 @@ import { ConfirmDialog } from './components/ConfirmDialog'
 import { SettingsPage } from './components/SettingsPage'
 import { applyTitleBar } from './desktop-bridge'
 import { startNotifications } from './notifications'
+import { startDisabledAgentsMirror } from './installed-agents'
 import { followPreferences } from './preferences'
 import { startUnsavedEditRetries } from './unsaved-edits'
 import { startUiLanguage } from './language'
@@ -42,7 +43,7 @@ if (playground) {
   startCodeFont()
 } else if (popup) {
   document.documentElement.dataset.window = 'request-popup'
-  followRequestPopupWanted()
+  followRequestPopup()
   startCoreConnection('requests')
   startAppearance()
   startCodeFont()
@@ -61,6 +62,7 @@ if (playground) {
   startUnsavedEditRetries()
   startWorktreeUpdates()
   startNotifications()
+  startDisabledAgentsMirror()
   startPanelWindowHost()
 }
 

@@ -451,11 +451,25 @@ ipcMain.handle('antumi:request-popup', (event, wanted: unknown) => {
   if (event.sender !== mainWindow?.webContents || typeof wanted !== 'boolean') return
   requestPopup.want(wanted)
 })
+ipcMain.handle('antumi:request-popup-mode', (event, mode: unknown) => {
+  if (event.sender !== mainWindow?.webContents || (mode !== 'requests' && mode !== 'always')) return
+  requestPopup.setMode(mode)
+})
+const PopupAttention = z.array(z.string()).max(10_000)
+ipcMain.on('antumi:request-popup-attention', (event, unseen: unknown) => {
+  const parsed = PopupAttention.safeParse(unseen)
+  if (event.sender !== mainWindow?.webContents || !parsed.success) return
+  requestPopup.setAttention(parsed.data)
+})
 const PopupLayout = z.object({ visible: z.boolean(), height: z.number().finite().min(0).max(10_000) })
 ipcMain.on('antumi:request-popup-layout', (event, layout: unknown) => {
   const parsed = PopupLayout.safeParse(layout)
   if (!requestPopup.owns(event.sender) || !parsed.success) return
   requestPopup.layout(parsed.data.visible, parsed.data.height)
+})
+ipcMain.on('antumi:request-popup-interactive', (event, interactive: unknown) => {
+  if (!requestPopup.owns(event.sender) || typeof interactive !== 'boolean') return
+  requestPopup.setInteractive(interactive)
 })
 // The target goes to the main window as a notification's would, which checks it the same way.
 ipcMain.handle('antumi:request-popup-open', (event, target: unknown) => {

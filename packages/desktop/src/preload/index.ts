@@ -26,12 +26,25 @@ contextBridge.exposeInMainWorld('antumi', {
   },
   // The card of waiting requests: the main window asks for it, the card lays itself out.
   requestPopup: (wanted: boolean): Promise<unknown> => ipcRenderer.invoke('antumi:request-popup', wanted),
+  requestPopupMode: (mode: 'requests' | 'always'): Promise<unknown> => ipcRenderer.invoke('antumi:request-popup-mode', mode),
+  requestPopupAttention: (unseen: string[]): void => ipcRenderer.send('antumi:request-popup-attention', unseen),
+  onRequestPopupAttention: (listener: (unseen: unknown) => void): (() => void) => {
+    const handler = (_event: IpcRendererEvent, unseen: unknown) => listener(unseen)
+    ipcRenderer.on('antumi:request-popup-attention', handler)
+    return () => ipcRenderer.removeListener('antumi:request-popup-attention', handler)
+  },
   onRequestPopupWanted: (listener: (wanted: boolean) => void): (() => void) => {
     const handler = (_event: IpcRendererEvent, wanted: unknown) => listener(wanted === true)
     ipcRenderer.on('antumi:request-popup-wanted', handler)
     return () => ipcRenderer.removeListener('antumi:request-popup-wanted', handler)
   },
+  onRequestPopupGeometry: (listener: (geometry: unknown) => void): (() => void) => {
+    const handler = (_event: IpcRendererEvent, geometry: unknown) => listener(geometry)
+    ipcRenderer.on('antumi:request-popup-geometry', handler)
+    return () => ipcRenderer.removeListener('antumi:request-popup-geometry', handler)
+  },
   requestPopupLayout: (layout: { visible: boolean; height: number }): void => ipcRenderer.send('antumi:request-popup-layout', layout),
+  requestPopupInteractive: (interactive: boolean): void => ipcRenderer.send('antumi:request-popup-interactive', interactive),
   openFromRequestPopup: (target: unknown): Promise<unknown> => ipcRenderer.invoke('antumi:request-popup-open', target),
   // The built-in browser's tab on show, placed over the panel by main.
   browserShow: (tabId: string | null): Promise<unknown> => ipcRenderer.invoke('antumi:browser-show', tabId),

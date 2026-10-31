@@ -1,5 +1,6 @@
 import { AGENT_CALL_TOOLS, type AgentCall, type ChatItem } from '@antumi/protocol'
 import type { ChatBlock } from './chat-state'
+import { agentResultCallIds } from './delegation-delivery'
 
 function itemsOf(block: ChatBlock): readonly ChatItem[] {
   if (block.kind === 'entry') return block.entry.kind === 'item' ? [block.entry.item] : []
@@ -28,7 +29,7 @@ export function withDelegations(blocks: readonly ChatBlock[], calls: readonly Ag
   for (const call of [...calls].sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id))) {
     let anchor = items.findIndex((group) => group.some((item) => dispatched(item, call)))
     if (anchor === -1) {
-      const delivery = items.findIndex((group) => group.some((item) => item.kind === 'user' && item.id === `u:agent-result:${call.id}`))
+      const delivery = items.findIndex((group) => group.some((item) => agentResultCallIds(item).includes(call.id)))
       if (hasOlder && call.createdAt < earliest) {
         if (delivery === -1) continue
         anchor = delivery - 1

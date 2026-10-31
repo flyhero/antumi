@@ -6,8 +6,8 @@ import { readJsonIfExists, writePrivateJson } from '@antumi/protocol/node'
 // message is rarely a good one; scheduled runs let edits through but still ask for
 // anything else; an agent that can drives the user's own browser; agents may read the user's
 // history in Antumi; no knowledge base until the user picks one; nothing archived on its own; the
-// resets services announce for everyone shown with the usage. Each field falls back on its own,
-// so one bad value resets nothing else.
+// resets services announce for everyone shown with the usage; every agent on until the desktop says
+// otherwise. Each field falls back on its own, so one bad value resets nothing else.
 export const DEFAULT_AGENT_CONCURRENCY = 6
 const DEFAULTS = {
   promptSuggestions: true,
@@ -22,7 +22,8 @@ const DEFAULTS = {
   userTodos: true,
   knowledgeBase: null,
   autoArchiveDays: null,
-  resetAnnouncements: true
+  resetAnnouncements: true,
+  disabledAgents: []
 } satisfies Required<ChatSettings>
 const Saved = z.object({
   promptSuggestions: z.boolean().catch(DEFAULTS.promptSuggestions),
@@ -37,7 +38,8 @@ const Saved = z.object({
   userTodos: z.boolean().catch(DEFAULTS.userTodos),
   knowledgeBase: KnowledgeBase.nullable().catch(DEFAULTS.knowledgeBase),
   autoArchiveDays: ChatSettings.shape.autoArchiveDays.unwrap().catch(DEFAULTS.autoArchiveDays),
-  resetAnnouncements: z.boolean().catch(DEFAULTS.resetAnnouncements)
+  resetAnnouncements: z.boolean().catch(DEFAULTS.resetAnnouncements),
+  disabledAgents: ChatSettings.shape.disabledAgents.unwrap().catch(DEFAULTS.disabledAgents)
 }).catch(DEFAULTS)
 
 // Machine-level, like keeping the computer awake: every window and every chat goes by the same.
@@ -85,7 +87,8 @@ export class ChatSettingsStore {
       userTodos: patch.userTodos ?? this.settings.userTodos,
       knowledgeBase,
       autoArchiveDays: patch.autoArchiveDays === undefined ? this.settings.autoArchiveDays : patch.autoArchiveDays,
-      resetAnnouncements: patch.resetAnnouncements ?? this.settings.resetAnnouncements
+      resetAnnouncements: patch.resetAnnouncements ?? this.settings.resetAnnouncements,
+      disabledAgents: patch.disabledAgents ?? this.settings.disabledAgents
     }
     await writePrivateJson(this.file, { version: 1, ...next })
     this.settings = next

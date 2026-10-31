@@ -7,6 +7,7 @@ import {
   agentAdvice,
   agentDescriptor,
   quotaVerdict,
+  scheduledQuotaReset,
   tightestWindow,
   usageAccount,
   windowPace,
@@ -162,6 +163,7 @@ const fullDate = (at: number) => new Date(at).toLocaleString(getLocale(), { hour
 // and the credit the tracker asks for.
 export function GlobalResetList({ resets, now }: { resets: GlobalResets; now: number }) {
   const sourceId = useId()
+  const quoteId = useId()
   const text = globalResetText(resets, now)
   const source = (url: string | null, label: string) => url && <a className="usage-card-global-source" href={url} target="_blank" rel="noreferrer">{label}</a>
   const attribution = (
@@ -177,10 +179,17 @@ export function GlobalResetList({ resets, now }: { resets: GlobalResets; now: nu
       <div className="usage-card-credits-title">{t('SettingsPage.serviceWideReset')}{!text.upcoming && !text.latest && !text.chance && attribution}</div>
       {resets.upcoming && text.upcoming && (
         <div className="usage-card-global-upcoming" title={fullDate(resets.upcoming.at)}>
-          {text.upcoming}
-          {resets.upcoming.text && <q>{resets.upcoming.text}</q>}
-          {source(resets.upcoming.sourceUrl, t('UsageBar.upcomingSource'))}
-          {!text.latest && !text.chance && attribution}
+          <div className="usage-card-global-heading">
+            <span>{text.upcoming}</span>
+            {source(resets.upcoming.sourceUrl, t('UsageBar.upcomingSource'))}
+            {!text.latest && !text.chance && attribution}
+          </div>
+          {resets.upcoming.text && (
+            <span className="usage-card-global-quote" tabIndex={0} aria-describedby={quoteId} title="">
+              <q>{resets.upcoming.text}</q>
+              <span id={quoteId} role="tooltip" className="usage-card-global-tooltip usage-card-global-quote-tooltip">{resets.upcoming.text}</span>
+            </span>
+          )}
         </div>
       )}
       {resets.latest && text.latest && (
@@ -209,7 +218,7 @@ export function MeterHint({ display }: { display: Preferences['usageDisplay'] })
 }
 
 // One window in the card: its meter against the clock, when it resets, and what to do about it.
-export function UsageWindowRow({ window, now, display, showPace, forecast, advice, alternative }: {
+export function UsageWindowRow({ window, now, display, showPace, forecast, advice, alternative, usage }: {
   window: UsageWindow
   now: number
   display: Preferences['usageDisplay']
@@ -217,13 +226,16 @@ export function UsageWindowRow({ window, now, display, showPace, forecast, advic
   forecast: UsageForecast | undefined
   advice: readonly QuotaAdvice[]
   alternative: AgentKind | null
+  usage?: AgentUsage
 }) {
   const elapsed = elapsedPercent(window, now)
   const mark = elapsed === null ? null : display === 'remaining' ? 100 - elapsed : elapsed
-  const pace = showPace ? windowPace(window, now) : null
+  const planned = scheduledQuotaReset(usage, window, now)
+  const resetAt = planned?.kind === 'reset' ? planned.at : window.resetsAt
+  const pace = showPace ? windowPace(window, now, resetAt) : null
   const paceLabel = paceText(pace, now)
   // Said only where the window runs out before it resets: that it lasts, the bar already shows.
-  const runsOut = showPace && window.usedPercent < 100 ? forecastRunsOut(forecast) : null
+  const runsOut = showPace && window.usedPercent < 100 ? forecastRunsOut(forecast, usage ? resetAt : undefined) : null
   return (
     <div className="usage-card-row" data-level={usageLevel(window.usedPercent)}>
       <span className="usage-card-label">{windowLabel(window)}</span>
@@ -245,7 +257,7 @@ export function UsageWindowRow({ window, now, display, showPace, forecast, advic
       {runsOut && (
         <span className="usage-card-forecast" title={runsOut.basis}>
           <WarningIcon />
-          {spacedText(`${t('UsageBar.runsOutAt', { value1: formatClock(runsOut.at, now) })}${window.resetsAt === null ? '' : t('quotaAdviceText.beforeReset', { value1: formatDuration(window.resetsAt - runsOut.at) })}`)}
+          {spacedText(`${t('UsageBar.runsOutAt', { value1: formatClock(runsOut.at, now) })}${resetAt === null ? '' : t(planned?.kind === 'reset' ? 'quotaAdviceText.beforeExpectedReset' : 'quotaAdviceText.beforeReset', { value1: formatDuration(resetAt - runsOut.at) })}`)}
         </span>
       )}
       {advice.map((item) => (
@@ -374,6 +386,7 @@ function UsageCard({ usage, accounts, accountLabel, now, advice, alternative, sh
           forecast={forecasts.find((forecast) => forecast.window.kind === window.kind && forecast.window.model === window.model)}
           advice={advice.filter((item) => item.window.kind === window.kind && item.window.model === window.model)}
           alternative={alternative}
+          usage={usage}
         />
       ))}
       {usage.resetCredits && (usage.resetCredits.available > 0 || usage.resetCredits.blockedBy || spending) && (

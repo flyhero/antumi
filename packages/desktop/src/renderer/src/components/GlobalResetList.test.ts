@@ -27,12 +27,18 @@ describe('globalResetText', () => {
   it('leads with one announced, and drops the odds while it is', () => {
     const upcoming = { kind: 'upcoming' as const, at: now - 2 * HOUR, text: 'Landing within the next 2 hours', sourceUrl: null, scheduledFor: null }
     const text = globalResetText({ ...quiet, upcoming }, now)
-    expect(text.upcoming).toBe('已预告全员重置 · 2 小时前发布')
+    expect(text.upcoming).toBe('已预告重置活动（类型待确认） · 2 小时前发布')
     expect(text.chance).toBeNull()
   })
 
   it('says a banked reset is a credit for every paid account', () => {
     expect(globalResetText({ ...quiet, latest: { ...latest, kind: 'banked' } }, now).latest).toBe('最近一次给每个付费账号发重置卡：7 小时前')
+  })
+
+  it('distinguishes an upcoming automatic reset from a card distribution', () => {
+    const upcoming = { ...latest, kind: 'upcoming' as const, at: now - HOUR, scheduledFor: now + HOUR }
+    expect(globalResetText({ ...quiet, upcoming: { ...upcoming, resetType: 'banked' } }, now).upcoming).toContain('已预告发放重置卡，预计')
+    expect(globalResetText({ ...quiet, upcoming: { ...upcoming, resetType: 'reset' } }, now).upcoming).toContain('已预告全员重置，预计')
   })
 })
 

@@ -1,7 +1,8 @@
 import { t } from './i18n'
 import { isHelper } from '@antumi/protocol'
 import { PLAN_TOOLS, type Conversation, type ConversationRequest } from '@antumi/protocol'
-import { actionableItems, waiting, type ActionableTarget, type Snapshot } from './attention'
+import { actionableItems, named, waiting, working, type ActionableTarget, type Snapshot } from './attention'
+import type { AgentKind } from '@antumi/protocol'
 
 // One conversation on the card of waiting requests, under its task's name when it has one.
 export type PopupEntry = { conversationId: string; title: string; target: ActionableTarget; request: ConversationRequest }
@@ -25,9 +26,34 @@ export function popupQueue(s: Pick<Snapshot, 'tasks' | 'conversations'>, closed:
   })
 }
 
+// One chat on the island while nothing is asked: its agent at work, or a reply the user has not
+// looked at (as the main window says, which alone knows). Under its task's name when it has
+// one, most recently active first. A chat held up on the user is on the card instead.
+export type ActivityEntry = { conversationId: string; title: string; target: ActionableTarget; agent: AgentKind; state: 'running' | 'replied' }
+
+export function islandActivity(s: Pick<Snapshot, 'tasks' | 'conversations'>, unseen: ReadonlySet<string>): ActivityEntry[] {
+  return Object.values(s.conversations)
+    .flatMap((conversation) => {
+      if (isHelper(conversation) || conversation.archivedAt != null || waiting(conversation)) return []
+      const state: ActivityEntry['state'] | null = working(conversation) ? 'running' : unseen.has(conversation.id) ? 'replied' : null
+      if (!state) return []
+      const { title, target } = named(conversation, s.tasks)
+      return [{ conversation, entry: { conversationId: conversation.id, title, target: target.kind === 'task' ? target : { kind: 'conversation' as const, id: conversation.id }, agent: conversation.agent, state } }]
+    })
+    .sort((a, b) => b.conversation.updatedAt - a.conversation.updatedAt)
+    .map(({ entry }) => entry)
+}
+
+// What the card's header marks the request as: a question, a plan to approve, or a permission.
+export type PopupKind = 'question' | 'plan' | 'permission'
+export function popupKind(request: ConversationRequest): PopupKind {
+  if (request.kind === 'question') return 'question'
+  return request.tool !== null && PLAN_TOOLS.has(request.tool) ? 'plan' : 'permission'
+}
+
 export function popupLabel(request: ConversationRequest): string {
-  if (request.kind === 'question') return t('requestPopup.hasAQuestion')
-  return request.tool !== null && PLAN_TOOLS.has(request.tool) ? t('requestPopup.planAwaitingApproval') : t('requestPopup.awaitingYourPermission')
+  const kind = popupKind(request)
+  return kind === 'question' ? t('requestPopup.hasAQuestion') : kind === 'plan' ? t('requestPopup.planAwaitingApproval') : t('requestPopup.awaitingYourPermission')
 }
 
 // Whether the card is worth bringing up: a chat now held up on the user, or held up on something

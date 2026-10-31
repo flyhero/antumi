@@ -61,7 +61,9 @@ export const GlobalReset = z.object({
   at: z.number(),
   text: z.string().nullable(),
   sourceUrl: z.string().nullable(),
-  scheduledFor: z.number().nullable()
+  scheduledFor: z.number().nullable(),
+  // An upcoming event can restore quota or distribute a card; absent on older cores.
+  resetType: z.enum(['reset', 'banked']).nullable().optional()
 })
 export type GlobalReset = z.infer<typeof GlobalReset>
 

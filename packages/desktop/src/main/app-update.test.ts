@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -120,6 +120,20 @@ describe('AppUpdater', () => {
       canInstall: true,
       latest: { version: '0.19.5', notes: 'notes for v0.19.5', download: 'https://example.com/v0.19.5.dmg' }
     })
+  })
+
+  it('removes installers a newer download replaced, and nothing else in the folder', async () => {
+    const bytes = new Uint8Array([1, 2, 3, 4])
+    const digest = `sha256:${createHash('sha256').update(bytes).digest('hex')}`
+    const { instance, dir } = updater([release('v0.19.6', { assets: [{ name: 'Antumi-0.19.6-macos-arm64.dmg', browser_download_url: 'https://example.com/a.dmg', size: 4, digest }] })], bytes)
+    const folder = join(dir, 'downloads')
+    mkdirSync(join(folder, 'Antumi-kept.dmg'), { recursive: true })
+    for (const name of ['Antumi-0.19.5-macos-arm64.dmg', 'Antumi-0.19.5-arm64.dmg', 'Antumi-0.19.5-linux-x86_64.AppImage', 'notes.txt', 'Other-1.0.0.dmg', 'Antumi-0.19.5.zip']) {
+      writeFileSync(join(folder, name), 'old')
+    }
+    await instance.check()
+    expect(instance.current().status).toBe('ready')
+    expect(readdirSync(folder).sort()).toEqual(['Antumi-0.19.5.zip', 'Antumi-0.19.6-macos-arm64.dmg', 'Antumi-kept.dmg', 'Other-1.0.0.dmg', 'notes.txt', 'pending.json'])
   })
 
   it('installs a download that matches its digest, with progress on the way', async () => {

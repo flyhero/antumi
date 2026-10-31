@@ -715,11 +715,13 @@ export function PopOutIcon() {
   )
 }
 
+// PopOutIcon's box, open at the corner the arrow comes into: an arrowhead across its edges reads
+// as clutter at this size.
 export function PopInIcon() {
   return (
     <svg {...stroked}>
-      <rect x="3.5" y="7" width="8.5" height="8.5" rx="1.4" />
-      <path d="M16.5 3.5V9.5H10.5M16.5 3.5L10.5 9.5" />
+      <path d="M12 12.5v1.6a1.4 1.4 0 0 1-1.4 1.4H4.9a1.4 1.4 0 0 1-1.4-1.4V8.4a1.4 1.4 0 0 1 1.4-1.4H7.5" />
+      <path d="M10 7.5V11h3M10 11l6.5-6.5" />
     </svg>
   )
 }

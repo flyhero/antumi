@@ -282,6 +282,8 @@ export const MESSAGES = {
   "AgentProfiles.contextPlaceholder": {"zh": "必要背景、文件范围、交付要求等", "en": "Background, file scope, expected output…"},
   "AgentProfiles.noAvailable": {"zh": "当前会话没有可调用的智能体。可在「智能体」中新建智能体或调整调用范围。", "en": "No agents are available to this conversation. Create an agent or adjust callable agents in Agents."},
   "AgentProfiles.resultReturned": {"zh": "委派结果已返回，主会话将继续处理", "en": "Delegation result returned; the main conversation will continue"},
+  "AgentProfiles.resultReceived": {"zh": "收到委派结果", "en": "Delegation result received"},
+  "AgentProfiles.resultsReceived": {"zh": "收到 {count} 个委派结果", "en": "{count} delegation results received"},
   "AgentProfiles.history": {"zh": "委派记录", "en": "Delegation history"},
   "AgentProfiles.result": {"zh": "结果", "en": "Result"},
   "AgentProfiles.loadingCalls": {"zh": "正在读取委派记录…", "en": "Loading delegation history…"},
@@ -305,6 +307,7 @@ export const MESSAGES = {
   "AgentProfiles.expertise": {"zh": "擅长的工作与调用时机", "en": "Expertise and when to call"},
   "AgentProfiles.instructions": {"zh": "工作指令", "en": "Instructions"},
   "AgentProfiles.engine": {"zh": "外部智能体", "en": "External agent"},
+  "AgentProfiles.allowEdits": {"zh": "允许修改文件", "en": "Allow file edits"},
   "AgentProfiles.callable": {"zh": "允许调用的智能体", "en": "Agents it can call"},
   "AgentProfiles.callableHint": {"zh": "选中的智能体可在主会话中接受委派；子会话完成工作后返回结果。", "en": "Selected agents can receive delegated work from the main conversation and return results."},
   "AgentProfiles.skills": {"zh": "技能", "en": "Skills"},
@@ -7117,14 +7120,21 @@ export const MESSAGES = {
     "zh": "窗口不在前台时，Agent 等你确认、做完一轮、异常退出或定时任务完成时通知你，点击回到对应会话。",
     "en": "When the window is in the background, notify you when Agent needs approval, finishes a turn, exits unexpectedly, or a routine finishes. Click to open the conversation."
   },
-  "SettingsPage.showPendingRequestsAtTheTopOfThe": {
-    "zh": "离开时在屏幕顶部弹出待处理的请求",
-    "en": "Show pending requests at the top of the screen when away"
+  "SettingsPage.islandLabel": {
+    "zh": "屏幕顶部的灵动岛",
+    "en": "Island at the top of the screen"
   },
-  "SettingsPage.whileUsingAnotherAppApprovalRequestsAppearAs": {
-    "zh": "在别的应用里时，待确认的请求以卡片弹出，可直接选择，不抢焦点；这类请求不再另发系统通知。",
-    "en": "While using another app, approval requests appear as cards you can answer without stealing focus. These requests do not also trigger system notifications."
+  "SettingsPage.islandDescription": {
+    "zh": "在别的应用里时，等待确认的请求以卡片弹出，可直接作答，不抢焦点；这类请求不再另发系统通知。「始终」时常驻刘海，显示在跑、有新回复和等你的 Agent，鼠标移上去展开，新回复也不再另发通知（仅 macOS）。",
+    "en": "While using another app, requests waiting on you come up as a card you can answer without losing focus; they do not also trigger system notifications. Always: it stays at the notch, shows the agents at work, with a new reply and waiting on you, and expands under the pointer; new replies do not trigger notifications either (macOS only)."
   },
+  "SettingsPage.islandOff": {"zh": "关闭", "en": "Off"},
+  "SettingsPage.islandWhenNeeded": {"zh": "需要我时弹出", "en": "When needed"},
+  "RequestPopup.waitingOnYou": {"zh": "等你 {count}", "en": "{count} waiting"},
+  "RequestPopup.agentsWorking": {"zh": "{count} 在跑", "en": "{count} working"},
+  "RequestPopup.newReplies": {"zh": "{count} 条新回复", "en": "{count, plural, one {{count} new reply} other {{count} new replies}}"},
+  "RequestPopup.replied": {"zh": "已回复", "en": "Replied"},
+  "RequestPopup.agentsAtWork": {"zh": "在跑的 Agent", "en": "Agents at work"},
   "SettingsPage.automatic": {
     "zh": "自动（{cheapestLabel}）",
     "en": "Automatic ({cheapestLabel})"
@@ -9662,8 +9672,8 @@ export const MESSAGES = {
     "en": "Use one reset card"
   },
   "UsageBar.upcomingSource": {
-    "zh": "预告来源",
-    "en": "Announcement source"
+    "zh": "来源",
+    "en": "Source"
   },
   "UsageBar.latestSource": {
     "zh": "上次来源",
@@ -11145,6 +11155,30 @@ export const MESSAGES = {
     "zh": "{value1}额度",
     "en": "{value1} quota"
   },
+  "quotaAdviceText.resetCreditOption": {
+    "zh": "有覆盖此额度的重置卡，可在额度用完时手动使用；不会自动恢复",
+    "en": "A reset card covers this quota; use it manually when exhausted. Quota will not restore automatically."
+  },
+  "quotaAdviceText.scheduledCreditOption": {
+    "zh": "预计 {at} 发放重置卡，到账后需手动使用；若未到账，仍可能在常规重置前用完",
+    "en": "Reset cards are expected {at} and require manual use after arrival; quota may still run out before its regular reset if they do not arrive."
+  },
+  "quotaAdviceText.unknownResetOption": {
+    "zh": "预计 {at} 有重置活动，尚未确认是自动恢复还是发卡；仍需留意额度",
+    "en": "A reset event is expected {at}; automatic restoration versus card distribution is unconfirmed. Keep an eye on quota."
+  },
+  "quotaAdviceText.scheduledResetOption": {
+    "zh": "预计 {at} 全员重置；若按期生效，当前额度可撑到那时，无需因此分流；以实际到账为准",
+    "en": "A service-wide reset is expected {at}. Current quota should last until then if it arrives on time, so no handoff is needed on that basis; restoration is unconfirmed."
+  },
+  "quotaAdviceText.beforeExpectedReset": {
+    "zh": "，比预计全员重置早 {value1}",
+    "en": ", {value1} before the expected service-wide reset"
+  },
+  "quotaAdviceText.expectedResetFirst": {
+    "zh": "若预告按期生效，预计先全员重置",
+    "en": "The announced service-wide reset is expected first, if it arrives on time"
+  },
   "quotaAdviceText.isAlsoAvailable": {
     "zh": "，也可以放心用 {value1}",
     "en": "; {value1} is also available"
@@ -11628,6 +11662,14 @@ export const MESSAGES = {
   "usageFormat.serviceWideResetAnnouncedPosted": {
     "zh": "已预告全员重置{value1} · {value2}发布",
     "en": "Service-wide reset announced{value1} · Posted {value2}"
+  },
+  "usageFormat.resetCardDistributionAnnouncedPosted": {
+    "zh": "已预告发放重置卡{value1} · {value2}发布",
+    "en": "Reset card distribution announced{value1} · Posted {value2}"
+  },
+  "usageFormat.resetTypeUnknownAnnouncedPosted": {
+    "zh": "已预告重置活动（类型待确认）{value1} · {value2}发布",
+    "en": "Reset event announced (type unconfirmed){value1} · Posted {value2}"
   },
   "usageFormat.expected": {
     "zh": "，预计{value1}",
@@ -12361,6 +12403,8 @@ export const MESSAGES = {
   "UsageAnalytics.state.failed": {"zh": "未完成", "en": "Not completed"},
   "FilesPanel.files": {"zh": "文件", "en": "Files"},
   "FilesPanel.hideFiles": {"zh": "隐藏文件", "en": "Hide files"},
+  "StatusBar.uncommittedFiles": {"zh": "{count} 个文件未提交", "en": "{count} uncommitted {count, plural, one {file} other {files}}"},
+  "StatusBar.filesWithUncommitted": {"zh": "文件，{count} 个文件未提交", "en": "Files, {count} uncommitted {count, plural, one {file} other {files}}"},
   "FilesPanel.whichFolders": {"zh": "查看哪份代码", "en": "Which checkout to show"},
   "FilesPanel.followsWhatYouLookAt": {"zh": "当前会话或任务的目录，跟随切换", "en": "The open conversation's or task's folders; follows as you switch"},
   "FilesPanel.pickAProject": {"zh": "选择项目", "en": "Pick a project"},

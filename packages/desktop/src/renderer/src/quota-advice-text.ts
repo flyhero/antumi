@@ -1,5 +1,5 @@
 import { t } from './i18n'
-import { agentAdvice, quotaVerdict, rankAgents, type AgentKind, type AgentRecommendation, type AgentUsage, type QuotaAdvice, type WindowPace } from '@antumi/protocol'
+import { agentAdvice, quotaAdvicePressed, quotaVerdict, rankAgents, type AgentKind, type AgentRecommendation, type AgentUsage, type QuotaAdvice, type WindowPace } from '@antumi/protocol'
 import { agentLabel } from './labels'
 import { formatClock, formatDuration, windowLabel } from './usage-format'
 
@@ -11,7 +11,7 @@ export function alternativeAgent(agent: AgentKind, usages: readonly AgentUsage[]
   return (
     others.find((kind) => {
       const usage = usages.find((entry) => entry.agent === kind)
-      return quotaVerdict(usage, now).state === 'ok' && !agentAdvice(usage, now).some((item) => item.kind === 'wait-reset' || item.kind === 'slow-down')
+      return quotaVerdict(usage, now).state === 'ok' && !quotaAdvicePressed(agentAdvice(usage, now))
     }) ?? null
   )
 }
@@ -38,6 +38,15 @@ function rawAdviceText(advice: QuotaAdvice, now: number, alternative: AgentKind 
   const reset = window.resetsAt === null ? '' : formatClock(window.resetsAt, now)
   const other = alternative ? agentLabel(alternative) : null
   switch (advice.kind) {
+    case 'reset-option': {
+      const recovery = advice.recovery
+      if (!recovery) return ''
+      const at = recovery.at === null ? '' : formatClock(recovery.at, now)
+      if (recovery.kind === 'credit') return t('quotaAdviceText.resetCreditOption')
+      if (recovery.kind === 'banked') return t('quotaAdviceText.scheduledCreditOption', { at })
+      if (recovery.kind === 'unknown') return t('quotaAdviceText.unknownResetOption', { at })
+      return t('quotaAdviceText.scheduledResetOption', { at })
+    }
     case 'use-more': {
       const left = 100 - Math.round(window.usedPercent)
       const waste = Math.round(advice.percent ?? 0)

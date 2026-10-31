@@ -2,10 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { petPointerFacing, petPointerLook, petPointerNear } from './pet-gaze'
 
 describe('pet mouse gaze', () => {
-  it('only senses pointers in a nearby circle scaled to the pet', () => {
+  it('only senses pointers in a nearby circle, keeping a minimum reach for small pets', () => {
     const center = { x: 400, y: 500 }
-    for (const width of [80, 120, 192]) {
-      const radius = width * 2
+    for (const [width, radius] of [[60, 160], [80, 160], [120, 240], [192, 384]] as const) {
       expect(petPointerNear({ x: center.x + radius - 1, y: center.y }, center, width)).toBe(true)
       expect(petPointerNear({ x: center.x, y: center.y - radius - 1 }, center, width)).toBe(false)
       expect(petPointerNear({ x: center.x + radius, y: center.y + radius }, center, width)).toBe(false)
@@ -49,7 +48,7 @@ describe('pet mouse gaze', () => {
   })
 
   it('turns toward a pointer behind the body and holds its facing near the middle', () => {
-    for (const width of [80, 120, 192]) {
+    for (const width of [60, 80, 120, 192]) {
       for (const facing of [1, -1] as const) {
         const frame = { a: 1, b: 0, c: 0, d: 1, e: 400, f: 500 }
         expect(petPointerFacing({ x: 400 - width * facing, y: 0 }, frame, width, facing)).toBe(-facing)

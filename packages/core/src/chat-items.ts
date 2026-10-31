@@ -54,6 +54,18 @@ export class ChatItems {
     return item
   }
 
+  // An imported snapshot already owns its revision, including after an atomic rewrite.
+  restore(item: ChatItem): void {
+    const previous = this.items.get(item.id)
+    if (previous && previous.revision > item.revision) return
+    if (!previous) this.order.push(item.id)
+    const restored = item.kind === 'user' && item.references
+      ? { ...item, stageId: this.stageId, references: validChatReferences(item.text, item.references) }
+      : { ...item, stageId: this.stageId }
+    this.items.set(item.id, restored)
+    this.changed.add(item.id)
+  }
+
   // Streamed text: sent on as a delta unless the whole item goes out in the same batch anyway.
   append(id: string, text: string): void {
     const item = this.items.get(id)

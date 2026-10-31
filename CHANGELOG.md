@@ -4,6 +4,10 @@
 
 ## 未发布
 
+### 新功能
+
+- 导入会话支持 Cursor 桌面和 CLI、OpenCode、Pi、Kimi Code、Gemini CLI、DeepSeek Harness、Antigravity ACP 历史，可恢复原会话或通过历史移交接着聊。
+
 ## 0.21.3-beta.1 — 2026-10-30
 
 ### 新功能

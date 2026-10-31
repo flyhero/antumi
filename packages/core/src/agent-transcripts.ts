@@ -4,6 +4,8 @@ import path from 'node:path'
 import { createInterface } from 'node:readline'
 import { createZstdDecompress } from 'node:zlib'
 import type { ChatItemBody } from './chat-items'
+import type { AttachmentStore } from './attachment-store'
+import { readZstdLines } from './zstd-transcripts'
 
 // A session an agent kept in its own transcript, as a quick look at the file tells it.
 export type TranscriptSummary = {
@@ -17,6 +19,10 @@ export type TranscriptSummary = {
   // When the file last changed: the session's last activity.
   modifiedAt: number
   file: string
+  // undefined keeps the historical id-as-resume-id contract; null requires a handoff.
+  nativeSessionId?: string | null
+  source?: 'cli' | 'desktop'
+  clockless?: boolean
 }
 
 // One thing the transcript shows, as Antumi's chat would: its id is the same on every read.
@@ -29,16 +35,22 @@ export type Transcript = { entries: TranscriptEntry[]; messages: TranscriptMessa
 // How an agent's own record of the sessions it ran outside Antumi is read.
 export interface TranscriptSource {
   scan(): Promise<TranscriptSummary[]>
-  read(file: string): Promise<Transcript>
+  read(file: string, attachments?: AttachmentStore): Promise<Transcript>
+  diagnostics?(): string[]
 }
 
 const HEAD_BYTES = 256 * 1024
 
 // The lines of a transcript, decompressed where Codex packed it, while `take` wants more. A
 // line cut short by the byte limit is left out.
-export async function readLines(file: string, take: (line: string) => boolean, limit = Infinity): Promise<void> {
+export async function readLines(file: string, take: (line: string) => boolean, limit = Infinity, onError?: (error: unknown) => void): Promise<void> {
+  if (file.endsWith('.zstd')) {
+    try { await readZstdLines(file, take, limit) } catch (error) { onError?.(error) }
+    return
+  }
   const raw = createReadStream(file)
-  const input = file.endsWith('.zst') ? raw.pipe(createZstdDecompress()) : raw
+  const input = /\.zstd?$/.test(file) ? raw.pipe(createZstdDecompress()) : raw
+  if (input !== raw) raw.on('error', (error) => input.destroy(error))
   const lines = createInterface({ input, crlfDelay: Infinity })
   let read = 0
   try {
@@ -46,7 +58,8 @@ export async function readLines(file: string, take: (line: string) => boolean, l
       read += Buffer.byteLength(line) + 1
       if (read > limit || !take(line)) break
     }
-  } catch {
+  } catch (error) {
+    onError?.(error)
     // An unreadable or truncated file reads as far as it went.
   } finally {
     lines.close()
@@ -105,13 +118,13 @@ export async function findFiles(root: string, depth: number, wanted: (name: stri
 
 // Summaries kept while their file stays the same size and age, so a second scan reads only what changed.
 export class SummaryCache {
-  private readonly kept = new Map<string, { mtimeMs: number; size: number; summary: TranscriptSummary | null }>()
+  private readonly kept = new Map<string, { mtimeMs: number; size: number; revision?: string; summary: TranscriptSummary | null }>()
 
-  async get(file: { file: string; mtimeMs: number; size: number }, read: () => Promise<TranscriptSummary | null>): Promise<TranscriptSummary | null> {
+  async get(file: { file: string; mtimeMs: number; size: number; revision?: string }, read: () => Promise<TranscriptSummary | null>): Promise<TranscriptSummary | null> {
     const known = this.kept.get(file.file)
-    if (known && known.mtimeMs === file.mtimeMs && known.size === file.size) return known.summary
+    if (known && known.mtimeMs === file.mtimeMs && known.size === file.size && known.revision === file.revision) return known.summary
     const summary = await read()
-    this.kept.set(file.file, { mtimeMs: file.mtimeMs, size: file.size, summary })
+    this.kept.set(file.file, { mtimeMs: file.mtimeMs, size: file.size, revision: file.revision, summary })
     return summary
   }
 }

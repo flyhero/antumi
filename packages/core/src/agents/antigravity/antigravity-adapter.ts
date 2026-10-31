@@ -1,3 +1,4 @@
+import { antigravityTranscripts } from './antigravity-transcripts'
 import type { ChatCatalog } from '@antumi/protocol'
 import { probeChatCatalog } from '../../chat-catalog'
 import type { AgentAdapter } from '../agent-adapter'
@@ -20,6 +21,7 @@ async function antigravityCatalog(cwd: string): Promise<ChatCatalog | null> {
 
 export const antigravity: AgentAdapter = {
   kind: 'antigravity',
+  transcripts: antigravityTranscripts(),
   createDriver: (stageId, options) => new AcpDriver(antigravityDialect, stageId, options),
   // Antumi's MCP servers and the user's go in session/new; extra projects ride in the first
   // prompt's note, as its session takes no additional directories.

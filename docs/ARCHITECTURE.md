@@ -348,18 +348,35 @@ Agent adapter 解析一次性命令的结构化输出：Claude 的 JSON、Codex 
 
 在会话列表里右键选「删除会话」。删除会删除数据库记录、结构化消息、交接文件和聊天记录，但**无论外部还是 Antumi 托管的工作目录都会保留**，因为其中可能有唯一的工作成果。
 
-### 导入终端里的会话
+### 导入外部 Agent 的会话
 
-设置 → 导入会话（首次打开时新手引导和总览也会列出最近几个，见「首次使用环境引导」）列出 Claude Code 和 Codex 在 Antumi 之外跑过的会话（`session-imports.ts`），勾选后各导入成一条会话，下一条消息用 Agent 自己的恢复接着聊。读哪里、怎么读归 adapter 的 `transcripts`（`agent-transcripts.ts`），没有它的 Agent 不出现在列表里：
+设置 → 导入会话、新手引导和总览共用 `SessionImports`。扫描和解析由各 adapter 的 `transcripts` 提供，core 只读来源，不启动 CLI、不改来源数据库或日志；desktop 只展示与调用 RPC。会话按原目录分组，勾选后导入成不启动的普通会话，下一条消息才恢复或移交；导入后也可切换 Agent。扫描失败按来源报告，其他来源仍可使用。
 
-- **Claude Code**（`claude-transcripts.ts`）：`$CLAUDE_CONFIG_DIR/projects/*/<会话 id>.jsonl`（默认 `~/.claude`），会话 id 取文件名，目录取记录里的 `cwd`，不从目录名反推。从最后一条主线记录沿 `parentUuid` 往回走（压缩处接 `logicalParentUuid`），/rewind 丢掉的分支和 sidechain 不算；`isMeta`、压缩摘要和 CLI 自己注入的用户轮次（`<local-command-…>`、`<system-reminder>`、`<task-notification>` 等）跳过，斜杠命令显示成 `/命令 参数`。标题依次取 `custom-title`（用户 /rename 的，导入后锁定）、`ai-title`、`summary`、第一条提问。`<id>/subagents/` 不是会话。
-- **Codex**（`codex-transcripts.ts`）：`$CODEX_HOME/sessions/YYYY/MM/DD/rollout-*.jsonl`，旧的已压成 `.jsonl.zst`，两份都在时读没压的那份（Codex 还在写它）。第一行 `session_meta` 的 `source` 是对象（子 Agent、审查）、`thread_source` 不是 `user`，或 `originator` 是 Antumi 自己（`CODEX_CLIENT_NAME`）的线程不算。内容按回合读 `event_msg` 里的 `item_completed`，回合以 `task_complete` / `turn_aborted` 收尾；更早没有这些事件的 rollout 只显示消息。标题取 `session_index.jsonl` 的 `thread_name`，没有就用第一条提问。
+| 来源 | 标准存储 | 恢复 |
+| --- | --- | --- |
+| Claude Code | `$CLAUDE_CONFIG_DIR/projects` 下 JSONL，沿当前主线读，跳过 sidechain 和注入消息 | 原生 session id |
+| Codex | `$CODEX_HOME/sessions` 下 rollout JSONL / Zstandard，标题取 session index | 原生 thread id |
+| ZCode | `$ZCODE_SESSION_DB_PATH`，默认 `~/.zcode/cli/db/db.sqlite` | 原生 session id |
+| Cursor CLI | `$CURSOR_CONFIG_DIR`，其次 `$XDG_CONFIG_HOME/cursor`，默认 `~/.cursor`；`chats` 和 `acp-sessions` 中的 SQLite blob DAG | 原生 session id |
+| Cursor 桌面 | 各平台 Cursor User 目录下 `globalStorage/state.vscdb`，读取 composer headers、state 和有序 bubble；支持 header table 之前的布局 | 历史移交 |
+| OpenCode | `$XDG_DATA_HOME/opencode/opencode.db`，默认 `~/.local/share/opencode`；2.x `session_v2/session_message` 和保留的旧表择最近有效副本 | 原生 session id |
+| Pi | `$PI_CODING_AGENT_SESSION_DIR`、agent settings 的绝对 `sessionDir`，或 `$PI_CODING_AGENT_DIR/sessions`（默认 `~/.pi/agent`）；JSONL 沿末节点的 parent chain 读取 | 扫描得到的完整文件路径 |
+| Kimi Code | `$KIMI_CODE_HOME`，默认 `~/.kimi-code`；session index、state 和 `agents/main/wire.jsonl` | 原生 session id |
+| Gemini CLI | `$GEMINI_CLI_HOME/.gemini`，默认 `~/.gemini`；tmp/history 下 JSON / JSONL，目录取项目映射或记录的 directories | 历史移交，沿用 adapter 的 `nativeResume: false` |
+| DeepSeek Harness | `$DSH_HOME/sessions`，默认 `~/.dsh`；每个会话选择最高规范格式代次，读取 JSONL 或串接的 `.zstd` 帧 | 原生 session id |
+| Antigravity ACP | `$GEMINI_HOME/antigravity-acp/conversations`，默认 `~/.gemini`；SQLite steps protobuf 与 `.meta` | 原生 session id |
 
-扫描只读每个文件开头 256KB，最后活动时间用文件的修改时间，按路径、大小和修改时间缓存，第二次几乎不花时间。隐藏的有：`conversation_stages` 里已有、却不是导入来的会话（Antumi 自己跑的），目录在 `ANTUMI_HOME` 或临时目录下的。目录已不存在的列出但不能选，因为 Claude 只能在原目录恢复。
+只扫描本机标准目录和已有配置；不导入参考项目自己的数据库、远端文件、旧 Python Kimi 或 Antigravity IDE 私有存储。子 Agent 不列成独立的用户会话。Pi 的相对 sessionDir 无法脱离工作目录唯一定位，不当作全局扫描根。
 
-导入新会话时建一条不启动的会话（`create(..., deferStart)`，项目就是原目录，不建 worktree），再由 `ConversationService.importStage` 补一个已结束的 stage：`provider_session_id` 是原会话的 id，聊天记录写成 `item` 记录（各 driver 原样放进条目，不写 `exit`，否则会被当成没启动成功），用户消息和每轮最终回复写进 `conversation_messages`（Claude 恢复要先看到这些消息，标题、搜索、`history_read` 和移交也读它们）。之后和重启后继续一样：`startStage` 找到这个 stage，Claude 用 `--resume`，Codex 用 `thread/resume`；原会话不在了照常退回移交文件。
+`ExternalSession.sessionId` 是有界的导入查找键；只有重扫得到的键可以导入，客户端不能传读取路径。`TranscriptSummary.nativeSessionId` 与之分开：省略时沿用旧的同名原生 id，字符串可指定 Pi 的文件路径，null 表示历史移交。Cursor 桌面的导入键是 `desktop:<composerId>`，与 CLI UUID 分开，来源 id 不会误送给另一个 runtime。`source` 和 `continuation` 是可选的协议字段，旧客户端和旧 core 的现有调用保持兼容。
 
-`session_imports` 表记每个导入的会话导到哪条记录（`imported_through`）和当时文件的修改时间。文件之后又改过，而改动时间不落在这条会话任何 stage 的 `[开始, 结束 + 2 秒]` 里，就算在终端里又聊过，列表标「有更新」；Antumi 自己恢复时也写同一个文件，这段时间的改动不算。再导入一次，只取时间晚于 `imported_through`、又不在这些区间里的记录，作为一个新的已结束 stage 接在后面，原会话 id 不变，下一次仍从它恢复。会话的 Agent 正在运行时不导入。删掉会话后，它导入的会话回到「未导入」。
+历史先投影为稳定 id 的聊天条目与结构化问答，再由 `ConversationService.importStage` 写入已结束的 stage。工具结果、可解析思考和本地图片保留；图片经附件库检查与复制，不下载远程 URL，缺失图片留下提示。未知二进制工具保留通用字段预览，不执行历史里的操作。中断工具不会显示成仍在运行。JSONL 扫描读取开头 256KB 并缓存；SQLite 扫描读取索引和首条用户消息，正文在导入时读取。DeepSeek 独立解码每个 Zstandard 帧，单帧压缩／解压大小上限 128MiB。
+
+`session_imports` 保留来源、目标会话和扫描版本；`session_import_items` 保存条目／结构化消息的来源键、内容指纹和所属导入 stage。重导入只追加新键；同键内容补全时更新原 stage 的条目 revision 和消息，不复制整轮，也不依赖时间戳唯一。导入 stage 的 item 快照按来源顺序原子替换，新增回复仍排在原有回合结束标记之前；`conversations.chatItems` 的可选 `replaceStage` 通知让已打开的页面同步该顺序，历史更新不进入用量和自动化观察器。旧数据库首次重导入从已有导入 stage 建立指纹基线。Antumi 的运行 stage 不会被历史补全改写。
+
+原生恢复前保存来源记录指纹到 `session_import_observations`，停止或退出后把这段运行新增／改变的来源键标记为已观察，防止重复导入；没有逐条时间的来源也使用这条边界。core 重启后在会话不运行时完成尚未结算的观察。已有时间区间检查继续辅助排除 Antumi 自己的写入。已导入的历史增量写入串行进行，运行中的会话不接受导入，删除目标会话会清理导入索引并允许重新导入，原项目目录始终保留。
+
+恢复沿用现有 `startStage`：有可用原生 id 时恢复；无原生 id、Gemini 不支持原生恢复、模型路由变化或明确报告原会话丢失时，使用可见消息构建移交文件。登录、权限、额度等其他错误仍按原错误处理，不当作会话丢失吞掉。
 
 ### 待办
 

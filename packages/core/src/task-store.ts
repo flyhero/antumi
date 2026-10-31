@@ -367,7 +367,18 @@ export const MIGRATIONS = [
    ALTER TABLE scheduled_runs ADD COLUMN held_by TEXT;`,
   // Pages the built-in browser went to, one row per address and who opened it ('' for the user).
   `CREATE TABLE browser_history (url TEXT NOT NULL, opened_by TEXT NOT NULL, title TEXT NOT NULL, visited_at INTEGER NOT NULL, visits INTEGER NOT NULL, PRIMARY KEY (url, opened_by));
-   CREATE INDEX browser_history_visited ON browser_history (visited_at);`
+   CREATE INDEX browser_history_visited ON browser_history (visited_at);`,
+  `CREATE TABLE session_import_items (
+     agent TEXT NOT NULL, session_id TEXT NOT NULL, item_key TEXT NOT NULL,
+     conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+     stage_id TEXT REFERENCES conversation_stages(id) ON DELETE CASCADE,
+     fingerprint TEXT NOT NULL,
+     PRIMARY KEY (agent, session_id, item_key)
+   );
+   CREATE TABLE session_import_observations (
+     conversation_id TEXT PRIMARY KEY REFERENCES conversations(id) ON DELETE CASCADE,
+     agent TEXT NOT NULL, session_id TEXT NOT NULL, before_items TEXT NOT NULL
+   );`
 ]
 
 

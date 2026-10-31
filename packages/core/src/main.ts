@@ -103,8 +103,8 @@ let server: RpcServer | null = null
 let awake: ComputerAwakeService | null = null
 const refreshAwake = () => awake?.refresh(conversations.workingCount(), schedules.openCount())
 
-const notifyChatItems = (conversationId: string, items: ChatItem[]) =>
-  [...(server?.connections ?? [])].filter((c) => c.watching.has(conversationId)).forEach((c) => c.notify('conversations.chatItems', { conversationId, items }))
+const notifyChatItems = (conversationId: string, items: ChatItem[], replaceStage?: string) =>
+  [...(server?.connections ?? [])].filter((c) => c.watching.has(conversationId)).forEach((c) => c.notify('conversations.chatItems', { conversationId, items, ...(replaceStage ? { replaceStage } : {}) }))
 
 const wire = new WireLog(paths.sessions, (conversationId, stageId, entries) =>
   [...(server?.connections ?? [])].filter((c) => c.wiring.has(conversationId)).forEach((c) => c.notify('debug.wireEntries', { conversationId, stageId, entries }))
@@ -158,6 +158,9 @@ const conversations = new ConversationService(
       squads.observe(event.conversationId, event.items)
       if (event.items.some((item) => item.kind === 'turn')) profiles.tick()
       notifyChatItems(event.conversationId, limits.decorate(smallModels.decorate(event.items)))
+    } else if (event.type === 'importedItems') {
+      // Historical turns update open views without counting as new work or triggering automation.
+      notifyChatItems(event.conversationId, event.items, event.replaceStage)
     } else if (event.type === 'planApproved') {
       service.recordPlan(event.taskId, event.plan)
     } else if (event.type === 'usage') {
@@ -174,6 +177,9 @@ const conversations = new ConversationService(
   paths.worktrees,
   wire
 )
+const sessionImports = new SessionImports(conversationsStore, conversations, paths.home, undefined, undefined, attachments)
+conversations.setImportHooks({ before: (id, agent, nativeId) => sessionImports.beforeResume(id, agent, nativeId), after: (id) => sessionImports.afterResume(id) })
+
 
 const browserHistory = new BrowserHistoryStore(paths.database, () => server?.broadcast('browserHistory.changed', {}))
 const browser = new BrowserService(
@@ -506,7 +512,7 @@ server = await startRpcServer({
   handlers: createRpcHandlers(service, conversations, projects, gitFavorites, daemon, usage, sources, {
     store: attachments,
     uploads: new AttachmentUploads(attachments)
-  }, terminals, worktrees, browser, awake, terminalCommands, limits, runs, turns, chatSettings, environment, schedules, chatCommands, routines, discussions, wire, () => server?.broadcast('git.changed', {}), squads, todos, plugins, skills, mcpServers, smallModels, projectConfigs, modelProviders, new SessionImports(conversationsStore, conversations, paths.home), accounts, cliMaintenance, analytics, automation, pets, new ProjectStar(sources), profiles, bookmarks, browserHistory)
+  }, terminals, worktrees, browser, awake, terminalCommands, limits, runs, turns, chatSettings, environment, schedules, chatCommands, routines, discussions, wire, () => server?.broadcast('git.changed', {}), squads, todos, plugins, skills, mcpServers, smallModels, projectConfigs, modelProviders, sessionImports, accounts, cliMaintenance, analytics, automation, pets, new ProjectStar(sources), profiles, bookmarks, browserHistory)
 })
 await writeCoreEndpoint({ port: server.port, token, pid: process.pid, protocolVersion: PROTOCOL_VERSION, version: packageJson.version })
 daemon.start()

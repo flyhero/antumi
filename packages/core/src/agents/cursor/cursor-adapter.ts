@@ -1,3 +1,4 @@
+import { cursorTranscripts } from './cursor-transcripts'
 import { parseCursorQuick } from '../../model-metering'
 import { Rejection } from '../../rejection'
 import type { AgentAdapter, AgentStage } from '../agent-adapter'
@@ -10,6 +11,7 @@ const readyFile = (stage: AgentStage) => cursorMcpReadyFile(stage.sessionsRoot, 
 
 export const cursor: AgentAdapter = {
   kind: 'cursor',
+  transcripts: cursorTranscripts(),
   maintenance: { native: { roots: { darwin: ['.local/share/cursor-agent'], linux: ['.local/share/cursor-agent'], win32: ['AppData/Local/cursor-agent'] }, args: ['update'] } },
   createDriver: (stageId, options) => new CursorAcp(stageId, options),
   // Its ACP session takes no extra folders, but the CLI does, as workspace roots whose rules and

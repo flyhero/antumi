@@ -489,7 +489,7 @@ export class ClaudeStream implements ChatDriver {
         this.ended(record.code, record.stderr, record.at)
         break
       case 'item':
-        this.items.put(record.item, record.at)
+        this.items.restore(record.item)
         break
       case 'ask':
       case 'answer':

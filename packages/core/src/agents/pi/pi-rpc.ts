@@ -195,7 +195,7 @@ export class PiRpc implements ChatDriver {
       ...(record.id !== undefined ? { id: record.id } : {}),
       ...(record.action !== undefined ? { action: record.action } : {})
     })
-    else if (record.dir === 'item') this.items.put(record.item, record.at)
+    else if (record.dir === 'item') this.items.restore(record.item)
     else if (record.dir === 'ask') this.antumi.apply(record)
     else if (record.dir === 'answer') {
       // A plan put aside (see waitingPlans); any other answer is to Antumi's own question.

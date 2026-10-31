@@ -1,3 +1,4 @@
+import { opencodeTranscripts } from './opencode-transcripts'
 import { Rejection } from '../../rejection'
 import type { AgentAdapter, AgentStage } from '../agent-adapter'
 import { clearMcpReadyFile, mcpReadyFile, mcpReadyWithin, mcpServerReporting } from '../mcp-ready-file'
@@ -13,6 +14,7 @@ const MCP_SETTLE_MS = 1500
 
 export const opencode: AgentAdapter = {
   kind: 'opencode',
+  transcripts: opencodeTranscripts(),
   maintenance: { packageName: '@opencode/cli', brew: { name: 'opencode', cask: false }, native: { roots: { darwin: ['.opencode/bin'], linux: ['.opencode/bin'] }, args: ['upgrade'], latestUrl: 'https://registry.npmjs.org/@opencode/cli/latest' } },
   createDriver: (stageId, options) => new OpenCodeAcp(stageId, options),
   // Extra projects and a vault it may write go in the ACP session's additionalDirectories, and

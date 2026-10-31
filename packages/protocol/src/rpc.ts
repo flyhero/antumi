@@ -250,9 +250,8 @@ export const rpcMethods = {
   // The servers Claude, Codex and Cursor have in their own configuration, and taking some in.
   'mcpServers.importable': { params: z.object({}), result: z.array(McpImportCandidate) },
   'mcpServers.import': { params: z.object({ items: z.array(McpImportItem).min(1).max(64), agents: z.array(AgentKind) }), result: z.array(McpServer) },
-  // Sessions Claude Code and Codex ran outside Antumi, newest first; importing one again brings in
-  // what it added since.
-  'sessionImports.list': { params: z.object({}), result: z.object({ sessions: z.array(ExternalSession) }) },
+  // Native and desktop histories outside Antumi; importing again merges new and completed records.
+  'sessionImports.list': { params: z.object({}), result: z.object({ sessions: z.array(ExternalSession), warnings: z.array(z.object({ agent: AgentKind, message: z.string() })).optional() }) },
   'sessionImports.import': { params: z.object({ sessions: z.array(ExternalSessionRef).min(1).max(100) }), result: z.object({ conversations: z.array(Conversation) }) },
   'modelProviders.list': { params: z.object({}), result: z.array(ModelProvider) },
   // Adds a provider (id null) or replaces one, from the next start of each agent on it.
@@ -834,7 +833,7 @@ export const rpcNotifications = {
   // A conversation's to-dos as they now stand; to every connection, as they are few and short.
   'todos.changed': z.object({ conversationId: z.string(), groups: TodoList }),
   // Items added or changed, newest revision each; only to connections watching the conversation.
-  'conversations.chatItems': z.object({ conversationId: z.string(), items: ChatItemList }),
+  'conversations.chatItems': z.object({ conversationId: z.string(), items: ChatItemList, replaceStage: z.string().optional() }),
   // Text streamed onto an assistant or reasoning item the client already holds. Item ids are
   // unique within a stage only; an older core leaves the stage out.
   'conversations.chatDelta': z.object({ conversationId: z.string(), stageId: z.string().optional(), itemId: z.string(), append: z.string() }),

@@ -46,6 +46,7 @@ export type ConversationEvent =
   | { type: 'changed'; conversation: Conversation }
   | { type: 'deleted'; id: string }
   | { type: 'chatItems'; conversationId: string; items: ChatItem[] }
+  | { type: 'importedItems'; conversationId: string; items: ChatItem[]; replaceStage?: string }
   | { type: 'prompt'; conversationId: string; stageId: string; ref: string }
   | { type: 'chatDelta'; conversationId: string; stageId: string; itemId: string; append: string }
   // A plan approved in a task's chat, for the task to keep as the one it carries out.
@@ -136,6 +137,8 @@ async function resolveProjects(projectPaths: readonly string[], taken: readonly 
 }
 
 export class ConversationService {
+  private importHooks: { before(id: string, agent: AgentKind, nativeId: string): Promise<void>; after(id: string): Promise<void> } | null = null
+  setImportHooks(hooks: NonNullable<ConversationService['importHooks']>): void { this.importHooks = hooks }
   private delegationStatus: ((id: string) => Conversation['delegation']) | null = null
   setDelegationStatus(status: (id: string) => Conversation['delegation']): void { this.delegationStatus = status }
   refreshDelegation(id: string): void { const conversation = this.store.get(id); if (conversation) this.changed(conversation) }
@@ -988,19 +991,39 @@ export class ConversationService {
 
   // A session the agent ran outside Antumi, taken in as a stage that has ended, on that session: the
   // next start resumes it, as it would a stage of Antumi's own. title: what the session was called.
-  importStage(id: string, agent: AgentKind, providerSessionId: string, transcript: Transcript, title: { text: string; locked: boolean } | null = null): Conversation {
+  importStage(id: string, agent: AgentKind, providerSessionId: string | null, transcript: Transcript, title: { text: string; locked: boolean } | null = null, update?: { stageId: string; order: readonly string[] }): Conversation {
     const current = this.get(id)
     if (current.sessionId || this.launching.has(id)) throw new Rejection('conversation-running')
-    const stageId = randomUUID()
-    this.store.startStage(id, agent, providerSessionId, this.store.maxSequence(id), stageId)
+    const existingStageId = update?.stageId
+    const stageId = existingStageId ?? randomUUID()
+    if (existingStageId && !this.store.stages(id).some((stage) => stage.id === existingStageId && stage.endedAt !== null && stage.sessionId === null)) throw new Rejection('invalid-params', 'not an imported stage')
+    const previous = new Map<string, ChatItem>(existingStageId ? this.stageChatItems(id, existingStageId).filter((item) => item.kind !== 'state').map((item) => [item.id, item]) : [])
+    if (!existingStageId) this.store.startStage(id, agent, providerSessionId, this.store.maxSequence(id), stageId)
     // No exit record: no process ran here, and the driver would read one as a start that failed.
-    ChatLog.of(this.sessionsRoot, id, stageId).append(transcript.entries.map((entry): LoggedRecord => ({ dir: 'item', at: entry.at, item: { ...entry.item, stageId, revision: 1, at: entry.at } })))
+    let items: ChatItem[] = transcript.entries.map((entry) => ({ ...entry.item, stageId, revision: (previous.get(entry.item.id)?.revision ?? 0) + 1, at: previous.get(entry.item.id)?.at ?? entry.at }))
+    const log = ChatLog.of(this.sessionsRoot, id, stageId)
+    if (update) {
+      const ranks = new Map(update.order.map((itemId, index) => [itemId, index]))
+      let lastRank = -1
+      for (const item of previous.values()) {
+        const rank = ranks.get(item.id)
+        if (rank !== undefined) lastRank = rank
+        else { lastRank += 1 / (previous.size + 1); ranks.set(item.id, lastRank) }
+      }
+      const merged = new Map(previous)
+      for (const item of items) merged.set(item.id, item)
+      items = [...merged.values()].sort((a, b) => (ranks.get(a.id) ?? Infinity) - (ranks.get(b.id) ?? Infinity))
+      log.replaceImported(items.map((item): LoggedRecord => ({ dir: 'item', at: item.at, item })))
+    } else log.append(items.map((item): LoggedRecord => ({ dir: 'item', at: item.at, item })))
+    this.chats.invalidateHistory(stageId)
     for (const message of transcript.messages) {
       this.store.addMessage({ conversationId: id, stageId, role: message.role, agent, text: message.text, eventKey: `chat:${message.ref}:${message.role}`, complete: true })
+      if (existingStageId) this.store.updateImportedMessage(stageId, `chat:${message.ref}:${message.role}`, message.text)
     }
     this.store.endStage(stageId, null)
     if (title) this.store.update(id, { title: title.text, titleLocked: title.locked })
     else this.store.touch(id)
+    if (items.length) this.emit({ type: 'importedItems', conversationId: id, items, ...(existingStageId ? { replaceStage: existingStageId } : {}) })
     return this.changed(this.get(id))
   }
 
@@ -1067,6 +1090,7 @@ export class ConversationService {
     const account = route ? null : await this.accounts?.launch(agent) ?? null
     const stageId = randomUUID()
     const stage = this.store.startStage(id, agent, providerSessionId, this.store.maxSequence(id), stageId, launch.planOnly ?? false, route, account?.id ?? null)
+    if (saved) await this.importHooks?.before(id, agent, saved)
     const provider = decision.kind === 'provider' ? providerLaunch(decision.route, decision.apiKey) : undefined
     return { ...await this.startChat(current, stage, saved !== null, handoffPath === null ? null : { path: handoffPath, note, references: launch.references }, launch.readable ?? [], null, provider, account), starting: false }
   }
@@ -1737,6 +1761,7 @@ export class ConversationService {
     const current = this.get(id)
     if (!current.sessionId) return current
     await this.stopAgent(current.sessionId)
+    await this.importHooks?.after(id)
     if (this.store.get(id)?.sessionId === null) return this.get(id)
     const stage = this.store.activeStage(id)
     if (stage) this.store.endStage(stage.id, null)
@@ -1875,6 +1900,7 @@ export class ConversationService {
     if (current) {
       const stage = this.store.activeStage(current.id)
       if (stage?.sessionId === sessionId) this.store.endStage(stage.id, stopped ? null : exitCode)
+      void this.importHooks?.after(current.id).catch((error: unknown) => console.error('[antumi-core] observing imported session failed:', error))
       this.changed(this.store.update(current.id, { sessionId: null }))
     }
     this.exitWaiters.get(sessionId)?.()

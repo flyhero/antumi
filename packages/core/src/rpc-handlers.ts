@@ -294,7 +294,7 @@ export function createRpcHandlers(
     'mcpServers.probe': ({ name }) => mcpServerStore().probe(name),
     'mcpServers.importable': () => mcpServerStore().importable(),
     'mcpServers.import': ({ items, agents }) => mcpServerStore().import(items, agents),
-    'sessionImports.list': async () => ({ sessions: await imports().list() }),
+    'sessionImports.list': async () => ({ sessions: await imports().list(), warnings: imports().diagnostics() }),
     'sessionImports.import': async ({ sessions }) => ({ conversations: await imports().import(sessions) }),
     'modelProviders.list': () => modelProviderStore().list(),
     'modelProviders.save': (input) => modelProviderStore().save(input),

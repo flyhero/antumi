@@ -182,6 +182,8 @@ export class ChatHost {
     this.history.delete(stageId)
   }
 
+  invalidateHistory(stageId: string): void { this.history.delete(stageId) }
+
   // Reads what the daemon holds past what the stage has seen: on open, and again after the
   // connection to the daemon dropped and output went by unseen.
   private async catchUp(live: Live): Promise<void> {

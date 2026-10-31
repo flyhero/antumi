@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useState } from 'react'
-import type { AgentKind, Conversation, ExternalSession } from '@antumi/protocol'
+import { isAgentKind, type AgentKind, type Conversation, type ExternalSession } from '@antumi/protocol'
 import { t } from '../i18n'
 import { perform, selectConversation, useCore } from '../core-store'
 import { agentLabel } from '../labels'
@@ -7,17 +7,18 @@ import { timeAgo } from '../conversation-state'
 import { AgentIcon, ChevronRightIcon, RefreshIcon } from './icons'
 import { projectName } from './ProjectPicker'
 import { useExternalSessions } from '../external-sessions'
-import { Segmented, Toggle } from './SettingsControls'
+import { Toggle } from './SettingsControls'
+import { ChatPicker } from './ChatPicker'
 
 const keyOf = (session: ExternalSession) => `${session.agent}:${session.sessionId}`
 const selectable = (session: ExternalSession) => session.problem === null && session.status !== 'imported'
 
-// Sessions Claude Code, Codex and ZCode ran outside Antumi, listed by the folder they ran in; the ones
-// picked come in as conversations that go on in the agent's own session.
+// Each source's history becomes a conversation in the folder it ran in.
 export function SessionImportSettings() {
   const connected = useCore((s) => s.connection === 'connected')
   const [sessions, setSessions] = useState<ExternalSession[] | null>(null)
   const [loading, setLoading] = useState(false)
+  const [warnings, setWarnings] = useState<Array<{ agent: AgentKind; message: string }>>([])
   const [chosen, setChosen] = useState<ReadonlySet<string>>(new Set())
   const [agent, setAgent] = useState<'all' | AgentKind>('all')
   const [query, setQuery] = useState('')
@@ -26,7 +27,6 @@ export function SessionImportSettings() {
   const [busy, setBusy] = useState(false)
   const [imported, setImported] = useState<Conversation[] | null>(null)
   const hideLabel = useId()
-  const filterLabel = useId()
 
   const load = async () => {
     setLoading(true)
@@ -34,6 +34,7 @@ export function SessionImportSettings() {
     setLoading(false)
     if (found) {
       setSessions(found.sessions)
+      setWarnings(found.warnings ?? [])
       // What the guide and the overview offer to go on with must not offer what came in here.
       useExternalSessions.setState({ sessions: found.sessions })
     }
@@ -97,12 +98,12 @@ export function SessionImportSettings() {
   return (
     <>
       <p className="settings-note">{t('SessionImportSettings.note')}</p>
+      {warnings.map((warning, index) => <p key={`${warning.agent}:${index}`} className="settings-note" role="status">{agentLabel(warning.agent)}：{warning.message}</p>)}
       <div className="session-import-toolbar">
-        <span id={filterLabel} hidden>{t('SessionImportSettings.agentFilter')}</span>
-        {agents.length > 1 && (
-          <Segmented labelId={filterLabel} value={agent} onChange={setAgent}
-            options={[{ value: 'all', label: t('SessionImportSettings.allAgents') }, ...agents.map((kind) => ({ value: kind, label: agentLabel(kind) }))]} />
-        )}
+        {agents.length > 1 && <ChatPicker label={t('SessionImportSettings.agentFilter')} value={agent}
+          placeholder={t('SessionImportSettings.allAgents')} size="large" placement="below"
+          onChange={(value) => { if (value === 'all' || isAgentKind(value)) setAgent(value) }}
+          options={[{ value: 'all', label: t('SessionImportSettings.allAgents') }, ...agents.map((kind) => ({ value: kind, label: agentLabel(kind), icon: <AgentIcon agent={kind} /> }))]} />}
         <input className="input session-import-search" value={query} onChange={(event) => { setQuery(event.target.value); setExpanded(new Map()) }}
           placeholder={t('SessionImportSettings.search')} aria-label={t('SessionImportSettings.search')} />
         <span id={hideLabel} className="session-import-hide">
@@ -144,7 +145,7 @@ export function SessionImportSettings() {
   )
 }
 
-function SessionImportGroup({ cwd, members, chosen, busy, expanded, toggle, onExpand }: {
+export function SessionImportGroup({ cwd, members, chosen, busy, expanded, toggle, onExpand }: {
   cwd: string
   members: ExternalSession[]
   chosen: ReadonlySet<string>
@@ -180,6 +181,8 @@ function SessionImportGroup({ cwd, members, chosen, busy, expanded, toggle, onEx
                 onChange={(event) => toggle([key], event.target.checked)} aria-label={t('SessionImportSettings.select', { value1: session.title })} />
               <span className="session-import-agent" title={agentLabel(session.agent)}><AgentIcon agent={session.agent} /></span>
               <span className="session-import-title" title={session.firstPrompt}>{session.title}</span>
+              {session.source && <span className="session-import-badge">{t(session.source === 'desktop' ? 'SessionImportSettings.desktop' : 'SessionImportSettings.cli')}</span>}
+              {session.continuation === 'handoff' && <span className="session-import-badge" title={t('SessionImportSettings.handoffHint')}>{t('SessionImportSettings.handoff')}</span>}
               {session.problem === 'missing-cwd' && <span className="session-import-badge">{t('SessionImportSettings.missingFolder')}</span>}
               {session.status === 'imported' && <span className="session-import-badge">{t('SessionImportSettings.statusImported')}</span>}
               {session.status === 'updated' && <span className="session-import-badge updated">{t('SessionImportSettings.statusUpdated')}</span>}

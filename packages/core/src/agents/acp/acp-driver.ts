@@ -182,7 +182,7 @@ export class AcpDriver implements ChatDriver {
       ...(record.action !== undefined ? { action: record.action } : {})
     })
     else if (record.dir === 'ask' || record.dir === 'answer') this.antumi.apply(record)
-    else if (record.dir === 'item') this.items.put(record.item, record.at)
+    else if (record.dir === 'item') this.items.restore(record.item)
     else if (record.dir === 'exit') {
       this.exited = true
       this.antumi.cancelAll(record.at)

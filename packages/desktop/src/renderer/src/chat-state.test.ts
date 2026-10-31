@@ -37,6 +37,16 @@ describe('chat items', () => {
     expect(merged.map((item) => item.kind === 'assistant' && item.text)).toEqual(['one, revised', 'two', 'three'])
   })
 
+  it('replaces an imported stage in source order without moving later stages or loading older pages', () => {
+    const before = text('old', 'Old reply', 'imported')
+    const tail = text('tail', 'Later conversation', 'later')
+    setChatPage('c', { items: [before, tail], before: 'older-page' })
+    receiveChatItems('c', [text('a', 'First source message', 'imported'), text('old', 'Completed reply', 'imported', 2)], 'imported')
+    expect(useChat.getState().c).toEqual({ items: [text('a', 'First source message', 'imported'), text('old', 'Completed reply', 'imported', 2), tail], before: 'older-page' })
+    receiveChatItems('c', [text('hidden', 'Not on this page', 'hidden')], 'hidden')
+    expect(useChat.getState().c?.items).toHaveLength(3)
+  })
+
   it('streams text onto the item it names and ignores one it does not hold', () => {
     expect(appendText([text('a', 'he')], 'chat-stage', 'a', 'llo')).toEqual([text('a', 'hello')])
     expect(appendText([text('a', 'he')], undefined, 'a', 'llo')).toEqual([text('a', 'hello')])

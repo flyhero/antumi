@@ -1,3 +1,4 @@
+import { kimiTranscripts } from './kimi-transcripts'
 import type { AgentAdapter } from '../agent-adapter'
 import { AcpDriver } from '../acp/acp-driver'
 import { kimiDialect } from './kimi-dialect'
@@ -5,6 +6,7 @@ import { detectKimi, kimiCatalog, kimiInstallation, requireKimi } from './kimi-c
 
 export const kimi: AgentAdapter = {
   kind: 'kimi',
+  transcripts: kimiTranscripts(),
   maintenance: { packageName: '@moonshot-ai/kimi-code' },
   createDriver: (stageId, options) => new AcpDriver(kimiDialect, stageId, options),
   command: () => ({ command: 'kimi', args: ['acp'] }),

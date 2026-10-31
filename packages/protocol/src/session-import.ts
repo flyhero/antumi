@@ -17,6 +17,8 @@ export const ExternalSession = z.object({
   updatedAt: z.number(),
   status: ExternalSessionStatus,
   conversationId: z.string().nullable(),
+  source: z.enum(['cli', 'desktop']).optional(),
+  continuation: z.enum(['native', 'handoff']).optional(),
   // missing-cwd: the folder it ran in is gone, and the agent resumes a session only from there.
   problem: z.enum(['missing-cwd']).nullable()
 })

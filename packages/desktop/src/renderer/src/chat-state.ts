@@ -125,10 +125,15 @@ export function prependChatPage(conversationId: string, page: ChatPage): void {
   })
 }
 
-export function receiveChatItems(conversationId: string, items: readonly ChatItem[]): void {
+export function receiveChatItems(conversationId: string, items: readonly ChatItem[], replaceStage?: string): void {
   flushChatDeltas()
   useChat.setState((state) => {
     const current = state[conversationId]
+    if (current && replaceStage) {
+      const first = current.items.findIndex((item) => item.stageId === replaceStage)
+      if (first < 0) return {}
+      return { [conversationId]: { ...current, items: [...current.items.slice(0, first), ...items, ...current.items.slice(first).filter((item) => item.stageId !== replaceStage)] } }
+    }
     return current ? { [conversationId]: { ...current, items: mergeItems(current.items, items) } } : {}
   })
 }

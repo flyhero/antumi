@@ -586,7 +586,7 @@ export class CodexAppServer implements ChatDriver {
         this.closeAsk(record.requestId, record.answers, record.at)
         break
       case 'item':
-        this.items.put(record.item, record.at)
+        this.items.restore(record.item)
     }
     this.refreshOptions()
     // The composer offers sending into the turn while one that takes it runs.

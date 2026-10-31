@@ -1,4 +1,5 @@
-import { appendFileSync, mkdirSync, openSync, readFileSync, closeSync, fstatSync, ftruncateSync, readSync } from 'node:fs'
+import { appendFileSync, mkdirSync, openSync, readFileSync, closeSync, fstatSync, ftruncateSync, readSync, writeFileSync, renameSync, rmSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 import { z } from 'zod'
 import { ChatReference, ChatImage, ChatItem, ChatOption } from '@antumi/protocol'
@@ -86,6 +87,17 @@ export class ChatLog {
       this.ready = true
     }
     appendFileSync(this.file, records.map((record) => `${JSON.stringify(record)}\n`).join(''), { mode: 0o600 })
+  }
+
+  // Imported stages have no process or output offset; their ordered snapshot can be replaced.
+  replaceImported(records: readonly LoggedRecord[]): void {
+    if (records.some((record) => record.dir !== 'item')) throw new Error('an imported snapshot contains only items')
+    mkdirSync(path.dirname(this.file), { recursive: true, mode: 0o700 })
+    const temporary = `${this.file}.${randomUUID()}.tmp`
+    try {
+      writeFileSync(temporary, records.map((record) => `${JSON.stringify(record)}\n`).join(''), { mode: 0o600, flag: 'wx' })
+      renameSync(temporary, this.file)
+    } finally { rmSync(temporary, { force: true }) }
   }
 
   // A crash mid-write leaves half a line; appending after it would glue two records together.

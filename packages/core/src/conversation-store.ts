@@ -34,6 +34,8 @@ export type ChatOptions = z.infer<typeof ChatOptions>
 // its file as it stood at the other.
 const SessionImport = z.object({ agent: AgentKind, sessionId: z.string(), conversationId: z.string(), importedThrough: z.number(), sourceModifiedAt: z.number() })
 export type SessionImport = z.infer<typeof SessionImport>
+const ImportedItem = z.object({ key: z.string(), stageId: z.string().nullable(), fingerprint: z.string() })
+export type ImportedItem = z.infer<typeof ImportedItem>
 
 // An unreadable source is dropped rather than losing the conversation with it.
 function source(raw: unknown): TaskSource | null {
@@ -285,7 +287,7 @@ export class ConversationStore {
     return row ? stage(row) : null
   }
 
-  startStage(conversationId: string, agent: AgentKind, providerSessionId: string | null, receivedSequence: number, id = randomUUID(), planOnly = false, route: ProviderRoute | null = null, account: string | null = null): ConversationStage {
+  startStage(conversationId: string, agent: AgentKind, providerSessionId: string | null, receivedSequence: number, id: string = randomUUID(), planOnly = false, route: ProviderRoute | null = null, account: string | null = null): ConversationStage {
     this.db.prepare(`INSERT INTO conversation_stages
       (id, conversation_id, agent, provider_session_id, received_sequence, started_at, plan_only, provider_route, account)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(id, conversationId, agent, providerSessionId, receivedSequence, this.now(), Number(planOnly), route ? JSON.stringify(route) : null, account)
@@ -371,6 +373,43 @@ export class ConversationStore {
   completePendingUsers(stageId: string): void {
     this.db.prepare(`UPDATE conversation_messages SET complete = 1
       WHERE stage_id = ? AND role = 'user' AND complete = 0`).run(stageId)
+  }
+
+  updateImportedMessage(stageId: string, eventKey: string, text: string): void {
+    this.db.prepare('UPDATE conversation_messages SET text = ? WHERE stage_id = ? AND event_key = ?').run(text, stageId, eventKey)
+  }
+
+  importedItems(agent: AgentKind, sessionId: string): ImportedItem[] {
+    return this.db.prepare('SELECT item_key AS key, stage_id AS stageId, fingerprint FROM session_import_items WHERE agent = ? AND session_id = ?')
+      .all(agent, sessionId).map((row) => ImportedItem.parse(row))
+  }
+
+  recordImportedItems(record: SessionImport, items: readonly ImportedItem[]): void {
+    const put = this.db.prepare(`INSERT INTO session_import_items (agent, session_id, item_key, conversation_id, stage_id, fingerprint)
+      VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (agent, session_id, item_key) DO UPDATE SET fingerprint = excluded.fingerprint`)
+    this.db.exec('SAVEPOINT imported_items')
+    try {
+      for (const item of items) put.run(record.agent, record.sessionId, item.key, record.conversationId, item.stageId, item.fingerprint)
+      this.db.exec('RELEASE imported_items')
+    } catch (error) {
+      this.db.exec('ROLLBACK TO imported_items; RELEASE imported_items')
+      throw error
+    }
+  }
+
+  saveImportObservation(record: SessionImport, items: readonly ImportedItem[]): void {
+    this.db.prepare(`INSERT INTO session_import_observations (conversation_id, agent, session_id, before_items) VALUES (?, ?, ?, ?)
+      ON CONFLICT (conversation_id) DO UPDATE SET agent = excluded.agent, session_id = excluded.session_id, before_items = excluded.before_items`)
+      .run(record.conversationId, record.agent, record.sessionId, JSON.stringify(items))
+  }
+
+  importObservation(conversationId: string): ImportedItem[] | null {
+    const row = this.db.prepare('SELECT before_items FROM session_import_observations WHERE conversation_id = ?').get(conversationId)
+    return row ? parsedJson(row.before_items, z.array(ImportedItem)) : null
+  }
+
+  clearImportObservation(conversationId: string): void {
+    this.db.prepare('DELETE FROM session_import_observations WHERE conversation_id = ?').run(conversationId)
   }
 
   delete(id: string): void {

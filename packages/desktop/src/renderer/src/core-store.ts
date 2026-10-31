@@ -1485,7 +1485,7 @@ export function startCoreConnection(scope: 'app' | 'requests' = 'app'): void {
             return { conversations, selectedConversationId: s.selectedConversationId === id ? other : s.selectedConversationId }
           })
         })
-        rpc.on('conversations.chatItems', ({ conversationId, items }) => receiveChatItems(conversationId, items))
+        rpc.on('conversations.chatItems', ({ conversationId, items, replaceStage }) => receiveChatItems(conversationId, items, replaceStage))
         rpc.on('conversations.chatDelta', ({ conversationId, stageId, itemId, append }) => receiveChatDelta(conversationId, stageId, itemId, append))
         rpc.on('browser.changed', ({ status }) => useCore.setState({ browser: status }))
         rpc.on('system.awakeChanged', ({ status }) => useCore.setState({ awake: status }))

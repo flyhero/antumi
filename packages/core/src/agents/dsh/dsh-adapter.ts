@@ -1,3 +1,4 @@
+import { dshTranscripts } from './dsh-transcripts'
 import { DSH_MODES } from '@antumi/protocol'
 import type { AgentAdapter } from '../agent-adapter'
 import { AcpDriver } from '../acp/acp-driver'
@@ -7,6 +8,7 @@ import { detectDsh, dshCatalog, dshInstallation, prepareDsh } from './dsh-cli'
 
 export const dsh: AgentAdapter = {
   kind: 'dsh',
+  transcripts: dshTranscripts(),
   createDriver: (stageId, options) => new AcpDriver(dshDialect, stageId, options),
   command: dshCommand,
   providerModels: dshProviderModels,

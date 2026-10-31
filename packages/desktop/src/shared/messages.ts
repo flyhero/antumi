@@ -12174,13 +12174,17 @@ export const MESSAGES = {
     "en": "Import sessions"
   },
   "SettingsPage.sessionImportDescription": {
-    "zh": "导入在终端或 ZCode 里跑过的 Claude Code、Codex、ZCode 会话，在 Antumi 里接着聊",
-    "en": "Bring in Claude Code, Codex and ZCode sessions you ran in a terminal or in ZCode, and continue them in Antumi"
+    "zh": "导入本机外部 Agent 和 Cursor 桌面的会话，在 Antumi 里接着聊",
+    "en": "Import local Agent and Cursor desktop sessions and continue them in Antumi"
   },
   "SessionImportSettings.note": {
-    "zh": "导入后保留之前的对话；之后发消息时，Agent 在原目录里恢复同一个会话接着聊。在终端里又聊过的会话会标为「有更新」，再导入一次只补上新的部分。",
-    "en": "Imported sessions keep their history. Your next message resumes the same session in its original folder. Sessions you continued in a terminal show as Updated; importing again adds only what is new."
+    "zh": "导入后保留之前的对话。发消息时优先恢复原会话；标有「历史移交」的会话会把历史交给新的 Agent 会话。外部会话有更新时可再次导入，补齐新的内容；导入后也可以切换 Agent。",
+    "en": "Imported sessions keep their history. Your next message resumes the original session when supported. History handoff passes the history to a new Agent session. Import again to bring in updates, or switch Agents after importing."
   },
+  "SessionImportSettings.desktop": { "zh": "桌面", "en": "Desktop" },
+  "SessionImportSettings.cli": { "zh": "CLI", "en": "CLI" },
+  "SessionImportSettings.handoff": { "zh": "历史移交", "en": "History handoff" },
+  "SessionImportSettings.handoffHint": { "zh": "下一条消息会通过已导入的历史继续，不恢复来源产品的原生会话。", "en": "Your next message continues from the imported history in a new native session." },
   "SessionImportSettings.agentFilter": {
     "zh": "Agent",
     "en": "Agent"

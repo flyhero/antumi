@@ -1,5 +1,5 @@
 import { AgentProfileStore } from './agent-profile-store'
-import { AgentProfileService } from './agent-profile-service'
+import { AgentProfileService, readyAgents } from './agent-profile-service'
 import { AgentCliMaintenance } from './agent-cli-maintenance'
 import { randomBytes } from 'node:crypto'
 import { mkdir, rm, stat } from 'node:fs/promises'
@@ -363,14 +363,19 @@ const profiles = new AgentProfileService(new AgentProfileStore(paths.database), 
     server?.broadcast('agentCalls.changed', { call })
     conversations.refreshDelegation(call.parentId)
   }
-}, (id) => terminals.stopForConversation(id), (conversation) => !conversation.taskId || !service.get(conversation.taskId).squadId)
+}, (id) => terminals.stopForConversation(id), (conversation) => !conversation.taskId || !service.get(conversation.taskId).squadId,
+{
+  ready: () => readyAgents(environment.current(), modelProviders.list(), chatSettings.current().disabledAgents),
+  disabled: () => chatSettings.current().disabledAgents,
+  usage: () => standingUsage.list()
+})
 service.setSquads(squads)
 conversations.setSquadGuard((conversation) => { squads.guardMember(conversation); profiles.guard(conversation) })
 squads.setProfiles((id) => profiles.get(id))
 conversations.setCallCleanup((id) => profiles.cancelForParent(id))
 service.setDelegationBusy((id) => profiles.busy(id))
 conversations.setDelegationStatus((id) => profiles.summary(id))
-conversations.setDelegationAvailable((id) => profiles.available(id).length > 0)
+conversations.setDelegationAvailable((id) => profiles.delegates(id))
 
 const terminals = new TerminalService(paths.database, daemon, (list) => server?.broadcast('terminals.changed', { terminals: list }), Date.now, new ShellPrompt(path.join(paths.home, 'shell')))
 // Looked for where the daemon looks: it was started with the same PATH as core.

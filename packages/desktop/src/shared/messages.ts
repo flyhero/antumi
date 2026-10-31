@@ -305,6 +305,7 @@ export const MESSAGES = {
   "AgentProfiles.expertise": {"zh": "擅长的工作与调用时机", "en": "Expertise and when to call"},
   "AgentProfiles.instructions": {"zh": "工作指令", "en": "Instructions"},
   "AgentProfiles.engine": {"zh": "外部智能体", "en": "External agent"},
+  "AgentProfiles.allowEdits": {"zh": "允许修改文件", "en": "Allow file edits"},
   "AgentProfiles.callable": {"zh": "允许调用的智能体", "en": "Agents it can call"},
   "AgentProfiles.callableHint": {"zh": "选中的智能体可在主会话中接受委派；子会话完成工作后返回结果。", "en": "Selected agents can receive delegated work from the main conversation and return results."},
   "AgentProfiles.skills": {"zh": "技能", "en": "Skills"},

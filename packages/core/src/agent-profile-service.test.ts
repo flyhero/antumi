@@ -2,8 +2,8 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { type AgentProfile } from '@antumi/protocol'
-import { AgentProfileService, delegatedMode } from './agent-profile-service'
+import { ModelProvider, type AgentKind, type AgentProfile, type AgentUsage } from '@antumi/protocol'
+import { AgentProfileService, delegatedMode, readyAgents, type ReadyAgent } from './agent-profile-service'
 import { AgentProfileStore } from './agent-profile-store'
 import { TaskStore } from './task-store'
 import { ConversationStore } from './conversation-store'
@@ -23,6 +23,9 @@ describe('reusable agent roles and delegated work', () => {
   let profiles: AgentProfileService
   let reviewer: AgentProfile
   let parentId: string
+  let ready: ReadyAgent[]
+  let disabled: AgentKind[]
+  let usage: AgentUsage[]
   const waitFor = async (check: () => boolean) => { await expect.poll(check, { timeout: 5000 }).toBe(true) }
   const complete = (sessionId: string, text = 'verified the change', failed = false) => {
     daemon.emit(sessionId, { type: 'assistant', uuid: `a-${sessionId}-${daemon.writes.length}`, message: { id: `m-${sessionId}-${daemon.writes.length}`, content: [{ type: 'text', text }] }, parent_tool_use_id: null })
@@ -42,7 +45,9 @@ describe('reusable agent roles and delegated work', () => {
       if (event.type === 'changed' || event.type === 'chatItems') profiles.tick()
     }, projects, new AttachmentStore(path.join(root, 'attachments')))
     store = new AgentProfileStore(db)
-    profiles = new AgentProfileService(store, chats, { profile: () => {}, call: () => {} })
+    ready = []; disabled = []; usage = []
+    profiles = new AgentProfileService(store, chats, { profile: () => {}, call: () => {} }, undefined, undefined,
+      { ready: () => ready, disabled: () => disabled, usage: () => usage })
     chats.setSquadGuard((conversation) => profiles.guard(conversation))
     chats.setCallCleanup((id) => profiles.cancelForParent(id))
     chats.setCapacity({ maxConcurrentAgents: 20, agentConcurrency: { claude: 6 } }, () => profiles.tick())
@@ -90,6 +95,64 @@ describe('reusable agent roles and delegated work', () => {
     conversations.setProfile(parentId, profiles.save({ name: 'Restricted', agent: 'claude', callableProfiles: [] }))
     expect(profiles.available(parentId)).toEqual([])
     await expect(profiles.dispatch(parentId, reviewer.id, 'Not allowed')).rejects.toMatchObject({ reason: 'agent-call-forbidden' })
+  })
+  it('calls a ready agent without a profile, read-only unless asked, never from a profile caller', async () => {
+    ready = [{ agent: 'claude', modelProvider: null }]
+    expect(profiles.targets(parentId)).toEqual([
+      { profileId: reviewer.id, name: 'Reviewer', description: '', agent: 'claude', capability: 'readOnly', readOnly: true, quota: { state: 'unknown', window: null, stale: false } },
+      { profileId: null, name: 'Claude Code', description: '', agent: 'claude', capability: null, readOnly: true, quota: { state: 'unknown', window: null, stale: false } }
+    ])
+    const call = await profiles.dispatch(parentId, { agent: 'claude' }, 'Look into the failure', 'direct-1')
+    expect(call).toMatchObject({ readOnly: true, profile: { agent: 'claude', name: 'Claude Code', instructions: '', capability: 'readOnly', modelProvider: null } })
+    expect(profiles.list().some((profile) => profile.id === call.profile.id)).toBe(false)
+    await waitFor(() => store.call(call.id).state === 'running')
+    expect(chats.get(call.conversationId)).toMatchObject({ parentConversationId: parentId, agentCallId: call.id, workspaceReadOnly: true })
+    expect(await profiles.dispatch(parentId, { agent: 'claude' }, 'Look into the failure', 'direct-1')).toMatchObject({ id: call.id })
+    await expect(profiles.dispatch(parentId, reviewer.id, 'Look into the failure', 'direct-1')).rejects.toMatchObject({ reason: 'invalid-params' })
+    await expect(profiles.dispatch(parentId, { agent: 'codex' }, 'Not ready')).rejects.toMatchObject({ reason: 'agent-call-forbidden' })
+    await profiles.cancelForParent(parentId)
+    expect(await profiles.dispatch(parentId, { agent: 'claude', capability: 'develop' }, 'Fix it')).toMatchObject({ readOnly: false, permissionMode: 'ask' })
+    await profiles.cancelForParent(parentId)
+    conversations.setProfile(parentId, profiles.save({ name: 'Restricted', agent: 'claude', callableProfiles: [] }))
+    expect(profiles.targets(parentId).filter((target) => target.profileId === null)).toEqual([])
+    await expect(profiles.dispatch(parentId, { agent: 'claude' }, 'Not allowed')).rejects.toMatchObject({ reason: 'agent-call-forbidden' })
+  })
+  it('asks for develop from an agent that cannot work read-only', async () => {
+    ready = [{ agent: 'gemini', modelProvider: null }]
+    expect(profiles.targets(parentId).at(-1)).toMatchObject({ profileId: null, name: 'Gemini CLI', readOnly: false })
+    await expect(profiles.dispatch(parentId, { agent: 'gemini' }, 'Read only')).rejects.toMatchObject({ reason: 'invalid-params' })
+  })
+  it('offers the agents that can start, on the provider that serves them where not signed in', () => {
+    const tool = (name: 'claude' | 'codex' | 'cursor', fields: object) => ({ tool: name, status: 'ok' as const, version: '1.0.0', path: `/bin/${name}`, signedIn: false, ...fields })
+    const environment = { checks: [tool('claude', {}), tool('codex', { signedIn: true }), tool('cursor', { status: 'missing' })], checkedAt: 0, searchPath: [] }
+    const provider = ModelProvider.parse({ id: 'test', name: 'Test', preset: 'custom', anthropic: { baseUrl: 'https://api.example.com', auth: 'api_key', env: {} }, openai: null, models: [{ id: 'model', label: null, contextWindow: null, maxOutput: null, efforts: [] }], defaultModel: 'model', smallModel: 'model', agents: ['claude'], hasKey: true, revision: 0, createdAt: 0, updatedAt: 0 })
+    expect(readyAgents(null, [], [])).toEqual([])
+    expect(readyAgents(environment, [], [])).toEqual([{ agent: 'codex', modelProvider: null }])
+    expect(readyAgents(environment, [provider], [])).toEqual([{ agent: 'claude', modelProvider: 'test' }, { agent: 'codex', modelProvider: null }])
+    expect(readyAgents(environment, [provider], ['codex'])).toEqual([{ agent: 'claude', modelProvider: 'test' }])
+  })
+  it('delegates to nothing on an agent the user turned off', async () => {
+    disabled = ['claude']
+    expect(profiles.targets(parentId)).toEqual([])
+    await expect(profiles.dispatch(parentId, reviewer.id, 'Review it')).rejects.toMatchObject({ reason: 'agent-call-forbidden' })
+  })
+  it('shows each target\'s quota and refuses one whose quota is used up', async () => {
+    const resetsAt = Date.now() + 3_600_000
+    const reading = (usedPercent: number, model: string | null = null): AgentUsage => ({ agent: 'claude', status: 'ok', plan: null, error: null, updatedAt: Date.now(), resetCredits: null,
+      windows: [{ kind: 'session', model, usedPercent, windowMinutes: 300, resetsAt }] })
+    ready = [{ agent: 'claude', modelProvider: null }, { agent: 'codex', modelProvider: 'test' }]
+    usage = [reading(40)]
+    expect(profiles.targets(parentId).map((target) => [target.name, target.quota.state, target.quota.window?.usedPercent ?? null])).toEqual([
+      ['Reviewer', 'ok', 40], ['Claude Code', 'ok', 40], ['Codex', 'provider', null]
+    ])
+    usage = [reading(100)]
+    await expect(profiles.dispatch(parentId, reviewer.id, 'Review it')).rejects.toMatchObject({ reason: 'agent-quota-exhausted' })
+    await expect(profiles.dispatch(parentId, { agent: 'claude' }, 'Look into it')).rejects.toMatchObject({ reason: 'agent-quota-exhausted' })
+    expect((await profiles.dispatch(parentId, { agent: 'codex' }, 'Look into it')).profile.modelProvider).toBe('test')
+    // A cap on one model stops only a call that runs on it.
+    usage = [reading(100, 'opus')]
+    expect((await profiles.dispatch(parentId, { agent: 'claude', model: 'sonnet' }, 'Look into it')).state).toBe('queued')
+    await expect(profiles.dispatch(parentId, { agent: 'claude', model: 'opus' }, 'Look into it')).rejects.toMatchObject({ reason: 'agent-quota-exhausted' })
   })
   it('lets a developing member work in the caller\'s mode, all-allowed included', async () => {
     const developer = profiles.save({ name: 'Developer', agent: 'claude', capability: 'develop' })

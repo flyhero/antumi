@@ -10,6 +10,7 @@ import {
   type AgentRecommendation,
   type AgentUsage,
   type ChatModel,
+  type DelegationQuota,
   type QuotaVerdict
 } from '@antumi/protocol'
 import { useCore } from '../core-store'
@@ -62,6 +63,11 @@ export function quotaText(verdict: QuotaVerdict, display: Preferences['usageDisp
   }
   const used = Math.round(window.usedPercent)
   return `${windowLabel(window)} ${display === 'remaining' ? t('AgentQuota.remaining', { value1: 100 - used }) : t('AgentQuota.used', { used: used })}${stale}`
+}
+
+// The same for whom work is delegated to; nothing for one on a model provider, which has no quota.
+export function delegationQuotaText(quota: DelegationQuota, display: Preferences['usageDisplay'], now: number): string | null {
+  return quota.state === 'provider' ? null : quotaText({ state: quota.state, window: quota.window, stale: quota.stale }, display, now)
 }
 
 // The agent's tightest window, for wherever it is about to be picked. Says nothing while the usage

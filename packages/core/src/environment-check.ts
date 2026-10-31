@@ -130,6 +130,9 @@ export class EnvironmentService {
     this.now = options.now ?? Date.now
   }
 
+  // The last look, if any, without waiting on one.
+  current(): Environment | null { return this.last }
+
   check(refresh = false): Promise<Environment> {
     // An explicit refresh after installation must not reuse a look that started before it.
     if (this.pending) return refresh ? this.pending.then(() => this.check(true)) : this.pending

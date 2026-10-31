@@ -54,7 +54,10 @@ export const ChatSettings = z.object({
   autoArchiveDays: z.number().int().min(1).max(365).nullable().optional(),
   // Whether core asks limitreset.net, hourly, about the resets agents' services announce for
   // everyone (AgentUsage.globalResets). Older cores omit it.
-  resetAnnouncements: z.boolean().optional()
+  resetAnnouncements: z.boolean().optional(),
+  // The agents the user turned off on the desktop, mirrored so that core delegates to none of them.
+  // Older cores omit it.
+  disabledAgents: z.array(AgentKind).optional()
 })
 export type ChatSettings = z.infer<typeof ChatSettings>
 

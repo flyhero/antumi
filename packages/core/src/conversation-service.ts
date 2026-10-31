@@ -1227,7 +1227,7 @@ export class ConversationService {
     const profile = conversation.profile
     const notes = [profile ? `你是用户配置的智能体「${profile.name}」。\n${profile.instructions}` : '']
     if (this.delegationAvailable?.(conversation.id) && !conversation.parentConversationId && !conversation.discussionId && !conversation.squadRunId && !conversation.routineId && !isHelper(conversation)) {
-      notes.push('用户用 @ 点名智能体时，先查找对应智能体并委派，不要自行代替它回答。需要其他专业智能体协助时，可用 Antumi 的 antumi_agent_list 查找可调用的智能体，再用 antumi_agent_dispatch 委派具体子任务（说明目标、必要背景、文件范围和交付要求）。这是独立子会话，不自动继承聊天历史。调用后结束当前回合，Antumi 会在结果就绪后自动继续当前会话。用 antumi_agent_status 查看进度；不要反复轮询。')
+      notes.push('用户用 @ 点名智能体时，先查找对应智能体并委派，不要自行代替它回答。需要其他专业智能体协助时，可用 Antumi 的 antumi_agent_list 查找可调用的智能体（用户配置的，以及本机可直接调用的外部智能体），再用 antumi_agent_dispatch 委派具体子任务（说明目标、必要背景、文件范围和交付要求）。这是独立子会话，不自动继承聊天历史。调用后结束当前回合，Antumi 会在结果就绪后自动继续当前会话。用 antumi_agent_status 查看进度；不要反复轮询。')
     }
     return notes.filter(Boolean).join('\n\n')
   }

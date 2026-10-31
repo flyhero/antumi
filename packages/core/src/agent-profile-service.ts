@@ -1,13 +1,32 @@
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { adapterOf } from './agents'
-import { agentCallOpen, agentDescriptor, AgentCall, type AgentProfile, type AgentProfileFields, type ChatItem, type Conversation, isHelper } from '@antumi/protocol'
+import { AGENT_KINDS, agentCallOpen, agentDescriptor, agentReadiness, AgentCall, AgentProfile, quotaVerdict, type AgentKind, type AgentProfileFields, type AgentUsage, type ChatItem, type Conversation, type DelegationQuota, type DelegationTarget, type DirectAgentCall, type Environment, type ModelProvider, isHelper } from '@antumi/protocol'
 import type { ConversationService } from './conversation-service'
 import { AgentProfileStore } from './agent-profile-store'
 import { Rejection } from './rejection'
 
 type Chats = Pick<ConversationService, 'get' | 'listAll' | 'create' | 'continue' | 'resumeDelegation' | 'send' | 'stop' | 'interrupt' | 'chatPage' | 'messages' | 'capacityAvailable' | 'validateStartOptions' | 'turnOver' | 'agentIdle' | 'allowsBypass'>
 const refOf = (call: AgentCall) => `agent-call:${call.id}`
+
+// An agent ready to be called as it is, and the provider it runs on when not on its own account.
+export type ReadyAgent = { agent: AgentKind; modelProvider: string | null }
+// Whatever might start and the user has not turned off: signed in, on a provider, or one whose
+// sign-in shows only once it runs.
+const STARTABLE = new Set(['ready', 'unknown-auth', 'authorize-on-use'])
+export function readyAgents(environment: Environment | null, providers: readonly ModelProvider[], disabled: readonly AgentKind[]): ReadyAgent[] {
+  return AGENT_KINDS.flatMap((agent) => {
+    const readiness = agentReadiness(agent, environment, disabled, providers)
+    if (!STARTABLE.has(readiness.state)) return []
+    return [{ agent, modelProvider: readiness.state === 'ready' && readiness.via === 'provider' ? readiness.provider.id : null }]
+  })
+}
+
+// What delegating asks of the machine: the agents ready to be called as they are, those the user
+// turned off, and each agent's quota as what runs on it next sees it.
+export type DelegationSources = { ready(): readonly ReadyAgent[]; disabled(): readonly AgentKind[]; usage(): readonly AgentUsage[] }
+const NO_SOURCES: DelegationSources = { ready: () => [], disabled: () => [], usage: () => [] }
+const resetClock = (at: number) => new Date(at).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })
 
 // Most to least left to the agent. Planning and read-only callers never get here: their members read.
 const DEVELOP_MODES = ['bypass', 'auto', 'acceptEdits', 'ask']
@@ -32,7 +51,8 @@ export class AgentProfileService {
   constructor(private readonly store: AgentProfileStore, private readonly chats: Chats,
     private readonly events: { profile: (profile: AgentProfile) => void; call: (call: AgentCall) => void },
     private readonly stopTerminals: (id: string) => Promise<void> = async () => {},
-    private readonly scopeAllowed: (conversation: Conversation) => boolean = () => true) {}
+    private readonly scopeAllowed: (conversation: Conversation) => boolean = () => true,
+    private readonly sources: DelegationSources = NO_SOURCES) {}
 
   list(): AgentProfile[] { return this.store.list() }
   get(id: string): AgentProfile {
@@ -74,21 +94,51 @@ export class AgentProfileService {
     if (this.closed) return []
     const parent = this.chats.get(id)
     if (!this.canDelegate(parent)) return []
-    return this.list().filter((profile) => profile.archivedAt === null && profile.id !== parent.profile?.id
+    const disabled = this.sources.disabled()
+    return this.list().filter((profile) => profile.archivedAt === null && profile.id !== parent.profile?.id && !disabled.includes(profile.agent)
       && (!parent.profile || parent.profile.callableProfiles.includes(profile.id)))
   }
+  // A conversation running as a profile calls only the profiles it lists.
+  private agents(id: string): ReadyAgent[] {
+    if (this.closed) return []
+    const parent = this.chats.get(id)
+    return this.canDelegate(parent) && !parent.profile ? [...this.sources.ready()] : []
+  }
+  delegates(id: string): boolean { return this.available(id).length > 0 || this.agents(id).length > 0 }
+  // Everyone it can delegate to, profiles first, each with what it has left.
+  targets(id: string): DelegationTarget[] {
+    const readOnly = (agent: AgentKind) => agentDescriptor(agent).capabilities.readOnly !== false
+    return [
+      ...this.available(id).map((profile) => ({ profileId: profile.id, name: profile.name, description: profile.description, agent: profile.agent,
+        capability: profile.capability, readOnly: readOnly(profile.agent), quota: this.quota(profile.agent, profile.model, profile.modelProvider) })),
+      ...this.agents(id).map(({ agent, modelProvider }) => ({ profileId: null, name: agentDescriptor(agent).label, description: '', agent,
+        capability: null, readOnly: readOnly(agent), quota: this.quota(agent, null, modelProvider) }))
+    ]
+  }
+  private quota(agent: AgentKind, model: string | null, modelProvider: string | null): DelegationQuota {
+    if (modelProvider) return { state: 'provider', window: null, stale: false }
+    return quotaVerdict(this.sources.usage().find((entry) => entry.agent === agent), Date.now(), model)
+  }
   calls(id: string): AgentCall[] { this.chats.get(id); return this.store.calls(id) }
-  async dispatch(id: string, profileId: string, instruction: string, ref?: string): Promise<AgentCall> {
+  // target: a saved profile's id, or an agent called as it is.
+  async dispatch(id: string, target: string | DirectAgentCall, instruction: string, ref?: string): Promise<AgentCall> {
     return this.serially(async () => {
       const parent = this.chats.get(id)
       if (!this.canDelegate(parent)) throw new Rejection('agent-call-unavailable', '当前会话不能委派子任务')
       const existing = ref ? this.store.calls(id).find((call) => call.ref === ref) : null
       if (existing) {
-        if (existing.profile.id !== profileId || existing.instruction !== instruction.trim()) throw new Rejection('invalid-params', '委派引用已经用于其他工作')
+        const same = typeof target === 'string' ? existing.profile.id === target
+          : existing.profile.agent === target.agent && !this.list().some((profile) => profile.id === existing.profile.id)
+        if (!same || existing.instruction !== instruction.trim()) throw new Rejection('invalid-params', '委派引用已经用于其他工作')
         return existing
       }
-      const profile = this.available(id).find((each) => each.id === profileId)
+      const profile = typeof target === 'string' ? this.available(id).find((each) => each.id === target) : this.direct(id, target)
       if (!profile) throw new Rejection('agent-call-forbidden', '此会话不能调用这个智能体')
+      const quota = this.quota(profile.agent, profile.model, profile.modelProvider)
+      if (quota.state === 'exhausted') {
+        const reset = quota.window?.resetsAt ? `，${resetClock(quota.window.resetsAt)} 重置` : ''
+        throw new Rejection('agent-quota-exhausted', `${profile.name} 的额度已用完${reset}。请换一个智能体，或等额度恢复后再委派`)
+      }
       if (this.store.calls(id).filter(agentCallOpen).length >= 10) throw new Rejection('agent-call-limit', '请先等待已有委派完成')
       const readOnly = profile.capability === 'readOnly' || Boolean(parent.workspaceReadOnly || parent.planOnly)
         || ['plan', 'readOnly'].includes(parent.chatOptions?.permissionMode ?? '')
@@ -102,6 +152,17 @@ export class AgentProfileService {
       this.tick()
       return call
     })
+  }
+  // The profile a direct call runs as: the agent's own settings, no instructions, read-only unless asked.
+  private direct(id: string, target: DirectAgentCall): AgentProfile | null {
+    const ready = this.agents(id).find((each) => each.agent === target.agent)
+    if (!ready) return null
+    const { label, capabilities } = agentDescriptor(target.agent)
+    const capability = target.capability ?? 'readOnly'
+    if (capability === 'readOnly' && capabilities.readOnly === false) throw new Rejection('invalid-params', `${label} 不能只读工作，需要修改文件时请指定 capability: develop`)
+    const at = Date.now()
+    return AgentProfile.parse({ id: randomUUID(), name: label, agent: target.agent, model: target.model ?? null, effort: target.effort ?? null,
+      modelProvider: ready.modelProvider, capability, archivedAt: null, createdAt: at, updatedAt: at })
   }
   guard(conversation: Conversation): void {
     if (this.closed) throw new Rejection('core-stopping')

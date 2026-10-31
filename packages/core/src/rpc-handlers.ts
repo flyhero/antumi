@@ -223,7 +223,12 @@ export function createRpcHandlers(
     'agentProfiles.archive': ({ id, archived }) => profileService().archive(id, archived),
     'agentProfiles.available': ({ id }) => profileService().available(id),
     'agentCalls.list': ({ id }) => profileService().calls(id),
-    'agentCalls.dispatch': ({ id, profileId, instruction, ref }) => profileService().dispatch(id, profileId, instruction, ref),
+    'agentCalls.targets': ({ id }) => profileService().targets(id),
+    'agentCalls.dispatch': ({ id, profileId, agent, model, effort, capability, instruction, ref }) => {
+      const target = profileId && !agent ? profileId : agent && !profileId ? { agent, model, effort, capability } : null
+      if (!target) throw new Rejection('invalid-params', '请指定 profileId 或 agent 之一')
+      return profileService().dispatch(id, target, instruction, ref)
+    },
     'agentCalls.cancel': ({ id, callId }) => profileService().cancel(id, callId),
     'squads.list': () => squadService().list(),
     'squads.create': (fields) => squadService().create(fields),

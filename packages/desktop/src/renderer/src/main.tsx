@@ -17,6 +17,7 @@ import { ConfirmDialog } from './components/ConfirmDialog'
 import { SettingsPage } from './components/SettingsPage'
 import { applyTitleBar } from './desktop-bridge'
 import { startNotifications } from './notifications'
+import { startDisabledAgentsMirror } from './installed-agents'
 import { followPreferences } from './preferences'
 import { startUnsavedEditRetries } from './unsaved-edits'
 import { startUiLanguage } from './language'
@@ -61,6 +62,7 @@ if (playground) {
   startUnsavedEditRetries()
   startWorktreeUpdates()
   startNotifications()
+  startDisabledAgentsMirror()
   startPanelWindowHost()
 }
 

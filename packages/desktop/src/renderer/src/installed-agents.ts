@@ -32,6 +32,23 @@ export function otherInstalledAgent(agent: AgentKind, installed: readonly AgentK
   return installed.find((kind) => kind !== agent) ?? null
 }
 
+// Core delegates to no agent turned off here, so it keeps the list too (ChatSettings.disabledAgents):
+// sent on connecting and on each change, where it differs. A send that fails is not retried until
+// the list or the connection changes.
+export function startDisabledAgentsMirror(): void {
+  let sent: { rpc: unknown; key: string } | null = null
+  const mirror = () => {
+    const { rpc, chatSettings } = useCore.getState()
+    const wanted = [...usePreferences.getState().disabledAgents].sort()
+    const key = wanted.join(',')
+    if (!rpc || !chatSettings?.disabledAgents || key === [...chatSettings.disabledAgents].sort().join(',') || (sent?.rpc === rpc && sent.key === key)) return
+    sent = { rpc, key }
+    rpc.call('system.setChatSettings', { disabledAgents: wanted }).then((settings) => useCore.setState({ chatSettings: settings }), () => {})
+  }
+  useCore.subscribe(mirror)
+  usePreferences.subscribe(mirror)
+}
+
 export function useInstalledAgents(): readonly AgentKind[] {
   const environment = useCore((s) => s.environment)
   const disabled = usePreferences((s) => s.disabledAgents)

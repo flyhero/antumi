@@ -6,6 +6,7 @@
 .delegation-hint { margin: -6px 0 0; font-size: 12px; line-height: 1.6; }
 .delegation-field { display: flex; flex-direction: column; gap: 8px; font-size: 12px; }
 .delegation-field textarea { resize: vertical; min-height: 64px; max-height: 200px; font: inherit; line-height: 1.6; }
+.delegation-check { display: flex; align-items: center; gap: 8px; font-size: 12px; }
 .delegation-dialog .modal-footer { gap: 8px; justify-content: flex-end; }
 .delegation-history { margin-right: auto; font-size: 12px; }
 .delegation-panel { padding: 0 16px 24px; }

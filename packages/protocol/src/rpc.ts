@@ -164,7 +164,8 @@ export const rpcMethods = {
   'agentProfiles.save': { params: AgentProfileFields.extend({ id: z.string().uuid().optional() }), result: AgentProfile },
   'agentProfiles.archive': { params: z.object({ id: z.string().uuid(), archived: z.boolean() }), result: AgentProfile },
   'agentProfiles.available': { params: ConversationRef, result: z.array(AgentProfile) },
-  'agentCalls.list': { params: ConversationRef, result: z.array(AgentCall) },
+  // read: from the caller's own status tool, whose reading returns the finished results it sees.
+  'agentCalls.list': { params: ConversationRef.extend({ read: z.boolean().optional() }), result: z.array(AgentCall) },
   // Profiles and ready agents a conversation can delegate to, with their quota (feature direct-agent-calls).
   'agentCalls.targets': { params: ConversationRef, result: z.array(DelegationTarget) },
   // A saved profile by profileId, or, on a core with direct-agent-calls, an agent as it is.

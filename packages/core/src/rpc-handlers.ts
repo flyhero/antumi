@@ -222,7 +222,7 @@ export function createRpcHandlers(
     'agentProfiles.save': ({ id, ...fields }) => profileService().save(fields, id),
     'agentProfiles.archive': ({ id, archived }) => profileService().archive(id, archived),
     'agentProfiles.available': ({ id }) => profileService().available(id),
-    'agentCalls.list': ({ id }) => profileService().calls(id),
+    'agentCalls.list': ({ id, read }) => read ? profileService().read(id) : profileService().calls(id),
     'agentCalls.targets': ({ id }) => profileService().targets(id),
     'agentCalls.dispatch': ({ id, profileId, agent, model, effort, capability, instruction, ref }) => {
       const target = profileId && !agent ? profileId : agent && !profileId ? { agent, model, effort, capability } : null

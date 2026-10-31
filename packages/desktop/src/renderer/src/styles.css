@@ -340,7 +340,8 @@ textarea {
 /* Above the chat's sticky header (2), which would hide the half of the line over the chat. */
 :root:not([data-backdrop]) .workspace > .side-panel-separator { z-index: 3; }
 :root:not([data-backdrop]) .workspace > .side-panel-separator::before { content: ''; position: absolute; inset: 0 -4px; }
-:root:not([data-backdrop]) .workspace > .side-panel-separator::after { top: 0; bottom: 0; }
+/* The border lighting up, 2px whatever the state, as the sidebar's edge does. */
+:root:not([data-backdrop]) .workspace > .side-panel-separator::after { top: 0; bottom: 0; width: 2px; }
 :root:not([data-backdrop]) .workspace > .side-panel-separator:not(:hover, :focus-visible, [data-dragging='true'])::after { background: transparent; }
 
 /* Maximized it fills the window, which has nothing else to set it off from. */

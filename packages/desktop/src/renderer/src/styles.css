@@ -8253,8 +8253,8 @@ div.inspector-empty > p { margin: 0 0 8px; }
 .chat-picker-chip:disabled { cursor: default; opacity: 0.5; }
 .chat-picker-item { align-items: flex-start; }
 .chat-picker-item-text { display: flex; flex: 1; flex-direction: column; gap: 1px; min-width: 0; }
-.chat-picker-item-label { white-space: nowrap; }
-.chat-picker-item-description { color: var(--text-muted); font-size: 11px; line-height: 1.4; white-space: normal; }
+.chat-picker-item-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-picker-item-description { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; color: var(--text-muted); font-size: 11px; line-height: 1.4; white-space: normal; overflow-wrap: anywhere; }
 .chat-picker-item .menu-check { align-self: center; }
 
 .chat-context {

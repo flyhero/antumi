@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import type { ChatItem } from '@antumi/protocol'
-import { ChatApprovalCard } from './ChatRequestCards'
+import { ChatApprovalCard, ChatRequestLine } from './ChatRequestCards'
 
 vi.mock('../core-store', () => ({ perform: vi.fn() }))
 
@@ -21,6 +21,15 @@ describe('approval card', () => {
     const html = render()
     expect(html).toContain('子 Agent 的请求：Not in allowlist: rg')
     expect(html).toContain(`<pre>${command.replace('&&', '&amp;&amp;')}</pre>`)
+  })
+  it('names a call to Antumi\'s tools as the timeline does, not by the agent\'s title for it', () => {
+    const input = JSON.stringify({ agent: 'claude', instruction: '计算 1+2', ref: 'calc-1-plus-2' })
+    const item: ApprovalItem = { ...approval, tool: 'antumi.antumi_agent_dispatch', title: 'antumi-antumi_agent_dispatch: antumi_agent_dispatch', detail: null, toolItemId: 'tool:call' }
+    const tool: ToolItem = { id: 'tool:call', stageId: 'stage', revision: 1, at: 0, kind: 'tool', name: 'antumi.antumi_agent_dispatch', title: 'antumi: antumi_agent_dispatch', input, status: 'running', output: null, diffs: [] }
+    for (const html of [renderToStaticMarkup(createElement(ChatApprovalCard, { conversationId: 'conversation', item, tool })), renderToStaticMarkup(createElement(ChatRequestLine, { item, tool }))]) {
+      expect(html).toContain('calc-1-plus-2')
+      expect(html).not.toContain('antumi-antumi_agent_dispatch')
+    }
   })
   it('takes the command from the call when the chat has it', () => {
     const tool: ToolItem = { id: 'tool:inner', stageId: 'stage', revision: 1, at: 0, kind: 'tool', name: 'commandExecution', title: 'rg', input: 'rg -n session', status: 'running', output: null, diffs: [] }

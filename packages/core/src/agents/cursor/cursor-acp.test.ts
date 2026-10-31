@@ -69,6 +69,8 @@ describe('Cursor ACP', () => {
       expect(items(driver, 'user').some((item) => item.text.includes('CURSOR_TERMINAL_OK'))).toBe(false)
     } else {
       expect(items(driver, 'tool').find((tool) => tool.name === 'antumi.terminal_run')).toMatchObject({ status: 'done', input: '{"command":"printf CURSOR_TERMINAL_OK"}' })
+      // The arguments Cursor fences into its request are the call's input, not why it asks.
+      expect(items(driver, 'approval').find((approval) => approval.tool === 'antumi.terminal_run')).toMatchObject({ detail: null })
     }
     for (const item of driver.items.list()) expect(ChatItem.safeParse(item).success).toBe(true)
   })

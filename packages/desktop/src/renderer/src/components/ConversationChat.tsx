@@ -102,6 +102,8 @@ const Thoughts = createContext<ReadonlyMap<string, number>>(new Map())
 // The turn item that closes a final reply, by the reply's block key: its outcome reads on the
 // reply's own line of actions, and the turn's own line is left out.
 const Endings = createContext<ReadonlyMap<string, TurnItem>>(new Map())
+// Each call by its item id, for a request to be told by the call it asks about.
+const ToolItems = createContext<ReadonlyMap<string, Extract<ChatItem, { kind: 'tool' }>>>(new Map())
 const MergedTurns = createContext<ReadonlySet<string>>(new Set())
 // Final replies whose actions a turn's change card carries: finished, though they show no time.
 const CarriedReplies = createContext<ReadonlySet<string>>(new Set())
@@ -355,6 +357,7 @@ function AssistantReply({ conversationId, item, completedAt, ending, blockKey }:
 
 function Item({ conversationId, item, completedAt, blockKey }: { conversationId: string; item: ChatItem; completedAt: number | undefined; blockKey: string }) {
   const ending = useContext(Endings).get(blockKey)
+  const tools = useContext(ToolItems)
   const compact = useContext(ChatVariant) === 'compact'
   switch (item.kind) {
     case 'user':
@@ -369,7 +372,7 @@ function Item({ conversationId, item, completedAt, blockKey }: { conversationId:
       if (isBrowserTool(item.name)) return <ChatBrowserCard item={item} />
       return item.images?.length || toolImagePath(item) || item.name === CODEX_IMAGE_GENERATION ? <ChatShotCard item={item} /> : <ChatToolCard item={item} />
     case 'approval':
-      return isPlanApproval(item) ? <ChatPlanLine item={item} /> : <ChatRequestLine item={item} />
+      return isPlanApproval(item) ? <ChatPlanLine item={item} /> : <ChatRequestLine item={item} tool={item.toolItemId ? tools.get(item.toolItemId) : undefined} />
     case 'question':
       return <ChatRequestLine item={item} />
     case 'turn':
@@ -895,6 +898,7 @@ export function ConversationChat({ conversation, surface, onHandoff, variant = '
     <ChatRunScope.Provider value={runScope}>
     <Thoughts.Provider value={thoughts}>
     <Endings.Provider value={endings}>
+    <ToolItems.Provider value={tools}>
     <MergedTurns.Provider value={mergedTurns}>
     <CarriedReplies.Provider value={carried}>
     <ChatDisclosureScope.Provider value={id}>
@@ -982,6 +986,7 @@ export function ConversationChat({ conversation, surface, onHandoff, variant = '
     </ChatDisclosureScope.Provider>
     </CarriedReplies.Provider>
     </MergedTurns.Provider>
+    </ToolItems.Provider>
     </Endings.Provider>
     </Thoughts.Provider>
     </ChatRunScope.Provider>

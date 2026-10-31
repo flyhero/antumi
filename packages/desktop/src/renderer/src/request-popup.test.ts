@@ -69,6 +69,23 @@ describe('islandActivity', () => {
       ['a', '会话 a', { kind: 'conversation', id: 'a' }, 'running']
     ])
   })
+
+  it('drops an unseen reply of a task marked done or abandoned, but not an agent still at work there', () => {
+    const conversations = byId([
+      conversation('done', { taskId: 't1' }),
+      conversation('abandoned'),
+      conversation('working', { chat: { turn: 'running' }, taskId: 't3' }),
+      conversation('open', { taskId: 't4' })
+    ])
+    const tasks = byId([
+      task('t1', { status: 'done' }),
+      task('t2', { status: 'abandoned', conversationId: 'abandoned' }),
+      task('t3', { status: 'done' }),
+      task('t4', { status: 'review' })
+    ])
+    const activity = islandActivity({ conversations, tasks }, new Set(['done', 'abandoned', 'working', 'open']))
+    expect(activity.map((entry) => [entry.conversationId, entry.state])).toEqual([['working', 'running'], ['open', 'replied']])
+  })
 })
 
 describe('popupQueue', () => {

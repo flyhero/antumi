@@ -32,10 +32,14 @@ export function popupQueue(s: Pick<Snapshot, 'tasks' | 'conversations'>, closed:
 export type ActivityEntry = { conversationId: string; title: string; target: ActionableTarget; agent: AgentKind; state: 'running' | 'replied' }
 
 export function islandActivity(s: Pick<Snapshot, 'tasks' | 'conversations'>, unseen: ReadonlySet<string>): ActivityEntry[] {
+  // A task the user closed has nothing left to read, as in the inbox.
+  const closed = (task: Snapshot['tasks'][string] | undefined) => task?.status === 'done' || task?.status === 'abandoned'
+  const settled = new Set(Object.values(s.tasks).flatMap((task) => closed(task) && task.conversationId ? [task.conversationId] : []))
   return Object.values(s.conversations)
     .flatMap((conversation) => {
       if (isHelper(conversation) || conversation.archivedAt != null || waiting(conversation)) return []
-      const state: ActivityEntry['state'] | null = working(conversation) ? 'running' : unseen.has(conversation.id) ? 'replied' : null
+      const read = settled.has(conversation.id) || closed(conversation.taskId ? s.tasks[conversation.taskId] : undefined)
+      const state: ActivityEntry['state'] | null = working(conversation) ? 'running' : unseen.has(conversation.id) && !read ? 'replied' : null
       if (!state) return []
       const { title, target } = named(conversation, s.tasks)
       return [{ conversation, entry: { conversationId: conversation.id, title, target: target.kind === 'task' ? target : { kind: 'conversation' as const, id: conversation.id }, agent: conversation.agent, state } }]

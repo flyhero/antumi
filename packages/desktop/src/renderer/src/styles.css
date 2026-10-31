@@ -10011,6 +10011,9 @@ summary.agent-group-head:focus-visible { outline: 2px solid var(--focus); outlin
 .island-notch { flex: none; width: var(--notch-width); }
 .island-ear { display: flex; align-items: center; gap: 6px; padding: 0 10px; font-size: 12px; white-space: nowrap; color: var(--text-muted); }
 .island-ear:empty { padding: 0; }
+/* Unequal ears must not move the camera housing away from the screen's centre. */
+:root[data-island='notch'] .island-compact { display: grid; grid-template-columns: 1fr auto 1fr; }
+:root[data-island='notch'] .island-ear-leading { justify-content: flex-end; }
 .island-mark { display: grid; place-items: center; flex-shrink: 0; color: var(--text-3); }
 .island-mark .agent-mark { width: 16px; height: 16px; }
 .island-badge[data-tone='accent'] { color: var(--accent); font-weight: 600; }

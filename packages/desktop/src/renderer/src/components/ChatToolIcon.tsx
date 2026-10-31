@@ -1,7 +1,7 @@
 import { useId } from 'react'
 import type { ChatItem, ChatToolStatus } from '@antumi/protocol'
 import { toolIconKind, type ToolIconKind } from '../chat-tools'
-import { BookIcon, BranchIcon, GearIcon, GlobeIcon, ImageIcon, ListIcon, PencilIcon, SearchIcon, TerminalIcon } from './icons'
+import { BookIcon, GearIcon, GlobeIcon, ImageIcon, ListIcon, PencilIcon, RobotIcon, SearchIcon, TerminalIcon } from './icons'
 
 function BrowserControlIcon() {
   return <span className="chat-browser-mark"><span className="chat-browser-mark-cursor" /></span>
@@ -39,7 +39,7 @@ const ICONS = {
   browser: GlobeIcon,
   'browser-control': BrowserControlIcon,
   image: ImageIcon,
-  agent: BranchIcon,
+  agent: RobotIcon,
   list: ListIcon,
   tool: GearIcon
 } satisfies Record<ToolIconKind, () => React.JSX.Element>

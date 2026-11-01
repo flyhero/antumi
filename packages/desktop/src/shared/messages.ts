@@ -4067,6 +4067,17 @@ export const MESSAGES = {
     "zh": "移除成员 {value1}",
     "en": "Remove member {value1}"
   },
+  "discussionFormats.label": {"zh": "讨论方式", "en": "Format"},
+  "discussionFormats.roundtable": {"zh": "圆桌讨论", "en": "Round table"},
+  "discussionFormats.roundtableDescription": {"zh": "梳理共识与分歧", "en": "Sort out agreement and disagreement"},
+  "discussionFormats.roundtableFlow": {"zh": "独立作答 → 互相回应 → 主持人总结", "en": "Answer alone → respond to each other → chair sums up"},
+  "discussionFormats.debate": {"zh": "正反辩论", "en": "Debate"},
+  "discussionFormats.debateDescription": {"zh": "把一个决定的风险逼出来", "en": "Press a decision for its risks"},
+  "discussionFormats.debateFlow": {"zh": "按圆桌进行，成员分正反方、立场不变，3 人以上时最后一位做裁判", "en": "Runs as a round table; members argue fixed sides, the last one judges when there are three or more"},
+  "discussionFormats.relay": {"zh": "接力补充", "en": "Relay"},
+  "discussionFormats.relayDescription": {"zh": "一层层叠出清单或文案", "en": "Build up a list or a draft layer by layer"},
+  "discussionFormats.relayFlow": {"zh": "按圆桌进行，从第 2 轮起每人在别人的基础上补充", "en": "Runs as a round table; from round 2 each adds to what the others wrote"},
+  "discussionFormats.flowAndTurns": {"zh": "{flow} · 最多 {turns} 次发言（不等于额度）", "en": "{flow} · up to {turns} turns (not a measure of quota)"},
   "DraftModeSwitch.label": {"zh": "新建", "en": "Start"},
   "DraftModeSwitch.single": {"zh": "单人会话", "en": "One agent"},
   "DraftModeSwitch.group": {"zh": "群聊讨论", "en": "Group chat"},
@@ -4089,10 +4100,6 @@ export const MESSAGES = {
   "DiscussionDraft.reuseMembersProjectsAndSettingsFromEachMember": {
     "zh": "沿用群聊「{value1}」的成员、项目和设置，各成员从头开始，不带之前的讨论。",
     "en": "Reuse members, projects, and settings from “{value1}”. Each member starts fresh without the previous discussion."
-  },
-  "DiscussionDraft.agentsFirstAnswerIndependentlyThenReviewChallengeOr": {
-    "zh": "几个 Agent 先各自独立作答，再一轮轮看彼此的观点、反驳或修正，最后由主持人总结共识和分歧。讨论始终只读：成员可以读所选项目的代码来佐证，不修改文件、不执行计划。",
-    "en": "Agents first answer independently, then review, challenge, or revise each other's views over several rounds. The chair summarizes agreements and differences. Discussions stay read-only: members can read project code as evidence but cannot edit files or execute plans."
   },
   "DiscussionDraft.topic": {
     "zh": "主题",

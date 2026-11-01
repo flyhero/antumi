@@ -6,6 +6,7 @@
 
 ### 新功能
 
+- 新建群聊可选讨论方式：圆桌讨论、正反辩论或接力补充，选后自动填好立场、主持人和讨论要求。
 - 每个项目自动分配颜色，在侧栏、聊天页头和项目选择器中保持一致，可在设置 → 项目中修改或恢复默认。
 - 导入会话支持 Cursor 桌面和 CLI、OpenCode、Pi、Kimi Code、Gemini CLI、DeepSeek Harness、Antigravity ACP 历史，可恢复原会话或通过历史移交接着聊。
 

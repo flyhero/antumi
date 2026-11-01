@@ -10303,6 +10303,10 @@ button.island-compact:focus-visible { outline: 2px solid var(--focus); outline-o
 .discussion-draft-start > .chat-draft-mode,
 .discussion-draft-start > .chat-draft-hint { align-self: center; text-align: center; }
 .discussion-draft-start p { margin: 0; }
+.discussion-draft-format { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px; }
+.discussion-draft-format-label { color: var(--text-muted); font-size: 13px; }
+.discussion-draft-format-flow { font-size: 12px; }
+.discussion-draft-format-flow b { font-weight: 500; color: var(--text-muted); }
 .discussion-draft-settings { border-radius: var(--radius-lg); background: var(--fill); }
 .discussion-draft-settings-toggle { display: flex; align-items: center; gap: 6px; width: 100%; padding: 8px 12px; border: 0; background: none; color: var(--text-muted); font: inherit; font-size: 12px; text-align: left; cursor: pointer; }
 .discussion-draft-settings-toggle svg { width: 12px; height: 12px; transform: rotate(-90deg); transition: transform 0.15s; }

@@ -17,6 +17,7 @@ import { AgentIcon, ChevronDownIcon, CloseIcon, EnterIcon } from './icons'
 import { ProjectPicker } from './ProjectPicker'
 import { DiscussionRequirements } from './DiscussionRequirements'
 import { DraftModeSwitch } from './DraftModeSwitch'
+import { DISCUSSION_FORMATS, formatSetup, roundtableTurns, type DiscussionFormatId } from '../discussion-formats'
 
 // A member as picked: name is null while it follows the agent and model.
 type Draft = { key: string; agent: AgentKind; model?: string; effort?: string; name: string | null; role: string }
@@ -94,7 +95,7 @@ function MemberRow({ member, index, agents, chair, busy, removable, onChange, on
 
 // What the page holds besides what is written, kept while the app runs so switching to one agent
 // and back finds the members as they were.
-type Settings = { members: Draft[]; chair: number; rounds: number; anonymous: boolean; requirements: string }
+type Settings = { format: DiscussionFormatId; members: Draft[]; chair: number; rounds: number; anonymous: boolean; requirements: string }
 let kept: Settings | null = null
 
 function membersFor(installed: readonly AgentKind[], carry: DraftCarry | null): Draft[] {
@@ -108,6 +109,7 @@ function membersFor(installed: readonly AgentKind[], carry: DraftCarry | null): 
 
 function settingsFrom(from: Discussion): Settings {
   return {
+    format: 'roundtable',
     members: from.members.map((member) => ({ key: crypto.randomUUID(), agent: member.agent, model: member.model ?? undefined, effort: member.effort ?? undefined, name: member.name, role: member.role })),
     chair: Math.max(0, from.members.findIndex((member) => member.id === from.chairId)),
     rounds: from.maxRounds,
@@ -129,10 +131,11 @@ export function DiscussionDraft({ from }: { from: Discussion | null }) {
   const [carry] = useState(() => useCore.getState().conversationDraftCarry)
   const requested = useCore((s) => s.conversationDraftProjects)
   const [settings] = useState<Settings>(() => from ? settingsFrom(from) : kept ?? {
-    members: membersFor(installed, carry), chair: 0, rounds: DEFAULT_DISCUSSION_ROUNDS, anonymous: false, requirements: DEFAULT_DISCUSSION_REQUIREMENTS
+    format: 'roundtable', members: membersFor(installed, carry), chair: 0, rounds: DEFAULT_DISCUSSION_ROUNDS, anonymous: false, requirements: DEFAULT_DISCUSSION_REQUIREMENTS
   })
   const [topic, setTopic] = useState(() => carry?.text ?? '')
   const [projectPaths, setProjectPaths] = useState<string[]>(() => [...(from?.projectPaths ?? carry?.projects ?? requested?.paths ?? [])])
+  const [format, setFormat] = useState<DiscussionFormatId>(settings.format)
   const [members, setMembers] = useState<Draft[]>(settings.members)
   const [chair, setChair] = useState(settings.chair)
   const [rounds, setRounds] = useState(settings.rounds)
@@ -140,7 +143,16 @@ export function DiscussionDraft({ from }: { from: Discussion | null }) {
   const [requirements, setRequirements] = useState(settings.requirements)
   const [optionsOpen, setOptionsOpen] = useState(false)
   const [busy, setBusy] = useState(false)
-  useEffect(() => { if (!from) kept = { members, chair, rounds, anonymous, requirements } }, [from, members, chair, rounds, anonymous, requirements])
+  useEffect(() => { if (!from) kept = { format, members, chair, rounds, anonymous, requirements } }, [from, format, members, chair, rounds, anonymous, requirements])
+  // A format fills in the roles, chair and requirements, which stay the user's to change after.
+  const pickFormat = (next: DiscussionFormatId) => {
+    const setup = formatSetup(next, members.length)
+    setFormat(next)
+    setMembers(members.map((member, index) => ({ ...member, role: setup.roles[index] ?? '' })))
+    setChair(setup.chair)
+    setRequirements(setup.requirements)
+  }
+  const shownFormat = DISCUSSION_FORMATS.find((each) => each.id === format)
   // Images wait in one agent's draft: a group chat takes none.
   const [imagesLeft] = useState(() => composerDraft(null).images.length)
   // Names in use more than once would make @ ambiguous.
@@ -195,7 +207,22 @@ export function DiscussionDraft({ from }: { from: Discussion | null }) {
             <div className="chat-draft-start discussion-draft-start">
               <DraftModeSwitch mode="group" carry={toSingle} disabled={busy} />
               {from && <p className="discussion-draft-from">{tr('DiscussionDraft.reuseMembersProjectsAndSettingsFromEachMember', { value1: from.title })}</p>}
-              <p className="chat-draft-hint muted">{t('DiscussionDraft.agentsFirstAnswerIndependentlyThenReviewChallengeOr')}</p>
+              <div className="discussion-draft-format">
+                <span className="discussion-draft-format-label">{t('discussionFormats.label')}</span>
+                <ChatPicker
+                  label={t('discussionFormats.label')}
+                  value={format}
+                  placeholder={t('discussionFormats.label')}
+                  placement="below"
+                  disabled={busy}
+                  options={DISCUSSION_FORMATS.map((each) => ({ value: each.id, label: each.label, description: `${each.description} · ${each.flow}` }))}
+                  onChange={(value) => {
+                    const next = DISCUSSION_FORMATS.find((each) => each.id === value)
+                    if (next) pickFormat(next.id)
+                  }}
+                />
+                {shownFormat && <span className="discussion-draft-format-flow muted">{tr('discussionFormats.flowAndTurns', { flow: <b>{shownFormat.flow}</b>, turns: roundtableTurns(members.length, rounds) })}</span>}
+              </div>
               <div className="discussion-draft-field">
                 <ul className="discussion-draft-members" aria-label={t('DiscussionDraft.members')}>
                   {/* What each column of a member is: the name most of all, as it is what @ picks it by. */}

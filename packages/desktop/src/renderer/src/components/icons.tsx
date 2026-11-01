@@ -543,23 +543,19 @@ export function BoltIcon() {
   )
 }
 
+// An open folder: a project, or a folder to show in the file manager.
 export function FolderIcon() {
-  return (
-    <svg {...stroked}>
-      <path d="M2.8 5.6A1.6 1.6 0 0 1 4.4 4h3l1.7 1.9h6.5a1.6 1.6 0 0 1 1.6 1.6v6.9a1.6 1.6 0 0 1-1.6 1.6H4.4a1.6 1.6 0 0 1-1.6-1.6z" />
-    </svg>
-  )
-}
-
-// An open folder, for the files panel: a project's tree to browse and edit, where FolderIcon stands
-// for the project itself.
-export function FilesIcon() {
   return (
     <svg {...stroked}>
       <path d="M2.8 14.4V5.6A1.6 1.6 0 0 1 4.4 4h3l1.7 1.9h5.3a1.6 1.6 0 0 1 1.6 1.6V9" />
       <path d="M2.9 15 5 10a1.6 1.6 0 0 1 1.5-1h10a.9.9 0 0 1 .8 1.3l-2 4.8a1.6 1.6 0 0 1-1.5.9H4.4A1.5 1.5 0 0 1 2.9 15z" />
     </svg>
   )
+}
+
+// The files panel: a project's tree to browse and edit.
+export function FilesIcon() {
+  return <FolderIcon />
 }
 
 export function InfoIcon() {

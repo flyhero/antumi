@@ -6,6 +6,8 @@ import { AGENT_KINDS, agentDescriptor, LANGUAGE_NAMES, PROTOCOL_VERSION, quickMo
 import packageJson from '../../../../package.json'
 import { perform, setAwakeMode, setChatSettings, setSettingsOpen, useAwakeSupported, useCore, useBrowserSupported, useChatCommandsSupported, useKnowledgeBaseSupported, useMcpServersSupported, useModelProvidersSupported, useSessionImportSupported, useAccountsSupported, useProjectConfigEditSupported, useSkillsSupported, useTranslateSupported, useWireLogSupported } from '../core-store'
 import { setPreference, usePreferences, type Preferences } from '../preferences'
+import { ProjectColorPicker } from './ProjectColorPicker'
+import { ProjectIcon } from './ProjectIcon'
 import { UNATTENDED_LABEL } from '../schedules'
 import { detectedAgents, useInstalledAgents } from '../installed-agents'
 import { useAgentCatalog } from '../agent-models'
@@ -409,11 +411,13 @@ function ProjectRow({ projectPath, onForget }: { projectPath: string; onForget: 
   }, [rpc, editable, projectPath, reads])
   return (
     <li className="settings-project">
+      <ProjectIcon path={projectPath} />
       <span className="settings-project-name">{projectName(projectPath)}</span>
       <span className="settings-project-path mono" title={projectPath}>
         {projectPath}
       </span>
       {summary && <span className="settings-project-config muted">{summary}</span>}
+      <ProjectColorPicker path={projectPath} />
       {editable && <button type="button" className="button" onClick={() => setEditing(true)}>{t('ProjectConfigDialog.projectConfiguration')}</button>}
       <button type="button" className="button" onClick={onForget}>{t('ChatQuoteCards.remove')}</button>
       {editing && <ProjectConfigDialog projectPath={projectPath} onClose={() => setEditing(false)} onSaved={() => setReads((count) => count + 1)} />}

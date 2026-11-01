@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { create } from 'zustand'
 import { BACKDROPS } from './backdrops'
 import { PALETTES } from './palettes'
+import { PROJECT_COLORS } from './project-colors'
 import { PetLevelPreference, PetSizePreference, PetStylePreference } from './pet-preferences'
 import { DEFAULT_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH, MIN_SIDEBAR_WIDTH } from './sidebar-width'
 import { SetupProgress } from './setup-progress'
@@ -27,6 +28,7 @@ const Preferences = z.object({
   theme: z.enum(['system', 'light', 'dark']).catch('system'),
   // The set of colours the interface is drawn in; each has a light and a dark side.
   palette: z.enum(PALETTES).catch('terracotta'),
+  projectColors: z.record(z.string(), z.enum(PROJECT_COLORS)).catch({}),
   // Experimental: the gradient behind the sidebar and status bar; none keeps the flat canvas.
   backdrop: z.enum(['none', ...BACKDROPS]).catch('none'),
   petStyle: PetStylePreference,

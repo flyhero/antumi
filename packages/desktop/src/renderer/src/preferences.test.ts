@@ -21,6 +21,24 @@ beforeEach(() => {
 
 afterEach(() => vi.unstubAllGlobals())
 
+describe('project color preferences', () => {
+  it('persists color choices and loads them after a restart', async () => {
+    const { setPreference } = await import('./preferences')
+    setPreference('projectColors', { '/projects/antumi': 'purple' })
+    expect(JSON.parse(storage.get('antumi.preferences') ?? '{}').projectColors).toEqual({ '/projects/antumi': 'purple' })
+    vi.resetModules()
+    const { usePreferences } = await import('./preferences')
+    expect(usePreferences.getState().projectColors).toEqual({ '/projects/antumi': 'purple' })
+  })
+
+  it('defaults old preferences and discards invalid colors without losing the theme', async () => {
+    storage.set('antumi.preferences', JSON.stringify({ theme: 'dark', projectColors: { '/projects/app': 'invalid' } }))
+    const { usePreferences } = await import('./preferences')
+    expect(usePreferences.getState().projectColors).toEqual({})
+    expect(usePreferences.getState().theme).toBe('dark')
+  })
+})
+
 describe('island preference defaults', () => {
   it.each(['always', 'requests'])('uses the display default %s when no mode is saved', async (mode) => {
     const { followPreferences, usePreferences, DEFAULT_PREFERENCES } = await import('./preferences')

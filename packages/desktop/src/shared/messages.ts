@@ -1,5 +1,15 @@
 // Application-owned text. Values and external content are passed separately.
 export const MESSAGES = {
+  "ProjectColor.label": {"zh": "项目颜色", "en": "Project color"},
+  "ProjectColor.default": {"zh": "默认颜色", "en": "Default color"},
+  "ProjectColor.blue": {"zh": "蓝色", "en": "Blue"},
+  "ProjectColor.green": {"zh": "绿色", "en": "Green"},
+  "ProjectColor.teal": {"zh": "青色", "en": "Teal"},
+  "ProjectColor.yellow": {"zh": "黄色", "en": "Yellow"},
+  "ProjectColor.orange": {"zh": "橙色", "en": "Orange"},
+  "ProjectColor.red": {"zh": "红色", "en": "Red"},
+  "ProjectColor.pink": {"zh": "粉色", "en": "Pink"},
+  "ProjectColor.purple": {"zh": "紫色", "en": "Purple"},
   "BrowserDownloads.title": {"zh": "下载", "en": "Downloads"},
   "BrowserDownloads.session": {"zh": "本次运行", "en": "This session"},
   "BrowserDownloads.empty": {"zh": "尚无下载，网页下载的文件会显示在这里。", "en": "No downloads yet. Files downloaded from web pages appear here."},

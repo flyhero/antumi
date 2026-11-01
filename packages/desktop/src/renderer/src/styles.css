@@ -24,6 +24,14 @@
   --danger: light-dark(#b3261e, #ef6b62);
   --focus: light-dark(#c2542d55, #e0754c55);
   --mark-mono: light-dark(#000000, #ffffff);
+  --project-blue: light-dark(#2878d4, #4098f7);
+  --project-green: light-dark(#208654, #38c984);
+  --project-teal: light-dark(#168c7a, #2cbba5);
+  --project-yellow: light-dark(#a97b05, #efbd28);
+  --project-orange: light-dark(#c46a10, #f58e1c);
+  --project-red: light-dark(#d43e3b, #f2504b);
+  --project-pink: light-dark(#c13994, #db4fb0);
+  --project-purple: light-dark(#8650d7, #985bf5);
 
   /* Code in replies, coloured by kind of token: One Light and One Dark. */
   --code-keyword: light-dark(#a626a4, #c678dd);
@@ -5070,6 +5078,37 @@ div.inspector-empty > p { margin: 0 0 8px; }
   padding: 0;
   list-style: none;
 }
+
+[data-project-color='blue'] { --project-color: var(--project-blue); }
+[data-project-color='green'] { --project-color: var(--project-green); }
+[data-project-color='teal'] { --project-color: var(--project-teal); }
+[data-project-color='yellow'] { --project-color: var(--project-yellow); }
+[data-project-color='orange'] { --project-color: var(--project-orange); }
+[data-project-color='red'] { --project-color: var(--project-red); }
+[data-project-color='pink'] { --project-color: var(--project-pink); }
+[data-project-color='purple'] { --project-color: var(--project-purple); }
+
+.project-icon {
+  color: var(--project-color);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+.project-icon svg { width: 16px; height: 16px; }
+.project-color-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--project-color);
+  flex-shrink: 0;
+}
+
+.settings-project-list > .settings-project { flex-wrap: wrap; }
+.settings-project-list .settings-project-path { min-width: 120px; }
 
 .settings-project {
   display: flex;

@@ -6,6 +6,7 @@ import { canPickFolder, pickFolder } from '../desktop-bridge'
 import { ContextMenu, MenuItem, menuPoint, type MenuPoint } from './ContextMenu'
 import { Popover } from './Popover'
 import { FolderIcon } from './icons'
+import { ProjectIcon } from './ProjectIcon'
 
 export function projectName(projectPath: string): string {
   return projectPath.split(/[\\/]/).filter(Boolean).at(-1) ?? projectPath
@@ -72,6 +73,7 @@ function ProjectMenu({
             {recent.map((projectPath) => (
               <li key={projectPath} className="menu-row">
                 <button type="button" className="menu-item" title={projectPath} onClick={() => onAdd(projectPath)}>
+                  <ProjectIcon path={projectPath} />
                   <span className="menu-item-name">{projectName(projectPath)}</span>
                   <span className="menu-item-path mono">{projectPath}</span>
                 </button>
@@ -182,6 +184,7 @@ export function ProjectPicker({
           } : undefined}
         >
           <span className="chip-main chip-static">
+            <ProjectIcon path={project.path} />
             <span className="project-name">{projectName(project.path)}</span>
             {index === 0 && <span className="visually-hidden">{t('ProjectPicker.primaryProject_1427')}</span>}
           </span>

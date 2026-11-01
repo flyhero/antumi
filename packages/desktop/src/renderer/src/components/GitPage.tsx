@@ -9,6 +9,7 @@ import { GitRepository } from './GitRepository'
 import { useFocusCount } from './Inspector'
 import { useSidebarEntryMenu } from './SidebarEntryMenu'
 import { GitIcon, CloseIcon, FolderIcon, RefreshIcon } from './icons'
+import { ProjectIcon } from './ProjectIcon'
 import { projectName } from './ProjectPicker'
 
 export function GitEntry() {
@@ -75,7 +76,7 @@ export function GitPage() {
     {/* Project and workspace on one line, read as a path: antumi / dev. */}
     <div className="git-project-bar git-page-projects">
       {entries.length > 0 && <ChatPicker label={t('GitPage.project')} value={selected} placeholder={t('GitPage.project')} placement="below"
-        options={entries.map((path) => ({ value: path, label: projectName(path), description: path, icon: <FolderIcon /> }))} onChange={choose} />}
+        options={entries.map((path) => ({ value: path, label: projectName(path), description: path, icon: <ProjectIcon path={path} /> }))} onChange={choose} />}
       {project && <>
         <span className="git-page-separator" aria-hidden="true">/</span>
         <ChatPicker label={t('GitPage.workspace')} value={active ?? ''} placeholder={t('GitPage.workspace')} placement="below"

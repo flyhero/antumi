@@ -5,7 +5,8 @@ import { perform, useCore } from '../core-store'
 import { canPickFolder, pickFolder } from '../desktop-bridge'
 import { reasonText } from '../labels'
 import { ContextMenu, type MenuPoint } from './ContextMenu'
-import { CheckIcon, ChevronDownIcon, FolderIcon } from './icons'
+import { CheckIcon, ChevronDownIcon } from './icons'
+import { ProjectIcon } from './ProjectIcon'
 import { parentDir, projectName } from './ProjectPicker'
 
 // Why the additional projects cannot change right now, as the menu says it.
@@ -88,7 +89,7 @@ export function ChatProjects({ conversation }: { conversation: Conversation }) {
         disabled={busy}
         onClick={() => (at ? close() : void open())}
       >
-        <FolderIcon />
+        <ProjectIcon path={primary} />
         <span className="chat-projects-name">{projectName(primary)}</span>
         {extras.length > 0 && <span className="chat-projects-count">+{extras.length}</span>}
         <ChevronDownIcon />
@@ -98,7 +99,7 @@ export function ChatProjects({ conversation }: { conversation: Conversation }) {
         <ContextMenu at={at} above trigger={button.current} label={t('ChatProjects.conversationProjects_445')} onClose={close}>
           <div className="chat-picker-heading">{t('ChatProjects.primaryProjectFixedAfterConversationStarts')}</div>
           <div className="menu-item chat-projects-item chat-projects-primary" title={primary}>
-            <FolderIcon />
+            <ProjectIcon path={primary} />
             <span className="menu-item-name">{projectName(primary)}</span>
             <span className="menu-item-path mono">{primary}</span>
           </div>
@@ -117,7 +118,7 @@ export function ChatProjects({ conversation }: { conversation: Conversation }) {
                 disabled={note !== null || busy || (!on && full)}
                 onClick={() => tick(on ? ticked.filter((other) => other !== each) : [...ticked, each])}
               >
-                <FolderIcon />
+                <ProjectIcon path={each} />
                 <span className="menu-item-name">{projectName(each)}</span>
                 <span className="menu-item-path mono">{each}</span>
                 {on && <span className="menu-check"><CheckIcon /></span>}

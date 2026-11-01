@@ -87,3 +87,9 @@ time.chat-delegation-caller-meta { white-space: normal; max-width: 100%; text-wr
   .chat-delegation-orb, .chat-delegation-orb::before, .chat-delegation-rings circle { animation: none; }
   .chat-delegation-rings, .chat-delegation-orb { transition: none; }
 }
+/* A call taken up again says which go it is on, beside how long it ran. */
+.chat-delegation-attempt { margin-left: 8px; padding: 0 6px; border-radius: 999px; background: var(--fill-2); color: var(--text-muted); }
+/* What going on with a call would mean now, before the user goes on. */
+.agent-call-resume-warning { display: flex; gap: 6px; align-items: flex-start; margin: 0; color: var(--text-muted); font-size: 13px; }
+.agent-call-resume-warning svg { flex-shrink: 0; width: 14px; height: 14px; margin-top: 2px; color: var(--warning); }
+

@@ -232,6 +232,8 @@ export function createRpcHandlers(
       return profileService().dispatch(id, target, instruction, ref)
     },
     'agentCalls.cancel': ({ id, callId }) => profileService().cancel(id, callId),
+    'agentCalls.resumeCheck': ({ id, callId }) => profileService().resumeCheck(id, callId),
+    'agentCalls.resume': ({ id, callId, note }) => profileService().resume(id, callId, note),
     'squads.list': () => squadService().list(),
     'squads.create': (fields) => squadService().create(fields),
     'squads.update': ({ id, ...fields }) => squadService().update(id, fields),

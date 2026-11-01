@@ -29,6 +29,7 @@ const definitions = {
   [AGENT_CALL_TOOLS.dispatch]: { label: 'antumiTools.agentDispatch', icon: 'agent', subject: 'delegation' },
   [AGENT_CALL_TOOLS.status]: { label: 'antumiTools.agentStatus', icon: 'agent', subject: null },
   [AGENT_CALL_TOOLS.cancel]: { label: 'antumiTools.agentCancel', icon: 'agent', subject: 'delegation' },
+  [AGENT_CALL_TOOLS.resume]: { label: 'antumiTools.agentResume', icon: 'agent', subject: 'delegation' },
   [SQUAD_TOOL_NAMES.roster]: { label: 'antumiTools.squadRoster', icon: 'agent', subject: null },
   [SQUAD_TOOL_NAMES.dispatch]: { label: 'antumiTools.squadDispatch', icon: 'agent', subject: 'member' },
   [SQUAD_TOOL_NAMES.finish]: { label: 'antumiTools.squadFinish', icon: 'agent', subject: 'summary' }

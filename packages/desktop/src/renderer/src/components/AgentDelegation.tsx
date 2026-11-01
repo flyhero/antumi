@@ -18,7 +18,9 @@ import { useConversationPane } from './conversation-pane'
 import { AgentIcon, ChevronRightIcon, CloseIcon, SquadIcon } from './icons'
 import './agent-calls.css'
 
-function DelegationDialog({ conversation, onClose, onHistory }: { conversation: Conversation; onClose(): void; onHistory(): void }) {
+// initial: what a call delegated before asked, to start the dialog from (`agent:<kind>` for an agent
+// called as it is), as when a call that stopped short is sent again rather than taken up.
+export function DelegationDialog({ conversation, onClose, onHistory, initial }: { conversation: Conversation; onClose(): void; onHistory(): void; initial?: { target: string; goal: string } }) {
   useOccludesBrowser()
   const dialog = useRef<HTMLDialogElement>(null)
   const titleId = useId()
@@ -30,8 +32,8 @@ function DelegationDialog({ conversation, onClose, onHistory }: { conversation: 
   const now = useNow(60_000)
   const [develop, setDevelop] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [profileId, setProfileId] = useState<string | null>(null)
-  const [goal, setGoal] = useState('')
+  const [profileId, setProfileId] = useState<string | null>(initial?.target ?? null)
+  const [goal, setGoal] = useState(initial?.goal ?? '')
   const [context, setContext] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)

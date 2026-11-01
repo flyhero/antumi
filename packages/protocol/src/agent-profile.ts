@@ -55,6 +55,15 @@ export const AgentCall = z.object({
   // What a queued call waits for: the caller's turn to end, another edit in the same directories to
   // finish, or a free slot under the concurrency limits.
   waiting: z.enum(['parent', 'writer', 'capacity']).nullable().optional(),
+  // How many times it was taken up again after it stopped short (feature agent-call-resume), when it
+  // last ended, and what the latest go on from: how it had ended, how many turns the caller took
+  // since, and what the user added. Older cores leave them out.
+  attempt: z.number().int().nonnegative().default(0),
+  endedAt: z.number().nullable().default(null),
+  resumedFrom: z.object({
+    state: z.enum(['failed', 'cancelled']), error: z.string().nullable(), endedAt: z.number().nullable(),
+    turnsSince: z.number().int().nonnegative(), note: z.string().nullable()
+  }).nullable().default(null),
   createdAt: z.number(), updatedAt: z.number()
 })
 export type AgentCall = z.infer<typeof AgentCall>
@@ -62,6 +71,35 @@ export function agentCallOpen(call: Pick<AgentCall, 'state'>): boolean {
   return ['queued', 'starting', 'running', 'awaiting'].includes(call.state)
 }
 
+// A call is taken up again at most this many times, so a caller cannot retry it without end.
+export const MAX_AGENT_CALL_RESUMES = 3
+// The reason a call never got its own conversation, which leaves nothing to go on from.
+export const AGENT_CALL_NOT_STARTED = '成员启动中断，请重新委派'
+
+export type AgentCallResumeBlocker = 'open' | 'completed' | 'not-started' | 'limit' | 'read-only' | 'parent-gone'
+
+// Whether a call that stopped short can go on in its own conversation, where it left off. One still
+// at work, or done, has nothing to go on with; one whose conversation never started has nowhere to.
+// A call that edits goes on only while the caller may still edit: going on never widens what the
+// user allowed. `caller`: null when the conversation that sent it is gone or archived.
+export function checkResumeAgentCall(call: Pick<AgentCall, 'state' | 'error' | 'attempt' | 'readOnly'>, caller: { readOnly: boolean } | null): AgentCallResumeBlocker | null {
+  if (agentCallOpen(call)) return 'open'
+  if (call.state === 'completed') return 'completed'
+  if (call.error === AGENT_CALL_NOT_STARTED) return 'not-started'
+  if (call.attempt >= MAX_AGENT_CALL_RESUMES) return 'limit'
+  if (!caller) return 'parent-gone'
+  return !call.readOnly && caller.readOnly ? 'read-only' : null
+}
+
+// What going on means now, for the user to weigh it: how many turns the caller took since the call
+// stopped, and a later call that did the same work, if one finished.
+export const AgentCallResumeCheck = z.object({
+  blocker: z.enum(['open', 'completed', 'not-started', 'limit', 'read-only', 'parent-gone', 'quota', 'gone']).nullable(),
+  turnsSince: z.number().int().nonnegative(),
+  redoneBy: z.string().uuid().nullable()
+})
+export type AgentCallResumeCheck = z.infer<typeof AgentCallResumeCheck>
+
 export const AGENT_CALL_TOOLS = {
-  list: 'antumi_agent_list', dispatch: 'antumi_agent_dispatch', status: 'antumi_agent_status', cancel: 'antumi_agent_cancel'
+  list: 'antumi_agent_list', dispatch: 'antumi_agent_dispatch', status: 'antumi_agent_status', cancel: 'antumi_agent_cancel', resume: 'antumi_agent_resume'
 } as const

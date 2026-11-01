@@ -334,6 +334,83 @@ describe('reusable agent roles and delegated work', () => {
     await profiles.reconcile()
     expect(store.call(call.id)).toMatchObject({ state: 'failed', delivered: true })
   })
+  describe('going on with a call that stopped short', () => {
+    // What a session was sent, as text.
+    const sent = (sessionId: string) => daemon.written(sessionId).flatMap((frame) => {
+      const message = typeof frame === 'object' && frame !== null && Reflect.get(frame, 'type') === 'user' ? Reflect.get(frame, 'message') : null
+      return message ? [String(Reflect.get(message, 'content'))] : []
+    })
+    const later = () => new Promise((resolve) => setTimeout(resolve, 5))
+
+    it('goes on in its own conversation, telling it what changed since and the caller what came back', async () => {
+      const call = await profiles.dispatch(parentId, reviewer.id, 'Review the reminder change')
+      await waitFor(() => store.call(call.id).state === 'running')
+      complete(chats.get(call.conversationId).sessionId!, 'the run broke', true)
+      await waitFor(() => store.call(call.id).delivered)
+      expect(store.call(call.id)).toMatchObject({ state: 'failed', attempt: 0 })
+      expect(store.call(call.id).endedAt).not.toBeNull()
+      // The caller goes on with the user for a turn before anyone comes back to the call.
+      complete(chats.get(parentId).sessionId!, 'noted the failure')
+      await later()
+      await chats.send(parentId, 'rename the setting to reminderLead')
+      complete(chats.get(parentId).sessionId!, 'renamed')
+      expect(profiles.resumeCheck(parentId, call.id)).toEqual({ blocker: null, turnsSince: 1, redoneBy: null })
+
+      const resumed = await profiles.resume(parentId, call.id, '接口改名了，按新名字看')
+      expect(resumed).toMatchObject({ state: 'queued', attempt: 1, delivered: false, resumedFrom: { state: 'failed', error: 'the run broke', turnsSince: 1, note: '接口改名了，按新名字看' } })
+      await waitFor(() => store.call(call.id).state === 'running')
+      const child = chats.get(call.conversationId)
+      expect(child.id).toBe(call.conversationId)
+      const told = sent(child.sessionId!).at(-1) ?? ''
+      expect(told).toContain('中断后主会话又进行了 1 轮')
+      expect(told).toContain('用户补充：接口改名了，按新名字看')
+      expect(told).toContain('Review the reminder change')
+
+      complete(child.sessionId!, 'Found the overlap at midnight')
+      await waitFor(() => store.call(call.id).delivered)
+      expect(store.call(call.id)).toMatchObject({ state: 'completed', result: 'Found the overlap at midnight' })
+      await waitFor(() => chats.messages(parentId).some((message) => message.text.includes('Found the overlap at midnight')))
+      const back = chats.messages(parentId).findLast((message) => message.text.includes('Found the overlap at midnight'))?.text ?? ''
+      expect(back).toContain('"resumed"')
+      expect(back).toContain('"turnsSince":1')
+      expect(back).toContain('Review the reminder change')
+    })
+
+    it('goes on after a cancel, and not with one done, never started, taken up too often, or editing past a read-only caller', async () => {
+      const call = await profiles.dispatch(parentId, reviewer.id, 'Inspect the module')
+      await waitFor(() => store.call(call.id).state === 'running')
+      await profiles.cancel(parentId, call.id)
+      expect(profiles.resumeCheck(parentId, call.id).blocker).toBeNull()
+      await profiles.resume(parentId, call.id)
+      await waitFor(() => store.call(call.id).state === 'running')
+      expect(sent(chats.get(call.conversationId).sessionId!).at(-1)).toContain('你之前的工作被取消了')
+      complete(chats.get(call.conversationId).sessionId!, 'inspected')
+      await waitFor(() => store.call(call.id).state === 'completed')
+      await expect(profiles.resume(parentId, call.id)).rejects.toMatchObject({ reason: 'agent-call-resume-completed' })
+
+      store.patchCall(call.id, { state: 'failed', attempt: 3 })
+      expect(profiles.resumeCheck(parentId, call.id).blocker).toBe('limit')
+      store.patchCall(call.id, { attempt: 0, error: '成员启动中断，请重新委派' })
+      expect(profiles.resumeCheck(parentId, call.id).blocker).toBe('not-started')
+      store.patchCall(call.id, { error: 'error', readOnly: false })
+      conversations.setWorkspaceReadOnly(parentId, true)
+      expect(profiles.resumeCheck(parentId, call.id).blocker).toBe('read-only')
+    })
+
+    it('says when a later call already did the same work', async () => {
+      const first = await profiles.dispatch(parentId, reviewer.id, 'Review it', 'first')
+      await waitFor(() => store.call(first.id).state === 'running')
+      complete(chats.get(first.conversationId).sessionId!, 'broke', true)
+      await waitFor(() => store.call(first.id).delivered)
+      complete(chats.get(parentId).sessionId!, 'will retry')
+      await later()
+      const again = await profiles.dispatch(parentId, reviewer.id, 'Review it', 'again')
+      await waitFor(() => store.call(again.id).state === 'running')
+      complete(chats.get(again.conversationId).sessionId!, 'reviewed')
+      await waitFor(() => store.call(again.id).state === 'completed')
+      expect(profiles.resumeCheck(parentId, first.id).redoneBy).toBe(again.id)
+    })
+  })
 })
 
 describe('delegatedMode', () => {

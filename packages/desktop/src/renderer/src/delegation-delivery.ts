@@ -2,9 +2,10 @@ import { z } from 'zod'
 import type { ChatItem } from '@antumi/protocol'
 
 // The calls whose results core sent back in this message, by its id: one, or those back together.
+// A call taken up again comes back under its id and the go it was (`<id>#2`), each its own message.
 export function agentResultCallIds(item: Pick<ChatItem, 'kind' | 'id'>): string[] {
-  const ids = item.kind === 'user' ? /^u:agent-result:([0-9a-f-]{36}(?:,[0-9a-f-]{36})*)$/.exec(item.id)?.[1] : undefined
-  return ids ? ids.split(',') : []
+  const ids = item.kind === 'user' ? /^u:agent-result:([0-9a-f-]{36}(?:#\d+)?(?:,[0-9a-f-]{36}(?:#\d+)?)*)$/.exec(item.id)?.[1] : undefined
+  return ids ? ids.split(',').map((id) => id.replace(/#\d+$/, '')) : []
 }
 
 const Delivered = z.object({

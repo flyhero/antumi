@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { agentCallOpen, type AgentCall } from '@antumi/protocol'
+import { agentCallOpen, checkResumeAgentCall, type AgentCall } from '@antumi/protocol'
 import { openAgentCall, showAgentCalls } from '../agent-calls'
 import { useJustFinished } from '../chat-motion'
 import { workedFor } from '../chat-tools'
@@ -10,6 +10,7 @@ import { useChatSurface } from './chat-surface'
 import { useConversationPane } from './conversation-pane'
 import { AgentIcon, ChatIcon, CheckIcon, ClockIcon, CloseIcon, ForkIcon, WarningIcon } from './icons'
 import { Spinner } from './Spinner'
+import { AgentCallResume } from './AgentCallResume'
 import './chat-delegation.css'
 
 // What a queued call waits for; one from a core that does not say is simply queued.
@@ -45,6 +46,8 @@ export function ChatDelegationCard({ call, fresh = false }: { call: AgentCall; f
   const finished = useJustFinished(open) && call.state === 'completed'
   const status = t(`AgentProfiles.${call.state}`)
   const inspect = () => { pane?.focus(); showAgentCalls(surface.inspector, call.id) }
+  // Whether it can go on where it stopped; core has the last word, with what changed since.
+  const resumable = useCore((state) => state.rpc?.features.includes('agent-call-resume') ?? false) && checkResumeAgentCall(call, { readOnly: false }) === null
   const cancel = async () => {
     if (cancelling) return
     setCancelling(true)
@@ -57,7 +60,7 @@ export function ChatDelegationCard({ call, fresh = false }: { call: AgentCall; f
       <div className="chat-delegation-recipient"><span className="chat-delegation-avatar" data-line-end=""><AgentIcon agent={call.profile.agent} /></span><strong>{call.profile.name}</strong></div>
       <p className="chat-delegation-goal" title={call.instruction}>{call.instruction.split('\n').filter((line) => line.trim()).slice(0, 2).join(' · ')}</p>
       {call.error ? <p className="chat-delegation-error">{call.error}</p> : call.result ? <div className="chat-delegation-preview">{call.state === 'completed' ? <CheckIcon /> : <ChatIcon />}<p>{call.result}</p></div> : <p className="chat-delegation-hint">{call.state === 'queued' ? t(QUEUED_HINT[call.waiting ?? 'unknown']) : call.state === 'awaiting' ? t('AgentProfiles.needsAttention') : call.state === 'starting' ? t('AgentProfiles.startingHint') : open ? t('AgentProfiles.workingHint') : t('AgentProfiles.noResult')}</p>}
-      <footer className="chat-delegation-footer"><span className="chat-delegation-meta"><DelegationTime call={call} /></span><div className="chat-delegation-actions"><button type="button" className="link-button chat-delegation-details-link" aria-pressed={focused} onClick={inspect}>{t('AgentProfiles.details')}</button>{call.state === 'awaiting' && <button type="button" className="link-button" onClick={() => void openAgentCall(call)}>{t('AgentProfiles.handleRequest')}</button>}{open && <button type="button" className="link-button" disabled={cancelling} onClick={() => void cancel()}>{t('AgentProfiles.cancelCall')}</button>}</div></footer>
+      <footer className="chat-delegation-footer"><span className="chat-delegation-meta"><DelegationTime call={call} />{call.attempt > 0 && <span className="chat-delegation-attempt">{t('AgentCallResume.attempt', { count: call.attempt + 1 })}</span>}</span><div className="chat-delegation-actions"><button type="button" className="link-button chat-delegation-details-link" aria-pressed={focused} onClick={inspect}>{t('AgentProfiles.details')}</button>{call.state === 'awaiting' && <button type="button" className="link-button" onClick={() => void openAgentCall(call)}>{t('AgentProfiles.handleRequest')}</button>}{resumable && <AgentCallResume call={call} inspector={surface.inspector} />}{open && <button type="button" className="link-button" disabled={cancelling} onClick={() => void cancel()}>{t('AgentProfiles.cancelCall')}</button>}</div></footer>
     </article>
   </ChatCopyRegion>
 }

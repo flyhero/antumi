@@ -81,6 +81,55 @@ describe('plugin packages', () => {
     expect(await readFile(path.join(root, 'latest', 'main.mjs'), 'utf8')).toBe('export {}')
   })
 
+  it('selects the highest stable version of just one plugin across release pages', async () => {
+    const archive = pluginZip({ 'main.mjs': 'export {}' })
+    const release = (tag: string, flags = {}) => ({ tag_name: tag, assets: [{ name: 'plugin.zip', browser_download_url: `https://github.com/demo/plugins/releases/download/${tag}/plugin.zip` }], ...flags })
+    const first = [release('jira-v99.0.0'), release('github-v3.0.0-beta.1'), release('github-v8.0.0', { draft: true }), release('github-v9.0.0', { prerelease: true }), release('github-v1.9.0')]
+    while (first.length < 100) first.push(release('other-v1.0.0'))
+    const fetch = vi.fn(async (url: string) => {
+      if (url.endsWith('page=1')) return Response.json(first)
+      if (url.endsWith('page=2')) return Response.json([release('github-v1.10.0')])
+      if (url === 'https://github.com/demo/plugins/releases/download/github-v1.10.0/plugin.zip') return new Response(new Uint8Array(archive))
+      throw new Error(`Unexpected request ${url}`)
+    })
+    vi.stubGlobal('fetch', fetch)
+    await stagePlugin({ kind: 'github', repository: 'demo/plugins', tagPrefix: 'github-v' }, root)
+    expect(fetch).toHaveBeenCalledTimes(3)
+    expect(await readFile(path.join(root, 'main.mjs'), 'utf8')).toBe('export {}')
+  })
+
+  it('never downloads another plugin when a prefix has no stable release', async () => {
+    const fetch = vi.fn(async () => Response.json([{ tag_name: 'jira-v1.0.0', assets: [] }, { tag_name: 'github-v2.0.0-beta.1', assets: [] }]))
+    vi.stubGlobal('fetch', fetch)
+    await expect(stagePlugin({ kind: 'github', repository: 'demo/plugins', tagPrefix: 'github-v' }, root)).rejects.toThrow('还没有可安装')
+    expect(fetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('uses an explicit tag ahead of its prefix and selects the named ZIP', async () => {
+    const archive = pluginZip({ 'main.mjs': 'export {}' })
+    const fetch = vi.fn(async (url: string) => url.startsWith('https://api.github.com/')
+      ? Response.json({ tag_name: 'github-v1.0.0', assets: ['github.zip', 'jira.zip'].map((name) => ({ name, browser_download_url: `https://github.com/demo/plugins/releases/download/github-v1.0.0/${name}` })) })
+      : new Response(new Uint8Array(archive)))
+    vi.stubGlobal('fetch', fetch)
+    await stagePlugin({ kind: 'github', repository: 'demo/plugins', tag: 'github-v1.0.0', tagPrefix: 'github-v', asset: 'github.zip' }, root)
+    expect(fetch.mock.calls.map(([url]) => url)).toEqual(['https://api.github.com/repos/demo/plugins/releases/tags/github-v1.0.0', 'https://github.com/demo/plugins/releases/download/github-v1.0.0/github.zip'])
+  })
+
+  it('finds a plugin release through paginated release pages when the API is rate limited', async () => {
+    const archive = pluginZip({ 'main.mjs': 'export {}' })
+    const fetch = vi.fn(async (url: string) => {
+      if (url.startsWith('https://api.github.com/')) return new Response('', { status: 429 })
+      if (url.endsWith('releases?page=1')) return new Response('<a href="/demo/plugins/releases/tag/jira-v20.0.0">Jira</a><a href="/demo/plugins/releases/tag/github-v2.0.0-beta.1">beta</a><a rel="next" href="?page=2">Next</a>')
+      if (url.endsWith('releases?page=2')) return new Response('<a href="/demo/plugins/releases/tag/github-v1.10.0">GitHub</a><a href="/demo/plugins/releases/tag/github-v1.9.0">GitHub</a>')
+      if (url.endsWith('expanded_assets/github-v1.10.0')) return new Response('<a href="/demo/plugins/releases/download/github-v1.10.0/plugin.zip">ZIP</a>')
+      if (url.endsWith('download/github-v1.10.0/plugin.zip')) return new Response(new Uint8Array(archive))
+      throw new Error(`Unexpected request ${url}`)
+    })
+    vi.stubGlobal('fetch', fetch)
+    await stagePlugin({ kind: 'github', repository: 'demo/plugins', tagPrefix: 'github-v' }, root)
+    expect(fetch).toHaveBeenCalledTimes(5)
+  })
+
   it('says which host could not be reached and why, instead of "fetch failed"', async () => {
     vi.stubGlobal('fetch', async () => { throw new TypeError('fetch failed', { cause: Object.assign(new Error('Connect Timeout Error'), { code: 'UND_ERR_CONNECT_TIMEOUT' }) }) })
     await expect(stagePlugin({ kind: 'github', repository: 'demo/plugin' }, root)).rejects.toThrow('连不上 api.github.com：连接超时。换个网络或开关 VPN 后重试')

@@ -1,7 +1,7 @@
 import { mkdir, readdir, readFile, lstat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fromBuffer } from 'yauzl'
-import { satisfies, valid, validRange } from 'semver'
+import { prerelease, rcompare, satisfies, valid, validRange } from 'semver'
 import { PluginManifest, type PluginInstallSource } from '@antumi/protocol'
 import { z } from 'zod'
 import { networkFailure } from './network-failure'
@@ -117,10 +117,62 @@ export async function extractPlugin(data: Buffer, root: string): Promise<void> {
   })
 }
 
-const Release = z.object({ tag_name: z.string(), assets: z.array(z.object({ name: z.string(), browser_download_url: z.string().url() })) })
+const Release = z.object({ tag_name: z.string(), draft: z.boolean().optional(), prerelease: z.boolean().optional(), assets: z.array(z.object({ name: z.string(), browser_download_url: z.string().url() })) })
 type Release = z.infer<typeof Release>
 type GitHubSource = Extract<PluginInstallSource, { kind: 'github' }>
 const NO_RELEASE = '该仓库还没有可安装的 GitHub Release，请在发布 ZIP 后重试'
+const RELEASE_PAGE_LIMIT = 10
+
+function releaseVersion(tag: string, prefix: string): string | null {
+  if (!tag.startsWith(prefix)) return null
+  const version = valid(tag.slice(prefix.length))
+  return version && !prerelease(version) ? version : null
+}
+
+async function prefixedRelease(source: GitHubSource, prefix: string): Promise<Release> {
+  const found: { version: string; release: Release }[] = []
+  for (let page = 1; page <= RELEASE_PAGE_LIMIT; page++) {
+    const url = `https://api.github.com/repos/${source.repository}/releases?per_page=100&page=${page}`
+    const response = await request(url, { headers: { Accept: 'application/vnd.github+json' } })
+    if (response.status === 403 || response.status === 429) return prefixedReleaseFromSite(source, prefix)
+    if (response.status === 404) throw new Error(NO_RELEASE)
+    const releases = z.array(Release).parse(JSON.parse((await read(url, response)).toString('utf8')))
+    for (const release of releases) {
+      const version = releaseVersion(release.tag_name, prefix)
+      if (version && !release.draft && !release.prerelease) found.push({ version, release })
+    }
+    if (releases.length < 100) {
+      const latest = found.sort((a, b) => rcompare(a.version, b.version))[0]
+      if (!latest) throw new Error(NO_RELEASE)
+      return latest.release
+    }
+  }
+  throw new Error('仓库发布记录过多，请指定插件的 Release 标签')
+}
+
+async function prefixedReleaseFromSite(source: GitHubSource, prefix: string): Promise<Release> {
+  const found = new Map<string, string>()
+  for (let page = 1; page <= RELEASE_PAGE_LIMIT; page++) {
+    const url = `https://github.com/${source.repository}/releases?page=${page}`
+    const response = await request(url)
+    if (response.status === 404) throw new Error(NO_RELEASE)
+    const html = (await read(url, response)).toString('utf8')
+    const tagPath = `/${source.repository}/releases/tag/`
+    for (const match of html.matchAll(/href="([^"]+)"/g)) {
+      const href = match[1]
+      if (!href?.startsWith(tagPath)) continue
+      const tag = decodeURIComponent(href.slice(tagPath.length))
+      const version = releaseVersion(tag, prefix)
+      if (version) found.set(tag, version)
+    }
+    if (!/<a\b[^>]*\brel="next"[^>]*>/i.test(html)) {
+      const latest = [...found].sort((a, b) => rcompare(a[1], b[1]))[0]
+      if (!latest) throw new Error(NO_RELEASE)
+      return releaseFromSite({ ...source, tag: latest[0] })
+    }
+  }
+  throw new Error('仓库发布记录过多，请指定插件的 Release 标签')
+}
 
 async function request(url: string, init: RequestInit = {}): Promise<Response> {
   try {
@@ -149,6 +201,7 @@ async function read(url: string, response: Response): Promise<Buffer> {
 }
 
 async function releaseOf(source: GitHubSource): Promise<Release> {
+  if (!source.tag && source.tagPrefix) return prefixedRelease(source, source.tagPrefix)
   const endpoint = source.tag ? `tags/${encodeURIComponent(source.tag)}` : 'latest'
   const url = `https://api.github.com/repos/${source.repository}/releases/${endpoint}`
   const response = await request(url, { headers: { Accept: 'application/vnd.github+json' } })

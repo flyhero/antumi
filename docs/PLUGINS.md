@@ -6,9 +6,9 @@
 
 ## 使用
 
-「设置 → 插件」的推荐列表包含 GitHub、Jira、Linear 和禅道，只保存独立 GitHub 仓库的信息。点击安装时，core 下载对应仓库最新正式 Release 的 ZIP；启动、查看列表和构建应用都不会下载或安装来源插件。也可以安装本地目录、ZIP 或 GitHub Release。目录和 ZIP 的根目录必须有 `manifest.json`；目录安装会复制文件，后续修改开发目录不会改变已安装版本。GitHub 输入 `owner/repository`，可指定 Release 标签和 ZIP 附件名；未指定标签时使用最新正式 Release，多个 ZIP 时必须指定附件。查 Release 先用 GitHub 接口；接口因同一出口 IP 请求过多拒绝（403、429，多人共用的 VPN 常见）时，改从仓库的发布页读标签（`releases/latest` 的跳转）和附件列表（`releases/expanded_assets/<标签>`），下载地址同样只接受该仓库的 `releases/download/`。
+「设置 → 插件」的推荐列表包含 GitHub、Jira、Linear 和禅道，只保存 GitHub 仓库与发布定位信息。点击安装时，core 下载对应插件最新正式 Release 的 ZIP；启动、查看列表和构建应用都不会下载或安装来源插件。也可以安装本地目录、ZIP 或 GitHub Release。目录和 ZIP 的根目录必须有 `manifest.json`；目录安装会复制文件，后续修改开发目录不会改变已安装版本。GitHub 输入 `owner/repository`，可指定 Release 标签和 ZIP 附件名；未指定标签时使用最新正式 Release，多个 ZIP 时必须指定附件。安装来源可选 `tagPrefix`，按此前缀筛选正式 Release 并取语义版本最高者；显式 `tag` 优先。API 分页每页 100 条、最多 10 页；超限要求显式标签，不猜测版本。API 限流时按发布网页分页筛选，最多 10 页。查 Release 先用 GitHub 接口；接口因同一出口 IP 请求过多拒绝（403、429，多人共用的 VPN 常见）时，改从仓库的发布页读标签（`releases/latest` 的跳转）和附件列表（`releases/expanded_assets/<标签>`），下载地址同样只接受该仓库的 `releases/download/`。
 
-安装文件放在 `ANTUMI_HOME/plugins/<id>/<version>/`（默认 `~/.antumi/plugins/`）。`active.json` 原子记录启用状态、当前版本、安装来源和来源 ID 归属。版本目录不覆盖；重新开发需要增加版本号。手动更新使用原安装来源，GitHub 更新检查最新正式 Release；不兼容版本拒绝安装。界面可以切换到保留的旧版。
+安装文件放在 `ANTUMI_HOME/plugins/<id>/<version>/`（默认 `~/.antumi/plugins/`）。`active.json` 原子记录启用状态、当前版本、安装来源和来源 ID 归属。版本目录不覆盖；重新开发需要增加版本号。手动更新使用原安装来源，GitHub 更新按可选标签前缀检查最新正式 Release；不兼容版本拒绝安装。界面可以切换到保留的旧版。
 
 安装和更新先检查包、Antumi 版本、协议握手和已有设置。切换前暂停该来源，取消登录与请求、等待正在提交的数据完成，再校验设置和原子替换指针；失败继续使用旧版。首版不支持数据迁移，更新必须兼容已有配置及凭据格式，不允许增删来源 ID。
 
@@ -16,15 +16,15 @@
 
 ## 独立维护的推荐插件
 
-四个插件的源码、测试与发布分别在 `flyhero/antumi-plugin-github`、`flyhero/antumi-plugin-jira`、`flyhero/antumi-plugin-linear` 和 `flyhero/antumi-plugin-zentao` 仓库。插件 ID 为 `antumi.<来源>`，来源 ID 为 `github`、`jira`、`linear`、`zentao`。Antumi 主仓库仅在 `packages/core/src/plugins-recommended.json` 中维护推荐名称、说明与仓库地址，不保存或打包这些插件的 ZIP、源码与依赖。
+四个插件统一在 `flyhero/antumi-plugins` 仓库维护，目录为 `plugins/github`、`plugins/jira`、`plugins/linear`、`plugins/zentao`。仓库按插件身份组织，名称不限定任务来源能力；当前 SDK 仍只提供来源接口，不预设尚未实现的贡献点。插件 ID 为 `antumi.<来源>`，来源 ID 为 `github`、`jira`、`linear`、`zentao`。Antumi 主仓库仅在 `packages/core/src/plugins-recommended.json` 中维护推荐名称、说明、仓库地址、标签前缀与旧仓库列表，不保存或打包这些插件的 ZIP、源码与依赖。
 
-推荐列表由 core 提供。客户端只能用推荐 ID 请求安装，core 从列表解析仓库，下载后校验包内 ID、版本兼容性、文件结构和握手。安装来源记录为 GitHub，后续「检查并更新」继续查该独立仓库最新正式 Release。当前安装器读取公开 Release，仓库尚未发布 ZIP 时安装会提示重试，不改变现有数据。
+推荐列表由 core 提供。客户端只能用推荐 ID 请求安装，core 从列表解析仓库，下载后校验包内 ID、版本兼容性、文件结构和握手。安装来源记录为 GitHub，后续「检查并更新」按 `github-v`、`jira-v`、`linear-v`、`zentao-v` 前缀分别查找最高正式版本，跳过草稿与预发布。当前安装器读取公开 Release，仓库尚未发布 ZIP 时安装会提示重试，不改变现有数据。
 
-旧版已安装的 GitHub 插件继续从用户插件目录加载；旧 `bundled` 安装记录仍可读取，通过推荐条目的 GitHub 仓库检查更新。不会覆盖已有安装或自动重新启用被停用、卸载的插件。
+旧版已安装的 GitHub 插件继续从用户插件目录加载；旧 `bundled` 安装记录仍可读取，通过推荐条目的 GitHub 仓库检查更新。原四个 `flyhero/antumi-plugin-*` 仓库的安装在用户主动检查更新时迁移到新仓库；只匹配推荐条目明确列出的旧地址，不迁移本地安装或自定义 fork。新包验证成功后才保存来源变更，同版本也会保存新来源，失败保留原记录。不会覆盖已有安装或自动重新启用被停用、卸载的插件。
 
 Jira 的站点、JQL、凭据及已导入任务继续保留。升级不会自动安装 Jira；用户点击推荐里的 Jira 后，core 接续旧 `jira: builtin` 归属并使用原实例设置，成功安装后归属改为 `antumi.jira`。未安装或下载失败时不改写旧数据。旧 `jira.json` 的配置迁移仍由 core 负责，与插件下载分开。
 
-独立仓库运行 `npm ci && npm run check`，得到 `dist/plugin/` 和带版本号的 ZIP。普通 CI 只检查和上传构建产物；推送与插件版本匹配的 `vX.Y.Z` 标签后，Release 工作流验证并上传 ZIP。预发布不作为推荐安装的默认版本，已有 Release 不覆盖。应用构建只处理自身运行时，不需要访问插件仓库或网络。
+插件仓库根目录运行 `npm ci && npm run check`，得到各 `plugins/<slug>/dist/plugin/` 和带版本号的 ZIP。普通 CI 只检查和上传构建产物；推送与插件版本匹配的 `<slug>-vX.Y.Z` 标签后，Release 工作流验证并只上传对应插件的 ZIP。预发布不作为推荐安装的默认版本，已有 Release 不覆盖。应用构建只处理自身运行时，不需要访问插件仓库或网络。
 
 新客户端连接缺少 `plugin-recommendations` 能力的旧 core 时隐藏推荐部分，保留原安装入口。
 
@@ -168,7 +168,7 @@ pnpm exec tsx scripts/verify-source-plugin.ts ../antumi-plugin-acme/dist/antumi-
 
 ### 5. 发布到自己的 GitHub 仓库
 
-将插件源码、锁文件及必要的 SDK 包推送到独立仓库。在 GitHub 创建正式 Release，把构建得到的插件 ZIP 作为附件上传；自动生成的源码 ZIP 不是插件安装包。模板 CI 只验证并上传构建产物，不自动创建 Release；需要自动发版时可参考下方四个独立插件仓库的 Release 工作流。
+将插件源码、锁文件及必要的 SDK 包推送到独立仓库。在 GitHub 创建正式 Release，把构建得到的插件 ZIP 作为附件上传；自动生成的源码 ZIP 不是插件安装包。模板 CI 只验证并上传构建产物，不自动创建 Release；需要自动发版时可参考 [antumi-plugins 的 Release 工作流](https://github.com/flyhero/antumi-plugins/blob/main/.github/workflows/release.yml)，用插件标签前缀分别发布。
 
 用户在「设置 → 插件 → 从其他位置安装」选择 `GitHub Release`，填写 `owner/repository` 并确认信任即可安装。默认读取最新正式 Release；测试版需要填写 Release 标签，多个 ZIP 则填写目标 ZIP 的附件名。后续「检查并更新」仍从同一仓库下载。
 
@@ -192,10 +192,10 @@ pnpm exec tsx scripts/verify-source-plugin.ts ../antumi-plugin-acme/dist/antumi-
 
 ### 可以参考的完整实现
 
-- [GitHub](https://github.com/flyhero/antumi-plugin-github)：Token 登录、搜索筛选、Issues 与 Pull Requests。
-- [Jira](https://github.com/flyhero/antumi-plugin-jira)：JQL、富文本、评论与图片附件。
-- [Linear](https://github.com/flyhero/antumi-plugin-linear)：团队和项目筛选、GraphQL 分页。
-- [禅道](https://github.com/flyhero/antumi-plugin-zentao)：自定义站点、任务/Bug/需求及 RESTful API v1。
+- [GitHub](https://github.com/flyhero/antumi-plugins/tree/main/plugins/github)：Token 登录、搜索筛选、Issues 与 Pull Requests。
+- [Jira](https://github.com/flyhero/antumi-plugins/tree/main/plugins/jira)：JQL、富文本、评论与图片附件。
+- [Linear](https://github.com/flyhero/antumi-plugins/tree/main/plugins/linear)：团队和项目筛选、GraphQL 分页。
+- [禅道](https://github.com/flyhero/antumi-plugins/tree/main/plugins/zentao)：自定义站点、任务/Bug/需求及 RESTful API v1。
 
 ## Manifest
 

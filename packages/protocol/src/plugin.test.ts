@@ -1,7 +1,14 @@
 import { expect, it } from 'vitest'
-import { pluginSchemas } from './plugin'
+import { PluginInstallSource, pluginSchemas, RecommendedPlugin } from './plugin'
 
 const detail = { key: 'DEMO-1', title: 'Example', url: 'https://example.com/1', status: 'Open', statusCategory: 'todo', type: 'Issue', priority: null, updatedAt: null, markdown: '# Example' }
+
+it('keeps existing install sources compatible and accepts per-plugin release selectors', () => {
+  expect(PluginInstallSource.parse({ kind: 'github', repository: 'demo/plugin' })).toEqual({ kind: 'github', repository: 'demo/plugin' })
+  expect(PluginInstallSource.parse({ kind: 'github', repository: 'demo/plugins', tagPrefix: 'github-v', asset: 'github.zip' })).toMatchObject({ tagPrefix: 'github-v', asset: 'github.zip' })
+  expect(PluginInstallSource.safeParse({ kind: 'github', repository: 'demo/plugins', tagPrefix: '' }).success).toBe(false)
+  expect(RecommendedPlugin.parse({ id: 'antumi.github', name: 'GitHub', repository: 'demo/plugins', tagPrefix: 'github-v', description: '', descriptionEn: '', previousRepositories: ['demo/old-plugin'] })).toMatchObject({ previousRepositories: ['demo/old-plugin'] })
+})
 
 it('accepts existing text plugins and validates optional image encoding and limits', () => {
   const schema = pluginSchemas.fetch.result

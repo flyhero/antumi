@@ -16,9 +16,10 @@ export const PluginManifest = z.object({
 })
 
 export type PluginManifest = z.infer<typeof PluginManifest>
+const ReleaseTagPrefix = z.string().min(1).max(80).regex(/^[A-Za-z0-9][A-Za-z0-9._/-]*$/)
 export const PluginInstallSource = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('local'), path: z.string().min(1).max(4096) }),
-  z.object({ kind: z.literal('github'), repository: z.string().regex(/^[A-Za-z0-9_-]+\/[A-Za-z0-9_.-]+$/), tag: z.string().min(1).max(128).optional(), asset: z.string().min(1).max(200).optional() })
+  z.object({ kind: z.literal('github'), repository: z.string().regex(/^[A-Za-z0-9_-]+\/[A-Za-z0-9_.-]+$/), tag: z.string().min(1).max(128).optional(), tagPrefix: ReleaseTagPrefix.optional(), asset: z.string().min(1).max(200).optional() })
 ])
 export type PluginInstallSource = z.infer<typeof PluginInstallSource>
 export const PluginInfo = z.object({
@@ -31,6 +32,9 @@ export type PluginInfo = z.infer<typeof PluginInfo>
 export const RecommendedPlugin = z.object({
   id: PluginId, name: z.string().min(1).max(64),
   repository: PluginInstallSource.options[1].shape.repository,
+  tagPrefix: ReleaseTagPrefix.optional(),
+  asset: PluginInstallSource.options[1].shape.asset,
+  previousRepositories: z.array(PluginInstallSource.options[1].shape.repository).optional(),
   description: z.string().max(500), descriptionEn: z.string().max(500)
 })
 export type RecommendedPlugin = z.infer<typeof RecommendedPlugin>

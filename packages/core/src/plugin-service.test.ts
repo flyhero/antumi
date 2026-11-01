@@ -58,10 +58,10 @@ describe('plugin installation and activation', () => {
     const files: Record<string, string> = {}
     for (const name of ['main.mjs', 'manifest.json', 'behavior.json']) files[name] = await readFile(path.join(directory, name), 'utf8')
     const archive = pluginZip(files)
-    const repository = `flyhero/antumi-plugin-${source}`
-    const url = `https://github.com/${repository}/releases/download/v${version}/plugin.zip`
+    const repository = 'flyhero/antumi-plugins'
+    const url = `https://github.com/${repository}/releases/download/${source}-v${version}/plugin.zip`
     const fetch = vi.fn(async (input: string) => {
-      if (input === `https://api.github.com/repos/${repository}/releases/latest`) return new Response(JSON.stringify({ tag_name: `v${version}`, assets: [{ name: 'plugin.zip', browser_download_url: url }] }))
+      if (input === `https://api.github.com/repos/${repository}/releases?per_page=100&page=1`) return new Response(JSON.stringify([{ tag_name: `${source}-v${version}`, assets: [{ name: 'plugin.zip', browser_download_url: url }] }]))
       if (input === url) return new Response(new Uint8Array(archive))
       throw new Error(`Unexpected download: ${input}`)
     })
@@ -75,10 +75,9 @@ describe('plugin installation and activation', () => {
     await plugins.close()
     plugins = createService(app.version)
     await plugins.load()
-    expect(plugins.recommended().map((entry) => entry.repository)).toEqual([
-      'flyhero/antumi-plugin-github', 'flyhero/antumi-plugin-jira',
-      'flyhero/antumi-plugin-linear', 'flyhero/antumi-plugin-zentao'
-    ])
+    expect(plugins.recommended().map((entry) => ({ repository: entry.repository, tagPrefix: entry.tagPrefix }))).toEqual(
+      ['github', 'jira', 'linear', 'zentao'].map((slug) => ({ repository: 'flyhero/antumi-plugins', tagPrefix: `${slug}-v` }))
+    )
     expect(plugins.list()).toEqual([])
     expect(fetch).not.toHaveBeenCalled()
     expect(JSON.stringify(plugins.recommended())).not.toMatch(/directory|autoInstall|bundled/)
@@ -89,14 +88,14 @@ describe('plugin installation and activation', () => {
     expect(fetch).not.toHaveBeenCalled()
     const result = await plugins.installRecommended(`antumi.${source}`)
     expect(fetch).toHaveBeenCalledTimes(2)
-    expect(result).toMatchObject({ id: `antumi.${source}`, enabled: true, problem: null, origin: { kind: 'github', repository: `flyhero/antumi-plugin-${source}` } })
+    expect(result).toMatchObject({ id: `antumi.${source}`, enabled: true, problem: null, origin: { kind: 'github', repository: 'flyhero/antumi-plugins', tagPrefix: `${source}-v` } })
     await plugins.installRecommended(`antumi.${source}`)
     expect(fetch).toHaveBeenCalledTimes(2)
     await expect(plugins.installRecommended('other.plugin')).rejects.toThrow('推荐列表')
     expect(fetch).toHaveBeenCalledTimes(2)
   })
 
-  it('keeps an existing bundled GitHub installation working and updates it from its independent repository', async () => {
+  it('keeps an existing bundled GitHub installation working and updates it from the monorepo', async () => {
     const installedPath = path.join(root, 'plugins/antumi.github/1.0.0')
     const manifest = await pluginFixture(installedPath, { id: 'antumi.github', source: 'github' })
     const saved = { version: 1, plugins: [{ manifest, enabled: true, versions: ['1.0.0'], origin: { kind: 'bundled' } }], owners: { jira: 'builtin', github: 'antumi.github' } }
@@ -113,7 +112,7 @@ describe('plugin installation and activation', () => {
     expect(plugins.list()[0]).toMatchObject({ id: 'antumi.github', enabled: true, problem: null, origin: { kind: 'bundled' } })
     expect(fetch).not.toHaveBeenCalled()
     const next = await plugins.update('antumi.github')
-    expect(next).toMatchObject({ version: '1.0.1', origin: { kind: 'github', repository: 'flyhero/antumi-plugin-github' } })
+    expect(next).toMatchObject({ version: '1.0.1', origin: { kind: 'github', repository: 'flyhero/antumi-plugins', tagPrefix: 'github-v' } })
     expect(next.versions).toEqual(['1.0.1', '1.0.0'])
     expect(await readFile(path.join(root, 'sources.json'), 'utf8')).toBe(beforeConfig)
     expect(await readFile(path.join(root, 'credentials.json'), 'utf8')).toBe(beforeCredentials)
@@ -151,6 +150,59 @@ describe('plugin installation and activation', () => {
     expect(plugins.list()).toMatchObject([{ id: 'antumi.jira', problem: null }])
     expect(await readFile(path.join(root, 'sources.json'), 'utf8')).toBe(beforeConfig)
     expect(await readFile(path.join(root, 'credentials.json'), 'utf8')).toBe(beforeCredentials)
+  })
+
+  it.each(['github', 'jira', 'linear', 'zentao'])('migrates %s to the monorepo even when the installed version is current', async (source) => {
+    const id = `antumi.${source}`
+    const manifest = await pluginFixture(path.join(root, 'plugins', id, '1.0.0'), { id, source })
+    const saved = { version: 1, plugins: [{ manifest, enabled: false, versions: ['1.0.0'], origin: { kind: 'github', repository: `flyhero/antumi-plugin-${source}` } }], owners: { [source]: id } }
+    await writeFile(path.join(root, 'plugins/active.json'), JSON.stringify(saved))
+    await config.save({ provider: source, instance: 'default', enabled: false, settings: { query: 'mine' } })
+    await credentials.set(source, 'default', { kind: 'token', payload: { token: 'saved' }, account: 'ann', updatedAt: 1 })
+    const beforeConfig = await readFile(path.join(root, 'sources.json'), 'utf8')
+    const beforeCredentials = await readFile(path.join(root, 'credentials.json'), 'utf8')
+    await release(id, source)
+    await plugins.close()
+    plugins = createService(app.version)
+    await plugins.load()
+    const next = await plugins.update(id)
+    expect(next).toMatchObject({ enabled: false, version: '1.0.0', versions: ['1.0.0'], origin: { kind: 'github', repository: 'flyhero/antumi-plugins', tagPrefix: `${source}-v` } })
+    expect(await readFile(path.join(root, 'sources.json'), 'utf8')).toBe(beforeConfig)
+    expect(await readFile(path.join(root, 'credentials.json'), 'utf8')).toBe(beforeCredentials)
+    await plugins.close()
+    plugins = createService(app.version)
+    await plugins.load()
+    expect(plugins.list()[0]?.origin).toEqual(next.origin)
+  })
+
+  it('leaves a former update origin unchanged when the new repository cannot be downloaded', async () => {
+    const id = 'antumi.github'
+    const manifest = await pluginFixture(path.join(root, 'plugins', id, '1.0.0'), { id, source: 'github' })
+    const saved = { version: 1, plugins: [{ manifest, enabled: false, versions: ['1.0.0'], origin: { kind: 'github', repository: 'flyhero/antumi-plugin-github' } }], owners: { github: id } }
+    const pointer = JSON.stringify(saved)
+    await writeFile(path.join(root, 'plugins/active.json'), pointer)
+    await plugins.close()
+    plugins = createService(app.version)
+    await plugins.load()
+    vi.stubGlobal('fetch', async () => new Response('', { status: 404 }))
+    await expect(plugins.update(id)).rejects.toThrow('还没有可安装')
+    expect(await readFile(path.join(root, 'plugins/active.json'), 'utf8')).toBe(pointer)
+    expect(plugins.list()[0]?.origin).toEqual(saved.plugins[0]?.origin)
+  })
+
+  it('keeps a custom fork on its own release feed', async () => {
+    const id = 'antumi.github'
+    const manifest = await pluginFixture(path.join(root, 'plugins', id, '1.0.0'), { id, source: 'github' })
+    const origin = { kind: 'github', repository: 'someone/antumi-plugin-github', tagPrefix: 'custom-v' }
+    await writeFile(path.join(root, 'plugins/active.json'), JSON.stringify({ version: 1, plugins: [{ manifest, enabled: false, versions: ['1.0.0'], origin }], owners: { github: id } }))
+    await plugins.close()
+    plugins = createService(app.version)
+    await plugins.load()
+    const fetch = vi.fn(async () => new Response('', { status: 404 }))
+    vi.stubGlobal('fetch', fetch)
+    await expect(plugins.update(id)).rejects.toThrow('还没有可安装')
+    expect(fetch).toHaveBeenCalledWith('https://api.github.com/repos/someone/antumi-plugin-github/releases?per_page=100&page=1', expect.anything())
+    expect(plugins.list()[0]?.origin).toEqual(origin)
   })
 
   it('leaves installation and existing data unchanged when a release is not published or its ID is wrong', async () => {

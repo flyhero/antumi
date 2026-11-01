@@ -4,27 +4,43 @@
     "name": "GitHub",
     "description": "同步 GitHub Issues，按搜索条件导入任务。",
     "descriptionEn": "Sync GitHub Issues and import tasks using search filters.",
-    "repository": "flyhero/antumi-plugin-github"
+    "repository": "flyhero/antumi-plugins",
+    "previousRepositories": [
+      "flyhero/antumi-plugin-github"
+    ],
+    "tagPrefix": "github-v"
   },
   {
     "id": "antumi.jira",
     "name": "Jira",
     "description": "通过 JQL 同步 Jira 工作项，导入详情和图片附件。",
     "descriptionEn": "Sync Jira issues with JQL and import details and image attachments.",
-    "repository": "flyhero/antumi-plugin-jira"
+    "repository": "flyhero/antumi-plugins",
+    "previousRepositories": [
+      "flyhero/antumi-plugin-jira"
+    ],
+    "tagPrefix": "jira-v"
   },
   {
     "id": "antumi.linear",
     "name": "Linear",
     "description": "同步 Linear 工作项，按团队、项目和负责人筛选。",
     "descriptionEn": "Sync Linear issues filtered by team, project and assignee.",
-    "repository": "flyhero/antumi-plugin-linear"
+    "repository": "flyhero/antumi-plugins",
+    "previousRepositories": [
+      "flyhero/antumi-plugin-linear"
+    ],
+    "tagPrefix": "linear-v"
   },
   {
     "id": "antumi.zentao",
     "name": "禅道",
     "description": "同步禅道的任务、Bug 和需求（RESTful API v1）。",
     "descriptionEn": "Sync ZenTao tasks, bugs and stories using RESTful API v1.",
-    "repository": "flyhero/antumi-plugin-zentao"
+    "repository": "flyhero/antumi-plugins",
+    "previousRepositories": [
+      "flyhero/antumi-plugin-zentao"
+    ],
+    "tagPrefix": "zentao-v"
   }
 ]

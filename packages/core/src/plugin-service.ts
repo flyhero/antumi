@@ -60,7 +60,7 @@ export class PluginService {
     return this.serialize(async () => {
       const entry = this.recommendation(id)
       if (this.registry.plugins.some((record) => record.manifest.id === id)) return this.info(id)
-      return this.installInner({ kind: 'github', repository: entry.repository }, id)
+      return this.installInner(this.recommendedSource(entry), id)
     })
   }
 
@@ -68,6 +68,10 @@ export class PluginService {
     const entry = this.catalog.find((entry) => entry.id === id)
     if (!entry) throw new Error('这个插件不在推荐列表中')
     return entry
+  }
+
+  private recommendedSource(entry: RecommendedPlugin): PluginInstallSource {
+    return { kind: 'github', repository: entry.repository, ...(entry.tagPrefix ? { tagPrefix: entry.tagPrefix } : {}), ...(entry.asset ? { asset: entry.asset } : {}) }
   }
 
   list(): PluginInfo[] {
@@ -85,12 +89,18 @@ export class PluginService {
   update(id: string): Promise<PluginInfo> {
     return this.serialize(async () => {
       const record = this.record(id)
-      const origin = record.origin.kind === 'bundled'
-        ? { kind: 'github' as const, repository: this.recommendation(id).repository }
-        : record.origin
-      const source = origin.kind === 'github' ? { ...origin, tag: undefined } : origin
-      return this.installInner(source, id)
+      return this.installInner(this.updateSource(record), id)
     })
+  }
+
+  private updateSource(record: Installed): PluginInstallSource {
+    const origin = record.origin
+    if (origin.kind === 'bundled') return this.recommendedSource(this.recommendation(record.manifest.id))
+    if (origin.kind === 'local') return origin
+    const entry = this.catalog.find((entry) => entry.id === record.manifest.id)
+    // Only known addresses migrate; forks and local installs stay theirs.
+    if (entry && (entry.previousRepositories?.includes(origin.repository) || (entry.repository === origin.repository && !origin.tagPrefix))) return this.recommendedSource(entry)
+    return { ...origin, tag: undefined }
   }
 
   setEnabled(id: string, enabled: boolean): Promise<PluginInfo> {
@@ -162,7 +172,15 @@ export class PluginService {
       const current = this.registry.plugins.find((entry) => entry.manifest.id === manifest.id)
       if (expectedId && current && rcompare(manifest.version, current.manifest.version) > 0) throw new Error('发布版本早于当前版本，请使用版本切换回退')
       if (current?.versions.includes(manifest.version)) {
-        if (expectedId && current.manifest.version === manifest.version) return this.info(manifest.id)
+        if (expectedId && current.manifest.version === manifest.version) {
+          if (!isDeepStrictEqual(current.origin, origin)) {
+            const next = { ...this.registry, plugins: this.registry.plugins.map((record) => record.manifest.id === manifest.id ? { ...record, origin } : record) }
+            await writePrivateJson(this.pointer, next)
+            this.registry = next
+            this.publish([])
+          }
+          return this.info(manifest.id)
+        }
         throw new Error('这个版本已经安装，请选择切换版本')
       }
       const preview = await this.prepare(staging)

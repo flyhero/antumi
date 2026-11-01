@@ -24,8 +24,8 @@ describe('BrowserService', () => {
   let now: number
 
   // The service as main.ts makes it, over the fake host's link.
-  const make = (ask: (conversationId: string, host: string, url: string) => Promise<ChatDecision>, onEvent: (event: BrowserEvent) => void = () => {}) =>
-    new BrowserService({ browserHostFile: hostFile }, new AttachmentStore(path.join(root, 'attachments')), ask, onEvent, (endpoint) => host.connect(endpoint), () => now)
+  const make = (ask: (conversationId: string, host: string, url: string) => Promise<ChatDecision>, onEvent: (event: BrowserEvent) => void = () => {}, decisionWaitMs?: number) =>
+    new BrowserService({ browserHostFile: hostFile }, new AttachmentStore(path.join(root, 'attachments')), ask, onEvent, (endpoint) => host.connect(endpoint), () => now, decisionWaitMs)
 
   beforeEach(async () => {
     root = mkdtempSync(path.join(os.tmpdir(), 'antumi-browser-'))
@@ -85,6 +85,19 @@ describe('BrowserService', () => {
     expect(third.conversationId).toBe(CONV_B)
     third.answer('deny')
     expect((await elsewhere).outcome).toBe('denied')
+  })
+
+  it('keeps an allow given after the wait for the agent, though the user opens the site first', async () => {
+    const quick = make((conversationId, hostName, url) => new Promise((resolve, reject) => asks.push({ conversationId, host: hostName, url, answer: resolve, drop: () => reject(new Error('gone')) })), () => {}, 10)
+    const connection = fakeConnection()
+    const opened = await quick.open(CONV_A)
+    quick.watch(connection, CONV_A)
+    expect((await quick.navigate(CONV_A, opened.tab.id, { url: 'https://example.com/' })).outcome).toBe('awaiting-host')
+    asks[0]?.answer('allow')
+    await quick.userNavigate(connection, opened.tab.id, { url: 'https://example.com/' })
+    quick.handBack(connection, opened.tab.id)
+    expect((await quick.navigate(CONV_A, opened.tab.id, { url: 'https://example.com/again' })).outcome).toBe('done')
+    expect(asks).toHaveLength(1)
   })
 
   it('treats a question that cannot be asked as a refusal, and leaves the page alone', async () => {

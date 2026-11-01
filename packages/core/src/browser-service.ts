@@ -88,7 +88,8 @@ export class BrowserService {
     private readonly askHost: HostAsk,
     private readonly emit: (event: BrowserEvent) => void,
     private readonly connect: HostConnect = connectBrowserHost,
-    private readonly now: () => number = Date.now
+    private readonly now: () => number = Date.now,
+    private readonly decisionWaitMs = BROWSER_HOST_DECISION_WAIT_MS
   ) {}
 
   // ---- the app's host
@@ -201,22 +202,21 @@ export class BrowserService {
   // The host met a top-level navigation it has no say over (a link the agent or user clicked, a
   // redirect): it is cleared the same way an agent's own navigation is, within the host's wait.
   private async hostCheck(link: HostLink, check: Extract<BrowserHostEvent, { event: 'hostCheck' }>): Promise<void> {
-    const outcome = await this.permit(check.conversationId, check.tabId, check.host, check.url)
-    if (outcome === 'done' && check.conversationId !== null) this.allowOnce.get(check.conversationId)?.delete(check.host)
+    // The user taking the tab somewhere needs no allowance, so one left for the agent stays its.
+    const { conversationId } = check
+    const spends = conversationId !== null && !this.needsNoAllowance(conversationId, check.tabId, check.host)
+    const outcome = await this.permit(conversationId, check.tabId, check.host, check.url)
+    if (outcome === 'done' && spends) this.allowOnce.get(conversationId)?.delete(check.host)
     await link.request('host.resolve', { checkId: check.checkId, allow: outcome === 'done' }).catch(() => {})
   }
 
-  // Whether the conversation may open the site now: by what the user allowed before, by the user
-  // being at the wheel themselves, or by asking them. An answer that comes after the wait still
+  // Whether the conversation may open the site now: by the user being at the wheel themselves,
+  // by what the user allowed before, or by asking them. An answer that comes after the wait still
   // counts: for the conversation, or for the agent's next try at the site.
   private async permit(conversationId: string | null, tabId: string | null, hostName: string, url: string): Promise<BrowserNavigation['outcome']> {
-    if (isLocalHost(hostName)) return 'done'
     // The user's own tab goes where the user takes it.
-    if (conversationId === null) return 'done'
+    if (conversationId === null || this.needsNoAllowance(conversationId, tabId, hostName)) return 'done'
     if (this.allowed.get(conversationId)?.has(hostName) || this.allowOnce.get(conversationId)?.has(hostName)) return 'done'
-    if (tabId && this.isDriving(tabId)) return 'done'
-    const shared = tabId ? this.tabs.get(tabId) : null
-    if (shared?.userOwned && shared.conversationId === conversationId && browserHostOf(shared.url) === hostName) return 'done'
     // Asking can fail at once (no chat is running to ask in): that is a refusal, not a crash.
     const asked = Promise.resolve().then(() => this.askHost(conversationId, hostName, url)).then(
       (decision) => {
@@ -226,9 +226,17 @@ export class BrowserService {
       },
       (): ChatDecision => 'deny'
     )
-    const decision = await Promise.race([asked, new Promise<null>((resolve) => setTimeout(() => resolve(null), BROWSER_HOST_DECISION_WAIT_MS).unref())])
+    const decision = await Promise.race([asked, new Promise<null>((resolve) => setTimeout(() => resolve(null), this.decisionWaitMs).unref())])
     if (decision === null) return 'awaiting-host'
     return decision === 'deny' ? 'denied' : 'done'
+  }
+
+  // A local address, or the user at the wheel of the tab or sharing it from that site.
+  private needsNoAllowance(conversationId: string, tabId: string | null, hostName: string): boolean {
+    if (isLocalHost(hostName)) return true
+    if (tabId && this.isDriving(tabId)) return true
+    const shared = tabId ? this.tabs.get(tabId) : null
+    return Boolean(shared?.userOwned && shared.conversationId === conversationId && browserHostOf(shared.url) === hostName)
   }
 
   private remember(map: Map<string, Set<string>>, conversationId: string, host: string): void {

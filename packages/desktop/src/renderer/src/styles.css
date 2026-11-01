@@ -10297,8 +10297,22 @@ button.island-compact:focus-visible { outline: 2px solid var(--focus); outline-o
 .discussion-summary-body { padding: 8px 12px; }
 .discussion-summary-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 12px; border-top: 1px solid var(--border); font-size: var(--chat-font-small); color: var(--text-3); }
 
-.discussion-draft { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; padding: 16px max(24px, calc((100% - var(--page-form)) / 2)) 24px; background: var(--surface); }
-.discussion-draft > p { margin: 0; }
+/* The new page set to a group chat: the members and options take the middle, left-aligned, as wide
+   as a form; the switch and the hint stay centred as on one agent's page. */
+.chat-draft-start.discussion-draft-start { align-items: stretch; width: min(100%, var(--page-form)); margin: 0 auto; text-align: left; }
+.discussion-draft-start > .chat-draft-mode,
+.discussion-draft-start > .chat-draft-hint { align-self: center; text-align: center; }
+.discussion-draft-start p { margin: 0; }
+.discussion-draft-settings { border-radius: var(--radius-lg); background: var(--fill); }
+.discussion-draft-settings-toggle { display: flex; align-items: center; gap: 6px; width: 100%; padding: 8px 12px; border: 0; background: none; color: var(--text-muted); font: inherit; font-size: 12px; text-align: left; cursor: pointer; }
+.discussion-draft-settings-toggle svg { width: 12px; height: 12px; transform: rotate(-90deg); transition: transform 0.15s; }
+.discussion-draft-settings[data-open] .discussion-draft-settings-toggle svg { transform: none; }
+.discussion-draft-settings-body { display: flex; flex-direction: column; gap: 12px; padding: 0 12px 12px; }
+.discussion-draft-readonly { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 999px; background: var(--fill-2); color: var(--text-muted); font-size: 12px; }
+.button.discussion-draft-start { display: inline-flex; align-items: center; gap: 6px; }
+.button.discussion-draft-start svg { width: 14px; height: 14px; }
+.chat-draft-mode { flex-shrink: 0; }
+.chat-draft-invite { font-size: 13px; }
 .discussion-draft-field { display: flex; flex-direction: column; gap: 8px; }
 .discussion-draft-field > span { font-weight: 600; font-size: 12px; color: var(--text-muted); }
 .discussion-draft-topic,
@@ -10340,12 +10354,12 @@ button.island-compact:focus-visible { outline: 2px solid var(--focus); outline-o
 .segmented.discussion-send-mode button[aria-disabled='true'] { cursor: default; opacity: 0.5; }
 .segmented.discussion-send-mode button[aria-disabled='true']:hover { color: var(--text-muted); }
 .segmented.discussion-send-mode button[aria-checked='true']:last-child { color: var(--accent); font-weight: 600; }
-.discussion-draft > .discussion-draft-from { padding: 8px 12px; border-radius: var(--radius); background: var(--accent-bg); font-size: 12px; }
+.discussion-draft-from { padding: 8px 12px; border-radius: var(--radius); background: var(--accent-bg); font-size: 12px; }
 .discussion-draft-options { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; }
 .discussion-draft-options label { display: inline-flex; align-items: center; gap: 8px; color: var(--text-muted); }
 .discussion-draft-rounds { display: inline-flex; align-items: center; gap: 2px; }
-.discussion-draft input[type='radio'],
-.discussion-draft input[type='checkbox'] { accent-color: var(--accent); }
+.discussion-draft-start input[type='radio'],
+.discussion-draft-start input[type='checkbox'] { accent-color: var(--accent); }
 
 /* Squad configuration and task work reuse the workspace's surfaces and rhythm. */
 .task-executor-picker, .squad-member-nav { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }

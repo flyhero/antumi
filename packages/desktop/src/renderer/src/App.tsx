@@ -65,7 +65,7 @@ export function App() {
   const conversationDraft = useCore((s) => s.conversationDraft)
   const conversationDraftFrom = useCore((s) => s.conversationDraftFrom)
   const selectedDiscussionId = useCore((s) => s.selectedDiscussionId)
-  const discussionDraft = useCore((s) => s.discussionDraft)
+  const draftMode = useCore((s) => s.conversationDraftMode)
   const discussionDraftFrom = useCore((s) => s.discussionDraftFrom)
   const view = useCore((s) => s.view)
   const error = useCore((s) => s.error)
@@ -161,11 +161,11 @@ export function App() {
               <AgentsView />
             ) : section === 'discussions' ? (
               selectedDiscussionId ? <DiscussionView key={selectedDiscussionId} id={selectedDiscussionId} /> :
-                discussionDraft ? <DiscussionDraft key={discussionDraftFrom?.discussion.id ?? 'blank'} from={discussionDraftFrom?.discussion ?? null} /> :
                 <section className="detail-empty"><div className="detail-empty-body">{t('App.chooseOrCreateAGroupChat')}</div></section>
             ) : section === 'conversations' ? (
               splitPanes && selectedConversationId ? <ConversationSplit panes={splitPanes} active={selectedConversationId} /> :
               selectedConversationId ? <ConversationView key={selectedConversationId} id={selectedConversationId} /> :
+                conversationDraft && draftMode === 'group' ? <DiscussionDraft key={discussionDraftFrom?.discussion.id ?? 'blank'} from={discussionDraftFrom?.discussion ?? null} /> :
                 conversationDraft ? <ConversationDraft key={conversationDraftFrom?.key ?? 'blank'} /> :
                 <section className="detail-empty"><div className="detail-empty-body">{t('App.chooseOrCreateAConversation')}</div></section>
             ) : selectedId && view === 'chat' ? (

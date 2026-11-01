@@ -98,8 +98,13 @@ export type CoreState = {
   unseen: Readonly<Record<string, true>>
   section: Section
   selectedConversationId: string | null
-  // The page a new conversation starts from while chats are the default (see ConversationDraft).
+  // The page a new conversation starts from while chats are the default (see ConversationDraft), and
+  // whether it starts one agent or a group chat.
   conversationDraft: boolean
+  conversationDraftMode: DraftMode
+  // What the page carries over when it switches between one agent and a group: what was written,
+  // the projects, and the agent picked. A new object each time, so each switch applies.
+  conversationDraftCarry: DraftCarry | null
   // Group chats as core keeps them; empty on a core without them.
   agentProfiles: Record<string, AgentProfile>
   agentProfilesTab: 'profiles' | 'squads'
@@ -112,9 +117,7 @@ export type CoreState = {
   squadPlan: SquadPlanRef | null
   discussions: Record<string, Discussion>
   selectedDiscussionId: string | null
-  // The page a new group chat starts from, and the group it copies, if any: a new object each time,
-  // so the page starts over.
-  discussionDraft: boolean
+  // The group a new group chat copies, if any: a new object each time, so the page starts over.
   discussionDraftFrom: { discussion: Discussion } | null
   // The projects the new-conversation page was last asked to start with; a new object each time, so
   // asking again applies again.
@@ -263,8 +266,9 @@ export const useCore = create<CoreState>()(() => ({
   squadPlan: null,
   discussions: {},
   selectedDiscussionId: null,
-  discussionDraft: false,
   discussionDraftFrom: null,
+  conversationDraftMode: 'single',
+  conversationDraftCarry: null,
   taskMemberConversationId: null,
   selectedId: null,
   view: 'detail',
@@ -819,7 +823,15 @@ export type DraftIssue = { provider: string; instance: string; key: string; titl
 // `projects`: what the page starts with, as from a project's group; without, it starts with none.
 // `issue`: the inbox issue the conversation is opened to look into.
 export function openConversationDraft(projects?: readonly string[], issue: DraftIssue | null = null, from: CoreState['conversationDraftFrom'] = null): void {
-  useCore.setState({ selectedConversationId: null, section: 'conversations', settingsOpen: false, gitOpen: false, worktreesOpen: false, routinesOpen: false, overviewOpen: false, inboxOpen: false, conversationDraft: true, conversationDraftProjects: projects ? { paths: [...projects] } : null, conversationDraftIssue: issue, conversationDraftFrom: from, draftProfileId: null })
+  useCore.setState({ selectedConversationId: null, section: 'conversations', settingsOpen: false, gitOpen: false, worktreesOpen: false, routinesOpen: false, overviewOpen: false, inboxOpen: false, conversationDraft: true, conversationDraftMode: 'single', conversationDraftCarry: null, conversationDraftProjects: projects ? { paths: [...projects] } : null, conversationDraftIssue: issue, conversationDraftFrom: from, discussionDraftFrom: null, draftProfileId: null })
+}
+
+export type DraftMode = 'single' | 'group'
+export type DraftCarry = { text: string; projects: readonly string[]; agent: AgentKind | null; model: string | null }
+
+// The new page switching between one agent and a group chat, taking along what was written.
+export function switchDraftMode(mode: DraftMode, carry: DraftCarry): void {
+  useCore.setState({ conversationDraftMode: mode, conversationDraftCarry: { ...carry, projects: [...carry.projects] }, discussionDraftFrom: null })
 }
 
 export function useSourceInvestigateSupported(): boolean {
@@ -841,16 +853,12 @@ export function useSquadsSupported(): boolean {
 }
 
 export function selectDiscussion(id: string | null): void {
-  useCore.setState({ selectedDiscussionId: id, section: 'discussions', discussionDraft: false, ...PAGES_CLOSED })
+  useCore.setState({ selectedDiscussionId: id, section: 'discussions', conversationDraft: false, ...PAGES_CLOSED })
 }
 
-// from: a group whose members, projects and options the new one starts with.
+// The new page, set to a group chat. from: a group whose members, projects and options it starts with.
 export function openDiscussionDraft(from?: Discussion): void {
-  useCore.setState({ selectedDiscussionId: null, section: 'discussions', discussionDraft: true, discussionDraftFrom: from ? { discussion: from } : null, ...PAGES_CLOSED })
-}
-
-export function closeDiscussionDraft(): void {
-  openOverview()
+  useCore.setState({ selectedConversationId: null, selectedDiscussionId: null, section: 'conversations', conversationDraft: true, conversationDraftMode: 'group', conversationDraftCarry: null, conversationDraftIssue: null, conversationDraftFrom: null, discussionDraftFrom: from ? { discussion: from } : null, draftProfileId: null, ...PAGES_CLOSED })
 }
 
 // Whether core runs group chats (discussions.*).
@@ -1001,7 +1009,7 @@ export function useSchedulesOpen(): boolean {
 // The overview has no close of its own: it is what every other page leaves behind when it closes,
 // but a task, which goes back to the task board.
 const OVERVIEW = {
-  overviewOpen: true, guideOpen: false, section: 'tasks', selectedId: null, selectedConversationId: null, conversationDraft: false, discussionDraft: false,
+  overviewOpen: true, guideOpen: false, section: 'tasks', selectedId: null, selectedConversationId: null, conversationDraft: false,
   squadDraft: false, inboxOpen: false, gitOpen: false, worktreesOpen: false, routinesOpen: false, settingsOpen: false
 } as const
 

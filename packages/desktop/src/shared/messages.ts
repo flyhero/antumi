@@ -4067,6 +4067,21 @@ export const MESSAGES = {
     "zh": "移除成员 {value1}",
     "en": "Remove member {value1}"
   },
+  "DraftModeSwitch.label": {"zh": "新建", "en": "Start"},
+  "DraftModeSwitch.single": {"zh": "单人会话", "en": "One agent"},
+  "DraftModeSwitch.group": {"zh": "群聊讨论", "en": "Group chat"},
+  "DraftModeSwitch.groupHint": {"zh": "几个 Agent 一起讨论，成员只读", "en": "Several agents discuss it, read-only"},
+  "DraftModeSwitch.issueBlocks": {"zh": "排查问题由一个 Agent 进行，先去掉上面的问题再切换", "en": "An issue is looked into by one agent; remove it above to switch"},
+  "DraftModeSwitch.profileBlocks": {"zh": "群聊成员不能用智能体，先去掉上面的智能体再切换", "en": "Group chat members can't use an agent profile; remove it above to switch"},
+  "DraftModeSwitch.invite": {"zh": "＋ 邀请其他 Agent 一起讨论", "en": "＋ Invite other agents to discuss"},
+  "DiscussionDraft.settingsSummary": {"zh": "讨论设置：最多 {rounds} 轮{anonymous} · {requirements}", "en": "Settings: up to {rounds} rounds{anonymous} · {requirements}"},
+  "DiscussionDraft.anonymousShort": {"zh": " · 匿名互评", "en": " · anonymous"},
+  "DiscussionDraft.defaultRequirements": {"zh": "默认讨论要求", "en": "default requirements"},
+  "DiscussionDraft.customRequirements": {"zh": "自定义讨论要求", "en": "custom requirements"},
+  "DiscussionDraft.noRequirements": {"zh": "无讨论要求", "en": "no requirements"},
+  "DiscussionDraft.imagesStayBehind": {"zh": "群聊不带图片：已添加的 {count} 张图片留在单人会话里。", "en": "Group chats take no images: the {count} {count, plural, one {image} other {images}} added stay in the one-agent draft."},
+  "DiscussionDraft.membersReadOnly": {"zh": "成员只读", "en": "Read-only members"},
+  "DiscussionDraft.membersReadOnlyHint": {"zh": "成员可以读所选项目的代码，不改文件、不执行计划", "en": "Members can read the projects' code but not edit files or run plans"},
   "DiscussionDraft.newGroupChat": {
     "zh": "新群聊",
     "en": "New group chat"

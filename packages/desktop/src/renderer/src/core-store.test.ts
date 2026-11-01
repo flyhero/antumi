@@ -4,7 +4,7 @@ import { actionableItems } from './attention'
 import {
   openAttentionItem, openConversationDraft, selectConversation, selectTask, openOverview, openGit, setGitLocation, setOverviewFilter, setOverviewScroll, setOverviewView, setRoutinesOpen,
   refreshAttentionSummaries, setInboxOpen, setTaskStarting, openChatWhileStarting, setSchedulesOpen, setSettingsOpen, setWorktreesOpen, useCore,
-  clearInspectorFile, closeConversationDraft, closeDiscussionDraft, installAgentCli, openDiscussionDraft, showConversationChanges, showInspectorFile, showTaskChanges
+  clearInspectorFile, closeConversationDraft, installAgentCli, openDiscussionDraft, switchDraftMode, showConversationChanges, showInspectorFile, showTaskChanges
 } from './core-store'
 import { conversationSurface } from './components/chat-surface'
 
@@ -182,12 +182,21 @@ describe('overview navigation', () => {
     ['schedules', () => setSchedulesOpen(true), () => setSchedulesOpen(false)],
     ['worktrees', () => setWorktreesOpen(true), () => setWorktreesOpen(false)],
     ['conversation draft', () => openConversationDraft(), closeConversationDraft],
-    ['group chat draft', () => openDiscussionDraft(), closeDiscussionDraft]
+    ['group chat draft', () => openDiscussionDraft(), closeConversationDraft]
   ])('falls back to the overview when %s closes', (_label, open, close) => {
     selectConversation('chat')
     open()
     close()
     expect(useCore.getState()).toMatchObject({ overviewOpen: true, section: 'tasks', selectedConversationId: null })
+  })
+
+  it('opens one new page for a conversation or a group chat, switching between them with what was written', () => {
+    openDiscussionDraft()
+    expect(useCore.getState()).toMatchObject({ section: 'conversations', conversationDraft: true, conversationDraftMode: 'group', discussionDraftFrom: null })
+    switchDraftMode('single', { text: '要讨论的', projects: ['/p'], agent: 'codex', model: null })
+    expect(useCore.getState()).toMatchObject({ conversationDraftMode: 'single', conversationDraftCarry: { text: '要讨论的', projects: ['/p'], agent: 'codex' } })
+    openConversationDraft()
+    expect(useCore.getState()).toMatchObject({ conversationDraftMode: 'single', conversationDraftCarry: null })
   })
 
   it('goes back to the task board, not the overview, when a task closes', () => {

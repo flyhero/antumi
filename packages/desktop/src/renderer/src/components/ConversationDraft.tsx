@@ -4,7 +4,7 @@ import { useShortcutLabel } from '../keyboard-shortcuts'
 import { getLocale, t, tr } from '../i18n'
 import { useEffect, useMemo, useState } from 'react'
 import { agentDescriptor, ChatPermissionMode, type AgentKind, type ChatCatalog } from '@antumi/protocol'
-import { closeConversationDraft, perform, selectConversation, useChatImagesSupported, useChatOptionsSupported, useConversationWorktreesSupported, useCore, useSourceInvestigateSupported, useStartBranchSupported } from '../core-store'
+import { closeConversationDraft, perform, selectConversation, switchDraftMode, useChatImagesSupported, useChatOptionsSupported, useConversationWorktreesSupported, useCore, useDiscussionsSupported, useSourceInvestigateSupported, useStartBranchSupported } from '../core-store'
 import { OtherProjectsHint } from './OtherProjectsHint'
 import { ConversationTip } from './ConversationTip'
 import { defaultAgent } from '../default-agent'
@@ -30,6 +30,7 @@ import { composerDraft, EMPTY_DRAFT, saveComposerDraft } from '../composer-draft
 import { inboxKey, rememberInvestigationProjects } from '../source-inboxes'
 import { catalogKey, providerFor } from '../model-provider-choice'
 import { ProviderPicker } from './ProviderPicker'
+import { DraftModeSwitch } from './DraftModeSwitch'
 
 // A new conversation while chats are the default: the agent and projects are picked on the page,
 // and the first message creates the conversation and starts the agent, so none is left empty.
@@ -49,17 +50,23 @@ export function ConversationDraft() {
   const profile = profileId ? profiles[profileId] : null
   const initial = from?.configuration
   const composerId = from?.key ?? null
+  // Back from a group chat draft: its topic, projects and first member come along.
+  const [carry] = useState(() => useCore.getState().conversationDraftCarry)
   // Unset when nothing settles it, for each start to pick.
-  const [agent, setAgent] = useState<AgentKind | null>(() => (draftProfileId ? profiles[draftProfileId]?.agent : null) ?? initial?.agent ?? defaultAgent(useCore.getState().tasks, useCore.getState().conversations))
+  const [agent, setAgent] = useState<AgentKind | null>(() => (draftProfileId ? profiles[draftProfileId]?.agent : null) ?? initial?.agent ?? carry?.agent ?? defaultAgent(useCore.getState().tasks, useCore.getState().conversations))
   // Asked for again while the page is open (another project's ＋), it takes the new ones.
   const requested = useCore((s) => s.conversationDraftProjects)
-  const [projectPaths, setProjectPaths] = useState<string[]>(() => [...(requested?.paths ?? [])])
+  const [projectPaths, setProjectPaths] = useState<string[]>(() => [...(carry?.projects ?? requested?.paths ?? [])])
   useEffect(() => { if (requested) setProjectPaths([...requested.paths]) }, [requested])
   const investigateSupported = useSourceInvestigateSupported()
   const draftIssue = useCore((s) => s.conversationDraftIssue)
   const issue = investigateSupported ? draftIssue : null
   const [worktree, setWorktree] = useState(false)
-  const [draft] = useState(() => composerDraft(composerId))
+  // Mentions stay only while the text they mark is unchanged.
+  const [draft] = useState(() => {
+    const saved = composerDraft(composerId)
+    return carry && carry.text !== saved.text ? { ...saved, text: carry.text, mentions: [] } : saved
+  })
   const { value, setText, setValue } = useMentionedText({ text: draft.text, mentions: draft.mentions })
   const { text } = value
   const [busy, setBusy] = useState(false)
@@ -71,7 +78,7 @@ export function ConversationDraft() {
   // A model or effort left unpicked is the agent's own default, which the start does not pass.
   const [picks, setPicks] = useState<Partial<Record<AgentKind, { model?: string; effort?: string }>>>(() => initial ? {
     [initial.agent]: { model: initial.model ?? undefined, effort: initial.effort ?? undefined }
-  } : profile ? { [profile.agent]: { model: profile.model ?? undefined, effort: profile.effort ?? undefined } } : {})
+  } : profile ? { [profile.agent]: { model: profile.model ?? undefined, effort: profile.effort ?? undefined } } : carry?.agent && carry.model ? { [carry.agent]: { model: carry.model } } : {})
   // The model provider picked, for whichever agent it serves; null is the agent's own account.
   const [providerId, setProviderId] = useState<string | null>(() => profile?.modelProvider ?? initial?.modelProvider ?? null)
   const providers = useCore((s) => s.modelProviders)
@@ -145,6 +152,10 @@ export function ConversationDraft() {
   const choose = (next: { model?: string; effort?: string }) => {
     if (agent) setPicks({ ...picks, [agent]: next })
   }
+  // A group chat's members run on the agents' own accounts, so a provider's model stays behind.
+  const discussionsSupported = useDiscussionsSupported()
+  const toGroup = () => ({ text, projects: projectPaths, agent, model: provider ? null : pick.model ?? null })
+  const groupBlocked = issue ? t('DraftModeSwitch.issueBlocks') : profile ? t('DraftModeSwitch.profileBlocks') : null
 
   const chosen = {
     ...(optionsSupported ? { permissionMode: mode ?? undefined, ...(pick.model ? { model: pick.model } : {}), ...(effort ? { effort } : {}) } : {}),
@@ -206,6 +217,7 @@ export function ConversationDraft() {
         <div className="chat-view" data-width={width} {...typeface}>
           <div className="chat-list chat-draft">
             <div className="chat-draft-start">
+              <DraftModeSwitch mode="single" carry={toGroup} blocked={groupBlocked} disabled={busy} />
               {issue && (
                 <div className="chat-draft-issue">
                   <span className="muted">{tr('ConversationDraft.investigate', { value1: issue.source })}</span>
@@ -248,6 +260,9 @@ export function ConversationDraft() {
                   </button>
                 ))}
               </div>
+              {discussionsSupported && !groupBlocked && (
+                <button type="button" className="link-button chat-draft-invite" disabled={busy} onClick={() => switchDraftMode('group', toGroup())}>{t('DraftModeSwitch.invite')}</button>
+              )}
               <p className="chat-draft-hint muted">
                 {issue
                   ? t('ConversationDraft.agentReadsTheOriginalIssueAndInvestigatesIn')

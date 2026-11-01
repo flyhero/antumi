@@ -1073,9 +1073,17 @@ export function useOverview(): Overview {
     includeTaskSummaries: mode === 'complete' }), [tasks, conversations, unseen, routines, schedules, squadRuns, now, mode, getLocale()])
 }
 
+// Where a conversation a notice names opens: a group chat member's request is answered on the group
+// chat's page, so that is where it goes; any other conversation opens itself.
+export function openConversationTarget(id: string): void {
+  const discussionId = useCore.getState().conversations[id]?.discussionId
+  if (discussionId && useCore.getState().discussions[discussionId]) selectDiscussion(discussionId)
+  else selectConversation(id)
+}
+
 export function openAttentionItem(item: ActionableItem): void {
   if (item.target.kind === 'conversation') {
-    if (useCore.getState().conversations[item.target.id]) selectConversation(item.target.id)
+    if (useCore.getState().conversations[item.target.id]) openConversationTarget(item.target.id)
   } else {
     const task = useCore.getState().tasks[item.target.id]
     if (!task || task.status === 'done' || task.status === 'abandoned') return

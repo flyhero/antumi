@@ -4156,6 +4156,10 @@ export const MESSAGES = {
   "DiscussionView.researchComposerStopped": {"zh": "@ 成员可单独追问他查到的内容", "en": "@ a member to ask about what they found"},
   "DiscussionView.draftFromThis": {"zh": "据此起草一份文稿", "en": "Draft a document from this"},
   "DiscussionView.draftFromThisTopic": {"zh": "根据下面的讨论结论起草一份文稿，把结论落成可以直接用的内容。\n\n{text}", "en": "Draft a document from the conclusions below, turning them into something ready to use.\n\n{text}"},
+  "DiscussionView.awaitingBelow": {"zh": "在等你确认，在下方处理", "en": "Waiting on you; answer below"},
+  "DiscussionRequests.label": {"zh": "成员等你处理的请求", "en": "Members' requests waiting on you"},
+  "DiscussionRequests.waits": {"zh": "{name} 在等你", "en": "{name} is waiting on you"},
+  "DiscussionRequests.openMember": {"zh": "打开成员会话", "en": "Open their conversation"},
   "DraftModeSwitch.label": {"zh": "新建", "en": "Start"},
   "DraftModeSwitch.single": {"zh": "单人会话", "en": "One agent"},
   "DraftModeSwitch.group": {"zh": "群聊讨论", "en": "Group chat"},
@@ -4466,10 +4470,6 @@ export const MESSAGES = {
   "DiscussionView.unknownReason": {
     "zh": "未知原因",
     "en": "Unknown reason"
-  },
-  "DiscussionView.awaitingYourApproval": {
-    "zh": "在等你确认，{value1}",
-    "en": "Awaiting your approval, {value1}"
   },
   "DiscussionView.respond": {
     "zh": "去处理",

@@ -10270,6 +10270,16 @@ button.island-compact:focus-visible { outline: 2px solid var(--focus); outline-o
 .discussion-tag { padding: 0 6px; border-radius: 999px; background: var(--fill-2); color: var(--text-muted); }
 /* A review: which format it is, the author among the members, each review's verdict, and the steps
    from the first draft to the final one. Done steps carry a tick, the one under way the info blue. */
+/* Members waiting on the user, answered above the composer with the chat's own cards: who waits, a
+   tab each when several do, and the way to the member's own conversation. */
+.discussion-requests { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.discussion-requests-head { display: flex; align-items: center; gap: 6px; font-size: var(--chat-font-small); color: var(--text-muted); }
+.discussion-requests-who, .discussion-requests-tab { display: inline-flex; align-items: center; gap: 4px; }
+.discussion-requests-who .agent-mark, .discussion-requests-tab .agent-mark { width: 14px; height: 14px; }
+.discussion-requests-tabs { display: flex; gap: 2px; padding: 2px; border-radius: var(--radius); background: var(--surface-muted); }
+.discussion-requests-tab { height: 24px; padding: 0 8px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--text-muted); font: inherit; cursor: pointer; }
+.discussion-requests-tab[aria-selected='true'] { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+.discussion-request-loading { margin: 0; font-size: var(--chat-font-small); }
 .discussion-format { padding: 0 8px; border-radius: 999px; background: var(--accent-bg); color: var(--accent); font-size: 12px; }
 .discussion-member-chair[data-seat='lead'] { background: var(--accent-bg); color: var(--accent); }
 .discussion-verdict { display: inline-flex; align-items: center; gap: 4px; margin-top: 8px; padding: 0 8px; border-radius: 999px; font-size: var(--chat-font-small); font-weight: 500; }

@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { Task, createRpcClient, type Conversation, type RpcConnection } from '@antumi/protocol'
+import { Discussion, Task, createRpcClient, type Conversation, type RpcConnection } from '@antumi/protocol'
 import { actionableItems } from './attention'
 import {
   openAttentionItem, openConversationDraft, selectConversation, selectTask, openOverview, openGit, setGitLocation, setOverviewFilter, setOverviewScroll, setOverviewView, setRoutinesOpen,
   refreshAttentionSummaries, setInboxOpen, setTaskStarting, openChatWhileStarting, setSchedulesOpen, setSettingsOpen, setWorktreesOpen, useCore,
-  clearInspectorFile, closeConversationDraft, installAgentCli, openDiscussionDraft, switchDraftMode, showConversationChanges, showInspectorFile, showTaskChanges
+  clearInspectorFile, closeConversationDraft, installAgentCli, openConversationTarget, openDiscussionDraft, switchDraftMode, showConversationChanges, showInspectorFile, showTaskChanges
 } from './core-store'
 import { conversationSurface } from './components/chat-surface'
 
@@ -197,6 +197,20 @@ describe('overview navigation', () => {
     expect(useCore.getState()).toMatchObject({ conversationDraftMode: 'single', conversationDraftCarry: { text: '要讨论的', projects: ['/p'], agent: 'codex' } })
     openConversationDraft()
     expect(useCore.getState()).toMatchObject({ conversationDraftMode: 'single', conversationDraftCarry: null })
+  })
+
+  it("opens a group chat member's notice on the group chat's page, and any other conversation on its own", () => {
+    useCore.setState({
+      conversations: { chat, member: { ...chat, id: 'member', discussionId: 'group' } },
+      discussions: { group: Discussion.parse({
+        id: '00000000-0000-4000-8000-000000000001', title: 'g', topic: 't', projectPaths: [], members: [], chairId: '00000000-0000-4000-8000-000000000002',
+        maxRounds: 3, anonymous: false, state: 'done', step: null, round: 1, lastRound: 1, pinnedAt: null, archivedAt: null, createdAt: 0, updatedAt: 0
+      }) }
+    })
+    openConversationTarget('member')
+    expect(useCore.getState()).toMatchObject({ section: 'discussions', selectedDiscussionId: 'group' })
+    openConversationTarget('chat')
+    expect(useCore.getState()).toMatchObject({ section: 'conversations', selectedConversationId: 'chat' })
   })
 
   it('goes back to the task board, not the overview, when a task closes', () => {

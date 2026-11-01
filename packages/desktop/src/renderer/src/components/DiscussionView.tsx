@@ -3,13 +3,14 @@ import { localized, t, tr } from '../i18n'
 import { useChatTypeface } from '../chat-typeface'
 import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { checkDiscussionAction, checkDiscussionMention, checkEditDiscussionProjects, checkNewDiscussionTopic, checkRemoveDiscussionMember, currentTopic, MAX_DETAILS_LENGTH, memberLetter, researchRound, researchSteps, reviewRound, reviewSteps, stepwise, type ReviewStep, type Discussion, type DiscussionAction, type DiscussionMember, type DiscussionPost } from '@antumi/protocol'
-import { loadConversation, openDiscussionDraft, openDiscussionDraftWith, openOverview, perform, selectConversation, selectDiscussion, selectTask, useCore, useDiscussionFormatsSupported, useDiscussionMembersSupported, useDiscussionProjectsSupported, useDiscussionTopicsSupported } from '../core-store'
+import { openDiscussionDraft, openDiscussionDraftWith, openOverview, perform, selectDiscussion, selectTask, useCore, useDiscussionFormatsSupported, useDiscussionMembersSupported, useDiscussionProjectsSupported, useDiscussionTopicsSupported } from '../core-store'
 import { archiveDiscussion, controlDiscussion, discussionProgress, EVERYONE, loadDiscussionPosts, newDiscussionTopic, removeDiscussionMember, setDiscussionProjects, MEMBER_STATUS_LABEL, mentionedMembers, postToDiscussion, renameDiscussion, useDiscussionPosts } from '../discussions'
 import { agentLabel, messageTime, reasonText } from '../labels'
 import { setPreference, usePreferences } from '../preferences'
 import { ChatMarkdown } from './ChatMarkdown'
 import { sendsMessage } from './ChatComposer'
 import { DiscussionDot } from './DiscussionActions'
+import { DiscussionRequests, openMember } from './DiscussionRequests'
 import { AgentIcon, CloseIcon, EnterIcon, PlayIcon, StopIcon } from './icons'
 import { ProjectPicker, projectNames } from './ProjectPicker'
 import { Spinner } from './Spinner'
@@ -61,12 +62,6 @@ const SEND_MODES = localized(() => ([
 
 const KIND_LABEL: Partial<Record<DiscussionPost['kind'], string>> = localized(() => ({ opening: t('DiscussionView.independentAnswer'), rebuttal: t('DiscussionView.response'), reply: t('DiscussionView.answerToYou'), summary: t('DiscussionView.summary') }))
 
-// A member's own conversation, where its tool calls and approvals are: it is kept out of the list,
-// so it may need fetching before it can be shown.
-async function openMember(member: DiscussionMember): Promise<void> {
-  if (!useCore.getState().conversations[member.conversationId]) await loadConversation(member.conversationId)
-  selectConversation(member.conversationId)
-}
 
 // What a summary sums up: the topic it closes, and in how many of that topic's rounds.
 type Topic = { text: string; rounds: number }
@@ -194,7 +189,7 @@ function FailedPost({ error }: { error: string | null }) {
 
 function PendingPost({ member }: { member: DiscussionMember | undefined }) {
   if (member?.status === 'awaiting') {
-    return <span className="discussion-typing">{tr('DiscussionView.awaitingYourApproval', { value1: <button type="button" className="link-button" onClick={() => void openMember(member)}>{t('DiscussionView.respond')}</button> })}</span>
+    return <span className="discussion-typing">{t('DiscussionView.awaitingBelow')}</span>
   }
   return <span className="discussion-typing" role="status">{tr('DiscussionView.thinking', { value1: <i />, value2: <i />, value3: <i /> })}</span>
 }
@@ -612,6 +607,7 @@ export function DiscussionView({ id }: { id: string }) {
             {posts ? review ? <ReviewRounds discussion={discussion} posts={posts} /> : research ? <ResearchRounds discussion={discussion} posts={posts} /> : <Rounds discussion={discussion} posts={posts} /> : <p className="muted">{tr('DiscussionView.loadingPosts', { value1: <Spinner /> })}</p>}
           </div>
           <div className="chat-dock">
+            {!archived && <DiscussionRequests discussion={discussion} />}
             {archived && <ArchivedBar what={t('DiscussionView.groupChat_910')} onRestore={() => archiveDiscussion(id, false)} />}
             <div className="chat-input-card" data-working={busy || undefined} hidden={archived}>
               {mentionMenu.menu}

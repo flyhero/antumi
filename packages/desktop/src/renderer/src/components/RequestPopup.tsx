@@ -2,7 +2,8 @@ import { getLocale, useLocale, t } from '../i18n'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type JSX } from 'react'
 import { create } from 'zustand'
 import type { AgentKind, ChatItem, Conversation } from '@antumi/protocol'
-import { dropChat, pathShortener, setChatPage, useChat } from '../chat-state'
+import { pathShortener } from '../chat-state'
+import { useWatchedChat } from '../chat-watch'
 import { dismissError, perform, useCore } from '../core-store'
 import { layoutRequestPopup, onRequestPopupAttention, onRequestPopupGeometry, onRequestPopupWanted, openFromRequestPopup, setRequestPopupInteractive, type PopupGeometry } from '../desktop-bridge'
 import type { ActionableTarget } from '../attention'
@@ -20,7 +21,6 @@ import { AntHead, AntMoodMark, antMood } from './AntHead'
 
 type StateItem = Extract<ChatItem, { kind: 'state' }>
 
-const NO_ITEMS: readonly ChatItem[] = []
 const NONE_CLOSED: ReadonlySet<string> = new Set()
 // Asked for, with nothing to show by then (answered in the meantime): the card stays down.
 const GIVE_UP_MS = 5000
@@ -78,25 +78,6 @@ function popupSurface(entry: PopupEntry, conversation: Conversation | undefined)
     handoff: null,
     fork: null
   }
-}
-
-// The chat's items while the card shows it, kept current as the chat view keeps its own.
-function useWatchedChat(conversationId: string | null): readonly ChatItem[] {
-  const rpc = useCore((s) => s.rpc)
-  useEffect(() => {
-    if (!rpc || !conversationId) return
-    let current = true
-    rpc.call('conversations.watchChat', { id: conversationId }).then(
-      (result) => current && setChatPage(conversationId, result),
-      () => {}
-    )
-    return () => {
-      current = false
-      dropChat(conversationId)
-      void rpc.call('conversations.unwatchChat', { id: conversationId }).catch(() => {})
-    }
-  }, [rpc, conversationId])
-  return useChat((s) => (conversationId ? s[conversationId]?.items : undefined)) ?? NO_ITEMS
 }
 
 // The window at the top of the screen: what agents wait on while the user is in another app, one

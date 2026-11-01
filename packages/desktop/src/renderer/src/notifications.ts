@@ -1,5 +1,5 @@
 import { attentionCount, noticesBetween, unseenConversations } from './attention'
-import { openUsageCard, selectConversation, selectTask, setRoutinesOpen, useCore } from './core-store'
+import { openConversationTarget, openUsageCard, selectTask, setRoutinesOpen, useCore } from './core-store'
 import { canNotify, canShowIsland, canShowRequestPopup, notify, onNotificationClick, setBadge, setRequestPopupMode, tellRequestPopupAttention, wantRequestPopup } from './desktop-bridge'
 import { currentInstalledAgents } from './installed-agents'
 import { usePreferences, type Preferences } from './preferences'
@@ -45,7 +45,7 @@ export function startNotifications(): void {
   })
   onNotificationClick((target) => {
     if (target.kind === 'task') selectTask(target.id)
-    else if (target.kind === 'conversation') selectConversation(target.id)
+    else if (target.kind === 'conversation') openConversationTarget(target.id)
     else if (target.kind === 'usage') openUsageCard(target.agent)
     else setRoutinesOpen(true, 'routines')
   })

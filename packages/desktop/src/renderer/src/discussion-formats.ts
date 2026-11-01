@@ -14,7 +14,8 @@ const DRAFT = /起草|草拟|拟一|拟定|撰写|写一[份篇版个]|写个|�
 const RESEARCH = /为什么|为何|原因|排查|调研|查一下|查清|查查|摸底|盘点|哪些地方|瓶颈|根因|\bwhy\b|\binvestigate\b|\blook into\b|\broot cause\b|\baudit\b/i
 
 // What a topic asks for, by its words: whichever kind of word comes first wins, so 「为什么要写文档」
-// is research. Plain rules, cheap and instant; a wrong guess is one click to change.
+// is research. Plain rules, cheap and instant, shown until the small model's judgement comes in
+// (discussion-format-suggestion.ts); a wrong guess is one click to change.
 export function recommendFormat(topic: string, available: readonly DiscussionFormat[]): { format: DiscussionFormat; reason: FormatReason } {
   if (!topic.trim()) return { format: 'roundtable', reason: null }
   const draft = available.includes('review') ? topic.search(DRAFT) : -1
@@ -24,10 +25,13 @@ export function recommendFormat(topic: string, available: readonly DiscussionFor
   return { format: 'roundtable', reason: 'discuss' }
 }
 
-// The format a start runs: the one picked, or auto's, among those core runs.
-export function chosenFormat(choice: FormatChoice, topic: string, available: readonly DiscussionFormat[]): DiscussionFormat {
-  if (choice === 'auto') return recommendFormat(topic, available).format
-  return available.includes(choice) ? choice : 'roundtable'
+// Why a format suits, for one the small model judged without saying why.
+export const REASON_OF: Readonly<Record<DiscussionFormat, Exclude<FormatReason, null>>> = { roundtable: 'discuss', review: 'draft', research: 'research' }
+
+// The format a start runs: the one picked, or the one recommended for auto, among those core runs.
+export function chosenFormat(choice: FormatChoice, recommended: DiscussionFormat, available: readonly DiscussionFormat[]): DiscussionFormat {
+  const format = choice === 'auto' ? recommended : choice
+  return available.includes(format) ? format : 'roundtable'
 }
 
 // Rounds for a round table, revisions for a review; research has none to pick.

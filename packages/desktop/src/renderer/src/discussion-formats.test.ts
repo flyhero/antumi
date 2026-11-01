@@ -20,9 +20,10 @@ describe('discussion formats', () => {
   })
 
   it('runs what was picked, or what auto recommends, and falls back to a round table core can run', () => {
-    expect(chosenFormat('auto', '起草提案', all)).toBe('review')
-    expect(chosenFormat('research', '起草提案', all)).toBe('research')
-    expect(chosenFormat('review', '起草提案', ['roundtable'])).toBe('roundtable')
+    expect(chosenFormat('auto', 'review', all)).toBe('review')
+    expect(chosenFormat('research', 'review', all)).toBe('research')
+    expect(chosenFormat('review', 'roundtable', ['roundtable'])).toBe('roundtable')
+    expect(chosenFormat('auto', 'research', ['roundtable'])).toBe('roundtable')
   })
 
   it('counts rounds for a round table, revisions for a review, and turns at their fewest and most', () => {

@@ -217,6 +217,14 @@ export function checkArchiveDiscussion(discussion: Pick<Discussion, 'state' | 'm
   return busy(discussion) ? 'busy' : null
 }
 
+// What a new group chat's format is asked from: what was written, and the members' agents in order,
+// each with the model the user picked for its small jobs; the first that takes quick requests answers.
+export const DiscussionFormatAsk = z.object({
+  topic: z.string().trim().min(1).max(20000),
+  agents: z.array(z.object({ agent: AgentKind, model: z.string().trim().min(1).max(200).optional() })).min(1).max(MAX_DISCUSSION_MEMBERS)
+})
+export type DiscussionFormatAsk = z.input<typeof DiscussionFormatAsk>
+
 // Whether the user may name members to answer now. A reviewer or researcher answering midway would
 // see what the others wrote on their own, so names wait until nothing is out.
 export function checkDiscussionMention(discussion: Pick<Discussion, 'state' | 'members'> & { format?: DiscussionFormat }): 'busy' | null {

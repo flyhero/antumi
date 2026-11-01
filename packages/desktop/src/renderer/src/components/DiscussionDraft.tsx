@@ -17,7 +17,8 @@ import { AgentIcon, ChevronDownIcon, CloseIcon, EnterIcon } from './icons'
 import { ProjectPicker } from './ProjectPicker'
 import { DiscussionRequirements } from './DiscussionRequirements'
 import { DraftModeSwitch } from './DraftModeSwitch'
-import { chosenFormat, defaultRounds, DISCUSSION_FORMATS, discussionTurns, FORMAT_REASON, recommendFormat, type FormatChoice } from '../discussion-formats'
+import { chosenFormat, defaultRounds, DISCUSSION_FORMATS, discussionTurns, FORMAT_REASON, REASON_OF, recommendFormat, type FormatChoice } from '../discussion-formats'
+import { useFormatSuggestion } from '../discussion-format-suggestion'
 import { debateStances } from '../discussion-requirements'
 
 // A member as picked: name is null while it follows the agent and model.
@@ -153,9 +154,13 @@ export function DiscussionDraft({ from }: { from: Discussion | null }) {
   useEffect(() => { if (!from) kept = { choice, members, chair, rounds: roundsPicked, anonymous, requirements } }, [from, choice, members, chair, roundsPicked, anonymous, requirements])
   const formatsSupported = useDiscussionFormatsSupported()
   const available: readonly DiscussionFormat[] = formatsSupported ? ['roundtable', 'review', 'research'] : ['roundtable']
-  // Auto follows what is written; the format a start runs is what the page shows throughout.
-  const recommended = recommendFormat(topic, available)
-  const format = chosenFormat(choice, topic, available)
+  // Auto follows what is written: the rule's guess at once, then a member agent's small model's
+  // judgement once typing pauses. The format a start runs is what the page shows throughout.
+  const quickModels = usePreferences((p) => p.quickModels)
+  const suggestion = useFormatSuggestion(topic, members.map((member) => ({ agent: member.agent, ...(quickModels[member.agent] ? { model: quickModels[member.agent] } : {}) })), formatsSupported && choice === 'auto')
+  const judged = suggestion.format && available.includes(suggestion.format) ? suggestion.format : null
+  const recommended = judged ? { format: judged, reason: REASON_OF[judged] } : recommendFormat(topic, available)
+  const format = chosenFormat(choice, recommended.format, available)
   const reviewing = format === 'review'
   // Research runs in three steps, with no rounds to pick.
   const researching = format === 'research'
@@ -253,7 +258,11 @@ export function DiscussionDraft({ from }: { from: Discussion | null }) {
                 <span className="discussion-draft-format-flow muted">{tr('discussionFormats.flowAndTurns', { flow: <b>{DISCUSSION_FORMATS[format].flow}</b>, turns: turns.least === turns.most ? String(turns.most) : `${turns.least}–${turns.most}` })}</span>
               </div>
               {formatsSupported && choice === 'auto' && recommended.reason && (
-                <p className="chat-draft-hint muted">{t('discussionFormats.recommended', { format: DISCUSSION_FORMATS[recommended.format].label, reason: FORMAT_REASON[recommended.reason] })}</p>
+                <p className="chat-draft-hint muted">
+                  {t('discussionFormats.recommended', { format: DISCUSSION_FORMATS[recommended.format].label, reason: FORMAT_REASON[recommended.reason] })}
+                  {suggestion.state === 'asking' && <span className="discussion-draft-judging">{t('discussionFormats.checking')}</span>}
+                  {judged && suggestion.model && <span className="discussion-draft-judging">{t('discussionFormats.judgedBy', { model: suggestion.model })}</span>}
+                </p>
               )}
               <div className="discussion-draft-field">
                 <ul className="discussion-draft-members" aria-label={t('DiscussionDraft.members')}>

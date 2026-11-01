@@ -4078,6 +4078,8 @@ export const MESSAGES = {
   "discussionRequirements.debateDescription": {"zh": "成员分正反方、立场不变，3 人以上时最后一位做裁判兼主持", "en": "Members argue fixed sides; with three or more, the last judges and chairs"},
   "discussionRequirements.relay": {"zh": "接力补充", "en": "Relay"},
   "discussionRequirements.relayDescription": {"zh": "从第 2 轮起每人在别人的基础上补充，不重复", "en": "From round 2 each adds to what the others wrote"},
+  "discussionFormats.checking": {"zh": "正在让小模型确认…", "en": "Asking a small model to check…"},
+  "discussionFormats.judgedBy": {"zh": "由 {model} 判断", "en": "judged by {model}"},
   "discussionFormats.label": {"zh": "讨论方式", "en": "Format"},
   "discussionFormats.roundtable": {"zh": "圆桌讨论", "en": "Round table"},
   "discussionFormats.roundtableDescription": {"zh": "梳理共识与分歧", "en": "Sort out agreement and disagreement"},

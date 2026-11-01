@@ -48,6 +48,7 @@ import { cleanSlug, slugPrompt } from './branch-slug'
 import { cleanCommitMessage, commitContext, commitMessagePrompt } from './commit-message'
 import { QuickRequests } from './quick-request'
 import { TranslationService } from './translation-service'
+import { FormatSuggestions } from './discussion-format-suggestion'
 import { inspectKnowledgeFolder, readObsidianVaults } from './obsidian-vaults'
 import type { SkillsLibrary } from './skills-library'
 import { searchSkills } from './skills-search'
@@ -145,6 +146,7 @@ export function createRpcHandlers(
     observe: (facts) => analytics?.quick(facts)
   })
   const translations = new TranslationService(quick)
+  const formatSuggestions = new FormatSuggestions(quick)
   conversations.setTitleGenerator(async (conversation, prompt) => (await quick.ask(conversation.agent, prompt,
     chatSettings.current().titleModels[conversation.agent], {
       kind: 'title', conversationId: conversation.id, baseline: () => conversations.costBaseline(conversation.id)
@@ -661,6 +663,7 @@ export function createRpcHandlers(
     'discussions.list': () => discussions.list(),
     'discussions.get': ({ id }) => discussions.get(id),
     'discussions.create': (fields) => discussions.create(fields),
+    'discussions.suggestFormat': (ask) => formatSuggestions.suggest(ask),
     'discussions.posts': ({ id }) => discussions.posts(id),
     'discussions.post': ({ id, text, mentions }) => discussions.post(id, text, mentions),
     'discussions.newTopic': ({ id, text }) => discussions.newTopic(id, text),

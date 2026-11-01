@@ -3,8 +3,8 @@ import { DEFAULT_DISCUSSION_REQUIREMENTS, DEFAULT_DISCUSSION_REVISIONS, DEFAULT_
 
 // How a group chat goes, as the new page offers it. Debate and relay run as the round table does,
 // with roles, chair and requirements filled in for them: they promise nothing the rounds do not do.
-// A review is a format of core's own (feature discussion-formats).
-export const DISCUSSION_FORMAT_IDS = ['roundtable', 'debate', 'relay', 'review'] as const
+// A review and research are formats of core's own (feature discussion-formats).
+export const DISCUSSION_FORMAT_IDS = ['roundtable', 'debate', 'relay', 'review', 'research'] as const
 export type DiscussionFormatId = (typeof DISCUSSION_FORMAT_IDS)[number]
 
 // Sent to the agents as they are, like the requirement presets, so in Chinese whatever the interface.
@@ -26,7 +26,7 @@ export type FormatSetup = { roles: string[]; chair: number; requirements: string
 
 // What core runs a format as.
 export function coreFormat(format: DiscussionFormatId): DiscussionFormat {
-  return format === 'review' ? 'review' : 'roundtable'
+  return format === 'review' || format === 'research' ? format : 'roundtable'
 }
 
 // What picking a format sets for `count` members. A debate's last member judges once there are
@@ -34,6 +34,8 @@ export function coreFormat(format: DiscussionFormatId): DiscussionFormat {
 export function formatSetup(format: DiscussionFormatId, count: number): FormatSetup {
   switch (format) {
     case 'roundtable':
+      return { roles: Array.from({ length: count }, () => ''), chair: 0, requirements: DEFAULT_DISCUSSION_REQUIREMENTS, rounds: DEFAULT_DISCUSSION_ROUNDS }
+    case 'research':
       return { roles: Array.from({ length: count }, () => ''), chair: 0, requirements: DEFAULT_DISCUSSION_REQUIREMENTS, rounds: DEFAULT_DISCUSSION_ROUNDS }
     case 'review':
       return { roles: Array.from({ length: count }, () => ''), chair: 0, requirements: DEFAULT_DISCUSSION_REQUIREMENTS, rounds: DEFAULT_DISCUSSION_REVISIONS }
@@ -50,8 +52,10 @@ export function formatSetup(format: DiscussionFormatId, count: number): FormatSe
 
 // How many turns a discussion takes, at least and at most: a round table may end before its last
 // round; a review that passes its first draft takes one turn from each member, and each revision
-// one more from each. A turn is no measure of quota.
+// one more from each; research takes the chair's split and report and one turn from each other
+// member. A turn is no measure of quota.
 export function discussionTurns(format: DiscussionFormatId, count: number, rounds: number): { least: number; most: number } {
+  if (format === 'research') return { least: count + 1, most: count + 1 }
   if (format === 'review') return { least: count, most: count * (rounds + 1) }
   return { least: Math.min(count * rounds + 1, count * 2 + 1), most: count * rounds + 1 }
 }
@@ -60,5 +64,6 @@ export const DISCUSSION_FORMATS: readonly { id: DiscussionFormatId; label: strin
   { id: 'roundtable', label: t('discussionFormats.roundtable'), description: t('discussionFormats.roundtableDescription'), flow: t('discussionFormats.roundtableFlow') },
   { id: 'debate', label: t('discussionFormats.debate'), description: t('discussionFormats.debateDescription'), flow: t('discussionFormats.debateFlow') },
   { id: 'relay', label: t('discussionFormats.relay'), description: t('discussionFormats.relayDescription'), flow: t('discussionFormats.relayFlow') },
-  { id: 'review', label: t('discussionFormats.review'), description: t('discussionFormats.reviewDescription'), flow: t('discussionFormats.reviewFlow') }
+  { id: 'review', label: t('discussionFormats.review'), description: t('discussionFormats.reviewDescription'), flow: t('discussionFormats.reviewFlow') },
+  { id: 'research', label: t('discussionFormats.research'), description: t('discussionFormats.researchDescription'), flow: t('discussionFormats.researchFlow') }
 ]))

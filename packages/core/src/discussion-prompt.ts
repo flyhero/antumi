@@ -247,3 +247,65 @@ export function revisePrompt(discussion: Discussion, version: number, unseen: re
   ].join('\n')
 }
 
+
+// The chair's first message in research: split the topic so each other member has a part.
+export function splitPrompt(discussion: Discussion, chair: DiscussionMember, topic: string, userPosts: readonly DiscussionPost[]): string {
+  const others = discussion.members.filter((member) => member.id !== chair.id)
+  return [
+    '你正在主持 Antumi 的一场分工调研：先把问题拆开，分给其他几位 AI 各查一块，他们各自调研、互相看不到；最后由你汇总成报告。',
+    '',
+    '## 要调研的问题',
+    topic,
+    '',
+    '## 可以分配的成员',
+    ...others.map((each) => describe(discussion, each)),
+    '',
+    '## 相关项目',
+    projectList(discussion),
+    '',
+    ...rules(discussion),
+    ...(userPosts.length > 0 ? ['', '## 用户的补充', ...userPosts.map((post) => post.text)] : []),
+    '',
+    '## 拆题',
+    '先用几句话说明你怎么拆。然后单独写一行「分工：」，下面每位成员一行，格式是「- 名字：要查清的事，以及查到什么程度算完」。每位成员都要分到，名字照上面写。',
+    '你自己不领题，最后负责汇总。'
+  ].filter((line, index, lines) => line !== '' || lines[index - 1] !== '').join('\n')
+}
+
+// A member is sent its own part, never the others' findings, so each looks into its part alone.
+export function researchPrompt(discussion: Discussion, member: DiscussionMember, topic: string, part: string, unseen: readonly DiscussionPost[]): string {
+  return [
+    '你正在参加 Antumi 的一场分工调研：主持人把问题拆开，每人各查一块，最后由主持人汇总。你看不到其他成员的调研，他们也看不到你的。',
+    '',
+    '## 整体问题（背景）',
+    topic,
+    '',
+    '## 你负责的部分',
+    part,
+    '',
+    `你在调研中的名字是「${member.name}」。` + (member.role ? `\n你的角度：${member.role}` : ''),
+    '',
+    '## 相关项目',
+    projectList(discussion),
+    ...(unseen.length > 0 ? ['', '## 用户的补充', ...unseen.map((post) => post.text)] : []),
+    '',
+    ...rules(discussion),
+    '',
+    '只查你负责的部分。写清查到的事实和证据（引用代码时注明文件和行号），区分事实和推测，最后列出没查清的问题。'
+  ].filter((line, index, lines) => line !== '' || lines[index - 1] !== '').join('\n')
+}
+
+// The chair is sent every member's findings and writes the report.
+export function reportPrompt(discussion: Discussion, unseen: readonly DiscussionPost[]): string {
+  return [
+    '## 汇总',
+    ...projectsNow(discussion),
+    '下面是各位成员的调研结果' + (unseen.some((post) => post.memberId === null) ? '和用户的补充' : '') + '。',
+    '',
+    ...since(discussion, unseen),
+    '',
+    '请写成一份给用户的调研报告：先给结论，再按问题组织各部分的发现和证据，标出互相矛盾或没查清的地方，最后给出建议的下一步。只用调研里出现过的内容，具体格式遵循用户的讨论要求。',
+    '',
+    ...rules(discussion)
+  ].join('\n')
+}

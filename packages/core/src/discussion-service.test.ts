@@ -507,5 +507,48 @@ describe('DiscussionService', () => {
       await until(() => discussions.posts(discussion.id).some((post) => post.kind === 'reply' && post.state === 'done'))
     })
   })
+
+  describe('research', () => {
+    // Cid splits and reports; Ann and Bob each look into a part.
+    const research = (overrides: Partial<DiscussionCreate> = {}) => fields({ format: 'research', chair: 2, ...overrides })
+    const stages = (posts: DiscussionPost[]) => posts.filter((post) => post.kind !== 'notice').map((post) => `${post.round}:${post.stage}:${post.state}`)
+    const split = '这样拆。\n\n分工：\n- Ann：查缓存放哪\n- Bob：查失效策略'
+
+    it('splits the topic, has each member look into its own part alone, then the chair reports', async () => {
+      answer = (member, prompt) => prompt.includes('## 拆题') ? split : prompt.includes('## 汇总') ? 'the report' : `${member} found things`
+      const discussion = await discussions.create(research())
+      await until(() => state(discussion.id) === 'done')
+      const posts = discussions.posts(discussion.id)
+      expect(stages(posts)).toEqual(['1:split:done', '2:research:done', '2:research:done', '3:final:done'])
+      expect(posts.at(-1)).toMatchObject({ kind: 'summary', memberId: by(discussion, 'Cid').id, text: 'the report' })
+      const ann = prompts(discussion, 'Ann')
+      expect(ann[0]).toContain('查缓存放哪')
+      expect(ann[0]).not.toContain('查失效策略')
+      expect(prompts(discussion, 'Bob')[0]).not.toContain('Ann found things')
+      expect(prompts(discussion, 'Cid').at(-1)).toContain('Ann found things')
+      expect(prompts(discussion, 'Cid').at(-1)).toContain('Bob found things')
+    })
+
+    it('pauses on a split that leaves a member out, and asks the chair again going on', async () => {
+      let splits = 0
+      answer = (member, prompt) => prompt.includes('## 拆题') ? (++splits === 1 ? '分工：\n- Ann：全部' : split) : prompt.includes('## 汇总') ? 'report' : `${member} found`
+      const discussion = await discussions.create(research())
+      await until(() => state(discussion.id) === 'paused')
+      expect(discussions.posts(discussion.id).at(-1)?.text).toContain('没有给 Bob 分配')
+      await discussions.control(discussion.id, 'resume')
+      await until(() => state(discussion.id) === 'done')
+      expect(splits).toBe(2)
+      await expect(discussions.control(discussion.id, 'nextRound')).rejects.toMatchObject({ reason: 'discussion-format' })
+    })
+
+    it('reports on the findings in once concluded, without one still failing', async () => {
+      answer = (member, prompt) => prompt.includes('## 拆题') ? split : prompt.includes('## 汇总') ? 'report' : member === 'Bob' ? null : `${member} found`
+      const discussion = await discussions.create(research())
+      await until(() => state(discussion.id) === 'paused')
+      await discussions.control(discussion.id, 'conclude')
+      await until(() => state(discussion.id) === 'done')
+      expect(stages(discussions.posts(discussion.id)).at(-1)).toBe('3:final:done')
+    })
+  })
 })
 

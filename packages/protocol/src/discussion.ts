@@ -16,11 +16,18 @@ export const DEFAULT_DISCUSSION_REVISIONS = 2
 // How a group chat goes. roundtable: every member answers each round, then the chair sums up.
 // review: the chair is the author and writes a draft, the others review it each on their own, and
 // the author revises until every reviewer passes it or the revisions run out; maxRounds counts
-// revisions. Older cores know only the round table (feature discussion-formats). A format a client
-// does not know fails the discussion's parse, so that client leaves it out rather than misreading it.
-export const DISCUSSION_FORMATS = ['roundtable', 'review'] as const
+// revisions. research: the chair splits the topic among the others, each looks into its part on its
+// own, and the chair writes the report. Older cores know only the round table (feature
+// discussion-formats). A format a client does not know fails the discussion's parse, so that client
+// leaves it out rather than misreading it.
+export const DISCUSSION_FORMATS = ['roundtable', 'review', 'research'] as const
 export const DiscussionFormat = z.enum(DISCUSSION_FORMATS)
 export type DiscussionFormat = z.infer<typeof DiscussionFormat>
+
+// A format that runs in steps of its own, rather than rounds every member answers.
+export function stepwise(format: DiscussionFormat | undefined): boolean {
+  return format !== undefined && format !== 'roundtable'
+}
 
 export const DEFAULT_DISCUSSION_REQUIREMENTS = [
   '- 观点要具体，给出理由；不确定的地方直接说不确定。',
@@ -121,8 +128,9 @@ export const DiscussionPost = z.object({
   // A member's post is pending while its turn runs, failed when the turn did not complete.
   state: z.enum(['pending', 'done', 'failed']).catch('done'),
   // In a review: what the post is (a draft, a review of one, a revision, the final draft), the
-  // draft version it writes or reviews, and a review's or the final draft's verdict. Null elsewhere.
-  stage: z.enum(['draft', 'review', 'revise', 'final']).nullable().catch(null).default(null),
+  // draft version it writes or reviews, and a review's or the final draft's verdict. In research:
+  // the chair's split, a member's findings, and the report as final. Null elsewhere.
+  stage: z.enum(['draft', 'review', 'revise', 'final', 'split', 'research']).nullable().catch(null).default(null),
   version: z.number().int().positive().nullable().catch(null).default(null),
   verdict: z.enum(['pass', 'change']).nullable().catch(null).default(null),
   // Why a member's post failed: a reason code, then, on the lines after it, what the agent said.
@@ -152,10 +160,12 @@ export type DiscussionCreate = z.input<typeof DiscussionCreate>
 export const DiscussionAction = z.enum(['pause', 'resume', 'nextRound', 'conclude', 'stop'])
 export type DiscussionAction = z.infer<typeof DiscussionAction>
 
-export type DiscussionActionBlocker = 'not-running' | 'not-paused' | 'summing-up' | 'done'
+export type DiscussionActionBlocker = 'not-running' | 'not-paused' | 'summing-up' | 'done' | 'format'
 
-export function checkDiscussionAction(discussion: Pick<Discussion, 'state' | 'step'>, action: DiscussionAction): DiscussionActionBlocker | null {
-  // A review's nextRound is one more revision, and conclude takes the latest draft as it stands.
+// A review's nextRound is one more revision, and conclude takes the latest draft as it stands.
+// Research has no round to add: its conclude asks for the report with the findings in.
+export function checkDiscussionAction(discussion: Pick<Discussion, 'state' | 'step'> & { format?: DiscussionFormat }, action: DiscussionAction): DiscussionActionBlocker | null {
+  if (discussion.format === 'research' && action === 'nextRound') return 'format'
   const { state, step } = discussion
   const summing = step === 'summary' && (state === 'running' || state === 'pausing')
   switch (action) {
@@ -176,16 +186,16 @@ export function checkDiscussionAction(discussion: Pick<Discussion, 'state' | 'st
 
 export type DiscussionMemberBlocker = 'full' | 'too-few' | 'chair' | 'busy' | 'format'
 
-// A member joins up to the limit, and takes part from the next round. A review keeps the author and
-// reviewers it began with, so each draft is reviewed by the same people.
+// A member joins up to the limit, and takes part from the next round. A review or research keeps
+// the members it began with: each draft is reviewed by the same people, each part has its own.
 export function checkAddDiscussionMember(discussion: Pick<Discussion, 'members'> & { format?: DiscussionFormat }): DiscussionMemberBlocker | null {
-  if (discussion.format === 'review') return 'format'
+  if (stepwise(discussion.format)) return 'format'
   return discussion.members.length >= MAX_DISCUSSION_MEMBERS ? 'full' : null
 }
 
 // The chair stays, as it is to sum up; a member answering is let finish first.
 export function checkRemoveDiscussionMember(discussion: Pick<Discussion, 'members' | 'chairId'> & { format?: DiscussionFormat }, memberId: string): DiscussionMemberBlocker | null {
-  if (discussion.format === 'review') return 'format'
+  if (stepwise(discussion.format)) return 'format'
   if (discussion.members.length <= MIN_DISCUSSION_MEMBERS) return 'too-few'
   if (memberId === discussion.chairId) return 'chair'
   return discussion.members.find((member) => member.id === memberId)?.status === 'idle' ? null : 'busy'
@@ -196,9 +206,9 @@ function busy(discussion: Pick<Discussion, 'state' | 'members'>): boolean {
 }
 
 // A new topic waits for the turns out now: the user pauses first, or lets the summary come. A review
-// stays on what it drafts; another topic is another group chat.
+// or research stays on what it began with; another topic is another group chat.
 export function checkNewDiscussionTopic(discussion: Pick<Discussion, 'state' | 'members'> & { format?: DiscussionFormat }): 'busy' | 'format' | null {
-  if (discussion.format === 'review') return 'format'
+  if (stepwise(discussion.format)) return 'format'
   return busy(discussion) ? 'busy' : null
 }
 
@@ -207,10 +217,33 @@ export function checkArchiveDiscussion(discussion: Pick<Discussion, 'state' | 'm
   return busy(discussion) ? 'busy' : null
 }
 
-// Whether the user may name members to answer now. In a review a reviewer answering mid-review
-// would see the others' reviews, so names wait until nothing is out.
+// Whether the user may name members to answer now. A reviewer or researcher answering midway would
+// see what the others wrote on their own, so names wait until nothing is out.
 export function checkDiscussionMention(discussion: Pick<Discussion, 'state' | 'members'> & { format?: DiscussionFormat }): 'busy' | null {
-  return discussion.format === 'review' && busy(discussion) ? 'busy' : null
+  return stepwise(discussion.format) && busy(discussion) ? 'busy' : null
+}
+
+// Research's rounds: the chair splits the topic in the first, the others look into their parts in
+// the second, and the chair reports in the third.
+export function researchRound(round: number): 'split' | 'research' | 'report' {
+  return round <= 1 ? 'split' : round === 2 ? 'research' : 'report'
+}
+
+export type ResearchStep = { stage: 'split' | 'research' | 'report'; state: 'done' | 'current' | 'failed' | 'todo'; done: number; total: number }
+
+// Research's three steps and how far each got, for the page's progress line.
+export function researchSteps(discussion: Pick<Discussion, 'members' | 'chairId'>, posts: readonly Pick<DiscussionPost, 'round' | 'memberId' | 'stage' | 'state'>[]): ResearchStep[] {
+  const researchers = discussion.members.filter((member) => member.id !== discussion.chairId).length
+  return (['split', 'research', 'report'] as const).map((stage) => {
+    const latest = new Map<string, (typeof posts)[number]>()
+    const own = stage === 'report' ? 'final' : stage
+    for (const post of posts) if (post.stage === own && post.memberId) latest.set(post.memberId, post)
+    const answers = [...latest.values()]
+    const total = stage === 'research' ? researchers : 1
+    const done = answers.filter((post) => post.state === 'done').length
+    const state = answers.length === 0 ? 'todo' : answers.some((post) => post.state === 'pending') ? 'current' : done < total ? 'failed' : 'done'
+    return { stage, state, done, total }
+  })
 }
 
 // A review's rounds: the author writes in the odd ones (the first draft, then each revision), the

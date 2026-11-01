@@ -27,6 +27,8 @@ describe('discussion formats', () => {
   it('runs only a review as a format of its own, two revisions by default, its turns from one per member up', () => {
     expect(coreFormat('debate')).toBe('roundtable')
     expect(coreFormat('review')).toBe('review')
+    expect(coreFormat('research')).toBe('research')
+    expect(discussionTurns('research', 3, 3)).toEqual({ least: 4, most: 4 })
     expect(formatSetup('review', 3).rounds).toBe(2)
     expect(discussionTurns('review', 3, 2)).toEqual({ least: 3, most: 9 })
   })

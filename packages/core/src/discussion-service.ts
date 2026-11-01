@@ -16,7 +16,9 @@ import {
   DiscussionMemberFields,
   DiscussionPost,
   PLAN_TOOLS,
+  researchRound,
   reviewRound,
+  stepwise,
   type ChatItem,
   type Conversation,
   type DiscussionAction,
@@ -25,7 +27,8 @@ import {
   type DiscussionPostKind
 } from '@antumi/protocol'
 import type { ConversationService } from './conversation-service'
-import { draftPrompt, holdsPosition, openingPrompt, replyPrompt, reviewPrompt, reviewVerdict, revisePrompt, roundPrompt, summaryPrompt, topicPrompt } from './discussion-prompt'
+import { draftPrompt, holdsPosition, openingPrompt, replyPrompt, reportPrompt, researchPrompt, reviewPrompt, reviewVerdict, revisePrompt, roundPrompt, splitPrompt, summaryPrompt, topicPrompt } from './discussion-prompt'
+import { nextResearchStep, researchAssignments } from './discussion-research'
 import { nextReviewStep, reviewLastRound } from './discussion-review'
 import { Rejection } from './rejection'
 
@@ -150,7 +153,7 @@ export class DiscussionService {
       throw error
     }
     const discussion = this.announce(id)
-    void this.serially(id, () => discussion.format === 'review' ? this.advanceReview(id) : this.dispatchRound(id, 1))
+    void this.serially(id, () => stepwise(discussion.format) ? this.advanceStepwise(id) : this.dispatchRound(id, 1))
     return discussion
   }
 
@@ -170,6 +173,10 @@ export class DiscussionService {
       this.announcePosts(id, [said])
       if (named.length > 0) {
         return { said, next: () => Promise.all(named.map((member) => this.ask(this.get(id), member, 'reply', discussion.round, (unseen) => replyPrompt(this.get(id), said, unseen)))) }
+      }
+      if ((discussion.state === 'paused' || discussion.state === 'done') && discussion.format === 'research') {
+        this.announce(id)
+        return { said, next: null }
       }
       if ((discussion.state === 'paused' || discussion.state === 'done') && discussion.format === 'review') {
         this.announce(id)
@@ -224,8 +231,8 @@ export class DiscussionService {
       const blocked = checkDiscussionAction(discussion, action)
       if (blocked) throw new Rejection(`discussion-${blocked}`)
       const pending = this.storedPosts(id).filter((post) => post.state === 'pending')
-      if (discussion.format === 'review' && action !== 'pause' && action !== 'stop') {
-        await this.controlReview(id, action, pending.length > 0)
+      if (stepwise(discussion.format) && action !== 'pause' && action !== 'stop') {
+        await this.controlStepwise(id, action, pending.length > 0)
         return this.announce(id)
       }
       switch (action) {
@@ -438,7 +445,7 @@ export class DiscussionService {
   }
 
   private async resume(discussion: Discussion): Promise<void> {
-    if (discussion.format === 'review') return this.advanceReview(discussion.id, true)
+    if (stepwise(discussion.format)) return this.advanceStepwise(discussion.id, true)
     const posts = this.storedPosts(discussion.id)
     if (discussion.step === 'summary') {
       if (!posts.some((post) => post.kind === 'summary' && post.state === 'done' && post.round === discussion.round)) await this.dispatchSummary(discussion.id)
@@ -450,7 +457,7 @@ export class DiscussionService {
 
   // Once nothing is out: the next round, the summary, or a stop.
   private async advance(id: string): Promise<void> {
-    if (this.get(id).format === 'review') return this.advanceReview(id)
+    if (stepwise(this.get(id).format)) return this.advanceStepwise(id)
     const discussion = this.get(id)
     const posts = this.storedPosts(id)
     if (posts.some((post) => post.state === 'pending')) return
@@ -540,9 +547,9 @@ export class DiscussionService {
     }
   }
 
-  // A review once nothing is out: the next draft or reviews, a pause on what failed, or the final
-  // draft. retry: going on after a pause asks again what failed.
-  private async advanceReview(id: string, retry = false): Promise<void> {
+  // A review or research once nothing is out: its next step, a pause on what failed, or its end.
+  // retry: going on after a pause asks again what failed.
+  private async advanceStepwise(id: string, retry = false): Promise<void> {
     const discussion = this.get(id)
     const posts = this.storedPosts(id)
     if (posts.some((post) => post.state === 'pending')) return
@@ -551,14 +558,19 @@ export class DiscussionService {
       return
     }
     if (discussion.state !== 'running') return
-    const next = nextReviewStep(discussion, posts, retry)
+    const next = discussion.format === 'research' ? nextResearchStep(discussion, posts, retry) : nextReviewStep(discussion, posts, retry)
     if (next.kind === 'pause') {
       this.notice(id, discussion.round, next.notice)
       this.write(id, { state: 'paused' })
       return
     }
     if (next.kind === 'ask') {
-      await this.dispatchReview(id, next.round, next.memberIds)
+      if (discussion.format === 'research') await this.dispatchResearch(id, next.round, next.memberIds)
+      else await this.dispatchReview(id, next.round, next.memberIds)
+      return
+    }
+    if (next.kind === 'done') {
+      this.write(id, { state: 'done', step: 'summary' })
       return
     }
     // The final draft is the author's latest, as written; the verdict says whether it passed.
@@ -603,20 +615,43 @@ export class DiscussionService {
     await this.dispatchReview(id, next, reviewing ? reviewers : [discussion.chairId])
   }
 
-  private async controlReview(id: string, action: DiscussionAction, pending: boolean): Promise<void> {
+  // Research: the chair splits the topic, each other member looks into the part it was given, and
+  // the chair reports on the findings. A member sees only its own part and the user's words.
+  private async dispatchResearch(id: string, round: number, memberIds: readonly string[]): Promise<void> {
+    this.write(id, { step: this.get(id).step === 'summary' ? 'summary' : 'round', round })
+    const discussion = this.get(id)
+    const posts = this.storedPosts(id)
+    const stage = researchRound(round)
+    const split = posts.findLast((post) => post.stage === 'split' && post.state === 'done')
+    const parts = split ? researchAssignments(split.text, discussion.members, discussion.chairId) : new Map<string, string>()
+    await Promise.all(memberIds.map((memberId) => {
+      const member = discussion.members.find((each) => each.id === memberId)
+      if (!member) return Promise.resolve()
+      if (stage === 'split') {
+        return this.ask(discussion, member, 'opening', round, (unseen) => splitPrompt(discussion, member, discussion.topic, unseen.filter((post) => post.kind === 'user')), { stage: 'split', version: null, visible: (post) => post.kind === 'user' })
+      }
+      if (stage === 'research') {
+        return this.ask(discussion, member, 'opening', round, (unseen) => researchPrompt(discussion, member, discussion.topic, parts.get(member.id) ?? '', unseen), { stage: 'research', version: null, visible: (post) => post.kind === 'user' })
+      }
+      return this.ask(discussion, member, 'summary', round, (unseen) => reportPrompt(discussion, unseen), { stage: 'final', version: null })
+    }))
+  }
+
+  private async controlStepwise(id: string, action: DiscussionAction, pending: boolean): Promise<void> {
     const discussion = this.get(id)
     switch (action) {
       case 'resume':
         this.write(id, { state: 'running' })
-        if (discussion.state === 'paused') await this.advanceReview(id, true)
+        if (discussion.state === 'paused') await this.advanceStepwise(id, true)
         return
       case 'nextRound':
         await this.reviseAgain(id)
         return
       case 'conclude':
-        // Whatever is out finishes first; then the latest draft is final, passed or not.
+        // Whatever is out finishes first; then a review's latest draft is final, passed or not, and
+        // research goes to its report with the findings in.
         this.write(id, { state: 'running', step: 'summary' })
-        if (!pending) await this.advanceReview(id)
+        if (!pending) await this.advanceStepwise(id)
         return
     }
   }

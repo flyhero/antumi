@@ -111,7 +111,7 @@ function membersFor(installed: readonly AgentKind[], carry: DraftCarry | null): 
 
 function settingsFrom(from: Discussion): Settings {
   return {
-    format: from.format === 'review' ? 'review' : 'roundtable',
+    format: from.format,
     members: from.members.map((member) => ({ key: crypto.randomUUID(), agent: member.agent, model: member.model ?? undefined, effort: member.effort ?? undefined, name: member.name, role: member.role })),
     chair: Math.max(0, from.members.findIndex((member) => member.id === from.chairId)),
     rounds: from.maxRounds,
@@ -159,6 +159,8 @@ export function DiscussionDraft({ from }: { from: Discussion | null }) {
   const offered = DISCUSSION_FORMATS.filter((each) => coreFormat(each.id) === 'roundtable' || formatsSupported)
   const shownFormat = offered.find((each) => each.id === format)
   const reviewing = shownFormat?.id === 'review'
+  // Research runs in three steps, with no rounds to pick.
+  const researching = shownFormat?.id === 'research'
   const turns = discussionTurns(format, members.length, rounds)
   // Images wait in one agent's draft: a group chat takes none.
   const [imagesLeft] = useState(() => composerDraft(null).images.length)
@@ -192,7 +194,7 @@ export function DiscussionDraft({ from }: { from: Discussion | null }) {
       chair,
       maxRounds: rounds,
       anonymous,
-      ...(reviewing ? { format: coreFormat(format) } : {})
+      ...(reviewing || researching ? { format: coreFormat(format) } : {})
     })
     setBusy(false)
     if (!created) return
@@ -267,13 +269,13 @@ export function DiscussionDraft({ from }: { from: Discussion | null }) {
               <div className="discussion-draft-settings" data-open={optionsOpen || undefined}>
                 <button type="button" className="discussion-draft-settings-toggle" aria-expanded={optionsOpen} onClick={() => setOptionsOpen(!optionsOpen)}>
                   <ChevronDownIcon />
-                  {t(reviewing ? 'DiscussionDraft.reviewSettingsSummary' : 'DiscussionDraft.settingsSummary', { rounds, anonymous: anonymous ? t('DiscussionDraft.anonymousShort') : '', requirements: requirements.trim() === DEFAULT_DISCUSSION_REQUIREMENTS ? t('DiscussionDraft.defaultRequirements') : requirements.trim() ? t('DiscussionDraft.customRequirements') : t('DiscussionDraft.noRequirements') })}
+                  {t(reviewing ? 'DiscussionDraft.reviewSettingsSummary' : researching ? 'DiscussionDraft.researchSettingsSummary' : 'DiscussionDraft.settingsSummary', { rounds, anonymous: anonymous ? t('DiscussionDraft.anonymousShort') : '', requirements: requirements.trim() === DEFAULT_DISCUSSION_REQUIREMENTS ? t('DiscussionDraft.defaultRequirements') : requirements.trim() ? t('DiscussionDraft.customRequirements') : t('DiscussionDraft.noRequirements') })}
                 </button>
                 {optionsOpen && (
                   <div className="discussion-draft-settings-body">
                     {requirementsSupported && <DiscussionRequirements value={requirements} onChange={setRequirements} disabled={busy} />}
                     <div className="discussion-draft-options">
-                      <span className="discussion-draft-rounds">{tr(reviewing ? 'DiscussionDraft.upToRevisions' : 'DiscussionDraft.upToSummarizeEarlyWhenPositionsRemainUnchanged', { value1: <ChatPicker
+                      {!researching && <span className="discussion-draft-rounds">{tr(reviewing ? 'DiscussionDraft.upToRevisions' : 'DiscussionDraft.upToSummarizeEarlyWhenPositionsRemainUnchanged', { value1: <ChatPicker
                           label={t('DiscussionDraft.maximumRounds')}
                           value={String(rounds)}
                           placeholder={t('DiscussionDraft.rounds', { rounds: rounds })}
@@ -281,7 +283,7 @@ export function DiscussionDraft({ from }: { from: Discussion | null }) {
                           disabled={busy}
                           options={Array.from({ length: MAX_DISCUSSION_ROUNDS }, (_, index) => ({ value: String(index + 1), label: reviewing ? t('DiscussionDraft.revisions', { value1: index + 1 }) : t('DiscussionDraft.rounds_823', { value1: index + 1 }) }))}
                           onChange={(value) => setRounds(Number(value))}
-                        /> })}</span>
+                        /> })}</span>}
                       <label data-tooltip={t('DiscussionDraft.useMemberABWithoutRevealingAgentOr')}>{tr('DiscussionDraft.anonymousPeerReview', { value1: <input type="checkbox" checked={anonymous} disabled={busy} onChange={(event) => setAnonymous(event.target.checked)} /> })}</label>
                     </div>
                   </div>
@@ -303,7 +305,7 @@ export function DiscussionDraft({ from }: { from: Discussion | null }) {
                 disabled={busy}
                 maxLength={20000}
                 aria-label={t('DiscussionDraft.topic')}
-                placeholder={reviewing ? t('DiscussionDraft.whatShouldBeDrafted') : t('DiscussionDraft.whatShouldBeDiscussedDescribeTheQuestionAnd')}
+                placeholder={reviewing ? t('DiscussionDraft.whatShouldBeDrafted') : researching ? t('DiscussionDraft.whatShouldBeResearched') : t('DiscussionDraft.whatShouldBeDiscussedDescribeTheQuestionAnd')}
                 onChange={(event) => setTopic(event.target.value)}
                 onKeyDown={(event) => {
                   if (!sendsMessage(event)) return
@@ -313,10 +315,10 @@ export function DiscussionDraft({ from }: { from: Discussion | null }) {
               />
               <div className="chat-options">
                 <span className="discussion-draft-readonly" data-tooltip={t('DiscussionDraft.membersReadOnlyHint')}>{t('DiscussionDraft.membersReadOnly')}</span>
-                <span className="chat-options-note muted">{reviewing ? t('DiscussionDraft.revisions', { value1: rounds }) : t('DiscussionDraft.rounds_823', { value1: rounds })}</span>
+                {!researching && <span className="chat-options-note muted">{reviewing ? t('DiscussionDraft.revisions', { value1: rounds }) : t('DiscussionDraft.rounds_823', { value1: rounds })}</span>}
                 <span className="chat-dock-spacer" />
                 <button type="button" className="button primary discussion-draft-start" data-tooltip={startLabel} data-tooltip-side="top-end" disabled={!canStart} onClick={() => void start()}>
-                  {busy ? t('DiscussionDraft.starting') : reviewing ? t('DiscussionDraft.startReview') : t('DiscussionDraft.startDiscussion')}
+                  {busy ? t('DiscussionDraft.starting') : reviewing ? t('DiscussionDraft.startReview') : researching ? t('DiscussionDraft.startResearch') : t('DiscussionDraft.startDiscussion')}
                   <EnterIcon />
                 </button>
               </div>

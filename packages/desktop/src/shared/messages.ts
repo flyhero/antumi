@@ -4069,7 +4069,7 @@ export const MESSAGES = {
   },
   "discussionFormats.auto": {"zh": "自动", "en": "Auto"},
   "discussionFormats.autoWith": {"zh": "自动 · {format}", "en": "Auto · {format}"},
-  "discussionFormats.autoDescription": {"zh": "按你写的问题选一种，写完再看", "en": "Picks one from what you write"},
+  "discussionFormats.autoDescription": {"zh": "按你写的问题选合适的方式", "en": "Picks the one your question suits"},
   "discussionFormats.reasonDraft": {"zh": "看起来要产出一份文稿", "en": "it looks like a document to write"},
   "discussionFormats.reasonResearch": {"zh": "看起来要查清一个问题，可以分头去查", "en": "it looks like something to find out, in parts"},
   "discussionFormats.reasonDiscuss": {"zh": "看起来要比较观点、得出结论", "en": "it looks like views to weigh and a conclusion to reach"},

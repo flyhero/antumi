@@ -246,7 +246,7 @@ export function DiscussionDraft({ from }: { from: Discussion | null }) {
                       disabled={busy}
                       options={[
                         { value: 'auto', label: topic.trim() ? t('discussionFormats.autoWith', { format: DISCUSSION_FORMATS[recommended.format].label }) : t('discussionFormats.auto'), description: t('discussionFormats.autoDescription') },
-                        ...available.map((each) => ({ value: each, label: DISCUSSION_FORMATS[each].label, description: `${DISCUSSION_FORMATS[each].description} · ${DISCUSSION_FORMATS[each].flow}` }))
+                        ...available.map((each) => ({ value: each, label: DISCUSSION_FORMATS[each].label, description: DISCUSSION_FORMATS[each].description }))
                       ]}
                       onChange={(value) => {
                         const next = value === 'auto' ? 'auto' : available.find((each) => each === value)

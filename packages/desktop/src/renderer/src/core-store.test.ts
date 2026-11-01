@@ -199,7 +199,7 @@ describe('overview navigation', () => {
     expect(useCore.getState()).toMatchObject({ conversationDraftMode: 'single', conversationDraftCarry: null })
   })
 
-  it("opens a group chat member's notice on the group chat's page, and any other conversation on its own", () => {
+  it("opens a group chat member's notice on the group chat's page, a delegated agent's in its parent, and any other conversation on its own", () => {
     useCore.setState({
       conversations: { chat, member: { ...chat, id: 'member', discussionId: 'group' } },
       discussions: { group: Discussion.parse({
@@ -210,6 +210,10 @@ describe('overview navigation', () => {
     openConversationTarget('member')
     expect(useCore.getState()).toMatchObject({ section: 'discussions', selectedDiscussionId: 'group' })
     openConversationTarget('chat')
+    expect(useCore.getState()).toMatchObject({ section: 'conversations', selectedConversationId: 'chat' })
+    // A delegated agent's request is answered in the conversation that sent it.
+    useCore.setState((state) => ({ conversations: { ...state.conversations, child: { ...chat, id: 'child', parentConversationId: 'chat' } } }))
+    openConversationTarget('child')
     expect(useCore.getState()).toMatchObject({ section: 'conversations', selectedConversationId: 'chat' })
   })
 

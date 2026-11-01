@@ -1,5 +1,5 @@
 import { t, tr } from '../i18n'
-import { useContext, useState } from 'react'
+import { useContext, useState, type ReactNode } from 'react'
 import { focusPaneInput, selectConversation, setSchedulesOpen, useCore } from '../core-store'
 import { composerDraft } from '../composer-drafts'
 import { useShortcutLabel } from '../keyboard-shortcuts'
@@ -133,8 +133,10 @@ function PaneReply({ conversationId, pane }: { conversationId: string; pane: Con
 }
 
 // Everything that waits on the user sits here, above the composer, so it cannot scroll out of view.
-export function ChatDock({ conversation, state, pending, tools, finishedCalls, onPrevious, sent, onJump, compact = false }: {
+export function ChatDock({ conversation, state, pending, tools, finishedCalls, onPrevious, sent, onJump, compact = false, waiting: others = null }: {
   compact?: boolean
+  // What agents working for this chat wait on, answered here (AgentRequests).
+  waiting?: ReactNode
   conversation: Conversation
   // The running stage's state; null for an older core or before the stage reports one.
   state: StateItem | null
@@ -170,6 +172,7 @@ export function ChatDock({ conversation, state, pending, tools, finishedCalls, o
         </button>
       </div>}
       <ChatSchedules runs={runs} planWaiting={planWaiting} />
+      {!archived && others}
       {waiting && answerable.length > 0 && <PendingRequests conversation={conversation} pending={answerable} tools={tools} modes={(state?.permissionModes ?? []).filter((mode) => !isHelper(conversation) || helperAllowsMode(mode))} />}
       {archived && <ArchivedBar what={t('BrowserPanel.conversation')} onRestore={() => archiveConversation(conversation.id, false)} />}
       {/* The composer stays mounted while a request or the archive takes its place, so a draft is not lost. */}

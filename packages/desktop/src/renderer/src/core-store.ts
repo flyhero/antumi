@@ -1074,10 +1074,13 @@ export function useOverview(): Overview {
 }
 
 // Where a conversation a notice names opens: a group chat member's request is answered on the group
-// chat's page, so that is where it goes; any other conversation opens itself.
+// chat's page, a delegated agent's in the conversation that sent it, so that is where they go; any
+// other conversation opens itself.
 export function openConversationTarget(id: string): void {
-  const discussionId = useCore.getState().conversations[id]?.discussionId
-  if (discussionId && useCore.getState().discussions[discussionId]) selectDiscussion(discussionId)
+  const { conversations, discussions } = useCore.getState()
+  const conversation = conversations[id]
+  if (conversation?.discussionId && discussions[conversation.discussionId]) selectDiscussion(conversation.discussionId)
+  else if (conversation?.parentConversationId && conversations[conversation.parentConversationId]) selectConversation(conversation.parentConversationId)
   else selectConversation(id)
 }
 

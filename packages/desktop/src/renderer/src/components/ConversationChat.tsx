@@ -6,7 +6,9 @@ import { Fragment, createContext, useCallback, useContext, useEffect, useLayoutE
 import { CODEX_IMAGE_GENERATION, cursorProviderError, isBrowserTool, isPlanApproval, isPreviewTool, chatReferencesIn, parseHandoffMessage, toolImagePath, type AgentKind, type ChatItem, type Conversation, type ConversationStage } from '@antumi/protocol'
 import { ChatBrowserTabs, firstBrowserCall, shouldOpenBrowser, useWatchBrowserTabs } from '../browser-state'
 import { ChatBrowserCard, ChatBrowserRun, ChatShotCard } from './ChatBrowserCard'
-import { chatBlocks, dropChat, finalReplies, foldsOfTools, itemKey, pathShortener, prependChatPage, previousTodos, saidText, setChatPage, stageAgents, thoughtDurations, timeline, useChat, type ChatBlock, type TimelineEntry, type TurnAgent, type TurnFile } from '../chat-state'
+import { chatBlocks, finalReplies, foldsOfTools, itemKey, pathShortener, prependChatPage, previousTodos, saidText, stageAgents, thoughtDurations, timeline, useChat, type ChatBlock, type TimelineEntry, type TurnAgent, type TurnFile } from '../chat-state'
+import { DelegationRequests } from './AgentRequests'
+import { holdChat } from '../chat-watch'
 import { ChatDisclosureScope, ChatFindExpansion, setOpened, useDisclosure } from '../chat-disclosure'
 import { isCompaction, noticeSummary, readableNotice } from '../chat-notices'
 import { parseQuotes, withoutQuoteMarkers } from '../chat-quotes'
@@ -610,19 +612,8 @@ export function ConversationChat({ conversation, surface, onHandoff, variant = '
   }, [id])
 
   // Watching makes core send this conversation's item changes to this window until it lets go.
-  useEffect(() => {
-    if (!rpc) return
-    let current = true
-    rpc.call('conversations.watchChat', { id }).then(
-      (result) => current && setChatPage(id, result),
-      () => {}
-    )
-    return () => {
-      current = false
-      dropChat(id)
-      void rpc.call('conversations.unwatchChat', { id }).catch(() => {})
-    }
-  }, [rpc, id])
+  // Held, not just watched: a panel answering this chat's requests may show it at the same time.
+  useEffect(() => (rpc ? holdChat(rpc, id) : undefined), [rpc, id])
 
   // A new stage starts with a new session; earlier stages do not change.
   useEffect(() => {
@@ -965,7 +956,7 @@ export function ConversationChat({ conversation, surface, onHandoff, variant = '
         )}
       </div>
       <ProjectRunNotice conversationId={conversation.id} />
-      <ChatDock compact={variant === 'compact'} conversation={conversation} state={state} pending={pending} tools={tools} finishedCalls={finishedCalls} onPrevious={previous} sent={sent} onJump={jump} />
+      <ChatDock compact={variant === 'compact'} conversation={conversation} state={state} pending={pending} tools={tools} finishedCalls={finishedCalls} onPrevious={previous} sent={sent} onJump={jump} waiting={<DelegationRequests conversation={conversation} />} />
       {variant !== 'compact' && <SelectionComment
         conversationId={id}
         container={list}

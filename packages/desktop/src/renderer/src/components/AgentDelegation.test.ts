@@ -60,7 +60,7 @@ describe('delegation surfaces', () => {
     for (const state of ['queued', 'awaiting', 'failed', 'completed', 'cancelled'] as const) expect(renderCard({ state })).not.toContain('data-active=')
     const awaiting = renderCard({ state: 'awaiting' })
     expect(awaiting).toContain('等你回答')
-    expect(awaiting).toContain('去处理')
+    expect(awaiting).toContain('在输入框上方处理')
     expect(awaiting).toContain('取消委派')
   })
 

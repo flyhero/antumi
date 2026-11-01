@@ -136,6 +136,61 @@ describe('external transcript sources', () => {
     expect(readFileSync(file)).toEqual(before)
   })
 
+  it.each(['legacy', 'v2'])('excludes archived OpenCode %s sessions on listing and reading', async (version) => {
+    const file = path.join(root, 'opencode.db')
+    const db = dbAt(file)
+    db.exec(`CREATE TABLE session(id TEXT, parent_id TEXT, directory TEXT, title TEXT, time_created INTEGER, time_updated INTEGER, time_archived INTEGER);
+      CREATE TABLE message(id TEXT, session_id TEXT, time_created INTEGER, data TEXT);
+      CREATE TABLE part(id TEXT, message_id TEXT, time_created INTEGER, data TEXT);
+      CREATE TABLE session_v2(id TEXT, parent_id TEXT, directory TEXT, title TEXT, time_created INTEGER, time_updated INTEGER, time_archived INTEGER);
+      CREATE TABLE session_message(id TEXT, session_id TEXT, type TEXT, seq INTEGER, time_created INTEGER, data TEXT);`)
+    db.prepare('INSERT INTO session VALUES (?, NULL, ?, ?, 100, 101, NULL)').run(id, cwd, 'Old copy')
+    db.prepare('INSERT INTO message VALUES (?, ?, 100, ?)').run('u', id, JSON.stringify({ role: 'user' }))
+    db.prepare('INSERT INTO part VALUES (?, ?, 100, ?)').run('p', 'u', JSON.stringify({ type: 'text', text: 'OpenCode prompt' }))
+    if (version === 'v2') {
+      db.prepare('INSERT INTO session_v2 VALUES (?, NULL, ?, ?, 100, 200, NULL)').run(id, cwd, 'New copy')
+      db.prepare('INSERT INTO session_message VALUES (?, ?, ?, 0, 100, ?)').run('u', id, 'user', JSON.stringify({ content: [{ type: 'text', text: 'OpenCode prompt' }] }))
+    }
+    const source = opencodeTranscripts(() => file)
+    const [session] = await source.scan()
+    expect(session).toBeDefined()
+    const table = version === 'v2' ? 'session_v2' : 'session'
+    db.exec(`UPDATE ${table} SET time_archived = 300`)
+    expect(await source.scan()).toEqual([])
+    await expect(source.read(session!.file)).rejects.toThrow('已不存在')
+    db.exec(`UPDATE ${table} SET time_archived = NULL`)
+    expect(await source.scan()).toHaveLength(1)
+    db.close()
+  })
+
+  it.each(['column', 'header', 'state', 'legacy'])('excludes Cursor desktop archive metadata in %s and rechecks on read', async (location) => {
+    const userDir = path.join(root, 'cursor-desktop')
+    const db = dbAt(path.join(userDir, 'globalStorage', 'state.vscdb'))
+    db.exec('CREATE TABLE cursorDiskKV(key TEXT PRIMARY KEY, value TEXT)')
+    const state = { workspaceIdentifier: { uri: { fsPath: cwd } } }
+    if (location !== 'legacy') {
+      db.exec('CREATE TABLE composerHeaders(composerId TEXT, lastUpdatedAt INTEGER, isArchived INTEGER, value TEXT)')
+      db.prepare('INSERT INTO composerHeaders VALUES (?, 200, 0, ?)').run(id, JSON.stringify(state))
+    }
+    const put = db.prepare('INSERT INTO cursorDiskKV VALUES (?, ?)')
+    put.run(`composerData:${id}`, JSON.stringify(state))
+    put.run(`bubbleId:${id}:u`, JSON.stringify({ type: 1, text: 'Active conversation' }))
+    const source = cursorDesktopTranscripts(() => userDir)
+    const [session] = await source.scan()
+    expect(session).toBeDefined()
+    if (location === 'column') db.exec('UPDATE composerHeaders SET isArchived = 1')
+    else if (location === 'header') db.prepare('UPDATE composerHeaders SET value = ?').run(JSON.stringify({ ...state, isArchived: true }))
+    else db.prepare('UPDATE cursorDiskKV SET value = ? WHERE key = ?').run(JSON.stringify({ ...state, isArchived: true }), `composerData:${id}`)
+    expect(await source.scan()).toEqual([])
+    await expect(source.read(session!.file)).rejects.toThrow('归档')
+    if (location === 'column') db.exec('UPDATE composerHeaders SET isArchived = 0')
+    else if (location === 'header') db.prepare('UPDATE composerHeaders SET value = ?').run(JSON.stringify(state))
+    else db.prepare('UPDATE cursorDiskKV SET value = ? WHERE key = ?').run(JSON.stringify(state), `composerData:${id}`)
+    expect(await source.scan()).toHaveLength(1)
+    expect((await source.read(session!.file)).messages[0]?.text).toBe('Active conversation')
+    db.close()
+  })
+
   it.each([true, false])('reads Cursor desktop with header table=%s and keeps bubble order', async (modern) => {
     const userDir = path.join(root, 'cursor-desktop')
     const file = path.join(userDir, 'globalStorage', 'state.vscdb')

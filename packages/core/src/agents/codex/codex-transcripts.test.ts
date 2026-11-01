@@ -1,6 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
 import { zstdCompressSync } from 'node:zlib'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { codexTranscript, codexTranscripts } from './codex-transcripts'
@@ -89,6 +90,39 @@ describe('codexTranscripts', () => {
 
   afterEach(() => {
     rmSync(home, { recursive: true, force: true })
+  })
+
+  it('excludes the archive directory and refuses to read it directly', async () => {
+    const dir = path.join(home, 'archived_sessions')
+    mkdirSync(dir)
+    const file = path.join(dir, `rollout-2026-10-01T10-00-00-${THREAD}.jsonl`)
+    writeFileSync(file, `${LINES.join('\n')}\n`)
+    const source = codexTranscripts(() => home)
+    expect(await source.scan()).toEqual([])
+    await expect(source.read(file)).rejects.toThrow('归档')
+  })
+
+  it('refreshes database archive flags even when a rollout is cached and still in sessions', async () => {
+    const dir = path.join(home, 'sessions')
+    mkdirSync(dir)
+    const file = path.join(dir, `rollout-2026-10-01T10-00-00-${THREAD}.jsonl`)
+    writeFileSync(file, `${LINES.join('\n')}\n`)
+    for (const version of [4, 5]) {
+      const db = new DatabaseSync(path.join(home, `state_${version}.sqlite`))
+      db.exec('CREATE TABLE threads(id TEXT PRIMARY KEY, archived INTEGER)')
+      db.prepare('INSERT INTO threads VALUES (?, 0)').run(THREAD)
+      db.close()
+    }
+    const source = codexTranscripts(() => home)
+    expect(await source.scan()).toHaveLength(1)
+    const db = new DatabaseSync(path.join(home, 'state_5.sqlite'))
+    db.exec('UPDATE threads SET archived = 1')
+    expect(await source.scan()).toEqual([])
+    await expect(source.read(file)).rejects.toThrow('归档')
+    db.exec('UPDATE threads SET archived = 0')
+    expect(await source.scan()).toHaveLength(1)
+    expect((await source.read(file)).messages).not.toHaveLength(0)
+    db.close()
   })
 
   it('lists the threads the user started, packed or not, by the name Codex gave them', async () => {

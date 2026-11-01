@@ -24,7 +24,7 @@ function sessions(db: DatabaseSync): StoredSession[] {
     }
   }
   if (!found.size && !tables.has('session') && !tables.has('session_v2')) throw new Error('OpenCode 会话数据库格式不受支持')
-  return [...found.values()].filter(({ row }) => !row.parent_id && !row.time_deleted)
+  return [...found.values()].filter(({ row }) => !row.parent_id && !row.time_deleted && !row.time_archived)
 }
 
 async function readSession(db: DatabaseSync, session: StoredSession, attachments?: AttachmentStore) {

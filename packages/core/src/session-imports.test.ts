@@ -39,11 +39,13 @@ describe('SessionImports', () => {
   let summaries: TranscriptSummary[]
   let transcripts: Map<string, Transcript>
   let imports: SessionImports
+  let now: number
 
   const summary = (sessionId: string, extra: Partial<TranscriptSummary> = {}): TranscriptSummary =>
     ({ sessionId, cwd: project, title: 'Fix the build', named: false, firstPrompt: 'Fix the build', startedAt: 1, modifiedAt: 1_000, file: sessionId, ...extra })
 
   beforeEach(() => {
+    now = 1_000
     root = mkdtempSync(path.join(os.tmpdir(), 'antumi-session-imports-'))
     project = path.join(root, 'app')
     mkdirSync(project)
@@ -63,7 +65,7 @@ describe('SessionImports', () => {
     summaries = [summary(SESSION)]
     transcripts = new Map([[SESSION, turn('u1', 100, 'Fix the build', 'Fixed.')]])
     const origin = { agent: 'claude' as const, transcripts: { scan: async () => summaries, read: async (file: string) => transcripts.get(file)! } }
-    imports = new SessionImports(store, service, path.join(root, 'home'), [origin], [])
+    imports = new SessionImports(store, service, path.join(root, 'home'), [origin], [], undefined, () => now)
     service.setImportHooks({ before: (id, agent, nativeId) => imports.beforeResume(id, agent, nativeId), after: (id) => imports.afterResume(id) })
   })
 
@@ -72,6 +74,42 @@ describe('SessionImports', () => {
     store.close()
     tasks.close()
     rmSync(root, { recursive: true, force: true })
+  })
+
+  it('lists sessions active in the last 30 days, including older conversations recently used', async () => {
+    const day = 24 * 60 * 60 * 1000
+    now = Date.UTC(2026, 10, 1)
+    summaries = [
+      summary('recent', { startedAt: now - 100 * day, modifiedAt: now - day }),
+      summary('boundary', { modifiedAt: now - 30 * day }),
+      summary('too-old', { modifiedAt: now - 30 * day - 1 })
+    ]
+    expect((await imports.list()).map((session) => session.sessionId)).toEqual(['recent', 'boundary'])
+    now += 1
+    expect((await imports.list()).map((session) => session.sessionId)).toEqual(['recent'])
+  })
+
+  it('keeps imported history when the external session falls outside the listing window', async () => {
+    const [conversation] = await imports.import([{ agent: 'claude', sessionId: SESSION }])
+    now += 31 * 24 * 60 * 60 * 1000
+    expect(await imports.list()).toEqual([])
+    expect(service.messages(conversation!.id).map((message) => message.text)).toEqual(['Fix the build', 'Fixed.'])
+    expect(store.sessionImports()).toHaveLength(1)
+  })
+
+  it('rescans before import so a session archived after listing cannot be imported', async () => {
+    expect(await imports.list()).toHaveLength(1)
+    summaries = []
+    await expect(imports.import([{ agent: 'claude', sessionId: SESSION }])).rejects.toMatchObject({ reason: 'session-not-found' })
+    expect(store.sessionImports()).toEqual([])
+  })
+
+  it('keeps an imported Antumi conversation when its external session is later archived', async () => {
+    const [conversation] = await imports.import([{ agent: 'claude', sessionId: SESSION }])
+    summaries = []
+    expect(await imports.list()).toEqual([])
+    expect(service.get(conversation!.id).id).toBe(conversation!.id)
+    expect(store.sessionImports()).toHaveLength(1)
   })
 
   it('imports a session as a conversation that resumes it in its own folder', async () => {
@@ -145,7 +183,7 @@ describe('SessionImports', () => {
     transcripts.set(SESSION, joined(turn('u1', 100, 'Fix the build', 'Fixed.'), turn('u2', 100, 'Same timestamp', 'Later reply')))
     summaries[0]!.modifiedAt = 2000
     await imports.import([{ agent: 'claude', sessionId: SESSION }])
-    imports = new SessionImports(store, service, path.join(root, 'home'), [{ agent: 'claude', transcripts: { scan: async () => summaries, read: async () => transcripts.get(SESSION)! } }], [])
+    imports = new SessionImports(store, service, path.join(root, 'home'), [{ agent: 'claude', transcripts: { scan: async () => summaries, read: async () => transcripts.get(SESSION)! } }], [], undefined, () => now)
     await imports.import([{ agent: 'claude', sessionId: SESSION }])
     expect(service.messages(imported!.id).map((message) => message.text)).toEqual(['Fix the build', 'Fixed.', 'Same timestamp', 'Later reply'])
     expect(service.stages(imported!.id)).toHaveLength(2)
@@ -193,7 +231,7 @@ describe('SessionImports', () => {
     const broken = new SessionImports(store, service, path.join(root, 'home'), [
       { agent: 'claude', transcripts: { scan: async () => summaries, read: async () => transcripts.get(SESSION)! } },
       { agent: 'cursor', transcripts: { scan: async () => { throw new Error('locked') }, read: async () => ({ entries: [], messages: [] }) } }
-    ], [])
+    ], [], undefined, () => now)
     expect(await broken.list()).toHaveLength(1)
     expect(broken.diagnostics()).toEqual([expect.objectContaining({ agent: 'cursor' })])
   })

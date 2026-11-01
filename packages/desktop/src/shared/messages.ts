@@ -12230,8 +12230,8 @@ export const MESSAGES = {
     "en": "Import local Agent and Cursor desktop sessions and continue them in Antumi"
   },
   "SessionImportSettings.note": {
-    "zh": "导入后保留之前的对话。发消息时优先恢复原会话；标有「历史移交」的会话会把历史交给新的 Agent 会话。外部会话有更新时可再次导入，补齐新的内容；导入后也可以切换 Agent。",
-    "en": "Imported sessions keep their history. Your next message resumes the original session when supported. History handoff passes the history to a new Agent session. Import again to bring in updates, or switch Agents after importing."
+    "zh": "仅列出近 30 天有活动且未归档的会话。导入后保留之前的对话。发消息时优先恢复原会话；标有「历史移交」的会话会把历史交给新的 Agent 会话。外部会话有更新时可再次导入，补齐新的内容；导入后也可以切换 Agent。",
+    "en": "Only unarchived sessions active in the last 30 days are listed. Imported sessions keep their history. Your next message resumes the original session when supported. History handoff passes the history to a new Agent session. Import again to bring in updates, or switch Agents after importing."
   },
   "SessionImportSettings.desktop": { "zh": "桌面", "en": "Desktop" },
   "SessionImportSettings.cli": { "zh": "CLI", "en": "CLI" },

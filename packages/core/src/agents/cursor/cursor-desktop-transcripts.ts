@@ -29,11 +29,15 @@ function cwdOf(head: Record<string, unknown>, state: Record<string, unknown>, wo
     directory(object(object(head.agentLocation).environment).uri) || directory(object(object(state.agentLocation).environment).uri) ||
     string(object(array(head.trackedGitRepos)[0]).repoPath) || string(object(array(state.trackedGitRepos)[0]).repoPath) || workspaces.get(workspaceId) || ''
 }
-function headers(db: DatabaseSync): Record<string, unknown>[] {
+function headers(db: DatabaseSync, id?: string): Record<string, unknown>[] {
   const tables = transcriptTables(db)
   if (!tables.has('cursorDiskKV')) throw new Error('Cursor 桌面数据库格式不受支持')
-  if (tables.has('composerHeaders')) return db.prepare('SELECT * FROM composerHeaders ORDER BY lastUpdatedAt DESC').all()
-  return db.prepare("SELECT key, value FROM cursorDiskKV WHERE key GLOB 'composerData:*'").all().map((row) => ({
+  if (tables.has('composerHeaders')) return id === undefined
+    ? db.prepare('SELECT * FROM composerHeaders ORDER BY lastUpdatedAt DESC').all()
+    : db.prepare('SELECT * FROM composerHeaders WHERE composerId = ?').all(id)
+  const rows = id === undefined ? db.prepare("SELECT key, value FROM cursorDiskKV WHERE key GLOB 'composerData:*'").all()
+    : db.prepare('SELECT key, value FROM cursorDiskKV WHERE key = ?').all(`composerData:${id}`)
+  return rows.map((row) => ({
     composerId: string(row.key).slice('composerData:'.length), value: row.value
   }))
 }
@@ -67,6 +71,7 @@ export function cursorDesktopTranscripts(root: () => string = () => cursorDeskto
           const head = object(json(row.value instanceof Uint8Array ? Buffer.from(row.value).toString('utf8') : row.value))
           if (!id || row.isSubagent || head.isSubagent || head.isDraft || id === 'empty-state-draft') continue
           const state = cell(db, `composerData:${id}`)
+          if (row.isArchived || head.isArchived || state.isArchived) continue
           const cwd = cwdOf(head, state, workspaces, string(row.workspaceId))
           if (!cwd) continue
           const firstHeader = array(state.fullConversationHeadersOnly).find((header) => object(header).type === 1)
@@ -86,6 +91,10 @@ export function cursorDesktopTranscripts(root: () => string = () => cursorDeskto
       const db = openTranscriptDb(file)
       try {
         const state = cell(db, `composerData:${id}`)
+        const row = headers(db, id)[0]
+        if (!row) throw new Error('Cursor 会话已不存在')
+        const head = object(json(row?.value instanceof Uint8Array ? Buffer.from(row.value).toString('utf8') : row?.value))
+        if (row?.isArchived || head.isArchived || state.isArchived) throw new Error('Cursor 会话已归档，不能导入')
         const builder = new TranscriptBuilder()
         for (const row of bubbles(db, id, state)) {
           const at = timestamp(row.createdAt, number(state.createdAt) ?? 0)

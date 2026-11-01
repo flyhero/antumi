@@ -354,6 +354,10 @@ Agent adapter 解析一次性命令的结构化输出：Claude 的 JSON、Codex 
 
 设置 → 导入会话、新手引导和总览共用 `SessionImports`。扫描和解析由各 adapter 的 `transcripts` 提供，core 只读来源，不启动 CLI、不改来源数据库或日志；desktop 只展示与调用 RPC。会话按原目录分组，勾选后导入成不启动的普通会话，下一条消息才恢复或移交；导入后也可切换 Agent。扫描失败按来源报告，其他来源仍可使用。
 
+列表按来源摘要的最后活动时间筛选近 30 × 24 小时（含边界），再取最近的 500 条；创建时间不影响筛选。此窗口只限制列表，已导入的历史和更新核对记录保留。
+
+外部已归档会话不进入导入列表：Codex 只扫描 `sessions` 并核对最新 `state_<版本>.sqlite` 中的 `threads.archived`，Cursor 桌面检查数据库列及会话元数据的 `isArchived`，OpenCode 1/2 在合并重复记录后检查 `time_archived`。导入会重新扫描，读取时也核对这些归档状态；归档后不再增量导入，但已导入 Antumi 的会话保留。其余来源只读取已支持的历史格式，不依据会话年龄、完成状态或 `history` 目录名猜测归档。
+
 | 来源 | 标准存储 | 恢复 |
 | --- | --- | --- |
 | Claude Code | `$CLAUDE_CONFIG_DIR/projects` 下 JSONL，沿当前主线读，跳过 sidechain 和注入消息 | 原生 session id |

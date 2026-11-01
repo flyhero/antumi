@@ -11,6 +11,7 @@ import type { ConversationStore, ImportedItem, SessionImport } from './conversat
 import { Rejection } from './rejection'
 
 const MAX_LISTED = 500
+const RECENT_WINDOW_MS = 30 * 24 * 60 * 60 * 1000
 const SETTLE_MS = 2_000
 export type TranscriptOrigin = { agent: AgentKind; transcripts: TranscriptSource }
 type Found = TranscriptSummary & { agent: AgentKind }
@@ -46,7 +47,8 @@ export class SessionImports {
     private readonly antumiHome: string,
     private readonly origins: readonly TranscriptOrigin[] = transcriptOrigins(),
     private readonly scratch: readonly string[] = [os.tmpdir(), '/tmp', '/private/tmp'],
-    private readonly attachments?: AttachmentStore
+    private readonly attachments?: AttachmentStore,
+    private readonly now: () => number = Date.now
   ) {}
 
   diagnostics(): Array<{ agent: AgentKind; message: string }> { return [...this.warnings] }
@@ -62,7 +64,8 @@ export class SessionImports {
       }
     }
     const imports = this.imports()
-    return Promise.all(scanned.slice(0, MAX_LISTED).map(async (summary): Promise<ExternalSession> => {
+    const since = this.now() - RECENT_WINDOW_MS
+    return Promise.all(scanned.filter((summary) => summary.modifiedAt >= since).slice(0, MAX_LISTED).map(async (summary): Promise<ExternalSession> => {
       const record = imports.get(`${summary.agent}:${summary.sessionId}`)
       return {
         agent: summary.agent, sessionId: summary.sessionId, cwd: summary.cwd, title: summary.title, firstPrompt: summary.firstPrompt,

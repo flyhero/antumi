@@ -5,6 +5,7 @@ import { clip, type ChatItemBody } from '../../chat-items'
 import { findFiles, parseLine, readHead, readLines, SummaryCache, timeOf, titleOf, type Transcript, type TranscriptEntry, type TranscriptMessage, type TranscriptSource, type TranscriptSummary } from '../../agent-transcripts'
 import { codexDefaultHome } from './codex-account'
 import { CODEX_CLIENT_NAME, commandDescription, diffOf, unwrapShell } from './codex-app-server'
+import { openTranscriptDb, transcriptTables } from '../../sqlite-transcripts'
 
 // Codex keeps each thread in sessions/YYYY/MM/DD/rollout-<time>-<thread id>.jsonl, older ones
 // packed as .jsonl.zst: a session_meta line first, then what the model saw (response_item) and
@@ -288,12 +289,24 @@ async function threadNames(home: string): Promise<Map<string, string>> {
   return names
 }
 
+async function archivedThreads(home: string): Promise<Set<string>> {
+  const files = await findFiles(home, 0, (name) => /^state_\d+\.sqlite$/.test(name))
+  const version = (file: string) => Number(/state_(\d+)\.sqlite$/.exec(file)?.[1])
+  const latest = files.sort((a, b) => version(b.file) - version(a.file))[0]
+  if (!latest) return new Set()
+  const db = openTranscriptDb(latest.file)
+  try {
+    if (!transcriptTables(db).has('threads') || !db.prepare('PRAGMA table_info(threads)').all().some((column) => column.name === 'archived')) return new Set()
+    return new Set(db.prepare('SELECT id FROM threads WHERE archived = 1').all().map((row) => z.string().parse(row.id)))
+  } finally { db.close() }
+}
+
 export function codexTranscripts(home: () => string = () => codexDefaultHome()): TranscriptSource {
   const cache = new SummaryCache()
   return {
     scan: async () => {
       const root = home()
-      const [files, titles] = await Promise.all([findFiles(path.join(root, 'sessions'), 3, (name) => ROLLOUT.test(name)), threadNames(root)])
+      const [files, titles, archived] = await Promise.all([findFiles(path.join(root, 'sessions'), 3, (name) => ROLLOUT.test(name)), threadNames(root), archivedThreads(root)])
       // A rollout Codex has not packed yet is the one it still writes to.
       const plain = new Set(files.filter((file) => !file.file.endsWith('.zst')).map((file) => file.file))
       const current = files.filter((file) => !file.file.endsWith('.zst') || !plain.has(file.file.slice(0, -'.zst'.length)))
@@ -303,14 +316,19 @@ export function codexTranscripts(home: () => string = () => codexDefaultHome()):
         const named = summary ? titles.get(summary.sessionId) : undefined
         return summary && named ? { ...summary, title: named } : summary
       }))
-      return summaries.flatMap((summary) => (summary ? [summary] : []))
+      return summaries.flatMap((summary) => (summary && !archived.has(summary.sessionId) ? [summary] : []))
     },
     read: async (file) => {
+      const relative = path.relative(path.join(home(), 'sessions'), file)
+      if (relative.startsWith('..') || path.isAbsolute(relative)) throw new Error('Codex 会话已归档或不在活动会话目录中')
       const texts: string[] = []
       await readLines(file, (text) => {
         texts.push(text)
         return true
       })
+      const first = Line.safeParse(parseLine(texts[0] ?? ''))
+      const thread = first.success && first.data.type === 'session_meta' ? codexUserThread(first.data.payload) : null
+      if (thread && (await archivedThreads(home())).has(thread.id)) throw new Error('Codex 会话已归档，不能导入')
       return codexTranscript(texts)
     }
   }

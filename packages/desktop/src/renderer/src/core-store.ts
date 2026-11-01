@@ -40,6 +40,7 @@ import {
   type Environment,
   type ScheduledRun,
   type Discussion,
+  type DiscussionFormat,
   type Squad,
   type SquadRun,
   type SquadPlanRef
@@ -827,7 +828,8 @@ export function openConversationDraft(projects?: readonly string[], issue: Draft
 }
 
 export type DraftMode = 'single' | 'group'
-export type DraftCarry = { text: string; projects: readonly string[]; agent: AgentKind | null; model: string | null }
+// format: the group chat format the page is to start set to, where one is asked for.
+export type DraftCarry = { text: string; projects: readonly string[]; agent: AgentKind | null; model: string | null; format?: DiscussionFormat }
 
 // The new page switching between one agent and a group chat, taking along what was written.
 export function switchDraftMode(mode: DraftMode, carry: DraftCarry): void {
@@ -856,11 +858,11 @@ export function selectDiscussion(id: string | null): void {
   useCore.setState({ selectedDiscussionId: id, section: 'discussions', conversationDraft: false, ...PAGES_CLOSED })
 }
 
-// The new page set to a group chat on `text`, with the members and projects of `from`: going on from
-// what a group chat produced.
-export function openDiscussionDraftWith(from: Discussion, text: string): void {
+// The new page set to a group chat on `text`, with the members and projects of `from`, in `format`
+// where one is asked for: going on from what a group chat produced.
+export function openDiscussionDraftWith(from: Discussion, text: string, format?: DiscussionFormat): void {
   openDiscussionDraft(from)
-  useCore.setState({ conversationDraftCarry: { text, projects: [...from.projectPaths], agent: null, model: null } })
+  useCore.setState({ conversationDraftCarry: { text, projects: [...from.projectPaths], agent: null, model: null, ...(format ? { format } : {}) } })
 }
 
 // The new page, set to a group chat. from: a group whose members, projects and options it starts with.

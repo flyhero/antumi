@@ -10315,6 +10315,7 @@ button.island-compact:focus-visible { outline: 2px solid var(--focus); outline-o
 .discussion-summary-head { padding: 8px 12px; border-bottom: 1px solid var(--border); font-weight: 600; }
 .discussion-summary-body { padding: 8px 12px; }
 .discussion-summary-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 12px; border-top: 1px solid var(--border); font-size: var(--chat-font-small); color: var(--text-3); }
+.discussion-summary-actions { display: inline-flex; align-items: center; gap: 16px; }
 
 /* The new page set to a group chat: the members and options take the middle, left-aligned, as wide
    as a form; the switch and the hint stay centred as on one agent's page. */

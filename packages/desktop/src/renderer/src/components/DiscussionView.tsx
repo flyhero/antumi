@@ -3,7 +3,7 @@ import { localized, t, tr } from '../i18n'
 import { useChatTypeface } from '../chat-typeface'
 import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { checkDiscussionAction, checkDiscussionMention, checkEditDiscussionProjects, checkNewDiscussionTopic, checkRemoveDiscussionMember, currentTopic, MAX_DETAILS_LENGTH, memberLetter, researchRound, researchSteps, reviewRound, reviewSteps, stepwise, type ReviewStep, type Discussion, type DiscussionAction, type DiscussionMember, type DiscussionPost } from '@antumi/protocol'
-import { loadConversation, openDiscussionDraft, openDiscussionDraftWith, openOverview, perform, selectConversation, selectDiscussion, selectTask, useCore, useDiscussionMembersSupported, useDiscussionProjectsSupported, useDiscussionTopicsSupported } from '../core-store'
+import { loadConversation, openDiscussionDraft, openDiscussionDraftWith, openOverview, perform, selectConversation, selectDiscussion, selectTask, useCore, useDiscussionFormatsSupported, useDiscussionMembersSupported, useDiscussionProjectsSupported, useDiscussionTopicsSupported } from '../core-store'
 import { archiveDiscussion, controlDiscussion, discussionProgress, EVERYONE, loadDiscussionPosts, newDiscussionTopic, removeDiscussionMember, setDiscussionProjects, MEMBER_STATUS_LABEL, mentionedMembers, postToDiscussion, renameDiscussion, useDiscussionPosts } from '../discussions'
 import { agentLabel, messageTime, reasonText } from '../labels'
 import { setPreference, usePreferences } from '../preferences'
@@ -230,9 +230,12 @@ function Post({ post, discussion, topic, question }: { post: DiscussionPost; dis
             <div className="discussion-summary-body"><ChatMarkdown text={post.text} /></div>
             <div className="discussion-summary-foot">
               {discussion.format === 'research'
-                ? <button type="button" className="link-button" onClick={() => openDiscussionDraftWith(discussion, t('DiscussionView.discussThisReportTopic', { text: post.text }))}>{t('DiscussionView.discussThisReport')}</button>
+                ? <button type="button" className="link-button" onClick={() => openDiscussionDraftWith(discussion, t('DiscussionView.discussThisReportTopic', { text: post.text }), 'roundtable')}>{t('DiscussionView.discussThisReport')}</button>
                 : <span>{tr('DiscussionView.membersRounds', { value1: discussion.members.length, value2: topic.rounds })}</span>}
-              <button type="button" className="link-button" onClick={() => void taskFromSummary(discussion, topic.text, post)}>{t('DiscussionView.createTaskFromConclusions')}</button>
+              <span className="discussion-summary-actions">
+                <DraftFromThis discussion={discussion} text={post.text} />
+                <button type="button" className="link-button" onClick={() => void taskFromSummary(discussion, topic.text, post)}>{t('DiscussionView.createTaskFromConclusions')}</button>
+              </span>
             </div>
           </div>
         ) : (
@@ -257,6 +260,13 @@ function Post({ post, discussion, topic, question }: { post: DiscussionPost; dis
   )
 }
 
+// From a conclusion or a report to a document: the same members draft it in a review, where core
+// runs one.
+function DraftFromThis({ discussion, text }: { discussion: Discussion; text: string }) {
+  if (!useDiscussionFormatsSupported()) return null
+  return <button type="button" className="link-button" onClick={() => openDiscussionDraftWith(discussion, t('DiscussionView.draftFromThisTopic', { text }), 'review')}>{t('DiscussionView.draftFromThis')}</button>
+}
+
 function ReviewVerdict({ verdict, label }: { verdict: 'pass' | 'change'; label?: string }) {
   return <span className="discussion-verdict" data-verdict={verdict}>{label ?? (verdict === 'pass' ? t('DiscussionView.verdictPass') : t('DiscussionView.verdictChange'))}</span>
 }
@@ -278,7 +288,7 @@ function FinalDraft({ post, discussion, member, topic }: { post: DiscussionPost;
           </div>
           <div className="discussion-summary-body"><ChatMarkdown text={post.text} /></div>
           <div className="discussion-summary-foot">
-            <button type="button" className="link-button" onClick={() => openDiscussionDraftWith(discussion, t('DiscussionView.discussThisDraftTopic', { text: post.text }))}>{t('DiscussionView.discussThisDraft')}</button>
+            <button type="button" className="link-button" onClick={() => openDiscussionDraftWith(discussion, t('DiscussionView.discussThisDraftTopic', { text: post.text }), 'roundtable')}>{t('DiscussionView.discussThisDraft')}</button>
             <button type="button" className="link-button" onClick={() => void taskFromSummary(discussion, topic.text, post)}>{t('DiscussionView.createTaskFromDraft')}</button>
           </div>
         </div>

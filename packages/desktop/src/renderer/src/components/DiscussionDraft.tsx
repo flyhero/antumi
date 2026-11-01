@@ -1,6 +1,6 @@
 import { localized, t, tr } from '../i18n'
-import { useEffect, useState } from 'react'
-import { DEFAULT_DISCUSSION_REQUIREMENTS, DEFAULT_DISCUSSION_ROUNDS, MAX_DISCUSSION_MEMBERS, MAX_DISCUSSION_ROUNDS, MIN_DISCUSSION_MEMBERS, type AgentKind, type Discussion } from '@antumi/protocol'
+import { useEffect, useRef, useState } from 'react'
+import { DEFAULT_DISCUSSION_REQUIREMENTS, MAX_DISCUSSION_MEMBERS, MAX_DISCUSSION_ROUNDS, MIN_DISCUSSION_MEMBERS, type AgentKind, type Discussion, type DiscussionFormat } from '@antumi/protocol'
 import { resolveModel, useAgentCatalog } from '../agent-models'
 import { closeConversationDraft, selectDiscussion, useCore, useDiscussionFormatsSupported, useDiscussionRequirementsSupported, type DraftCarry } from '../core-store'
 import { composerDraft } from '../composer-drafts'
@@ -17,7 +17,8 @@ import { AgentIcon, ChevronDownIcon, CloseIcon, EnterIcon } from './icons'
 import { ProjectPicker } from './ProjectPicker'
 import { DiscussionRequirements } from './DiscussionRequirements'
 import { DraftModeSwitch } from './DraftModeSwitch'
-import { coreFormat, DISCUSSION_FORMATS, discussionTurns, formatSetup, type DiscussionFormatId } from '../discussion-formats'
+import { chosenFormat, defaultRounds, DISCUSSION_FORMATS, discussionTurns, FORMAT_REASON, recommendFormat, type FormatChoice } from '../discussion-formats'
+import { debateStances } from '../discussion-requirements'
 
 // A member as picked: name is null while it follows the agent and model.
 type Draft = { key: string; agent: AgentKind; model?: string; effort?: string; name: string | null; role: string }
@@ -96,8 +97,8 @@ function MemberRow({ member, index, agents, chair, author, busy, removable, onCh
 }
 
 // What the page holds besides what is written, kept while the app runs so switching to one agent
-// and back finds the members as they were.
-type Settings = { format: DiscussionFormatId; members: Draft[]; chair: number; rounds: number; anonymous: boolean; requirements: string }
+// and back finds the members as they were. rounds: null while the format's own default applies.
+type Settings = { choice: FormatChoice; members: Draft[]; chair: number; rounds: number | null; anonymous: boolean; requirements: string }
 let kept: Settings | null = null
 
 function membersFor(installed: readonly AgentKind[], carry: DraftCarry | null): Draft[] {
@@ -111,7 +112,7 @@ function membersFor(installed: readonly AgentKind[], carry: DraftCarry | null): 
 
 function settingsFrom(from: Discussion): Settings {
   return {
-    format: from.format,
+    choice: from.format,
     members: from.members.map((member) => ({ key: crypto.randomUUID(), agent: member.agent, model: member.model ?? undefined, effort: member.effort ?? undefined, name: member.name, role: member.role })),
     chair: Math.max(0, from.members.findIndex((member) => member.id === from.chairId)),
     rounds: from.maxRounds,
@@ -132,36 +133,47 @@ export function DiscussionDraft({ from }: { from: Discussion | null }) {
   // From one agent's draft: what was written, its projects, and its agent as the first member.
   const [carry] = useState(() => useCore.getState().conversationDraftCarry)
   const requested = useCore((s) => s.conversationDraftProjects)
-  const [settings] = useState<Settings>(() => from ? settingsFrom(from) : kept ?? {
-    format: 'roundtable', members: membersFor(installed, carry), chair: 0, rounds: DEFAULT_DISCUSSION_ROUNDS, anonymous: false, requirements: DEFAULT_DISCUSSION_REQUIREMENTS
+  // Going on from what a group chat produced, the format asked for comes along.
+  const [settings] = useState<Settings>(() => {
+    const base = from ? settingsFrom(from) : kept ?? {
+      choice: 'auto', members: membersFor(installed, carry), chair: 0, rounds: null, anonymous: false, requirements: DEFAULT_DISCUSSION_REQUIREMENTS
+    }
+    return carry?.format ? { ...base, choice: carry.format, rounds: null } : base
   })
   const [topic, setTopic] = useState(() => carry?.text ?? '')
   const [projectPaths, setProjectPaths] = useState<string[]>(() => [...(from?.projectPaths ?? carry?.projects ?? requested?.paths ?? [])])
-  const [format, setFormat] = useState<DiscussionFormatId>(settings.format)
+  const [choice, setChoice] = useState<FormatChoice>(settings.choice)
   const [members, setMembers] = useState<Draft[]>(settings.members)
   const [chair, setChair] = useState(settings.chair)
-  const [rounds, setRounds] = useState(settings.rounds)
+  const [roundsPicked, setRoundsPicked] = useState(settings.rounds)
   const [anonymous, setAnonymous] = useState(settings.anonymous)
   const [requirements, setRequirements] = useState(settings.requirements)
   const [optionsOpen, setOptionsOpen] = useState(false)
   const [busy, setBusy] = useState(false)
-  useEffect(() => { if (!from) kept = { format, members, chair, rounds, anonymous, requirements } }, [from, format, members, chair, rounds, anonymous, requirements])
-  // A format fills in the roles, chair and requirements, which stay the user's to change after.
-  const pickFormat = (next: DiscussionFormatId) => {
-    const setup = formatSetup(next, members.length)
-    setFormat(next)
-    setMembers(members.map((member, index) => ({ ...member, role: setup.roles[index] ?? '' })))
-    setChair(setup.chair)
-    setRequirements(setup.requirements)
-    setRounds(setup.rounds)
-  }
+  useEffect(() => { if (!from) kept = { choice, members, chair, rounds: roundsPicked, anonymous, requirements } }, [from, choice, members, chair, roundsPicked, anonymous, requirements])
   const formatsSupported = useDiscussionFormatsSupported()
-  const offered = DISCUSSION_FORMATS.filter((each) => coreFormat(each.id) === 'roundtable' || formatsSupported)
-  const shownFormat = offered.find((each) => each.id === format)
-  const reviewing = shownFormat?.id === 'review'
+  const available: readonly DiscussionFormat[] = formatsSupported ? ['roundtable', 'review', 'research'] : ['roundtable']
+  // Auto follows what is written; the format a start runs is what the page shows throughout.
+  const recommended = recommendFormat(topic, available)
+  const format = chosenFormat(choice, topic, available)
+  const reviewing = format === 'review'
   // Research runs in three steps, with no rounds to pick.
-  const researching = shownFormat?.id === 'research'
+  const researching = format === 'research'
+  // Rounds and revisions are different counts: a pick for one does not carry to the other.
+  const shownFormat = useRef(format)
+  useEffect(() => {
+    if (shownFormat.current !== format) setRoundsPicked(null)
+    shownFormat.current = format
+  }, [format])
+  const rounds = roundsPicked ?? defaultRounds(format)
   const turns = discussionTurns(format, members.length, rounds)
+  // A debate also sets who argues which side and who judges; the stances stay the user's to change.
+  const pickPreset = (preset: string) => {
+    if (preset !== 'debate') return
+    const stances = debateStances(members.length)
+    setMembers(members.map((member, index) => ({ ...member, role: stances.roles[index] ?? '' })))
+    setChair(stances.chair)
+  }
   // Images wait in one agent's draft: a group chat takes none.
   const [imagesLeft] = useState(() => composerDraft(null).images.length)
   // Names in use more than once would make @ ambiguous.
@@ -194,7 +206,7 @@ export function DiscussionDraft({ from }: { from: Discussion | null }) {
       chair,
       maxRounds: rounds,
       anonymous,
-      ...(reviewing || researching ? { format: coreFormat(format) } : {})
+      ...(format !== 'roundtable' ? { format } : {})
     })
     setBusy(false)
     if (!created) return
@@ -218,21 +230,31 @@ export function DiscussionDraft({ from }: { from: Discussion | null }) {
               <DraftModeSwitch mode="group" carry={toSingle} disabled={busy} />
               {from && <p className="discussion-draft-from">{tr('DiscussionDraft.reuseMembersProjectsAndSettingsFromEachMember', { value1: from.title })}</p>}
               <div className="discussion-draft-format">
-                <span className="discussion-draft-format-label">{t('discussionFormats.label')}</span>
-                <ChatPicker
-                  label={t('discussionFormats.label')}
-                  value={format}
-                  placeholder={t('discussionFormats.label')}
-                  placement="below"
-                  disabled={busy}
-                  options={offered.map((each) => ({ value: each.id, label: each.label, description: `${each.description} · ${each.flow}` }))}
-                  onChange={(value) => {
-                    const next = offered.find((each) => each.id === value)
-                    if (next) pickFormat(next.id)
-                  }}
-                />
-                {shownFormat && <span className="discussion-draft-format-flow muted">{tr('discussionFormats.flowAndTurns', { flow: <b>{shownFormat.flow}</b>, turns: turns.least === turns.most ? String(turns.most) : `${turns.least}–${turns.most}` })}</span>}
+                {formatsSupported && (
+                  <>
+                    <span className="discussion-draft-format-label">{t('discussionFormats.label')}</span>
+                    <ChatPicker
+                      label={t('discussionFormats.label')}
+                      value={choice}
+                      placeholder={t('discussionFormats.label')}
+                      placement="below"
+                      disabled={busy}
+                      options={[
+                        { value: 'auto', label: topic.trim() ? t('discussionFormats.autoWith', { format: DISCUSSION_FORMATS[recommended.format].label }) : t('discussionFormats.auto'), description: t('discussionFormats.autoDescription') },
+                        ...available.map((each) => ({ value: each, label: DISCUSSION_FORMATS[each].label, description: `${DISCUSSION_FORMATS[each].description} · ${DISCUSSION_FORMATS[each].flow}` }))
+                      ]}
+                      onChange={(value) => {
+                        const next = value === 'auto' ? 'auto' : available.find((each) => each === value)
+                        if (next) setChoice(next)
+                      }}
+                    />
+                  </>
+                )}
+                <span className="discussion-draft-format-flow muted">{tr('discussionFormats.flowAndTurns', { flow: <b>{DISCUSSION_FORMATS[format].flow}</b>, turns: turns.least === turns.most ? String(turns.most) : `${turns.least}–${turns.most}` })}</span>
               </div>
+              {formatsSupported && choice === 'auto' && recommended.reason && (
+                <p className="chat-draft-hint muted">{t('discussionFormats.recommended', { format: DISCUSSION_FORMATS[recommended.format].label, reason: FORMAT_REASON[recommended.reason] })}</p>
+              )}
               <div className="discussion-draft-field">
                 <ul className="discussion-draft-members" aria-label={t('DiscussionDraft.members')}>
                   {/* What each column of a member is: the name most of all, as it is what @ picks it by. */}
@@ -273,7 +295,7 @@ export function DiscussionDraft({ from }: { from: Discussion | null }) {
                 </button>
                 {optionsOpen && (
                   <div className="discussion-draft-settings-body">
-                    {requirementsSupported && <DiscussionRequirements value={requirements} onChange={setRequirements} disabled={busy} />}
+                    {requirementsSupported && <DiscussionRequirements value={requirements} onChange={setRequirements} disabled={busy} roundtable={format === 'roundtable'} onPreset={pickPreset} />}
                     <div className="discussion-draft-options">
                       {!researching && <span className="discussion-draft-rounds">{tr(reviewing ? 'DiscussionDraft.upToRevisions' : 'DiscussionDraft.upToSummarizeEarlyWhenPositionsRemainUnchanged', { value1: <ChatPicker
                           label={t('DiscussionDraft.maximumRounds')}
@@ -282,7 +304,7 @@ export function DiscussionDraft({ from }: { from: Discussion | null }) {
                           placement="above"
                           disabled={busy}
                           options={Array.from({ length: MAX_DISCUSSION_ROUNDS }, (_, index) => ({ value: String(index + 1), label: reviewing ? t('DiscussionDraft.revisions', { value1: index + 1 }) : t('DiscussionDraft.rounds_823', { value1: index + 1 }) }))}
-                          onChange={(value) => setRounds(Number(value))}
+                          onChange={(value) => setRoundsPicked(Number(value))}
                         /> })}</span>}
                       <label data-tooltip={t('DiscussionDraft.useMemberABWithoutRevealingAgentOr')}>{tr('DiscussionDraft.anonymousPeerReview', { value1: <input type="checkbox" checked={anonymous} disabled={busy} onChange={(event) => setAnonymous(event.target.checked)} /> })}</label>
                     </div>

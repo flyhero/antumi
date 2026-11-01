@@ -175,6 +175,18 @@ function MentionedText({ text, names }: { text: string; names: readonly string[]
   return <>{text.split(pattern).map((part, index) => (tags.includes(part) ? <span key={index} className="discussion-at">{part}</span> : part))}</>
 }
 
+function UserPost({ text, names = [], markdown = false }: { text: string; names?: readonly string[]; markdown?: boolean }) {
+  return (
+    <div className="discussion-msg" data-mine="">
+      <span className="discussion-face discussion-face-me" aria-hidden="true">{t('DiscussionView.me')}</span>
+      <div className="discussion-msg-body">
+        <div className="discussion-bubble">{markdown ? <ChatMarkdown text={text} /> : <MentionedText text={text} names={names} />}</div>
+        <PostActions text={text} />
+      </div>
+    </div>
+  )
+}
+
 // A post that failed: the reason as the app words it, and what the agent said, where core kept it.
 function FailedPost({ error }: { error: string | null }) {
   const [reason = '', ...said] = (error ?? '').split('\n')
@@ -199,15 +211,7 @@ function PendingPost({ member }: { member: DiscussionMember | undefined }) {
 function Post({ post, discussion, topic, question }: { post: DiscussionPost; discussion: Discussion; topic: Topic; question?: DiscussionPost }) {
   if (post.kind === 'notice') return <p className="discussion-system">{post.text}</p>
   if (post.kind === 'user') {
-    return (
-      <div className="discussion-msg" data-mine="">
-        <span className="discussion-face discussion-face-me" aria-hidden="true">{t('DiscussionView.me')}</span>
-        <div className="discussion-msg-body">
-          <div className="discussion-bubble"><MentionedText text={post.text} names={discussion.members.map((member) => member.name)} /></div>
-          <PostActions text={post.text} />
-        </div>
-      </div>
-    )
+    return <UserPost text={post.text} names={discussion.members.map((member) => member.name)} />
   }
   // A member that has left still answers for what it said, under its name and letter.
   const current = discussion.members.find((each) => each.id === post.memberId)
@@ -431,12 +435,10 @@ function Rounds({ discussion, posts }: { discussion: Discussion; posts: readonly
         const what = openings.length > 0 ? t('DiscussionView.independentAnswersHiddenFromEachOther') : list.some((post) => post.kind === 'rebuttal') ? t('DiscussionView.mutualResponses') : null
         return (
           <section key={round} className="discussion-round" aria-label={round === 0 ? t('DiscussionView.opening') : t('DiscussionView.round', { shown: shown })}>
-            {moved && (
-              <div className="discussion-topic" data-moved="">
-                <span className="discussion-post-kind">{t('DiscussionView.newTopic')}</span>
-                <ChatMarkdown text={moved.text} />
-              </div>
-            )}
+            {moved && <>
+              <p className="discussion-system">{t('DiscussionView.newTopic')}</p>
+              <UserPost text={moved.text} markdown />
+            </>}
             {round > 0 && (
               <div className="discussion-system">{tr('DiscussionView.round_897', { shown: shown, value2: what && ` · ${what}`, value3: openings.length > 1 && (
                   <button type="button" className="link-button" aria-pressed={sideBySide} onClick={() => setPreference('discussionSideBySide', !sideBySide)}>
@@ -600,10 +602,7 @@ export function DiscussionView({ id }: { id: string }) {
               pinned.current = !find.open && element.scrollHeight - element.scrollTop - element.clientHeight < 48
             }}
           >
-            <div className="discussion-topic">
-              <span className="discussion-post-kind">{review ? t('DiscussionView.toDraft') : research ? t('DiscussionView.toResearch') : t('DiscussionDraft.topic')}</span>
-              <ChatMarkdown text={discussion.topic} />
-            </div>
+            <UserPost text={discussion.topic} markdown />
             {posts ? review ? <ReviewRounds discussion={discussion} posts={posts} /> : research ? <ResearchRounds discussion={discussion} posts={posts} /> : <Rounds discussion={discussion} posts={posts} /> : <p className="muted">{tr('DiscussionView.loadingPosts', { value1: <Spinner /> })}</p>}
           </div>
           <div className="chat-dock">

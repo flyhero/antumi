@@ -10232,11 +10232,6 @@ button.island-compact:focus-visible { outline: 2px solid var(--focus); outline-o
 .discussion-list { gap: 14px; }
 /* The chat on the page's grey, its bubbles on the surface, as a chat app sets them apart. */
 .discussion-view .terminal-body { background: var(--bg); }
-.discussion-topic { padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
-/* A topic the user moved the group on to, opening its rounds. */
-.discussion-topic[data-moved] { border-color: var(--accent); }
-.discussion-topic[data-moved] .discussion-post-kind { background: var(--accent-bg); color: var(--accent); }
-.discussion-post-kind { padding: 0 8px; border-radius: 999px; background: var(--fill-2); color: var(--text-muted); font-size: var(--chat-font-small); }
 .discussion-round { display: flex; flex-direction: column; gap: 14px; }
 /* Antumi's own notes, rounds and what happened, small and in the middle. */
 .discussion-system { align-self: center; display: inline-flex; align-items: center; gap: 8px; max-width: 80%; margin: 0; padding: 2px 10px; border-radius: var(--radius-sm); background: var(--fill-2); color: var(--text-muted); font-size: var(--chat-font-small); text-align: center; }
@@ -10303,6 +10298,7 @@ button.island-compact:focus-visible { outline: 2px solid var(--focus); outline-o
 .discussion-bubble { position: relative; min-width: 0; max-width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); overflow-wrap: anywhere; }
 .discussion-bubble::before { content: ''; position: absolute; top: 12px; left: -6px; width: 10px; height: 10px; border-bottom: 1px solid var(--border); border-left: 1px solid var(--border); background: inherit; transform: rotate(45deg); }
 .discussion-msg[data-mine] .discussion-bubble { --mine-edge: color-mix(in srgb, var(--accent) 25%, var(--surface)); border-color: var(--mine-edge); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); white-space: pre-wrap; }
+.discussion-msg[data-mine] .chat-markdown { white-space: normal; }
 .discussion-msg[data-mine] .discussion-bubble::before { left: auto; right: -6px; border: 0; border-top: 1px solid var(--mine-edge); border-right: 1px solid var(--mine-edge); }
 .discussion-bubble[data-failed] { border-style: dashed; }
 .discussion-bubble .chat-markdown { line-height: 1.65; }

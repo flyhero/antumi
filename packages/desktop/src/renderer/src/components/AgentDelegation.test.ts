@@ -7,7 +7,7 @@ import { isAgentCallResult, showAgentCalls, useAgentCalls } from '../agent-calls
 import { useCore } from '../core-store'
 import { useChat } from '../chat-state'
 import { setOpened } from '../chat-disclosure'
-import { AgentDelegation, AgentDelegationResult } from './AgentDelegation'
+import { AgentDelegationResult } from './AgentDelegation'
 import { ChatSurfaceContext, conversationSurface } from './chat-surface'
 import { ConversationInspector } from './ConversationInspector'
 import { TaskInspector } from './TaskInspector'
@@ -42,7 +42,6 @@ function connect(features = ['agent-profiles']) {
   const rpc: RpcConnection = { ...client, features, close() {}, closed: new Promise(() => {}) }
   useCore.setState({ rpc, conversations: { [parent.id]: parent }, tasks: { [task.id]: task } })
 }
-const renderButton = (conversation = parent) => renderToStaticMarkup(createElement(ChatSurfaceContext.Provider, { value: conversationSurface(conversation) }, createElement(AgentDelegation, { conversation })))
 const call = AgentCall.parse({ result: null, error: null, delivered: false, id: '33333333-3333-4333-8333-333333333333', parentId: parent.id, conversationId: '44444444-4444-4444-8444-444444444444', profile: { id: '55555555-5555-4555-8555-555555555555', name: '审查员', agent: 'codex', archivedAt: null, createdAt: 0, updatedAt: 0 }, instruction: '检查变更', state: 'queued', readOnly: true, permissionMode: 'readOnly', createdAt: 10, updatedAt: 20 })
 const renderGroup = (calls: AgentCall[]) => renderToStaticMarkup(createElement(ChatSurfaceContext.Provider, { value: conversationSurface(parent) }, createElement(ChatDelegationGroup, { calls })))
 const renderCard = (patch: Partial<AgentCall>) => renderToStaticMarkup(createElement(ChatSurfaceContext.Provider, { value: conversationSurface(parent) }, createElement(ChatDelegationCard, { call: { ...call, ...patch } })))
@@ -94,16 +93,6 @@ describe('delegation surfaces', () => {
     expect(one).not.toContain('工作中 1')
   })
 
-  it('offers a dialog trigger for parent chats, but never for delegated or special-purpose chats or old cores', () => {
-    expect(renderButton()).toContain('aria-haspopup="dialog"')
-    expect(renderButton({ ...parent, taskId: task.id })).toContain('委派子任务')
-    for (const patch of [{ parentConversationId: parent.id }, { helperOf: parent.id }, { discussionId: parent.id }, { squadRunId: parent.id }, { routineId: parent.id }]) {
-      expect(renderButton({ ...parent, ...patch })).toBe('')
-    }
-    connect([])
-    expect(renderButton()).toBe('')
-  })
-
   it('hides delegation tabs and empty inspector entries before the first record arrives', () => {
     useCore.setState({ conversationInspectorTab: 'delegation', taskInspectorTab: 'delegation' })
     for (const calls of [null, []]) {
@@ -118,7 +107,6 @@ describe('delegation surfaces', () => {
       expect(renderToStaticMarkup(createElement(TaskToolbar, { task, view: 'chat' }))).not.toContain('aria-label="检查器"')
       expect(renderToStaticMarkup(createElement(ConversationView, { id: parent.id }))).not.toContain('aria-label="检查器"')
     }
-    expect(renderButton()).toContain('委派子任务')
   })
 
   it('keeps existing history reachable in both inspectors even without git, todos or a helper', () => {

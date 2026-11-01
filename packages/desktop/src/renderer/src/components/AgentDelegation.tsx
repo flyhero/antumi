@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useId, useRef, useState } from 'react'
 import type { ChatItem, Conversation, DelegationTarget } from '@antumi/protocol'
-import { showAgentCalls, useAgentCalls, useAgentCallsSupported } from '../agent-calls'
+import { showAgentCalls, useAgentCalls } from '../agent-calls'
 import { useOccludesBrowser } from '../browser-occlusion'
 import { useDisclosure } from '../chat-disclosure'
 import { useCore } from '../core-store'
@@ -87,23 +87,6 @@ export function DelegationDialog({ conversation, onClose, onHistory, initial }: 
       <footer className="modal-footer"><button type="button" className="link-button delegation-history" disabled={busy} onClick={() => { onHistory(); onClose() }}>{t('AgentProfiles.history')}</button><button type="button" className="button ghost" disabled={busy} onClick={onClose}>{t('ChatCommandSettings.cancel')}</button><button type="submit" className="button primary" disabled={busy || !selected || !goal.trim() || conversation.archivedAt != null}>{busy ? t('AgentProfiles.starting') : t('AgentProfiles.dispatch')}</button></footer>
     </form>
   </dialog>
-}
-
-export function AgentDelegation({ conversation }: { conversation: Conversation }) {
-  const supported = useAgentCallsSupported(conversation)
-  const [open, setOpen] = useState(false)
-  const surface = useChatSurface()
-  const pane = useConversationPane()
-  if (!supported) return null
-  const history = () => {
-    pane?.focus()
-    showAgentCalls(surface.inspector)
-  }
-  const working = conversation.delegation?.open ?? 0
-  return <>
-    <button type="button" className="tool-button delegation-button" aria-label={t('AgentProfiles.delegate')} aria-haspopup="dialog" aria-expanded={open} data-tooltip={t('AgentProfiles.delegate')} disabled={conversation.archivedAt != null} onClick={() => setOpen(true)}><SquadIcon /><span>{t('AgentProfiles.dispatch')}</span>{working > 0 && <span className="delegation-count" aria-label={`${t('AgentProfiles.running')} ${working}`}>{working}</span>}</button>
-    {open && <DelegationDialog key={conversation.id} conversation={conversation} onClose={() => setOpen(false)} onHistory={history} />}
-  </>
 }
 
 const ENDED = { completed: 'AgentProfiles.completed', failed: 'AgentProfiles.failed', cancelled: 'AgentProfiles.cancelled' } as const

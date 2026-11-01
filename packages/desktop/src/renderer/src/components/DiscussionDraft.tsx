@@ -2,7 +2,7 @@ import { localized, t, tr } from '../i18n'
 import { useEffect, useState } from 'react'
 import { DEFAULT_DISCUSSION_REQUIREMENTS, DEFAULT_DISCUSSION_ROUNDS, MAX_DISCUSSION_MEMBERS, MAX_DISCUSSION_ROUNDS, MIN_DISCUSSION_MEMBERS, type AgentKind, type Discussion } from '@antumi/protocol'
 import { resolveModel, useAgentCatalog } from '../agent-models'
-import { closeConversationDraft, selectDiscussion, useCore, useDiscussionRequirementsSupported, type DraftCarry } from '../core-store'
+import { closeConversationDraft, selectDiscussion, useCore, useDiscussionFormatsSupported, useDiscussionRequirementsSupported, type DraftCarry } from '../core-store'
 import { composerDraft } from '../composer-drafts'
 import { createDiscussion, defaultMemberName, loadDiscussionPosts } from '../discussions'
 import { useInstalledAgents } from '../installed-agents'
@@ -17,18 +17,20 @@ import { AgentIcon, ChevronDownIcon, CloseIcon, EnterIcon } from './icons'
 import { ProjectPicker } from './ProjectPicker'
 import { DiscussionRequirements } from './DiscussionRequirements'
 import { DraftModeSwitch } from './DraftModeSwitch'
-import { DISCUSSION_FORMATS, formatSetup, roundtableTurns, type DiscussionFormatId } from '../discussion-formats'
+import { coreFormat, DISCUSSION_FORMATS, discussionTurns, formatSetup, type DiscussionFormatId } from '../discussion-formats'
 
 // A member as picked: name is null while it follows the agent and model.
 type Draft = { key: string; agent: AgentKind; model?: string; effort?: string; name: string | null; role: string }
 
 const ROLE_HINTS = localized(() => ([t('DiscussionDraft.supporter'), t('DiscussionDraft.opponent'), t('DiscussionDraft.focusOnSecurityAndRisk'), t('DiscussionDraft.focusOnPerformanceAndCost'), t('DiscussionDraft.critic')]))
 
-function MemberRow({ member, index, agents, chair, busy, removable, onChange, onRemove, onChair }: {
+function MemberRow({ member, index, agents, chair, author, busy, removable, onChange, onRemove, onChair }: {
   member: Draft
   index: number
   agents: readonly AgentKind[]
   chair: boolean
+  // A review's chair is its author, and the others review.
+  author: boolean
   busy: boolean
   removable: boolean
   onChange: (next: Draft) => void
@@ -85,7 +87,7 @@ function MemberRow({ member, index, agents, chair, busy, removable, onChange, on
         disabled={busy}
         onChange={(event) => onChange({ ...member, role: event.target.value })}
       />
-      <label className="discussion-draft-chair" data-tooltip={t('DiscussionDraft.theChairSummarizesWhenTheDiscussionEnds')}>{tr('DiscussionDraft.chair', { value1: <input type="radio" name="discussion-chair" checked={chair} disabled={busy} onChange={onChair} /> })}</label>
+      <label className="discussion-draft-chair" data-tooltip={author ? t('DiscussionDraft.theAuthorWritesTheDraft') : t('DiscussionDraft.theChairSummarizesWhenTheDiscussionEnds')}>{tr(author ? 'DiscussionDraft.author' : 'DiscussionDraft.chair', { value1: <input type="radio" name="discussion-chair" checked={chair} disabled={busy} onChange={onChair} /> })}</label>
       <button type="button" className="icon-button" aria-label={t('DiscussionDraft.removeMember', { value1: index + 1 })} data-tooltip={t('ChatQuoteCards.remove')} disabled={busy || !removable} onClick={onRemove}>
         <CloseIcon />
       </button>
@@ -109,7 +111,7 @@ function membersFor(installed: readonly AgentKind[], carry: DraftCarry | null): 
 
 function settingsFrom(from: Discussion): Settings {
   return {
-    format: 'roundtable',
+    format: from.format === 'review' ? 'review' : 'roundtable',
     members: from.members.map((member) => ({ key: crypto.randomUUID(), agent: member.agent, model: member.model ?? undefined, effort: member.effort ?? undefined, name: member.name, role: member.role })),
     chair: Math.max(0, from.members.findIndex((member) => member.id === from.chairId)),
     rounds: from.maxRounds,
@@ -151,8 +153,13 @@ export function DiscussionDraft({ from }: { from: Discussion | null }) {
     setMembers(members.map((member, index) => ({ ...member, role: setup.roles[index] ?? '' })))
     setChair(setup.chair)
     setRequirements(setup.requirements)
+    setRounds(setup.rounds)
   }
-  const shownFormat = DISCUSSION_FORMATS.find((each) => each.id === format)
+  const formatsSupported = useDiscussionFormatsSupported()
+  const offered = DISCUSSION_FORMATS.filter((each) => coreFormat(each.id) === 'roundtable' || formatsSupported)
+  const shownFormat = offered.find((each) => each.id === format)
+  const reviewing = shownFormat?.id === 'review'
+  const turns = discussionTurns(format, members.length, rounds)
   // Images wait in one agent's draft: a group chat takes none.
   const [imagesLeft] = useState(() => composerDraft(null).images.length)
   // Names in use more than once would make @ ambiguous.
@@ -184,7 +191,8 @@ export function DiscussionDraft({ from }: { from: Discussion | null }) {
       })),
       chair,
       maxRounds: rounds,
-      anonymous
+      anonymous,
+      ...(reviewing ? { format: coreFormat(format) } : {})
     })
     setBusy(false)
     if (!created) return
@@ -215,13 +223,13 @@ export function DiscussionDraft({ from }: { from: Discussion | null }) {
                   placeholder={t('discussionFormats.label')}
                   placement="below"
                   disabled={busy}
-                  options={DISCUSSION_FORMATS.map((each) => ({ value: each.id, label: each.label, description: `${each.description} · ${each.flow}` }))}
+                  options={offered.map((each) => ({ value: each.id, label: each.label, description: `${each.description} · ${each.flow}` }))}
                   onChange={(value) => {
-                    const next = DISCUSSION_FORMATS.find((each) => each.id === value)
+                    const next = offered.find((each) => each.id === value)
                     if (next) pickFormat(next.id)
                   }}
                 />
-                {shownFormat && <span className="discussion-draft-format-flow muted">{tr('discussionFormats.flowAndTurns', { flow: <b>{shownFormat.flow}</b>, turns: roundtableTurns(members.length, rounds) })}</span>}
+                {shownFormat && <span className="discussion-draft-format-flow muted">{tr('discussionFormats.flowAndTurns', { flow: <b>{shownFormat.flow}</b>, turns: turns.least === turns.most ? String(turns.most) : `${turns.least}–${turns.most}` })}</span>}
               </div>
               <div className="discussion-draft-field">
                 <ul className="discussion-draft-members" aria-label={t('DiscussionDraft.members')}>
@@ -242,6 +250,7 @@ export function DiscussionDraft({ from }: { from: Discussion | null }) {
                       index={index}
                       agents={installed}
                       chair={chair === index}
+                      author={reviewing}
                       busy={busy}
                       removable={members.length > MIN_DISCUSSION_MEMBERS}
                       onChange={(next) => update(index, next)}
@@ -258,19 +267,19 @@ export function DiscussionDraft({ from }: { from: Discussion | null }) {
               <div className="discussion-draft-settings" data-open={optionsOpen || undefined}>
                 <button type="button" className="discussion-draft-settings-toggle" aria-expanded={optionsOpen} onClick={() => setOptionsOpen(!optionsOpen)}>
                   <ChevronDownIcon />
-                  {t('DiscussionDraft.settingsSummary', { rounds, anonymous: anonymous ? t('DiscussionDraft.anonymousShort') : '', requirements: requirements.trim() === DEFAULT_DISCUSSION_REQUIREMENTS ? t('DiscussionDraft.defaultRequirements') : requirements.trim() ? t('DiscussionDraft.customRequirements') : t('DiscussionDraft.noRequirements') })}
+                  {t(reviewing ? 'DiscussionDraft.reviewSettingsSummary' : 'DiscussionDraft.settingsSummary', { rounds, anonymous: anonymous ? t('DiscussionDraft.anonymousShort') : '', requirements: requirements.trim() === DEFAULT_DISCUSSION_REQUIREMENTS ? t('DiscussionDraft.defaultRequirements') : requirements.trim() ? t('DiscussionDraft.customRequirements') : t('DiscussionDraft.noRequirements') })}
                 </button>
                 {optionsOpen && (
                   <div className="discussion-draft-settings-body">
                     {requirementsSupported && <DiscussionRequirements value={requirements} onChange={setRequirements} disabled={busy} />}
                     <div className="discussion-draft-options">
-                      <span className="discussion-draft-rounds">{tr('DiscussionDraft.upToSummarizeEarlyWhenPositionsRemainUnchanged', { value1: <ChatPicker
+                      <span className="discussion-draft-rounds">{tr(reviewing ? 'DiscussionDraft.upToRevisions' : 'DiscussionDraft.upToSummarizeEarlyWhenPositionsRemainUnchanged', { value1: <ChatPicker
                           label={t('DiscussionDraft.maximumRounds')}
                           value={String(rounds)}
                           placeholder={t('DiscussionDraft.rounds', { rounds: rounds })}
                           placement="above"
                           disabled={busy}
-                          options={Array.from({ length: MAX_DISCUSSION_ROUNDS }, (_, index) => ({ value: String(index + 1), label: t('DiscussionDraft.rounds_823', { value1: index + 1 }) }))}
+                          options={Array.from({ length: MAX_DISCUSSION_ROUNDS }, (_, index) => ({ value: String(index + 1), label: reviewing ? t('DiscussionDraft.revisions', { value1: index + 1 }) : t('DiscussionDraft.rounds_823', { value1: index + 1 }) }))}
                           onChange={(value) => setRounds(Number(value))}
                         /> })}</span>
                       <label data-tooltip={t('DiscussionDraft.useMemberABWithoutRevealingAgentOr')}>{tr('DiscussionDraft.anonymousPeerReview', { value1: <input type="checkbox" checked={anonymous} disabled={busy} onChange={(event) => setAnonymous(event.target.checked)} /> })}</label>
@@ -294,7 +303,7 @@ export function DiscussionDraft({ from }: { from: Discussion | null }) {
                 disabled={busy}
                 maxLength={20000}
                 aria-label={t('DiscussionDraft.topic')}
-                placeholder={t('DiscussionDraft.whatShouldBeDiscussedDescribeTheQuestionAnd')}
+                placeholder={reviewing ? t('DiscussionDraft.whatShouldBeDrafted') : t('DiscussionDraft.whatShouldBeDiscussedDescribeTheQuestionAnd')}
                 onChange={(event) => setTopic(event.target.value)}
                 onKeyDown={(event) => {
                   if (!sendsMessage(event)) return
@@ -304,10 +313,10 @@ export function DiscussionDraft({ from }: { from: Discussion | null }) {
               />
               <div className="chat-options">
                 <span className="discussion-draft-readonly" data-tooltip={t('DiscussionDraft.membersReadOnlyHint')}>{t('DiscussionDraft.membersReadOnly')}</span>
-                <span className="chat-options-note muted">{t('DiscussionDraft.rounds_823', { value1: rounds })}</span>
+                <span className="chat-options-note muted">{reviewing ? t('DiscussionDraft.revisions', { value1: rounds }) : t('DiscussionDraft.rounds_823', { value1: rounds })}</span>
                 <span className="chat-dock-spacer" />
                 <button type="button" className="button primary discussion-draft-start" data-tooltip={startLabel} data-tooltip-side="top-end" disabled={!canStart} onClick={() => void start()}>
-                  {busy ? t('DiscussionDraft.starting') : t('DiscussionDraft.startDiscussion')}
+                  {busy ? t('DiscussionDraft.starting') : reviewing ? t('DiscussionDraft.startReview') : t('DiscussionDraft.startDiscussion')}
                   <EnterIcon />
                 </button>
               </div>

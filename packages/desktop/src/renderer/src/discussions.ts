@@ -1,6 +1,6 @@
 import { localized, t } from './i18n'
 import { create } from 'zustand'
-import type { AgentKind, Discussion, DiscussionAction, DiscussionCreate, DiscussionMemberFields, DiscussionMemberStatus, DiscussionPost, DiscussionState } from '@antumi/protocol'
+import { reviewRound, type AgentKind, type Discussion, type DiscussionAction, type DiscussionCreate, type DiscussionFormat, type DiscussionMemberFields, type DiscussionMemberStatus, type DiscussionPost, type DiscussionState } from '@antumi/protocol'
 import { perform } from './core-store'
 import { agentLabel } from './labels'
 
@@ -99,10 +99,19 @@ export const MEMBER_STATUS_LABEL: Record<DiscussionMemberStatus, string> = local
 
 // Where the discussion stands, in a few words for its header and its row.
 // Rounds count from the topic now discussed.
-export function discussionProgress(discussion: Pick<Discussion, 'state' | 'step' | 'round' | 'lastRound' | 'topicStart'>): string {
+export function discussionProgress(discussion: Pick<Discussion, 'state' | 'step' | 'round' | 'lastRound' | 'topicStart'> & { format?: DiscussionFormat }): string {
+  if (discussion.format === 'review') return reviewProgress(discussion)
   if (discussion.state === 'done') return DISCUSSION_STATE_LABEL.done
   const { round, lastRound, topicStart } = discussion
   const where = discussion.step === 'summary' ? t('DiscussionView.summary') : round > topicStart ? t('discussions.round', { value1: round - topicStart, value2: Math.max(round, lastRound) - topicStart }) : t('SquadWorkPanel.preparing')
+  return discussion.state === 'running' ? where : `${where} · ${DISCUSSION_STATE_LABEL[discussion.state]}`
+}
+
+// A review by the draft it is on and what is being done with it.
+function reviewProgress(discussion: Pick<Discussion, 'state' | 'step' | 'round'>): string {
+  if (discussion.state === 'done') return t('discussions.reviewDone')
+  const { stage, version } = reviewRound(Math.max(discussion.round, 1))
+  const where = discussion.step === 'summary' ? t('discussions.reviewFinishing') : stage === 'review' ? t('discussions.reviewReviewing', { version }) : stage === 'draft' ? t('discussions.reviewDrafting') : t('discussions.reviewRevising', { version })
   return discussion.state === 'running' ? where : `${where} · ${DISCUSSION_STATE_LABEL[discussion.state]}`
 }
 

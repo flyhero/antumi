@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_DISCUSSION_REQUIREMENTS, DiscussionCreate, MAX_DISCUSSION_REQUIREMENTS, checkAddDiscussionMember, checkDiscussionAction, checkEditDiscussionProjects, checkArchiveDiscussion, checkNewDiscussionTopic, checkRemoveDiscussionMember, currentTopic, memberLetter } from './discussion'
+import { DEFAULT_DISCUSSION_REQUIREMENTS, DiscussionCreate, MAX_DISCUSSION_REQUIREMENTS, checkAddDiscussionMember, checkDiscussionAction, checkEditDiscussionProjects, checkArchiveDiscussion, checkNewDiscussionTopic, checkRemoveDiscussionMember, checkDiscussionMention, currentTopic, memberLetter, reviewRound, reviewSteps } from './discussion'
 
 describe('discussion requirements', () => {
   const create = { topic: 'Compare caches', projectPaths: [], members: [{ agent: 'claude', name: 'Ann' }, { agent: 'codex', name: 'Bob' }], chair: 0 }
@@ -74,5 +74,44 @@ describe('changing a group chat midway', () => {
     const left = { members: [member('a', 0), member('c', 2)], formerMembers: [member('b', 1)] }
     expect(['a', 'b', 'c'].map((id) => memberLetter(left, id))).toEqual(['A', 'B', 'C'])
     expect(memberLetter(left, 'nobody')).toBeNull()
+  })
+})
+
+describe('a review', () => {
+  const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
+  const member = (n: number) => ({ id: id(n), conversationId: id(10 + n), agent: 'claude' as const, model: null, effort: null, name: `M${n}`, role: '', status: 'idle' as const })
+  const discussion = { members: [member(1), member(2), member(3)], chairId: id(1), state: 'running' as const, format: 'review' as const }
+  const post = (round: number, memberId: string, stage: 'draft' | 'review' | 'revise' | 'final', state: 'pending' | 'done' | 'failed', verdict: 'pass' | 'change' | null = null, version: number | null = null) =>
+    ({ round, memberId, stage, state, verdict, version })
+
+  it('numbers its rounds: drafts and revisions in the odd ones, reviews in the even ones', () => {
+    expect([1, 2, 3, 4, 5].map((round) => reviewRound(round))).toEqual([
+      { stage: 'draft', version: 1 }, { stage: 'review', version: 1 }, { stage: 'revise', version: 2 }, { stage: 'review', version: 2 }, { stage: 'revise', version: 3 }
+    ])
+  })
+
+  it('shows each step with how many reviewers passed, the one under way, and the final draft still to come', () => {
+    const steps = reviewSteps(discussion, [
+      post(1, id(1), 'draft', 'done'), post(2, id(2), 'review', 'done', 'pass'), post(2, id(3), 'review', 'done', 'change'),
+      post(3, id(1), 'revise', 'done'), post(4, id(2), 'review', 'done', 'pass'), post(4, id(3), 'review', 'pending')
+    ])
+    expect(steps.map((step) => [step.stage, step.version, step.state, step.passed, step.total, step.verdict])).toEqual([
+      ['draft', 1, 'done', 0, 1, null], ['review', 1, 'done', 1, 2, 'change'], ['revise', 2, 'done', 0, 1, null], ['review', 2, 'current', 1, 2, null], ['final', 0, 'todo', 0, 0, null]
+    ])
+    // A reviewer asked again counts by its latest answer.
+    const retried = reviewSteps({ ...discussion, state: 'done' }, [
+      post(1, id(1), 'draft', 'done'), post(2, id(2), 'review', 'done', 'pass'), post(2, id(3), 'review', 'failed'), post(2, id(3), 'review', 'done', 'pass'), post(2, id(1), 'final', 'done', 'pass', 1)
+    ])
+    expect(retried.map((step) => [step.stage, step.state, step.verdict])).toEqual([['draft', 'done', null], ['review', 'done', 'pass'], ['final', 'done', 'pass']])
+  })
+
+  it('keeps its members and topic, and names wait until nothing is out', () => {
+    expect(checkAddDiscussionMember(discussion)).toBe('format')
+    expect(checkRemoveDiscussionMember(discussion, id(2))).toBe('format')
+    expect(checkNewDiscussionTopic({ ...discussion, state: 'done' })).toBe('format')
+    expect(checkDiscussionMention(discussion)).toBe('busy')
+    expect(checkDiscussionMention({ ...discussion, state: 'done' })).toBeNull()
+    expect(checkDiscussionMention({ ...discussion, format: 'roundtable' })).toBeNull()
+    expect(checkArchiveDiscussion({ ...discussion, state: 'done' })).toBeNull()
   })
 })

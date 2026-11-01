@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_DISCUSSION_REQUIREMENTS, type Discussion, type DiscussionPost } from '@antumi/protocol'
-import { holdsPosition, openingPrompt, replyPrompt, roundPrompt, speakerName, summaryPrompt, topicPrompt } from './discussion-prompt'
+import { draftPrompt, holdsPosition, openingPrompt, replyPrompt, reviewPrompt, reviewVerdict, revisePrompt, roundPrompt, speakerName, summaryPrompt, topicPrompt } from './discussion-prompt'
 
 const ID = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
 
 const discussion = (anonymous: boolean): Discussion => ({
-  id: ID(1), title: 't', topic: 'Pick a cache', projectPaths: ['/repo'], chairId: ID(3), maxRounds: 3, anonymous,
+  id: ID(1), title: 't', topic: 'Pick a cache', format: 'roundtable', projectPaths: ['/repo'], chairId: ID(3), maxRounds: 3, anonymous,
   state: 'running', step: 'round', round: 1, lastRound: 3, topicStart: 0, pinnedAt: null, archivedAt: null, formerMembers: [], createdAt: 0, updatedAt: 0,
   members: [
     { id: ID(2), conversationId: ID(12), agent: 'claude', model: 'opus', effort: null, name: 'Ann', role: 'skeptic', status: 'idle' },
@@ -15,7 +15,7 @@ const discussion = (anonymous: boolean): Discussion => ({
 
 const post = (memberId: string | null, text: string): DiscussionPost => ({
   id: ID(20), discussionId: ID(1), sequence: 1, round: 1, memberId, kind: memberId ? 'opening' : 'user', text, mentions: [],
-  topic: false, state: 'done', error: null, createdAt: 0, updatedAt: 0
+  topic: false, state: 'done', error: null, stage: null, version: null, verdict: null, createdAt: 0, updatedAt: 0
 })
 
 describe('discussion prompts', () => {
@@ -82,5 +82,35 @@ describe('discussion prompts', () => {
     expect(holdsPosition('立场: 维持')).toBe(true)
     expect(holdsPosition('立场：已修改')).toBe(false)
     expect(holdsPosition('立场：维持\nbut one more thing')).toBe(false)
+  })
+
+  it("reads a review's verdict from its last line, counting anything unclear as asking for changes", () => {
+    expect(reviewVerdict('看过了。\n\n**结论：通过**')).toBe('pass')
+    expect(reviewVerdict('问题一……\n结论: 需修改')).toBe('change')
+    expect(reviewVerdict('结论：通过\n不过还有一点')).toBe('change')
+    expect(reviewVerdict('')).toBe('change')
+  })
+
+  it('tells the author to draft, a reviewer to judge alone, and the author what to revise', () => {
+    const review = { ...discussion(false), format: 'review' as const }
+    const author = review.members[1]!
+    const reviewer = review.members[0]!
+    const draft = draftPrompt(review, author, 'Write the cache RFC', [post(null, 'keep it short')])
+    expect(draft).toContain('你是作者')
+    expect(draft).toContain('Write the cache RFC')
+    expect(draft).toContain('keep it short')
+    expect(draft).toContain('Ann')
+    const first = reviewPrompt(review, reviewer, 'Write the cache RFC', 1, [post(author.id, 'v1 text')], true)
+    expect(first).toContain('你看不到其他评审的意见')
+    expect(first).toContain('v1 text')
+    expect(first).toContain('结论：通过')
+    expect(reviewPrompt(review, reviewer, 'Write the cache RFC', 2, [], false)).not.toContain('你看不到其他评审的意见')
+    expect(revisePrompt(review, 2, [post(reviewer.id, 'fix the TTL')])).toContain('## 修订说明')
+  })
+
+  it("names Antumi's own records as such, not as the user", () => {
+    const notice = { ...post(null, '计票结果'), kind: 'summary' as const }
+    expect(roundPrompt(discussion(false), 2, [notice])).toContain('Antumi 记录：')
+    expect(roundPrompt(discussion(false), 2, [post(null, 'hi')])).toContain('用户说：')
   })
 })

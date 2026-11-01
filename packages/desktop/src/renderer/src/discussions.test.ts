@@ -4,7 +4,7 @@ import { discussionProgress, EVERYONE, mentionChoices, mentionedMembers, mention
 
 const post = (sequence: number, patch: Partial<DiscussionPost> = {}): DiscussionPost => ({
   id: `00000000-0000-4000-8000-${String(sequence).padStart(12, '0')}`, discussionId: '00000000-0000-4000-8000-000000000100',
-  sequence, round: 1, memberId: null, kind: 'user', text: `p${sequence}`, mentions: [], topic: false, state: 'done', error: null, createdAt: 0, updatedAt: sequence,
+  sequence, round: 1, memberId: null, kind: 'user', text: `p${sequence}`, mentions: [], topic: false, state: 'done', error: null, stage: null, version: null, verdict: null, createdAt: 0, updatedAt: sequence,
   ...patch
 })
 
@@ -51,4 +51,15 @@ describe('group chat helpers', () => {
     expect(discussionProgress({ state: 'running', step: 'round', round: 4, lastRound: 5, topicStart: 2 })).toBe('第 2 / 3 轮')
     expect(discussionProgress({ state: 'done', step: 'summary', round: 2, lastRound: 2, topicStart: 0 })).toBe('已总结')
   })
+
+  it("says where a review stands by its draft and step", () => {
+    const at = (round: number, state: 'running' | 'paused' | 'done' = 'running', step: 'round' | 'summary' = 'round') => discussionProgress({ format: 'review', state, step, round, lastRound: 6, topicStart: 0 })
+    expect(at(1)).toBe('起草中')
+    expect(at(2)).toBe('第 1 版评审中')
+    expect(at(3)).toBe('修订第 2 版')
+    expect(at(4, 'paused')).toBe('第 2 版评审中 · 已暂停')
+    expect(at(4, 'running', 'summary')).toBe('整理定稿')
+    expect(at(4, 'done', 'summary')).toBe('已定稿')
+  })
 })
+

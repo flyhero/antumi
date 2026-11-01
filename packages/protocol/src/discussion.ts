@@ -11,6 +11,17 @@ export const MAX_DISCUSSION_MEMBERS = 5
 export const MAX_DISCUSSION_ROUNDS = 5
 export const DEFAULT_DISCUSSION_ROUNDS = 3
 export const MAX_DISCUSSION_REQUIREMENTS = 10000
+export const DEFAULT_DISCUSSION_REVISIONS = 2
+
+// How a group chat goes. roundtable: every member answers each round, then the chair sums up.
+// review: the chair is the author and writes a draft, the others review it each on their own, and
+// the author revises until every reviewer passes it or the revisions run out; maxRounds counts
+// revisions. Older cores know only the round table (feature discussion-formats). A format a client
+// does not know fails the discussion's parse, so that client leaves it out rather than misreading it.
+export const DISCUSSION_FORMATS = ['roundtable', 'review'] as const
+export const DiscussionFormat = z.enum(DISCUSSION_FORMATS)
+export type DiscussionFormat = z.infer<typeof DiscussionFormat>
+
 export const DEFAULT_DISCUSSION_REQUIREMENTS = [
   '- 观点要具体，给出理由；不确定的地方直接说不确定。',
   '- 每次发言尽量控制在 600 字以内，除非主题确实需要更多。'
@@ -60,6 +71,7 @@ export const Discussion = z.object({
   id: z.string().uuid(),
   title: z.string(),
   topic: z.string(),
+  format: DiscussionFormat.default('roundtable'),
   // Shared instructions for every turn; omitted by older cores, empty for no extra requirements.
   requirements: z.string().optional(),
   projectPaths: z.array(z.string()),
@@ -108,6 +120,11 @@ export const DiscussionPost = z.object({
   topic: z.boolean().default(false),
   // A member's post is pending while its turn runs, failed when the turn did not complete.
   state: z.enum(['pending', 'done', 'failed']).catch('done'),
+  // In a review: what the post is (a draft, a review of one, a revision, the final draft), the
+  // draft version it writes or reviews, and a review's or the final draft's verdict. Null elsewhere.
+  stage: z.enum(['draft', 'review', 'revise', 'final']).nullable().catch(null).default(null),
+  version: z.number().int().positive().nullable().catch(null).default(null),
+  verdict: z.enum(['pass', 'change']).nullable().catch(null).default(null),
   // Why a member's post failed: a reason code, then, on the lines after it, what the agent said.
   error: z.string().nullable(),
   createdAt: z.number(),
@@ -124,7 +141,8 @@ export const DiscussionCreate = z.object({
   // Which of members sums up.
   chair: z.number().int().nonnegative(),
   maxRounds: z.number().int().min(1).max(MAX_DISCUSSION_ROUNDS).default(DEFAULT_DISCUSSION_ROUNDS),
-  anonymous: z.boolean().default(false)
+  anonymous: z.boolean().default(false),
+  format: DiscussionFormat.default('roundtable')
 }).refine((fields) => fields.chair < fields.members.length, { message: 'the chair must be one of the members' })
 export type DiscussionCreate = z.input<typeof DiscussionCreate>
 
@@ -137,6 +155,7 @@ export type DiscussionAction = z.infer<typeof DiscussionAction>
 export type DiscussionActionBlocker = 'not-running' | 'not-paused' | 'summing-up' | 'done'
 
 export function checkDiscussionAction(discussion: Pick<Discussion, 'state' | 'step'>, action: DiscussionAction): DiscussionActionBlocker | null {
+  // A review's nextRound is one more revision, and conclude takes the latest draft as it stands.
   const { state, step } = discussion
   const summing = step === 'summary' && (state === 'running' || state === 'pausing')
   switch (action) {
@@ -155,29 +174,76 @@ export function checkDiscussionAction(discussion: Pick<Discussion, 'state' | 'st
   }
 }
 
-export type DiscussionMemberBlocker = 'full' | 'too-few' | 'chair' | 'busy'
+export type DiscussionMemberBlocker = 'full' | 'too-few' | 'chair' | 'busy' | 'format'
 
-// A member joins up to the limit, and takes part from the next round.
-export function checkAddDiscussionMember(discussion: Pick<Discussion, 'members'>): DiscussionMemberBlocker | null {
+// A member joins up to the limit, and takes part from the next round. A review keeps the author and
+// reviewers it began with, so each draft is reviewed by the same people.
+export function checkAddDiscussionMember(discussion: Pick<Discussion, 'members'> & { format?: DiscussionFormat }): DiscussionMemberBlocker | null {
+  if (discussion.format === 'review') return 'format'
   return discussion.members.length >= MAX_DISCUSSION_MEMBERS ? 'full' : null
 }
 
 // The chair stays, as it is to sum up; a member answering is let finish first.
-export function checkRemoveDiscussionMember(discussion: Pick<Discussion, 'members' | 'chairId'>, memberId: string): DiscussionMemberBlocker | null {
+export function checkRemoveDiscussionMember(discussion: Pick<Discussion, 'members' | 'chairId'> & { format?: DiscussionFormat }, memberId: string): DiscussionMemberBlocker | null {
+  if (discussion.format === 'review') return 'format'
   if (discussion.members.length <= MIN_DISCUSSION_MEMBERS) return 'too-few'
   if (memberId === discussion.chairId) return 'chair'
   return discussion.members.find((member) => member.id === memberId)?.status === 'idle' ? null : 'busy'
 }
 
-// A new topic waits for the turns out now: the user pauses first, or lets the summary come.
-export function checkNewDiscussionTopic(discussion: Pick<Discussion, 'state' | 'members'>): 'busy' | null {
-  if (discussion.state === 'running' || discussion.state === 'pausing') return 'busy'
-  return discussion.members.every((member) => member.status === 'idle') ? null : 'busy'
+function busy(discussion: Pick<Discussion, 'state' | 'members'>): boolean {
+  return discussion.state === 'running' || discussion.state === 'pausing' || discussion.members.some((member) => member.status !== 'idle')
+}
+
+// A new topic waits for the turns out now: the user pauses first, or lets the summary come. A review
+// stays on what it drafts; another topic is another group chat.
+export function checkNewDiscussionTopic(discussion: Pick<Discussion, 'state' | 'members'> & { format?: DiscussionFormat }): 'busy' | 'format' | null {
+  if (discussion.format === 'review') return 'format'
+  return busy(discussion) ? 'busy' : null
 }
 
 // A group chat is put away only once nothing is out, its members' agents then let go.
 export function checkArchiveDiscussion(discussion: Pick<Discussion, 'state' | 'members'>): 'busy' | null {
-  return checkNewDiscussionTopic(discussion)
+  return busy(discussion) ? 'busy' : null
+}
+
+// Whether the user may name members to answer now. In a review a reviewer answering mid-review
+// would see the others' reviews, so names wait until nothing is out.
+export function checkDiscussionMention(discussion: Pick<Discussion, 'state' | 'members'> & { format?: DiscussionFormat }): 'busy' | null {
+  return discussion.format === 'review' && busy(discussion) ? 'busy' : null
+}
+
+// A review's rounds: the author writes in the odd ones (the first draft, then each revision), the
+// reviewers in the even ones; round r works on version ceil(r / 2).
+export function reviewRound(round: number): { stage: 'draft' | 'review' | 'revise'; version: number } {
+  const version = Math.ceil(round / 2)
+  return { stage: round % 2 === 0 ? 'review' : round === 1 ? 'draft' : 'revise', version }
+}
+
+export type ReviewStep = { stage: 'draft' | 'review' | 'revise' | 'final'; version: number; state: 'done' | 'current' | 'failed' | 'todo'; passed: number; total: number; verdict: 'pass' | 'change' | null }
+
+// The steps a review has taken and the one it is on, for the page's progress line: each draft and
+// review by version, with how many reviewers passed it, then the final draft.
+export function reviewSteps(discussion: Pick<Discussion, 'members' | 'chairId' | 'state'>, posts: readonly Pick<DiscussionPost, 'round' | 'memberId' | 'stage' | 'state' | 'verdict' | 'version'>[]): ReviewStep[] {
+  const reviewers = discussion.members.filter((member) => member.id !== discussion.chairId).length
+  const rounds = [...new Set(posts.filter((post) => post.stage === 'draft' || post.stage === 'review' || post.stage === 'revise').map((post) => post.round))].sort((a, b) => a - b)
+  const steps: ReviewStep[] = rounds.map((round) => {
+    const { stage, version } = reviewRound(round)
+    // A member asked again in the same round counts by its latest post.
+    const latest = new Map<string, (typeof posts)[number]>()
+    for (const post of posts) if (post.round === round && post.stage === stage && post.memberId) latest.set(post.memberId, post)
+    const answers = [...latest.values()]
+    const pending = answers.some((post) => post.state === 'pending')
+    const failed = answers.some((post) => post.state === 'failed')
+    const done = answers.filter((post) => post.state === 'done')
+    const total = stage === 'review' ? reviewers : 1
+    const state = pending ? 'current' : failed || done.length < total ? 'failed' : 'done'
+    const verdict = stage === 'review' && state === 'done' ? (done.every((post) => post.verdict === 'pass') ? 'pass' : 'change') : null
+    return { stage, version, state, passed: done.filter((post) => post.verdict === 'pass').length, total, verdict }
+  })
+  const final = posts.findLast((post) => post.stage === 'final')
+  if (final) return [...steps, { stage: 'final', version: final.version ?? 1, state: 'done', passed: 0, total: 0, verdict: final.verdict }]
+  return discussion.state === 'done' ? steps : [...steps, { stage: 'final', version: 0, state: 'todo', passed: 0, total: 0, verdict: null }]
 }
 
 // The topic now discussed: the last the user moved the group on to, else the one it began with.

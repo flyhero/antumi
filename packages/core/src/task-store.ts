@@ -378,7 +378,12 @@ export const MIGRATIONS = [
    CREATE TABLE session_import_observations (
      conversation_id TEXT PRIMARY KEY REFERENCES conversations(id) ON DELETE CASCADE,
      agent TEXT NOT NULL, session_id TEXT NOT NULL, before_items TEXT NOT NULL
-   );`
+   );`,
+  // How a group chat goes, and in a review what each post is (discussion-formats).
+  `ALTER TABLE discussions ADD COLUMN format TEXT NOT NULL DEFAULT 'roundtable';
+   ALTER TABLE discussion_posts ADD COLUMN stage TEXT;
+   ALTER TABLE discussion_posts ADD COLUMN version INTEGER;
+   ALTER TABLE discussion_posts ADD COLUMN verdict TEXT;`
 ]
 
 

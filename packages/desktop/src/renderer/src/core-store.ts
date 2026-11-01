@@ -856,6 +856,13 @@ export function selectDiscussion(id: string | null): void {
   useCore.setState({ selectedDiscussionId: id, section: 'discussions', conversationDraft: false, ...PAGES_CLOSED })
 }
 
+// The new page set to a group chat on `text`, with the members and projects of `from`: going on from
+// what a group chat produced.
+export function openDiscussionDraftWith(from: Discussion, text: string): void {
+  openDiscussionDraft(from)
+  useCore.setState({ conversationDraftCarry: { text, projects: [...from.projectPaths], agent: null, model: null } })
+}
+
 // The new page, set to a group chat. from: a group whose members, projects and options it starts with.
 export function openDiscussionDraft(from?: Discussion): void {
   useCore.setState({ selectedConversationId: null, selectedDiscussionId: null, section: 'conversations', conversationDraft: true, conversationDraftMode: 'group', conversationDraftCarry: null, conversationDraftIssue: null, conversationDraftFrom: null, discussionDraftFrom: from ? { discussion: from } : null, draftProfileId: null, ...PAGES_CLOSED })
@@ -864,6 +871,11 @@ export function openDiscussionDraft(from?: Discussion): void {
 // Whether core runs group chats (discussions.*).
 export function useDiscussionsSupported(): boolean {
   return useCore((s) => s.rpc?.features.includes('discussions') ?? false)
+}
+
+// Whether core runs group chats as other than a round table: a review (Discussion.format).
+export function useDiscussionFormatsSupported(): boolean {
+  return useCore((s) => s.rpc?.features.includes('discussion-formats') ?? false)
 }
 
 // A core that lets members join and leave a group chat midway, and one that changes its projects.

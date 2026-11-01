@@ -2,8 +2,8 @@ import { useShortcutHint } from '../keyboard-shortcuts'
 import { localized, t, tr } from '../i18n'
 import { useChatTypeface } from '../chat-typeface'
 import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { checkDiscussionAction, checkEditDiscussionProjects, checkNewDiscussionTopic, checkRemoveDiscussionMember, currentTopic, MAX_DETAILS_LENGTH, memberLetter, type Discussion, type DiscussionAction, type DiscussionMember, type DiscussionPost } from '@antumi/protocol'
-import { loadConversation, openDiscussionDraft, openOverview, perform, selectConversation, selectDiscussion, selectTask, useCore, useDiscussionMembersSupported, useDiscussionProjectsSupported, useDiscussionTopicsSupported } from '../core-store'
+import { checkDiscussionAction, checkDiscussionMention, checkEditDiscussionProjects, checkNewDiscussionTopic, checkRemoveDiscussionMember, currentTopic, MAX_DETAILS_LENGTH, memberLetter, reviewRound, reviewSteps, type ReviewStep, type Discussion, type DiscussionAction, type DiscussionMember, type DiscussionPost } from '@antumi/protocol'
+import { loadConversation, openDiscussionDraft, openDiscussionDraftWith, openOverview, perform, selectConversation, selectDiscussion, selectTask, useCore, useDiscussionMembersSupported, useDiscussionProjectsSupported, useDiscussionTopicsSupported } from '../core-store'
 import { archiveDiscussion, controlDiscussion, discussionProgress, EVERYONE, loadDiscussionPosts, newDiscussionTopic, removeDiscussionMember, setDiscussionProjects, MEMBER_STATUS_LABEL, mentionedMembers, postToDiscussion, renameDiscussion, useDiscussionPosts } from '../discussions'
 import { agentLabel, messageTime, reasonText } from '../labels'
 import { setPreference, usePreferences } from '../preferences'
@@ -28,6 +28,19 @@ const ACTIONS: Array<{ action: DiscussionAction; label: string; hint: string }> 
   { action: 'conclude', label: t('DiscussionView.summarizeNow'), hint: t('DiscussionView.askTheChairToSummarizeAfterThisRound') },
   { action: 'stop', label: t('DiscussionView.stop'), hint: t('DiscussionView.interruptCurrentSpeakersAndPause') }
 ]))
+
+// A review's own words for the same actions: one more revision, and the latest draft as final.
+const REVIEW_ACTIONS: Partial<Record<DiscussionAction, { label: string; hint: string }>> = localized(() => ({
+  nextRound: { label: t('DiscussionView.reviseAgain'), hint: t('DiscussionView.reviseAgainHint') },
+  conclude: { label: t('DiscussionView.finishWithWhatIsThere'), hint: t('DiscussionView.finishWithWhatIsThereHint') }
+}))
+
+const STAGE_LABEL: Record<NonNullable<DiscussionPost['stage']>, (version: number) => string> = localized(() => ({
+  draft: (version: number) => t('DiscussionView.stageDraft', { version }),
+  review: (version: number) => t('DiscussionView.stageReview', { version }),
+  revise: (version: number) => t('DiscussionView.stageRevise', { version }),
+  final: (version: number) => t('DiscussionView.stageFinal', { version })
+}))
 
 // What the composer's next send is: more on the topic now discussed, or a new one.
 const SEND_MODES = localized(() => ([
@@ -66,7 +79,8 @@ async function taskFromReply(discussion: Discussion, member: DiscussionMember | 
   if (task) selectTask(task.id)
 }
 
-const LEAVE_BLOCKER: Record<'too-few' | 'chair' | 'busy', string> = localized(() => ({
+const LEAVE_BLOCKER: Record<'too-few' | 'chair' | 'busy' | 'format', string> = localized(() => ({
+  format: t('DiscussionView.aReviewKeepsItsMembers'),
   'too-few': t('DiscussionView.atLeast2MembersMustRemain'),
   chair: t('DiscussionView.theChairMustStayToWriteTheSummary'),
   busy: t('DiscussionView.theyAreStillSpeakingWaitUntilTheyFinish')
@@ -77,9 +91,11 @@ async function leave(discussion: Discussion, member: DiscussionMember): Promise<
   if (await askConfirm({ message: t('DiscussionView.removeFromTheDiscussionTheirPostsWillBe', { value1: member.name }), confirm: t('ConfirmDialog.removeMember') })) await removeDiscussionMember(discussion.id, member.id)
 }
 
-function MemberChip({ member, chair, onMention, leaveBlocker, onLeave }: {
+function MemberChip({ member, chair, seat, onMention, leaveBlocker, onLeave }: {
   member: DiscussionMember
   chair: boolean
+  // What a review calls it, author or reviewer, where the chair label would be.
+  seat: string | null
   // Null where nothing can be said to it: the group is archived.
   onMention: (() => void) | null
   // Why it cannot leave now; leaving is offered only where the core takes it.
@@ -97,7 +113,7 @@ function MemberChip({ member, chair, onMention, leaveBlocker, onLeave }: {
       >
         <span className="discussion-member-mark"><AgentIcon agent={member.agent} /></span>
         <span className="discussion-member-name">{member.name}</span>
-        {chair && <span className="discussion-member-chair">{t('DiscussionView.chair')}</span>}
+        {seat ? <span className="discussion-member-chair" data-seat={chair ? 'lead' : undefined}>{seat}</span> : chair && <span className="discussion-member-chair">{t('DiscussionView.chair')}</span>}
         <span className="discussion-member-status">
           {member.status === 'working' && <Spinner />}
           {status}
@@ -130,13 +146,15 @@ function MemberFace({ member, letter }: { member: DiscussionMember | undefined; 
   )
 }
 
-function PostHead({ post, member, chair, left }: { post: DiscussionPost; member: DiscussionMember | undefined; chair: boolean; left: boolean }) {
+// chair: what to call the chair here, author in a review; null for anyone else.
+function PostHead({ post, member, chair, left }: { post: DiscussionPost; member: DiscussionMember | undefined; chair: string | null; left: boolean }) {
   return (
     <div className="discussion-msg-head">
       <span className="discussion-msg-name">{member ? member.name : t('DiscussionView.removedMember')}</span>
       {left && <span className="discussion-tag">{t('DiscussionView.left')}</span>}
-      {chair && <span className="discussion-tag" data-chair="">{t('DiscussionView.chair')}</span>}
-      {KIND_LABEL[post.kind] && post.kind !== 'summary' && <span className="discussion-tag">{KIND_LABEL[post.kind]}</span>}
+      {chair && <span className="discussion-tag" data-chair="">{chair}</span>}
+      {post.stage && post.stage !== 'final' ? <span className="discussion-tag">{STAGE_LABEL[post.stage](post.version ?? 1)}</span>
+        : KIND_LABEL[post.kind] && post.kind !== 'summary' && <span className="discussion-tag">{KIND_LABEL[post.kind]}</span>}
       {member?.model && <span>{member.model}</span>}
       <span className="discussion-msg-time">{messageTime(post.createdAt)}</span>
     </div>
@@ -188,11 +206,12 @@ function Post({ post, discussion, topic, question }: { post: DiscussionPost; dis
   const current = discussion.members.find((each) => each.id === post.memberId)
   const member = current ?? discussion.formerMembers.find((each) => each.id === post.memberId)
   const summary = post.kind === 'summary' && post.state === 'done'
+  if (summary && post.stage === 'final') return <FinalDraft post={post} discussion={discussion} member={member} topic={topic} />
   return (
     <article className="discussion-msg" data-kind={post.kind} data-state={post.state}>
       <MemberFace member={member} letter={post.memberId ? memberLetter(discussion, post.memberId) : null} />
       <div className="discussion-msg-body">
-        <PostHead post={post} member={member} chair={member !== undefined && member.id === discussion.chairId} left={member !== undefined && current === undefined} />
+        <PostHead post={post} member={member} chair={member !== undefined && member.id === discussion.chairId ? (discussion.format === 'review' ? t('DiscussionView.author') : t('DiscussionView.chair')) : null} left={member !== undefined && current === undefined} />
         {summary ? (
           <div className="discussion-bubble discussion-summary">
             <div className="discussion-summary-head">{t('DiscussionView.discussionSummary')}</div>
@@ -208,6 +227,7 @@ function Post({ post, discussion, topic, question }: { post: DiscussionPost; dis
               <>
                 {post.text && <ChatMarkdown text={post.text} />}
                 {post.state === 'failed' && <FailedPost error={post.error} />}
+                {post.stage === 'review' && post.verdict && <ReviewVerdict verdict={post.verdict} />}
               </>
             )}
             {post.kind === 'reply' && post.state === 'done' && post.text.trim() && (
@@ -220,6 +240,95 @@ function Post({ post, discussion, topic, question }: { post: DiscussionPost; dis
         {post.state !== 'pending' && <PostActions text={post.text} />}
       </div>
     </article>
+  )
+}
+
+function ReviewVerdict({ verdict, label }: { verdict: 'pass' | 'change'; label?: string }) {
+  return <span className="discussion-verdict" data-verdict={verdict}>{label ?? (verdict === 'pass' ? t('DiscussionView.verdictPass') : t('DiscussionView.verdictChange'))}</span>
+}
+
+// A review's end: the author's latest draft, whether every reviewer passed it, and what to do with it.
+function FinalDraft({ post, discussion, member, topic }: { post: DiscussionPost; discussion: Discussion; member: DiscussionMember | undefined; topic: Topic }) {
+  const version = post.version ?? 1
+  const reviewers = discussion.members.filter((each) => each.id !== discussion.chairId).length
+  return (
+    <article className="discussion-msg" data-kind="summary" data-state={post.state}>
+      <MemberFace member={member} letter={post.memberId ? memberLetter(discussion, post.memberId) : null} />
+      <div className="discussion-msg-body">
+        <PostHead post={post} member={member} chair={t('DiscussionView.author')} left={false} />
+        <div className="discussion-bubble discussion-summary">
+          <div className="discussion-summary-head">{STAGE_LABEL.final(version)}</div>
+          <div className="discussion-final-status">
+            <ReviewVerdict verdict={post.verdict ?? 'change'} label={post.verdict === 'pass' ? t('DiscussionView.allReviewersPassed', { count: reviewers }) : t('DiscussionView.notPassed')} />
+            <span>{t('DiscussionView.revisedTimes', { count: version - 1 })}</span>
+          </div>
+          <div className="discussion-summary-body"><ChatMarkdown text={post.text} /></div>
+          <div className="discussion-summary-foot">
+            <button type="button" className="link-button" onClick={() => openDiscussionDraftWith(discussion, t('DiscussionView.discussThisDraftTopic', { text: post.text }))}>{t('DiscussionView.discussThisDraft')}</button>
+            <button type="button" className="link-button" onClick={() => void taskFromSummary(discussion, topic.text, post)}>{t('DiscussionView.createTaskFromDraft')}</button>
+          </div>
+        </div>
+        <PostActions text={post.text} />
+      </div>
+    </article>
+  )
+}
+
+// A review's steps, from the first draft to the final one, with where it stands now.
+function ReviewProgress({ discussion, posts }: { discussion: Discussion; posts: readonly DiscussionPost[] }) {
+  const steps = reviewSteps(discussion, posts)
+  const label = (step: ReviewStep) => step.stage === 'final' ? (step.version > 0 ? STAGE_LABEL.final(step.version) : t('DiscussionView.stageFinalTodo')) : STAGE_LABEL[step.stage](step.version)
+  return (
+    <ol className="discussion-steps" aria-label={t('DiscussionView.reviewProgress')}>
+      {steps.map((step, index) => (
+        <li key={`${step.stage}:${step.version}:${index}`} className="discussion-step" data-state={step.state}>
+          {step.state === 'current' && <Spinner />}
+          {label(step)}
+          {step.stage === 'review' && step.state !== 'todo' && <span className="discussion-step-note">{step.state === 'done' ? (step.verdict === 'pass' ? t('DiscussionView.passedCount', { passed: step.passed, total: step.total }) : t('DiscussionView.changeCount', { count: step.total - step.passed, total: step.total })) : t('DiscussionView.passedSoFar', { passed: step.passed, total: step.total })}</span>}
+          {step.stage === 'final' && step.verdict === 'change' && <span className="discussion-step-note">{t('DiscussionView.notPassed')}</span>}
+        </li>
+      ))}
+    </ol>
+  )
+}
+
+// A review's posts by round, each opened by what the round is; reviews of one draft side by side,
+// as they were written each on their own.
+function ReviewRounds({ discussion, posts }: { discussion: Discussion; posts: readonly DiscussionPost[] }) {
+  const sideBySide = usePreferences((p) => p.discussionSideBySide)
+  const rounds = new Map<number, DiscussionPost[]>()
+  for (const post of posts) rounds.set(post.round, [...(rounds.get(post.round) ?? []), post])
+  const topic = { text: discussion.topic, rounds: 0 }
+  return (
+    <>
+      {[...rounds].map(([round, list]) => {
+        const { stage, version } = reviewRound(Math.max(round, 1))
+        const reviews = stage === 'review' ? list.filter((post) => post.stage === 'review') : []
+        const rest = list.filter((post) => !reviews.includes(post))
+        return (
+          <section key={round} className="discussion-round" aria-label={STAGE_LABEL[stage](version)}>
+            {round > 0 && (
+              <div className="discussion-system">{STAGE_LABEL[stage](version)}{stage === 'review' && ` · ${t('DiscussionView.reviewedAlone')}`}{reviews.length > 1 && (
+                <button type="button" className="link-button" aria-pressed={sideBySide} onClick={() => setPreference('discussionSideBySide', !sideBySide)}>
+                  {sideBySide ? t('DiscussionView.viewSequentially') : t('DiscussionView.compareSideBySide')}
+                </button>
+              )}</div>
+            )}
+            {reviews.length > 0 && (
+              <div className="discussion-openings" data-side-by-side={(sideBySide && reviews.length > 1) || undefined}>
+                {reviews.map((post) => <Post key={post.id} post={post} discussion={discussion} topic={topic} />)}
+              </div>
+            )}
+            {rest.map((post) => (
+              <Fragment key={post.id}>
+                {post.stage === 'final' && <p className="discussion-system">{post.verdict === 'pass' ? t('DiscussionView.allPassedFinal', { version: post.version ?? 1 }) : t('DiscussionView.finalWithoutPass', { version: post.version ?? 1 })}</p>}
+                <Post post={post} discussion={discussion} topic={topic} question={post.kind === 'reply' ? askedOf(posts, post) : undefined} />
+              </Fragment>
+            ))}
+          </section>
+        )
+      })}
+    </>
   )
 }
 
@@ -303,7 +412,7 @@ export function DiscussionView({ id }: { id: string }) {
   // An archived group is read-only until it is taken out again.
   const archived = (discussion?.archivedAt ?? null) !== null
   // Archived before it loaded is not archived just now.
-  const membersEditable = useDiscussionMembersSupported() && !archived
+  const membersEditable = useDiscussionMembersSupported() && !archived && discussion?.format !== 'review'
   // A group begun without projects has none to change.
   const projectsEditable = useDiscussionProjectsSupported() && (discussion?.projectPaths.length ?? 0) > 0 && !archived
   const projectsBlocked = discussion ? checkEditDiscussionProjects(discussion) !== null : true
@@ -324,7 +433,10 @@ export function DiscussionView({ id }: { id: string }) {
   const mentions = asTopic ? [] : mentionedMembers(text, discussion.members)
   const busyNamed = discussion.members.filter((member) => mentions.includes(member.id) && member.status !== 'idle')
   const topicBlocked = checkNewDiscussionTopic(discussion) !== null
-  const canSend = !busy && text.trim() !== '' && busyNamed.length === 0 && !(asTopic && topicBlocked)
+  const review = discussion.format === 'review'
+  // In a review names wait until nothing is out, so no reviewer sees another's review.
+  const mentionBlocked = mentions.length > 0 && checkDiscussionMention(discussion) !== null
+  const canSend = !busy && text.trim() !== '' && busyNamed.length === 0 && !mentionBlocked && !(asTopic && topicBlocked)
   const chairId = discussion.chairId
 
   const act = async (action: DiscussionAction) => {
@@ -360,13 +472,14 @@ export function DiscussionView({ id }: { id: string }) {
             ? <TitleEditor title={discussion.title} label={t('DiscussionView.groupChatTitle')} onSave={(title) => void renameDiscussion(id, title)} onDone={() => setRenaming(false)} />
             : <button type="button" className="terminal-view-title conversation-title" title={t('ConversationView.clickToRename', { value1: discussion.title })} onClick={() => setRenaming(true)}>{discussion.title}</button>}
           <span className="muted">（{discussion.members.length}）</span>
+          {review && <span className="discussion-format">{t('discussionFormats.review')}</span>}
           <span className="muted">{discussionProgress(discussion)}</span>
           {!projectsEditable && discussion.projectPaths.length > 0 && <span className="muted" title={discussion.projectPaths.join('\n')}>{projectNames(discussion.projectPaths)}</span>}
           {discussion.anonymous && <span className="muted">{t('DiscussionView.anonymousPeerReview')}</span>}
           {archived && <span className="archived-tag">{t('ConversationList.archived')}</span>}
         </div>
         <div className="toolbar">
-          {ACTIONS.filter(({ action }) => !archived && checkDiscussionAction(discussion, action) === null).map(({ action, label, hint }) => (
+          {ACTIONS.filter(({ action }) => !archived && checkDiscussionAction(discussion, action) === null).map((each) => ({ ...each, ...(review ? REVIEW_ACTIONS[each.action] : {}) })).map(({ action, label, hint }) => (
             <button key={action} type="button" className="button discussion-action" data-tooltip={hint} disabled={busy} onClick={() => void act(action)}>
               {action === 'resume' && <PlayIcon />}
               {action === 'stop' && <StopIcon />}
@@ -389,6 +502,7 @@ export function DiscussionView({ id }: { id: string }) {
                   key={member.id}
                   member={member}
                   chair={member.id === chairId}
+                  seat={review ? (member.id === chairId ? t('DiscussionView.author') : t('DiscussionView.reviewer')) : null}
                   onMention={archived ? null : () => mention(member)}
                   leaveBlocker={blocked === null || blocked === 'full' ? null : LEAVE_BLOCKER[blocked]}
                   onLeave={membersEditable ? () => void leave(discussion, member) : null}
@@ -407,6 +521,7 @@ export function DiscussionView({ id }: { id: string }) {
               </li>
             )}
           </ul>
+          {review && posts && <ReviewProgress discussion={discussion} posts={posts} />}
           <div
             ref={list}
             className="chat-list discussion-list"
@@ -416,10 +531,10 @@ export function DiscussionView({ id }: { id: string }) {
             }}
           >
             <div className="discussion-topic">
-              <span className="discussion-post-kind">{t('DiscussionDraft.topic')}</span>
+              <span className="discussion-post-kind">{review ? t('DiscussionView.toDraft') : t('DiscussionDraft.topic')}</span>
               <ChatMarkdown text={discussion.topic} />
             </div>
-            {posts ? <Rounds discussion={discussion} posts={posts} /> : <p className="muted">{tr('DiscussionView.loadingPosts', { value1: <Spinner /> })}</p>}
+            {posts ? review ? <ReviewRounds discussion={discussion} posts={posts} /> : <Rounds discussion={discussion} posts={posts} /> : <p className="muted">{tr('DiscussionView.loadingPosts', { value1: <Spinner /> })}</p>}
           </div>
           <div className="chat-dock">
             {archived && <ArchivedBar what={t('DiscussionView.groupChat_910')} onRestore={() => archiveDiscussion(id, false)} />}
@@ -431,7 +546,9 @@ export function DiscussionView({ id }: { id: string }) {
                 rows={2}
                 value={text}
                 aria-label={t('DiscussionView.posts')}
-                placeholder={asTopic
+                placeholder={review
+                  ? discussion.state === 'done' || discussion.state === 'paused' ? t('DiscussionView.reviewComposerStopped') : t('DiscussionView.reviewComposerRunning')
+                  : asTopic
                   ? t('DiscussionView.writeANewTopicIndependentAnswersUpTo', { value1: discussion.maxRounds })
                   : discussion.state === 'done' || discussion.state === 'paused'
                   ? t('DiscussionView.addThoughtsOrQuestionsForAnotherRoundMember')
@@ -449,7 +566,7 @@ export function DiscussionView({ id }: { id: string }) {
                 }}
               />
               <div className="chat-options">
-                {topicsSupported && (
+                {topicsSupported && !review && (
                   <div className="segmented discussion-send-mode" role="radiogroup" aria-label={t('DiscussionView.sentMessages')}>
                     {SEND_MODES.map(({ topic, label, hint }) => {
                       const blocked = topic && topicBlocked && !asTopic
@@ -475,6 +592,7 @@ export function DiscussionView({ id }: { id: string }) {
                   </div>
                 )}
                 {asTopic && topicBlocked && <span className="chat-options-note muted">{t('DiscussionView.membersAreStillSpeakingPauseOrWaitUntil_917')}</span>}
+                {mentionBlocked && <span className="chat-options-note muted">{t('DiscussionView.namesWaitForTheReview')}</span>}
                 {busyNamed.length > 0 && <span className="chat-options-note muted">{tr('DiscussionView.isStillSpeakingWaitBeforeAskingAgain', { value1: busyNamed.map((member) => member.name).join('、') })}</span>}
                 <span className="chat-dock-spacer" />
                 <button type="button" className="chat-input-button" aria-label={sendLabel} data-tooltip={sendLabel} data-tooltip-side="top-end" disabled={!canSend} onClick={() => void send()}>

@@ -424,4 +424,88 @@ describe('DiscussionService', () => {
     expect(discussions.list()).toEqual([])
     expect(conversations.listAll()).toEqual([])
   })
+
+  describe('a review', () => {
+    // Ann writes, Bob and Cid review; each says what its prompt asked for.
+    const review = (overrides: Partial<DiscussionCreate> = {}) => fields({ format: 'review', chair: 0, maxRounds: 2, ...overrides })
+    const stages = (posts: DiscussionPost[]) => posts.filter((post) => post.kind !== 'notice').map((post) => `${post.round}:${post.stage}:${post.state}${post.verdict ? `:${post.verdict}` : ''}`)
+
+    it('drafts, has each reviewer judge alone, and ends on the draft every reviewer passed', async () => {
+      answer = (member, prompt) => prompt.includes('评审第') ? `${member} reviewed.\n结论：通过` : `${member} draft v${prompt.includes('修订第') ? 2 : 1}`
+      const discussion = await discussions.create(review())
+      expect(discussion.format).toBe('review')
+      await until(() => state(discussion.id) === 'done')
+      const posts = discussions.posts(discussion.id)
+      expect(stages(posts)).toEqual(['1:draft:done', '2:review:done:pass', '2:review:done:pass', '2:final:done:pass'])
+      expect(posts.at(-1)).toMatchObject({ kind: 'summary', memberId: by(discussion, 'Ann').id, text: 'Ann draft v1', version: 1 })
+      // A reviewer sees the draft, never the other review.
+      const bob = prompts(discussion, 'Bob')
+      expect(bob).toHaveLength(1)
+      expect(bob[0]).toContain('Ann draft v1')
+      expect(bob[0]).not.toContain('Cid reviewed')
+    })
+
+    it('has the author revise on the reviews until they pass, or the revisions run out', async () => {
+      answer = (member, prompt) => {
+        if (!prompt.includes('评审第')) return `${member} draft ${prompt.includes('修订第 2 版') ? 'v2' : prompt.includes('修订第 3 版') ? 'v3' : 'v1'}`
+        return member === 'Cid' && prompt.includes('评审第 1 版') ? 'Cid: TTL is wrong\n结论：需修改' : `${member}: fine\n结论：通过`
+      }
+      const discussion = await discussions.create(review())
+      await until(() => state(discussion.id) === 'done')
+      const posts = discussions.posts(discussion.id)
+      expect(stages(posts)).toEqual(['1:draft:done', '2:review:done:pass', '2:review:done:change', '3:revise:done', '4:review:done:pass', '4:review:done:pass', '4:final:done:pass'])
+      const ann = prompts(discussion, 'Ann')
+      expect(ann[1]).toContain('TTL is wrong')
+      expect(ann[1]).toContain('修订第 2 版')
+      // A later review sees the new draft and, as before, no other review.
+      expect(prompts(discussion, 'Bob')[1]).toContain('Ann draft v2')
+      expect(prompts(discussion, 'Bob')[1]).not.toContain('TTL is wrong')
+
+      answer = (member, prompt) => prompt.includes('评审第') ? `${member}: no\n结论：需修改` : `${member} draft`
+      const stubborn = await discussions.create(review({ maxRounds: 1 }))
+      await until(() => state(stubborn.id) === 'done')
+      expect(stages(discussions.posts(stubborn.id)).at(-1)).toBe('4:final:done:change')
+    })
+
+    it('pauses on a review that failed and, going on, asks again only who failed', async () => {
+      let failing = true
+      answer = (member, prompt) => {
+        if (member === 'Cid' && failing) return null
+        return prompt.includes('评审第') ? `${member}\n结论：通过` : `${member} draft`
+      }
+      const discussion = await discussions.create(review())
+      await until(() => state(discussion.id) === 'paused')
+      expect(discussions.posts(discussion.id).at(-1)?.text).toContain('Cid 没有完成第 1 版的评审')
+      failing = false
+      await discussions.control(discussion.id, 'resume')
+      await until(() => state(discussion.id) === 'done')
+      expect(prompts(discussion, 'Bob')).toHaveLength(1)
+      expect(stages(discussions.posts(discussion.id))).toEqual(['1:draft:done', '2:review:done:pass', '2:review:failed', '2:review:done:pass', '2:final:done:pass'])
+    })
+
+    it('takes the latest draft as final when concluded, and does not call it passed', async () => {
+      answer = (member, prompt) => prompt.includes('评审第') ? `${member}: no\n结论：需修改` : `${member} draft`
+      const discussion = await discussions.create(review({ maxRounds: 3 }))
+      await until(() => discussions.posts(discussion.id).some((post) => post.stage === 'revise' && post.state === 'done'))
+      await discussions.control(discussion.id, 'conclude')
+      await until(() => state(discussion.id) === 'done')
+      expect(discussions.posts(discussion.id).at(-1)).toMatchObject({ stage: 'final', verdict: 'change', version: 2 })
+      // One more pass, asked for after: the reviews of the final draft follow.
+      await discussions.control(discussion.id, 'nextRound')
+      await until(() => state(discussion.id) === 'done' && discussions.posts(discussion.id).filter((post) => post.stage === 'final').length === 2)
+    })
+
+    it('keeps its members, its topic, and names until nothing is out', async () => {
+      answer = (member, prompt) => prompt.includes('评审第') ? `${member}\n结论：通过` : `${member} draft`
+      const discussion = await discussions.create(review())
+      await expect(discussions.post(discussion.id, 'you?', [by(discussion, 'Bob').id])).rejects.toMatchObject({ reason: 'discussion-busy' })
+      await until(() => state(discussion.id) === 'done')
+      await expect(discussions.newTopic(discussion.id, 'another')).rejects.toMatchObject({ reason: 'discussion-format' })
+      await expect(discussions.addMember(discussion.id, { agent: 'claude', name: 'Dan' })).rejects.toMatchObject({ reason: 'discussion-member-format' })
+      await expect(discussions.removeMember(discussion.id, by(discussion, 'Bob').id)).rejects.toMatchObject({ reason: 'discussion-member-format' })
+      await discussions.post(discussion.id, 'why?', [by(discussion, 'Bob').id])
+      await until(() => discussions.posts(discussion.id).some((post) => post.kind === 'reply' && post.state === 'done'))
+    })
+  })
 })
+

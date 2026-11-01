@@ -1,9 +1,10 @@
 import { localized, t } from './i18n'
-import { DEFAULT_DISCUSSION_REQUIREMENTS } from '@antumi/protocol'
+import { DEFAULT_DISCUSSION_REQUIREMENTS, DEFAULT_DISCUSSION_REVISIONS, DEFAULT_DISCUSSION_ROUNDS, type DiscussionFormat } from '@antumi/protocol'
 
 // How a group chat goes, as the new page offers it. Debate and relay run as the round table does,
 // with roles, chair and requirements filled in for them: they promise nothing the rounds do not do.
-export const DISCUSSION_FORMAT_IDS = ['roundtable', 'debate', 'relay'] as const
+// A review is a format of core's own (feature discussion-formats).
+export const DISCUSSION_FORMAT_IDS = ['roundtable', 'debate', 'relay', 'review'] as const
 export type DiscussionFormatId = (typeof DISCUSSION_FORMAT_IDS)[number]
 
 // Sent to the agents as they are, like the requirement presets, so in Chinese whatever the interface.
@@ -21,33 +22,43 @@ const RELAY_REQUIREMENTS = [
   '- 每次发言尽量控制在 600 字以内。'
 ].join('\n')
 
-export type FormatSetup = { roles: string[]; chair: number; requirements: string }
+export type FormatSetup = { roles: string[]; chair: number; requirements: string; rounds: number }
+
+// What core runs a format as.
+export function coreFormat(format: DiscussionFormatId): DiscussionFormat {
+  return format === 'review' ? 'review' : 'roundtable'
+}
 
 // What picking a format sets for `count` members. A debate's last member judges once there are
 // three or more; with two, each side argues and the first sums up.
 export function formatSetup(format: DiscussionFormatId, count: number): FormatSetup {
   switch (format) {
     case 'roundtable':
-      return { roles: Array.from({ length: count }, () => ''), chair: 0, requirements: DEFAULT_DISCUSSION_REQUIREMENTS }
+      return { roles: Array.from({ length: count }, () => ''), chair: 0, requirements: DEFAULT_DISCUSSION_REQUIREMENTS, rounds: DEFAULT_DISCUSSION_ROUNDS }
+    case 'review':
+      return { roles: Array.from({ length: count }, () => ''), chair: 0, requirements: DEFAULT_DISCUSSION_REQUIREMENTS, rounds: DEFAULT_DISCUSSION_REVISIONS }
     case 'debate': {
       const judged = count >= 3
       const sides = judged ? count - 1 : count
       const roles = Array.from({ length: sides }, (_, index) => (index % 2 === 0 ? PRO : CON))
-      return { roles: judged ? [...roles, JUDGE] : roles, chair: judged ? count - 1 : 0, requirements: DEBATE_REQUIREMENTS }
+      return { roles: judged ? [...roles, JUDGE] : roles, chair: judged ? count - 1 : 0, requirements: DEBATE_REQUIREMENTS, rounds: DEFAULT_DISCUSSION_ROUNDS }
     }
     case 'relay':
-      return { roles: Array.from({ length: count }, () => ''), chair: 0, requirements: RELAY_REQUIREMENTS }
+      return { roles: Array.from({ length: count }, () => ''), chair: 0, requirements: RELAY_REQUIREMENTS, rounds: DEFAULT_DISCUSSION_ROUNDS }
   }
 }
 
-// The most turns a round table can take: every member each round, then the chair's summary. It may
-// end sooner, and a turn is no measure of quota.
-export function roundtableTurns(count: number, rounds: number): number {
-  return count * rounds + 1
+// How many turns a discussion takes, at least and at most: a round table may end before its last
+// round; a review that passes its first draft takes one turn from each member, and each revision
+// one more from each. A turn is no measure of quota.
+export function discussionTurns(format: DiscussionFormatId, count: number, rounds: number): { least: number; most: number } {
+  if (format === 'review') return { least: count, most: count * (rounds + 1) }
+  return { least: Math.min(count * rounds + 1, count * 2 + 1), most: count * rounds + 1 }
 }
 
 export const DISCUSSION_FORMATS: readonly { id: DiscussionFormatId; label: string; description: string; flow: string }[] = localized(() => ([
   { id: 'roundtable', label: t('discussionFormats.roundtable'), description: t('discussionFormats.roundtableDescription'), flow: t('discussionFormats.roundtableFlow') },
   { id: 'debate', label: t('discussionFormats.debate'), description: t('discussionFormats.debateDescription'), flow: t('discussionFormats.debateFlow') },
-  { id: 'relay', label: t('discussionFormats.relay'), description: t('discussionFormats.relayDescription'), flow: t('discussionFormats.relayFlow') }
+  { id: 'relay', label: t('discussionFormats.relay'), description: t('discussionFormats.relayDescription'), flow: t('discussionFormats.relayFlow') },
+  { id: 'review', label: t('discussionFormats.review'), description: t('discussionFormats.reviewDescription'), flow: t('discussionFormats.reviewFlow') }
 ]))

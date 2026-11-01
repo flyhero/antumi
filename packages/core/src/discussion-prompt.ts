@@ -7,6 +7,7 @@ type Members = Pick<Discussion, 'members' | 'formerMembers' | 'anonymous' | 'cha
 
 const CLOSING_TAG = /<\/discussion-post/gi
 const HOLDS = /^立场[:：]\s*维持/
+const VERDICT = /^结论[:：]\s*(通过|需修改)/
 
 function rules(discussion: Pick<Discussion, 'requirements'>): string[] {
   const requirements = (discussion.requirements ?? DEFAULT_DISCUSSION_REQUIREMENTS).trim()
@@ -34,9 +35,10 @@ function describe(discussion: Members, member: DiscussionMember): string {
   return `- ${name}${model}${chair}${role}`
 }
 
-// The others' words reach a member fenced, as what they are: another model's view, not the user's request.
+// The others' words reach a member fenced, as what they are: another model's view, not the user's
+// request. Only the user's own posts are the user's: what Antumi writes is not.
 function fenced(discussion: Members, post: DiscussionPost): string {
-  if (post.memberId === null) return `用户说：\n${post.text}`
+  if (post.memberId === null) return post.kind === 'user' ? `用户说：\n${post.text}` : `Antumi 记录：\n${post.text}`
   const text = post.text.replace(CLOSING_TAG, '<\\/discussion-post')
   return `<discussion-post speaker="${speakerName(discussion, post.memberId)}" round="${post.round}">\n${text}\n</discussion-post>`
 }
@@ -152,3 +154,96 @@ export function holdsPosition(text: string): boolean {
   const last = text.trim().split(/\r?\n/).map((line) => line.replace(/[*_`#>\s]/g, '')).filter(Boolean).at(-1) ?? ''
   return HOLDS.test(last)
 }
+
+// The last line a reviewer ends on, as it was asked to: anything else counts as asking for changes,
+// so a review that says nothing clear never passes a draft.
+export function reviewVerdict(text: string): 'pass' | 'change' {
+  const last = text.trim().split(/\r?\n/).map((line) => line.replace(/[*_`#>\s]/g, '')).filter(Boolean).at(-1) ?? ''
+  return VERDICT.exec(last)?.[1] === '通过' ? 'pass' : 'change'
+}
+
+function reviewers(discussion: Discussion): DiscussionMember[] {
+  return discussion.members.filter((member) => member.id !== discussion.chairId)
+}
+
+function projectList(discussion: Pick<Discussion, 'projectPaths'>): string {
+  return discussion.projectPaths.length > 0
+    ? discussion.projectPaths.map((path, index) => `${index + 1}. ${path}`).join('\n')
+    : '（没有关联项目）'
+}
+
+const REVIEW_RULES = '评审只针对稿件本身：指出具体的问题和改法，不要重写整份稿件。'
+
+// The author's first message: what to write, who reviews it, and how a review ends.
+export function draftPrompt(discussion: Discussion, author: DiscussionMember, topic: string, userPosts: readonly DiscussionPost[]): string {
+  return [
+    '你正在参加 Antumi 的一场起草评审：你是作者，先写出完整的稿件，再由其他几位 AI 各自独立评审；你按评审意见修订，直到评审都通过或修订次数用完。',
+    '',
+    '## 要起草的内容',
+    topic,
+    '',
+    '## 你',
+    `你在评审中的名字是「${author.name}」，作者。` + (author.role ? `\n你的角度：${author.role}` : ''),
+    '',
+    '## 评审',
+    ...reviewers(discussion).map((each) => describe(discussion, each)),
+    '',
+    '## 相关项目',
+    projectList(discussion),
+    '',
+    ...rules(discussion),
+    ...(userPosts.length > 0 ? ['', '## 用户的补充', ...userPosts.map((post) => post.text)] : []),
+    '',
+    '## 第 1 版',
+    '请写出完整的第 1 版稿件。只写稿件本身，不要加评论或客套话。'
+  ].filter((line, index, lines) => line !== '' || lines[index - 1] !== '').join('\n')
+}
+
+// A reviewer is sent the draft to review and what the user added; never the other reviews, so each
+// judges the draft alone. The first time it is told what the review is.
+export function reviewPrompt(discussion: Discussion, reviewer: DiscussionMember, topic: string, version: number, unseen: readonly DiscussionPost[], first: boolean): string {
+  const author = discussion.members.find((member) => member.id === discussion.chairId)
+  const intro = first ? [
+    '你正在参加 Antumi 的一场起草评审：作者写稿，你和其他几位 AI 各自独立评审，作者按意见修订。你看不到其他评审的意见，他们也看不到你的。',
+    '',
+    '## 要起草的内容',
+    topic,
+    '',
+    '## 你',
+    `你在评审中的名字是「${reviewer.name}」，评审。` + (reviewer.role ? `\n你关注：${reviewer.role}` : ''),
+    author ? `作者：${speakerName(discussion, author.id)}` : '',
+    '',
+    '## 相关项目',
+    projectList(discussion),
+    ''
+  ] : projectsNow(discussion)
+  return [
+    ...intro,
+    `## 评审第 ${version} 版`,
+    '下面是作者的稿件' + (version > 1 ? '和修订说明' : '') + '，以及用户的补充（如果有）。',
+    '',
+    ...since(discussion, unseen),
+    '',
+    REVIEW_RULES,
+    '',
+    ...rules(discussion),
+    '',
+    '最后单独一行写「结论：通过」或「结论：需修改」。还有必须修改的问题时写「需修改」。'
+  ].filter((line, index, lines) => line !== '' || lines[index - 1] !== '').join('\n')
+}
+
+// The author is sent the reviews of its last version and asked for the next one in full.
+export function revisePrompt(discussion: Discussion, version: number, unseen: readonly DiscussionPost[]): string {
+  return [
+    `## 修订第 ${version} 版`,
+    ...projectsNow(discussion),
+    `下面是评审对第 ${version - 1} 版的意见，以及用户的补充（如果有）。`,
+    '',
+    ...since(discussion, unseen),
+    '',
+    `请逐条考虑，写出完整的第 ${version} 版稿件。稿件之后用「## 修订说明」列出每条意见怎么处理：采纳了什么，没采纳的说明理由。`,
+    '',
+    ...rules(discussion)
+  ].join('\n')
+}
+

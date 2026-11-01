@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_DISCUSSION_REQUIREMENTS } from '@antumi/protocol'
-import { formatSetup, roundtableTurns } from './discussion-formats'
+import { coreFormat, discussionTurns, formatSetup } from './discussion-formats'
 
 describe('discussion formats', () => {
   it('leaves a round table to the default requirements and the first member as chair', () => {
-    expect(formatSetup('roundtable', 3)).toEqual({ roles: ['', '', ''], chair: 0, requirements: DEFAULT_DISCUSSION_REQUIREMENTS })
+    expect(formatSetup('roundtable', 3)).toEqual({ roles: ['', '', ''], chair: 0, requirements: DEFAULT_DISCUSSION_REQUIREMENTS, rounds: 3 })
   })
 
   it('sets a debate on fixed sides, with the last of three or more as its judge', () => {
@@ -21,6 +21,13 @@ describe('discussion formats', () => {
 
   it('asks a relay to build on what was said, and counts a round table at its longest', () => {
     expect(formatSetup('relay', 2).requirements).toContain('在别人已有内容的基础上补充')
-    expect(roundtableTurns(3, 3)).toBe(10)
+    expect(discussionTurns('roundtable', 3, 3)).toEqual({ least: 7, most: 10 })
+  })
+
+  it('runs only a review as a format of its own, two revisions by default, its turns from one per member up', () => {
+    expect(coreFormat('debate')).toBe('roundtable')
+    expect(coreFormat('review')).toBe('review')
+    expect(formatSetup('review', 3).rounds).toBe(2)
+    expect(discussionTurns('review', 3, 2)).toEqual({ least: 3, most: 9 })
   })
 })

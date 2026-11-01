@@ -6,7 +6,6 @@ import { Conversation, createRpcClient, Discussion, type RpcConnection } from '@
 import { useCore } from '../core-store'
 import { usePreferences } from '../preferences'
 import { ConversationList } from './ConversationList'
-import { SidebarDiscussions } from './SidebarDiscussions'
 
 // Read the live store instead of Zustand's fixed SSR hydration snapshot.
 vi.mock('zustand', async (importOriginal) => {
@@ -36,30 +35,35 @@ beforeEach(() => {
     conversations: { [id(1)]: chat(1, '在用的会话', null), [id(2)]: chat(2, '归档的会话', 5) },
     discussions: { [id(3)]: discussion(3, '在用的群聊', null), [id(4)]: discussion(4, '归档的群聊', 5) }
   })
-  usePreferences.setState({ showArchivedConversations: false, showArchivedDiscussions: false })
+  usePreferences.setState({ showArchivedConversations: false, conversationKinds: 'all' })
 })
 
-describe('archived in the sidebar', () => {
-  it('keeps archived conversations and group chats out of sight until asked for', () => {
-    const conversations = renderToStaticMarkup(createElement(ConversationList))
-    const discussions = renderToStaticMarkup(createElement(SidebarDiscussions))
-    expect(conversations).toContain('在用的会话')
-    expect(conversations).not.toContain('已归档')
-    expect(conversations).not.toContain('归档的会话')
-    expect(discussions).toContain('在用的群聊')
-    expect(discussions).not.toContain('归档的群聊')
-    // Group chats offer the same view menu as conversations, where there is something to show.
-    expect(discussions).toContain('aria-label="列表选项"')
+describe('conversations and group chats in the sidebar', () => {
+  it('lists both in one list, archived ones out of sight until asked for', () => {
+    const list = renderToStaticMarkup(createElement(ConversationList))
+    expect(list).toContain('在用的会话')
+    expect(list).toContain('在用的群聊')
+    expect(list).not.toContain('已归档')
+    expect(list).not.toContain('归档的会话')
+    expect(list).not.toContain('归档的群聊')
   })
 
-  it('shows them, opened, at the end of each list once asked for', () => {
-    usePreferences.setState({ showArchivedConversations: true, showArchivedDiscussions: true })
-    expect(renderToStaticMarkup(createElement(ConversationList))).toMatch(/已归档.*归档的会话/s)
-    expect(renderToStaticMarkup(createElement(SidebarDiscussions))).toMatch(/已归档.*归档的群聊/s)
+  it('shows both kinds, opened, at the end once asked for', () => {
+    usePreferences.setState({ showArchivedConversations: true })
+    expect(renderToStaticMarkup(createElement(ConversationList))).toMatch(/已归档.*归档的(会话|群聊).*归档的(会话|群聊)/s)
   })
 
-  it('offers no view menu for group chats when none is archived', () => {
-    useCore.setState({ discussions: { [id(3)]: discussion(3, '在用的群聊', null) } })
-    expect(renderToStaticMarkup(createElement(SidebarDiscussions))).not.toContain('列表选项')
+  it('keeps to one kind with the filter in sight, and to conversations on a core without group chats', () => {
+    usePreferences.setState({ conversationKinds: 'discussions' })
+    const groups = renderToStaticMarkup(createElement(ConversationList))
+    expect(groups).toContain('在用的群聊')
+    expect(groups).not.toContain('在用的会话')
+    expect(groups).toContain('仅群聊')
+    const rpc = useCore.getState().rpc
+    if (rpc) useCore.setState({ rpc: { ...rpc, features: ['conversation-archive'] } })
+    const old = renderToStaticMarkup(createElement(ConversationList))
+    expect(old).toContain('在用的会话')
+    expect(old).not.toContain('在用的群聊')
+    expect(old).not.toContain('仅群聊')
   })
 })

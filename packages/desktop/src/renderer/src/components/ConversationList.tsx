@@ -1,22 +1,25 @@
-import { getLocale, localized, t, tr } from '../i18n'
-import { isHelper } from '@antumi/protocol'
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { AGENT_KINDS, type AgentKind, type Conversation } from '@antumi/protocol'
-import { openBeside, selectConversation, useCore, useSplitPanes } from '../core-store'
+import { localized, t, tr } from '../i18n'
+import { useCallback, useEffect, useRef, useState, type MouseEvent } from 'react'
+import type { Conversation, Discussion } from '@antumi/protocol'
+import { openBeside, selectConversation, selectDiscussion, useCore, useDiscussionsSupported, useSplitPanes } from '../core-store'
+import { arrangeItems, conversationItem, discussionItem, GROUP_LIMIT, itemArchived, itemMatches, itemShown, shownRows, sortItems, type ItemGroup, type ListItem } from '../conversation-list-items'
+import { isListedConversation } from '../search-palette'
+import { discussionProgress, renameDiscussion } from '../discussions'
+import { DiscussionContextMenu, DiscussionDot, DiscussionMarks } from './DiscussionActions'
 import { canSplit } from '../conversation-split'
 import { endConversationDrag, startConversationDrag } from '../conversation-drag'
 import { hasPrimaryModifier } from '../shortcut-keys'
 import { conversationState, timeAgo } from '../conversation-state'
 import { agentLabel } from '../labels'
-import { CONVERSATION_DENSITIES, CONVERSATION_GROUPS, CONVERSATION_SORTS, setPreference, usePreferences, type Preferences } from '../preferences'
+import { CONVERSATION_DENSITIES, CONVERSATION_GROUPS, CONVERSATION_KINDS, CONVERSATION_SORTS, setPreference, usePreferences, type Preferences } from '../preferences'
 import { beginHandoff, ConversationContextMenu, newConversation, renameConversation } from './ConversationActions'
 import { ConversationStatus } from './ConversationStatus'
 import { ConversationPeek, useConversationPeek } from './ConversationPeek'
 import { conversationActivity } from '../work-activity'
 import { ContextMenu, MenuCheckboxItem, menuPoint, MenuRadioItem, MenuSubmenu, type MenuPoint } from './ContextMenu'
-import { AgentIcon, ChatIcon, ChevronDownIcon, FolderIcon, PinIcon, PlusIcon, SlidersIcon } from './icons'
+import { AgentIcon, ChatIcon, ChevronDownIcon, CloseIcon, FolderIcon, GroupChatIcon, PinIcon, PlusIcon, SlidersIcon } from './icons'
 import { ProjectIcon } from './ProjectIcon'
-import { primaryProjectName, projectName, projectNames } from './ProjectPicker'
+import { projectName, projectNames } from './ProjectPicker'
 import { SidebarCollapseButton } from './SidebarCollapseButton'
 import { SidebarSearchField, SidebarSearchToggle } from './SidebarSearch'
 import { TitleEditor } from './TitleEditor'
@@ -24,72 +27,20 @@ import { TitleEditor } from './TitleEditor'
 type GroupBy = Preferences['conversationGroup']
 type SortBy = Preferences['conversationSort']
 type Density = Preferences['conversationDensity']
+type Kinds = Preferences['conversationKinds']
 
 const GROUP_LABEL: Record<GroupBy, string> = localized(() => ({ none: t('ConversationList.noGrouping'), project: t('ChatMentionMenu.project'), agent: t('ConversationList.agent'), status: t('ConversationList.runStatus') }))
 const SORT_LABEL: Record<SortBy, string> = localized(() => ({ recent: t('ConversationList.recentActivity'), created: t('ConversationList.created'), title: t('ConversationList.title') }))
 const DENSITY_LABEL: Record<Density, string> = localized(() => ({ comfortable: t('ConversationList.comfortable'), compact: t('ConversationList.compact') }))
+const KINDS_LABEL: Record<Kinds, string> = localized(() => ({ all: t('ConversationList.kindsAll'), conversations: t('ConversationList.kindsConversations'), discussions: t('ConversationList.kindsDiscussions') }))
 
-const COMPARE: Record<SortBy, (a: Conversation, b: Conversation) => number> = {
-  recent: (a, b) => b.updatedAt - a.updatedAt,
-  created: (a, b) => b.createdAt - a.createdAt,
-  title: (a, b) => a.title.localeCompare(b.title, getLocale())
-}
-
-// A group shows its first few rows, and a few more each time it is asked; the open conversation
-// stays in sight wherever it falls.
-export const GROUP_LIMIT = 6
-export function shownRows(items: Conversation[], selected: string | null, limit = GROUP_LIMIT): Conversation[] {
-  return items.filter((conversation, index) => index < limit || conversation.id === selected)
-}
-
-// Groups keep a fixed order where there is one (running first, agents as listed);
-// projects go by name, with conversations that have no project last. A conversation belongs to its
-// primary project, where its agent works; the others only lend it folders.
-export function groupOf(conversation: Conversation, by: Exclude<GroupBy, 'none'>): { label: string; rank: number } {
-  switch (by) {
-    case 'project':
-      return { label: primaryProjectName(conversation.projectPaths), rank: conversation.projectPaths.length > 0 ? 0 : 1 }
-    case 'agent':
-      return { label: agentLabel(conversation.agent), rank: AGENT_KINDS.indexOf(conversation.agent) }
-    case 'status':
-      return conversation.sessionId ? { label: t('ConversationList.running'), rank: 0 } : { label: t('ConversationList.stopped'), rank: 1 }
-  }
-}
-
-// `project`: the primary project a project's group stands for, where its ＋ starts a conversation.
-// `agent`: the agent an agent's group stands for, whose mark its heading carries for its rows.
-type Group = { key: string; label: string | null; rank: number; items: Conversation[]; project?: string; agent?: AgentKind }
-
-// Pinned conversations come first, in a group of their own, whatever the grouping.
-function arrange(conversations: Conversation[], by: GroupBy, sort: SortBy): Group[] {
-  const sorted = [...conversations].sort(COMPARE[sort])
-  const pinned = sorted.filter((conversation) => conversation.pinnedAt != null)
-  const rest = sorted.filter((conversation) => conversation.pinnedAt == null)
-  const top: Group[] = pinned.length > 0 ? [{ key: 'pinned', label: t('ConversationList.pinned'), rank: -1, items: pinned }] : []
-  if (by === 'none') return rest.length > 0 ? [...top, { key: 'all', label: null, rank: 0, items: rest }] : top
-  const groups = new Map<string, Group>()
-  for (const conversation of rest) {
-    const { label, rank } = groupOf(conversation, by)
-    const project = by === 'project' ? conversation.projectPaths[0] : undefined
-    const group = groups.get(label) ?? { key: `group:${label}`, label, rank, items: [], ...(project ? { project } : {}), ...(by === 'agent' ? { agent: conversation.agent } : {}) }
-    group.items.push(conversation)
-    groups.set(label, group)
-  }
-  return [...top, ...[...groups.values()].sort((a, b) => a.rank - b.rank || (a.label ?? '').localeCompare(b.label ?? '', getLocale()))]
-}
-
-// Project folders, pins and agent marks head their groups; status groups keep a chevron.
-function groupMark(group: Group, by: GroupBy) {
+// Project folders, pins, agent marks and the group chat mark head their groups; status groups keep a chevron.
+function groupMark(group: ItemGroup, by: GroupBy) {
   if (group.key === 'pinned') return <PinIcon />
   if (group.agent) return <AgentIcon agent={group.agent} />
+  if (group.discussions) return <GroupChatIcon />
   if (by === 'project') return group.project ? <ProjectIcon path={group.project} /> : <FolderIcon />
   return null
-}
-
-// By title or project name, ignoring case. Message text is searched by core.
-function matches(conversation: Conversation, query: string): boolean {
-  const needle = query.toLowerCase()
-  return [conversation.title, ...conversation.projectPaths.map(projectName)].some((text) => text.toLowerCase().includes(needle))
 }
 
 const SEARCH_DELAY_MS = 200
@@ -157,6 +108,20 @@ function ConversationMeta({ conversation, heading = 'none' }: { conversation: Co
   )
 }
 
+// Its members' marks and where it stands; under the agent grouping its group says it is a group
+// chat, elsewhere a mark does.
+function DiscussionMeta({ discussion, heading = 'none' }: { discussion: Discussion; heading?: GroupBy }) {
+  const projects = metaProjects(discussion.projectPaths, heading === 'project')
+  return (
+    <>
+      {heading !== 'agent' && <span className="conversation-kind" role="img" aria-label={t('DiscussionView.groupChat_910')} title={t('DiscussionView.groupChat_910')}><GroupChatIcon /></span>}
+      <DiscussionMarks discussion={discussion} />
+      {projects !== null && <>{projects}{' · '}</>}
+      <span className="conversation-live">{discussionProgress(discussion)}</span>
+    </>
+  )
+}
+
 // The time, a minute at a time, for how long ago each row last changed.
 function useMinute(): number {
   const [now, setNow] = useState(() => Date.now())
@@ -167,15 +132,31 @@ function useMinute(): number {
   return now
 }
 
-function ViewMenu({ at, trigger, archived, onClose }: { at: MenuPoint; trigger: HTMLElement | null; archived: number; onClose: () => void }) {
+function ViewMenu({ at, trigger, archived, kinds, onClose }: { at: MenuPoint; trigger: HTMLElement | null; archived: number; kinds: boolean; onClose: () => void }) {
+  const shownKinds = usePreferences((p) => p.conversationKinds)
   const groupBy = usePreferences((p) => p.conversationGroup)
   const sortBy = usePreferences((p) => p.conversationSort)
   const showArchived = usePreferences((p) => p.showArchivedConversations)
   const density = usePreferences((p) => p.conversationDensity)
-  const [open, setOpen] = useState<'group' | 'sort' | 'density' | null>(null)
+  const [open, setOpen] = useState<'kinds' | 'group' | 'sort' | 'density' | null>(null)
   const closeSubmenu = () => setOpen(null)
   return (
     <ContextMenu at={at} align="end" trigger={trigger} label={t('ConversationList.groupAndSortConversations')} onClose={onClose}>
+      {kinds && (
+        <MenuSubmenu label={t('ConversationList.show')} value={KINDS_LABEL[shownKinds]} open={open === 'kinds'} onOpen={() => setOpen('kinds')} onClose={closeSubmenu}>
+          {CONVERSATION_KINDS.map((value) => (
+            <MenuRadioItem
+              key={value}
+              label={KINDS_LABEL[value]}
+              checked={value === shownKinds}
+              onSelect={() => {
+                setPreference('conversationKinds', value)
+                onClose()
+              }}
+            />
+          ))}
+        </MenuSubmenu>
+      )}
       <MenuSubmenu label={t('ConversationList.groupBy')} value={GROUP_LABEL[groupBy]} open={open === 'group'} onOpen={() => setOpen('group')} onClose={closeSubmenu}>
         {CONVERSATION_GROUPS.map((value) => (
           <MenuRadioItem
@@ -229,7 +210,9 @@ export function ConversationList() {
   const now = useMinute()
   const [collapsed, setCollapsed] = useState(false)
   const conversations = useCore((s) => s.conversations)
+  const discussions = useCore((s) => s.discussions)
   const selected = useCore((s) => s.selectedConversationId)
+  const selectedDiscussion = useCore((s) => s.selectedDiscussionId)
   const panes = useSplitPanes()
   // Opening beside the conversation in front: there has to be one, and another to put next to it.
   const splitWith = (conversation: Conversation): 'right' | 'other' | null => {
@@ -240,13 +223,20 @@ export function ConversationList() {
   const section = useCore((s) => s.section)
   const groupBy = usePreferences((p) => p.conversationGroup)
   const sortBy = usePreferences((p) => p.conversationSort)
+  // Group chats are listed beside conversations where core runs them; the view menu can keep to one kind.
+  const discussionsSupported = useDiscussionsSupported()
+  const savedKinds = usePreferences((p) => p.conversationKinds)
+  const kinds = discussionsSupported ? savedKinds : 'all'
   // A task's conversation is reached from its task; a routine's from the routine's history; a group
   // chat member's from the group chat.
-  const free = Object.values(conversations).filter((conversation) => !isHelper(conversation) && !conversation.taskId && !conversation.routineId && !conversation.discussionId && !conversation.squadRunId && !conversation.parentConversationId)
+  const free = [
+    ...Object.values(conversations).filter(isListedConversation).map(conversationItem),
+    ...(discussionsSupported ? Object.values(discussions).map(discussionItem) : [])
+  ].filter((item) => itemShown(item, kinds))
   // Archived ones are out of the list unless asked for in the view menu, then in a group of their
   // own at the end; a search finds them either way.
-  const all = free.filter((conversation) => conversation.archivedAt == null)
-  const archivedAll = free.filter((conversation) => conversation.archivedAt != null).sort(COMPARE[sortBy])
+  const all = free.filter((item) => !itemArchived(item))
+  const archivedAll = sortItems(free.filter(itemArchived), sortBy)
   const showArchived = usePreferences((p) => p.showArchivedConversations)
   const [archivedOpen, setArchivedOpen] = useState(true)
   // Null while the search box is closed. Groups left empty by a search drop out.
@@ -254,13 +244,14 @@ export function ConversationList() {
   const needle = query?.trim() ?? ''
   const searching = needle !== ''
   const messageHits = useMessageHits(needle)
-  // Null until core has answered this query.
+  // Null until core has answered this query. Only conversations are searched by what was said.
   const snippets = messageHits.query === needle ? messageHits.snippets : null
-  const visible = searching
-    ? all.filter((conversation) => matches(conversation, needle) || snippets?.has(conversation.id))
-    : all
-  const groups = arrange(visible, groupBy, sortBy)
-  const archived = searching ? archivedAll.filter((conversation) => matches(conversation, needle) || snippets?.has(conversation.id)) : showArchived ? archivedAll : []
+  const found = (item: ListItem) => itemMatches(item, needle) || Boolean(snippets?.has(item.id))
+  const visible = searching ? all.filter(found) : all
+  const groups = arrangeItems(visible, groupBy, sortBy)
+  const archived = searching ? archivedAll.filter(found) : showArchived ? archivedAll : []
+  // The open one, a conversation or a group chat, stays in sight in its group.
+  const current = section === 'conversations' ? selected : section === 'discussions' ? selectedDiscussion : null
   // A search opens every group, so nothing it found is folded away.
   const folded = usePreferences((p) => p.foldedConversationGroups)
   const foldKey = (key: string) => `${groupBy}:${key}`
@@ -281,12 +272,17 @@ export function ConversationList() {
   const viewButton = useRef<HTMLButtonElement>(null)
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const menuConversation = menu ? conversations[menu.id] : undefined
+  const menuDiscussion = menu ? discussions[menu.id] : undefined
   const density = usePreferences((p) => p.conversationDensity)
   const { peek, rowProps } = useConversationPeek()
   const peeked = peek && !menu && !renamingId ? conversations[peek.id] : undefined
+  const openMenu = (id: string) => (event: MouseEvent<HTMLElement>) => {
+    event.preventDefault()
+    setMenu({ id, at: menuPoint(event) })
+  }
 
   // heading: what the group the row is listed under is named after (its primary project, its agent).
-  const row = (conversation: Conversation, heading: GroupBy = 'none') => {
+  const conversationRow = (conversation: Conversation, heading: GroupBy) => {
     const snippet = searching ? snippets?.get(conversation.id) : undefined
     return <li key={conversation.id}>
       {renamingId === conversation.id
@@ -307,10 +303,7 @@ export function ConversationList() {
           onDragEnd={endConversationDrag}
           // ⌘-click opens it beside the one in front, as a link opens in a new tab.
           onClick={(event) => (hasPrimaryModifier(event) && splitWith(conversation) ? openBeside(conversation.id) : selectConversation(conversation.id))}
-          onContextMenu={(event) => {
-            event.preventDefault()
-            setMenu({ id: conversation.id, at: menuPoint(event) })
-          }}
+          onContextMenu={openMenu(conversation.id)}
         >
           <ConversationStatus conversation={conversation} />
           <span className="task-row-title">{conversation.title}</span>
@@ -322,6 +315,36 @@ export function ConversationList() {
         </button>}
     </li>
   }
+
+  // A group chat opens its page: it is not dragged into a split or peeked at, as its members'
+  // conversations are not. Compact rows hide the meta, so the tooltip carries it.
+  const discussionRow = (discussion: Discussion, heading: GroupBy) => (
+    <li key={discussion.id}>
+      {renamingId === discussion.id
+        ? <div className="task-row conversation-row" data-renaming>
+          <DiscussionDot discussion={discussion} />
+          <TitleEditor title={discussion.title} label={t('DiscussionView.groupChatTitle')} onSave={(title) => void renameDiscussion(discussion.id, title)} onDone={() => setRenamingId(null)} />
+          <span className="task-row-meta"><DiscussionMeta discussion={discussion} heading={heading} /></span>
+        </div>
+        : <button
+          type="button"
+          className="task-row conversation-row"
+          data-discussion-id={discussion.id}
+          data-menu-open={menu?.id === discussion.id || undefined}
+          aria-current={section === 'discussions' && selectedDiscussion === discussion.id}
+          title={density === 'compact' ? `${discussion.title}\n${discussion.members.map((member) => member.name).join('、')} · ${discussionProgress(discussion)}` : undefined}
+          onClick={() => selectDiscussion(discussion.id)}
+          onContextMenu={openMenu(discussion.id)}
+        >
+          <DiscussionDot discussion={discussion} />
+          <span className="task-row-title">{discussion.title}</span>
+          <span className="conversation-age">{timeAgo(discussion.updatedAt, now)}</span>
+          <span className="task-row-meta"><DiscussionMeta discussion={discussion} heading={heading} /></span>
+        </button>}
+    </li>
+  )
+
+  const row = (item: ListItem, heading: GroupBy = 'none') => item.kind === 'conversation' ? conversationRow(item.conversation, heading) : discussionRow(item.discussion, heading)
 
   return (
     <nav className="conversation-list" data-collapsed={collapsed} data-density={density} aria-label={t('ConversationList.conversations')}>
@@ -355,11 +378,17 @@ export function ConversationList() {
       {query !== null && !collapsed && (
         <SidebarSearchField label={t('ConversationList.searchConversations')} placeholder={t('ConversationList.titleProjectNameOrChatContent')} query={query} onChange={setQuery} />
       )}
+      {kinds !== 'all' && !collapsed && (
+        <p className="conversation-list-filter">
+          <span>{KINDS_LABEL[kinds]}</span>
+          <button type="button" className="icon-button" aria-label={t('ConversationList.showAllKinds')} data-tooltip={t('ConversationList.showAllKinds')} onClick={() => setPreference('conversationKinds', 'all')}><CloseIcon /></button>
+        </p>
+      )}
       <div id="sidebar-conversations" className="sidebar-section-content" hidden={collapsed}>
-      {free.length === 0 ? <p className="task-list-empty">{t('ConversationList.noConversationsYetClickAtTheTopRight')}</p> :
+      {free.length === 0 ? <p className="task-list-empty">{kinds === 'discussions' ? t('ConversationList.noGroupChatsYet') : t('ConversationList.noConversationsYetClickAtTheTopRight')}</p> :
         visible.length === 0 && archived.length === 0 ? snippets && <p className="task-list-empty">{tr('ConversationList.noConversationsMatch', { needle: needle })}</p> :
         groups.map((group) => {
-          if (group.label === null) return <ul key={group.key}>{group.items.map((conversation) => row(conversation))}</ul>
+          if (group.label === null) return <ul key={group.key}>{group.items.map((item) => row(item))}</ul>
           const mark = groupMark(group, groupBy)
           return <section key={group.key} className="conversation-group" data-tree={mark ? '' : undefined} aria-label={group.label}>
             <h3 className="conversation-group-title">
@@ -382,9 +411,9 @@ export function ConversationList() {
               )}
             </h3>
             {!isFolded(group.key) && <ul>
-              {shownRows(group.items, selected, limitOf(group.key)).map((conversation) => row(conversation, group.key === 'pinned' ? 'none' : groupBy))}
+              {shownRows(group.items, current, limitOf(group.key)).map((item) => row(item, group.key === 'pinned' ? 'none' : groupBy))}
               {!searching && group.items.length > GROUP_LIMIT && (() => {
-                const hidden = group.items.length - shownRows(group.items, selected, limitOf(group.key)).length
+                const hidden = group.items.length - shownRows(group.items, current, limitOf(group.key)).length
                 const more = limitOf(group.key) > GROUP_LIMIT
                 return (
                   <li className="conversation-group-more-row">
@@ -411,12 +440,12 @@ export function ConversationList() {
           <h3 className="conversation-group-title">
             <button type="button" className="conversation-group-fold" aria-expanded={searching || archivedOpen} onClick={() => setArchivedOpen(!archivedOpen)}>{tr('ConversationList.archived_718', { value1: <ChevronDownIcon />, value2: <span className="count">{archived.length}</span> })}</button>
           </h3>
-          {(searching || archivedOpen) && <ul>{archived.map((conversation) => row(conversation))}</ul>}
+          {(searching || archivedOpen) && <ul>{archived.map((item) => row(item))}</ul>}
         </section>
       )}
       </div>
       {peek && peeked && <ConversationPeek conversation={peeked} row={peek.row} />}
-      {viewAt && <ViewMenu at={viewAt} trigger={viewButton.current} archived={archivedAll.length} onClose={closeView} />}
+      {viewAt && <ViewMenu at={viewAt} trigger={viewButton.current} archived={archivedAll.length} kinds={discussionsSupported} onClose={closeView} />}
       {menu && menuConversation && (
         <ConversationContextMenu
           conversation={menuConversation}
@@ -426,6 +455,9 @@ export function ConversationList() {
           onHandoff={() => beginHandoff(menuConversation)}
           split={splitWith(menuConversation)}
         />
+      )}
+      {menu && menuDiscussion && (
+        <DiscussionContextMenu discussion={menuDiscussion} at={menu.at} onClose={closeMenu} onRename={() => setRenamingId(menuDiscussion.id)} />
       )}
     </nav>
   )

@@ -7,7 +7,7 @@ const SECTION_PREFERENCES = {
   colors: ['theme', 'palette', 'backdrop'],
   chat: ['chatFontSize', 'chatFont', 'chatFontFamily', 'chatCjkFontFamily', 'chatWidth', 'foldTurns'],
   terminal: ['codeFontFamily', 'codeCjkFontFamily', 'terminalFontSize', 'terminalLineHeight', 'colorPrompt'],
-  sidebar: ['sidebarInbox', 'sidebarRoutines', 'sidebarGit', 'sidebarDiscussions'],
+  sidebar: ['sidebarInbox', 'sidebarRoutines', 'sidebarGit'],
   language: ['language']
 } as const
 

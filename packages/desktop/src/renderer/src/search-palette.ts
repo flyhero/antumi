@@ -1,4 +1,4 @@
-import { isHelper, shortTaskId, type AgentProfile, type Conversation, type Task } from '@antumi/protocol'
+import { isHelper, shortTaskId, type AgentProfile, type Conversation, type Discussion, type Task } from '@antumi/protocol'
 
 // ⌘K: one box for what the user moves between. "all" shows the best of each kind at once, so a few
 // letters and Enter are enough; a kind on its own shows more of it.
@@ -6,7 +6,8 @@ export const SEARCH_CATEGORIES = ['all', 'conversations', 'tasks', 'agents', 'fi
 export type SearchCategory = (typeof SEARCH_CATEGORIES)[number]
 export type SearchKind = Exclude<SearchCategory, 'all'>
 
-export type SearchEntry = { kind: SearchKind; id: string; title: string; detail: string | null; at: number; score: number }
+// A group chat is found among the conversations, as the sidebar lists it; `discussion` opens its page.
+export type SearchEntry = { kind: SearchKind; id: string; title: string; detail: string | null; at: number; score: number; discussion?: true }
 export type SearchSection = { kind: SearchKind; entries: SearchEntry[] }
 
 const PER_KIND_IN_ALL = 5
@@ -48,6 +49,17 @@ export function conversationEntries(conversations: readonly Conversation[], quer
   })
 }
 
+// Group chats by title or project; what their members said is not searched.
+export function discussionEntries(discussions: readonly Discussion[], query: string, projectOf: (discussion: Discussion) => string | null): SearchEntry[] {
+  return discussions.flatMap((discussion) => {
+    const project = projectOf(discussion)
+    const score = Math.max(matchScore(discussion.title, query), project ? matchScore(project, query) - 0.5 : 0)
+    if (score === 0) return []
+    const archived = discussion.archivedAt !== null ? 0.25 : 0
+    return [{ kind: 'conversations' as const, id: discussion.id, title: discussion.title, detail: project, at: discussion.updatedAt, score: score - archived, discussion: true as const }]
+  })
+}
+
 // By title, project or the short id the task page shows.
 export function taskEntries(tasks: readonly Task[], query: string, projectOf: (task: Task) => string | null): SearchEntry[] {
   return tasks.flatMap((task) => {
@@ -66,13 +78,15 @@ export function agentEntries(profiles: readonly AgentProfile[], query: string): 
   })
 }
 
-// With nothing typed: the conversations and tasks touched last, to go back to in one key.
-export function recentEntries(conversations: readonly Conversation[], tasks: readonly Task[], projectOf: { conversation: (conversation: Conversation) => string | null; task: (task: Task) => string | null }): SearchEntry[] {
+// With nothing typed: the conversations, group chats and tasks touched last, to go back to in one key.
+export function recentEntries(conversations: readonly Conversation[], tasks: readonly Task[], projectOf: { conversation: (conversation: { projectPaths: readonly string[] }) => string | null; task: (task: Task) => string | null }, discussions: readonly Discussion[] = []): SearchEntry[] {
   const open = conversations.filter((conversation) => isListedConversation(conversation) && conversation.archivedAt == null)
     .map((conversation) => ({ kind: 'conversations' as const, id: conversation.id, title: conversation.title, detail: projectOf.conversation(conversation), at: conversation.updatedAt, score: 0 }))
+  const groups = discussions.filter((discussion) => discussion.archivedAt === null)
+    .map((discussion) => ({ kind: 'conversations' as const, id: discussion.id, title: discussion.title, detail: projectOf.conversation(discussion), at: discussion.updatedAt, score: 0, discussion: true as const }))
   const working = tasks.filter((task) => task.status !== 'done' && task.status !== 'abandoned')
     .map((task) => ({ kind: 'tasks' as const, id: task.id, title: task.title, detail: projectOf.task(task), at: task.updatedAt, score: 0 }))
-  return [...open, ...working].sort((a, b) => b.at - a.at).slice(0, RECENT)
+  return [...open, ...groups, ...working].sort((a, b) => b.at - a.at).slice(0, RECENT)
 }
 
 // The entries of each kind, best first and then newest; in "all" a few of each, the kind with the

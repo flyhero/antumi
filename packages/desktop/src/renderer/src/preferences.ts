@@ -15,6 +15,7 @@ export const DEFAULT_FILE_TREE_WIDTH = 220
 export const CONVERSATION_GROUPS = ['none', 'project', 'agent', 'status'] as const
 export const CONVERSATION_SORTS = ['recent', 'created', 'title'] as const
 export const CONVERSATION_DENSITIES = ['comfortable', 'compact'] as const
+export const CONVERSATION_KINDS = ['all', 'conversations', 'discussions'] as const
 export const TASK_SORTS = ['recent', 'created', 'title'] as const
 
 const IslandPreference = z.enum(['off', 'requests', 'always'])
@@ -65,7 +66,6 @@ const Preferences = z.object({
   sidebarInbox: z.boolean().catch(false),
   sidebarRoutines: z.boolean().catch(true),
   sidebarGit: z.boolean().catch(true),
-  sidebarDiscussions: z.boolean().catch(true),
   // Off, nothing is said when the window is not in front; the dock count stays.
   notifications: z.boolean().catch(true),
   // Where an agent held up on the user shows outside the window: on a card at the top of the
@@ -124,9 +124,10 @@ const Preferences = z.object({
   conversationSort: z.enum(CONVERSATION_SORTS).catch('recent'),
   // Compact, a conversation's row is its title alone; the rest is in the details its row shows on hover.
   conversationDensity: z.enum(CONVERSATION_DENSITIES).catch('comfortable'),
+  // Which the conversation list shows: conversations and group chats, or one kind of them.
+  conversationKinds: z.enum(CONVERSATION_KINDS).catch('all'),
   // Off, archived conversations and group chats stay out of the sidebar, found only by a search.
   showArchivedConversations: z.boolean().catch(false),
-  showArchivedDiscussions: z.boolean().catch(false),
   // On, a group chat's first round shows its independent answers side by side, for comparing them.
   discussionSideBySide: z.boolean().catch(false),
   // What an agent's reply in another language is translated into, and whether that happens as it
@@ -157,6 +158,13 @@ function load(): Preferences {
   // 0.21.3 had the card as a switch, requestPopup, before the island could stay up.
   if (typeof saved === 'object' && saved !== null && 'requestPopup' in saved && !('island' in saved)) {
     saved = { ...saved, island: saved.requestPopup === false ? 'off' : 'requests' }
+  }
+  // Up to 0.21.3 group chats had a sidebar section of their own, which could be hidden, with its own
+  // switch for archived ones. Once, the conversation list takes both on, hiding nothing that showed.
+  if (typeof saved === 'object' && saved !== null && !('conversationKinds' in saved)) {
+    const hidden = 'sidebarDiscussions' in saved && saved.sidebarDiscussions === false
+    const archived = ('showArchivedConversations' in saved && saved.showArchivedConversations === true) || ('showArchivedDiscussions' in saved && saved.showArchivedDiscussions === true)
+    saved = { ...saved, conversationKinds: hidden ? 'conversations' : 'all', showArchivedConversations: archived }
   }
   islandChosen = typeof saved === 'object' && saved !== null && 'island' in saved && IslandPreference.safeParse(saved.island).success
   const parsed = Preferences.safeParse(saved)

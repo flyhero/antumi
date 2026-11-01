@@ -13,7 +13,7 @@ import { CodeFontPicker } from './CodeFontPicker'
 import { CjkFontPicker } from './CjkFontPicker'
 import { PalettePicker } from './PalettePicker'
 import { BackdropPicker } from './BackdropPicker'
-import { ArrowUpIcon, BoardIcon, CheckIcon, ChatIcon, ChevronDownIcon, ClockIcon, GitIcon, GroupChatIcon, InboxIcon, RobotIcon, RotateLeftIcon, TerminalIcon } from './icons'
+import { ArrowUpIcon, BoardIcon, CheckIcon, ChatIcon, ChevronDownIcon, ClockIcon, GitIcon, InboxIcon, RobotIcon, RotateLeftIcon, TerminalIcon } from './icons'
 import { inboxLocked, SIDEBAR_ENTRIES, SIDEBAR_PREFERENCE, sidebarShows, type SidebarEntry } from '../sidebar-entries'
 
 function ThemeMiniature({ scheme }: { scheme: 'light' | 'dark' }) {
@@ -56,8 +56,7 @@ function ThemePicker() {
 const SIDEBAR_ENTRY: Record<SidebarEntry, { label: () => string; hint: () => string; icon: () => ReactNode }> = {
   inbox: { label: () => t('InboxEntry.inbox_1125'), hint: () => t('SettingsPage.sidebarInboxHint'), icon: () => <InboxIcon /> },
   routines: { label: () => t('RoutinesEntry.scheduled'), hint: () => t('SettingsPage.sidebarRoutinesHint'), icon: () => <ClockIcon /> },
-  git: { label: () => 'Git', hint: () => t('SettingsPage.sidebarGitHint'), icon: () => <GitIcon /> },
-  discussions: { label: () => t('DiscussionView.groupChat_910'), hint: () => t('SettingsPage.sidebarDiscussionsHint'), icon: () => <GroupChatIcon /> }
+  git: { label: () => 'Git', hint: () => t('SettingsPage.sidebarGitHint'), icon: () => <GitIcon /> }
 }
 
 // What the sidebar's top would show: the fixed entries, and the optional ones left on.
@@ -66,10 +65,9 @@ function SidebarPreview({ preferences }: { preferences: Parameters<typeof sideba
   return (
     <nav className="appearance-preview-sidebar" aria-hidden="true">
       <span><BoardIcon />{t('OverviewEntry.overview_1276')}</span>
-      {SIDEBAR_ENTRIES.filter((entry) => entry !== 'discussions' && sidebarShows(entry, preferences, sources)).map((entry) => <span key={entry}>{SIDEBAR_ENTRY[entry].icon()}{SIDEBAR_ENTRY[entry].label()}</span>)}
+      {SIDEBAR_ENTRIES.filter((entry) => sidebarShows(entry, preferences, sources)).map((entry) => <span key={entry}>{SIDEBAR_ENTRY[entry].icon()}{SIDEBAR_ENTRY[entry].label()}</span>)}
       <span><RobotIcon />{t('AgentProfiles.title')}</span>
       <span><BoardIcon />{t('SearchPalette.tasks')}</span>
-      {sidebarShows('discussions', preferences, sources) && <span>{SIDEBAR_ENTRY.discussions.icon()}{SIDEBAR_ENTRY.discussions.label()}</span>}
       <span><ChatIcon />{t('SearchPalette.conversations')}</span>
     </nav>
   )

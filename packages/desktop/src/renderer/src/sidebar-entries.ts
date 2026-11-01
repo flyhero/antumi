@@ -3,12 +3,12 @@ import { useCore } from './core-store'
 import { setPreference, usePreferences, type Preferences } from './preferences'
 
 // The sidebar's optional entries, in the order they show. Hiding one only takes its way in out of
-// the sidebar: routines still run, group chats go on and ⌘K still finds what they hold.
-export const SIDEBAR_ENTRIES = ['inbox', 'routines', 'git', 'discussions'] as const
+// the sidebar: routines still run and ⌘K still finds what they hold.
+export const SIDEBAR_ENTRIES = ['inbox', 'routines', 'git'] as const
 export type SidebarEntry = (typeof SIDEBAR_ENTRIES)[number]
 
 export const SIDEBAR_PREFERENCE = {
-  inbox: 'sidebarInbox', routines: 'sidebarRoutines', git: 'sidebarGit', discussions: 'sidebarDiscussions'
+  inbox: 'sidebarInbox', routines: 'sidebarRoutines', git: 'sidebarGit'
 } as const satisfies Record<SidebarEntry, keyof Preferences>
 
 // Once a plugin brings an issue source its issues land in the inbox and nowhere else, so the inbox

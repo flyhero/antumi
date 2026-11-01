@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { SourceDescriptor } from '@antumi/protocol'
 import { inboxLocked, sidebarShows } from './sidebar-entries'
 
-const preferences = { sidebarInbox: false, sidebarRoutines: true, sidebarGit: false, sidebarDiscussions: true }
+const preferences = { sidebarInbox: false, sidebarRoutines: true, sidebarGit: false }
 
 describe('sidebar entries', () => {
   it('shows what the user left on, and the inbox by itself once a plugin brings a source', () => {

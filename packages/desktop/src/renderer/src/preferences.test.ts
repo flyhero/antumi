@@ -104,3 +104,24 @@ describe('island preference defaults', () => {
     expect(usePreferences.getState().island).toBe('requests')
   })
 })
+
+describe('group chats joining the conversation list', () => {
+  it.each([
+    [{}, 'all', false],
+    [{ sidebarDiscussions: false }, 'conversations', false],
+    [{ showArchivedDiscussions: true }, 'all', true],
+    [{ showArchivedConversations: true, sidebarDiscussions: true }, 'all', true]
+  ])('carries %j over once', async (saved, kinds, archived) => {
+    storage.set('antumi.preferences', JSON.stringify(saved))
+    const { usePreferences } = await import('./preferences')
+    expect(usePreferences.getState().conversationKinds).toBe(kinds)
+    expect(usePreferences.getState().showArchivedConversations).toBe(archived)
+  })
+
+  it('leaves a choice made since alone', async () => {
+    storage.set('antumi.preferences', JSON.stringify({ conversationKinds: 'discussions', sidebarDiscussions: false, showArchivedDiscussions: true }))
+    const { usePreferences } = await import('./preferences')
+    expect(usePreferences.getState().conversationKinds).toBe('discussions')
+    expect(usePreferences.getState().showArchivedConversations).toBe(false)
+  })
+})

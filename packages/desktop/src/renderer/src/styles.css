@@ -10154,11 +10154,13 @@ button.island-compact:focus-visible { outline: 2px solid var(--focus); outline-o
 .request-popup-error { margin: 0; padding: 8px 12px; border-bottom: 1px solid var(--border); color: var(--danger); font-size: var(--chat-font-small); }
 .request-popup-loading { margin: 0; padding: 12px; color: var(--text-3); }
 
-/* Group chats: a sidebar section between the tasks and the conversations, sized to what it holds. */
-.sidebar-discussions { flex: 0 1 auto; min-height: 0; max-height: 30%; display: flex; flex-direction: column; }
-.sidebar-discussions[data-collapsed='true'] { flex: 0 0 auto; }
-.sidebar-discussions ul { margin: 0; padding: 0 8px 8px; list-style: none; }
-.sidebar-discussions:hover .sidebar-collapse-icon, .sidebar-discussions:focus-within .sidebar-collapse-icon { opacity: 1; }
+/* Group chats share the conversation list: a group mark before their members' marks tells them apart. */
+.conversation-kind { display: inline-flex; vertical-align: -2px; margin-right: 4px; color: var(--text-3); }
+.conversation-kind svg { width: 12px; height: 12px; }
+/* The kind the list keeps to, when it keeps to one, stays in sight with a way back to both. */
+.conversation-list-filter { display: flex; align-items: center; gap: 2px; margin: 0 16px 4px; padding: 0 2px 0 8px; width: fit-content; border-radius: 999px; background: var(--fill-2); color: var(--text-muted); font-size: 12px; }
+.conversation-list-filter .icon-button { width: 18px; height: 18px; }
+.conversation-list-filter .icon-button svg { width: 10px; height: 10px; }
 /* Inside a flex box the marks' own vertical-align does nothing: the box takes it, to sit them on the text's centre. */
 .discussion-marks { display: inline-flex; vertical-align: -2px; margin-right: 2px; }
 .discussion-marks .conversation-agent { margin-right: 2px; }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { AgentProfile, Conversation, Task } from '@antumi/protocol'
-import { agentEntries, conversationEntries, matchScore, recentEntries, searchSections, taskEntries } from './search-palette'
+import { AgentProfile, Conversation, Discussion, Task } from '@antumi/protocol'
+import { agentEntries, conversationEntries, discussionEntries, matchScore, recentEntries, searchSections, taskEntries } from './search-palette'
 
 let next = 0
 const uuid = () => `00000000-0000-4000-8000-${String(++next).padStart(12, '0')}`
@@ -12,6 +12,10 @@ const conversation = (id: string, title: string, patch: object = {}): Conversati
 const task = (id: string, title: string, patch: object = {}): Task => Task.parse({ id, title, details: '', status: 'running', agent: 'claude', repos: [], dependsOn: [], createdAt: 0, updatedAt: 0, ...patch })
 const profile = (id: string, name: string, description = ''): AgentProfile => ({ ...AgentProfile.parse({ id: uuid(), name, description, agent: 'claude', archivedAt: null, createdAt: 0, updatedAt: 0 }), id })
 const project = () => 'antumi'
+const group = (id: string, title: string, patch: object = {}): Discussion => ({
+  ...Discussion.parse({ id: uuid(), title, topic: title, projectPaths: ['/work/antumi'], members: [], chairId: uuid(), maxRounds: 3, anonymous: false, state: 'done', step: null, round: 1, lastRound: 1, pinnedAt: null, archivedAt: null, createdAt: 0, updatedAt: 0, ...patch }),
+  id
+})
 
 describe('search palette', () => {
   it('ranks a title that starts with the query over one with a word that does, over one that only contains it', () => {
@@ -44,5 +48,13 @@ describe('search palette', () => {
       { conversation: project, task: () => null }
     )
     expect(recent.map((entry) => entry.id)).toEqual(['new', 'open', 'old'])
+  })
+
+  it('finds group chats among the conversations, by title or project, and offers recent ones', () => {
+    const found = discussionEntries([group('g', 'Quota review'), group('h', 'Other', { archivedAt: 1 })], 'quota', project)
+    expect(found.map((entry) => [entry.id, entry.kind, entry.discussion])).toEqual([['g', 'conversations', true]])
+    expect(discussionEntries([group('h', 'Other')], 'antumi', project)).toHaveLength(1)
+    const recent = recentEntries([conversation('c', 'Chat', { updatedAt: 1 })], [], { conversation: project, task: () => null }, [group('g', 'Group', { updatedAt: 2 }), group('a', 'Gone', { updatedAt: 3, archivedAt: 3 })])
+    expect(recent.map((entry) => [entry.id, entry.discussion ?? false])).toEqual([['g', true], ['c', false]])
   })
 })

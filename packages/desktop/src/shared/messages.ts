@@ -71,7 +71,6 @@ export const MESSAGES = {
   "SettingsPage.sidebarInboxLocked": {"zh": "已安装收件箱插件，收件箱一直显示。", "en": "An inbox plugin is installed, so the inbox always shows."},
   "SettingsPage.sidebarRoutinesHint": {"zh": "定时任务和预约照常运行，状态栏仍会提醒。", "en": "Routines and scheduled runs keep running; the status bar still tells you."},
   "SettingsPage.sidebarGitHint": {"zh": "按项目查看分支、提交和工作区。", "en": "Branches, commits and worktrees by project."},
-  "SettingsPage.sidebarDiscussionsHint": {"zh": "隐藏后侧栏里没有新建群聊的入口。", "en": "While hidden, the sidebar has no way to start a group chat."},
   "KeyboardShortcuts.saveFile": {"zh": "保存当前文件", "en": "Save current file"},
   "KeyboardShortcuts.submitForm": {"zh": "提交 / 保存表单", "en": "Submit / save form"},
   "KeyboardShortcuts.groupApp": {"zh": "应用", "en": "Application"},
@@ -3615,6 +3614,12 @@ export const MESSAGES = {
   "ConversationList.density": {"zh": "列表样式", "en": "Rows"},
   "ConversationList.comfortable": {"zh": "标准", "en": "Comfortable"},
   "ConversationList.compact": {"zh": "紧凑", "en": "Compact"},
+  "ConversationList.show": {"zh": "显示", "en": "Show"},
+  "ConversationList.kindsAll": {"zh": "全部", "en": "All"},
+  "ConversationList.kindsConversations": {"zh": "仅会话", "en": "Conversations only"},
+  "ConversationList.kindsDiscussions": {"zh": "仅群聊", "en": "Group chats only"},
+  "ConversationList.showAllKinds": {"zh": "显示全部", "en": "Show all"},
+  "ConversationList.noGroupChatsYet": {"zh": "还没有群聊。点右上角的 ＋，在新建页切到「群聊讨论」。", "en": "No group chats yet. Click ＋ at the top right and switch to Group chat."},
   "ConversationPeek.details": {"zh": "会话详情", "en": "Conversation details"},
   "ConversationPeek.agent": {"zh": "Agent", "en": "Agent"},
   "ConversationPeek.status": {"zh": "状态", "en": "Status"},
@@ -7851,26 +7856,6 @@ export const MESSAGES = {
   "SidebarDiscussions.aMemberIsSpeaking": {
     "zh": "有成员在发言",
     "en": "A member is speaking"
-  },
-  "SidebarDiscussions.listOptions": {
-    "zh": "列表选项",
-    "en": "List options"
-  },
-  "SidebarDiscussions.newGroupChat": {
-    "zh": "新建群聊",
-    "en": "New group chat"
-  },
-  "SidebarDiscussions.groupChatListOptions": {
-    "zh": "群聊的列表选项",
-    "en": "Group chat list options"
-  },
-  "SidebarDiscussions.showArchived": {
-    "zh": "显示已归档（{value1}）",
-    "en": "Show archived ({value1})"
-  },
-  "SidebarDiscussions.archivedGroupChats": {
-    "zh": "已归档的群聊",
-    "en": "Archived group chats"
   },
   "SidebarDiscussions.actionsForGroupChat": {
     "zh": "群聊「{value1}」的操作",

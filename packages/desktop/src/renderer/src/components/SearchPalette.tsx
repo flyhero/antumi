@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import type { ProjectFileMatch } from '@antumi/protocol'
-import { closeSearch, selectConversation, selectTask, useCore, useFilesScope } from '../core-store'
+import { closeSearch, selectConversation, selectDiscussion, selectTask, useCore, useFilesScope } from '../core-store'
 import { revealFilesFolder, showResolvedFile } from '../file-actions'
 import { isDarkTheme, onThemeChange } from '../appearance'
 import { t } from '../i18n'
-import { agentEntries, conversationEntries, matchScore, recentEntries, searchSections, SEARCH_CATEGORIES, taskEntries, type SearchCategory, type SearchEntry, type SearchKind, type SearchSection } from '../search-palette'
+import { agentEntries, conversationEntries, discussionEntries, matchScore, recentEntries, searchSections, SEARCH_CATEGORIES, taskEntries, type SearchCategory, type SearchEntry, type SearchKind, type SearchSection } from '../search-palette'
 import { openAgentProfile } from './AgentProfiles'
 import { FileTypeIcon } from './FileTypeIcon'
-import { AgentIcon, BoardIcon, RobotIcon, SearchIcon } from './icons'
+import { AgentIcon, BoardIcon, GroupChatIcon, RobotIcon, SearchIcon } from './icons'
 import { projectName } from './ProjectPicker'
 import './search-palette.css'
 
@@ -64,6 +64,7 @@ export function SearchPalette({ initial }: { initial: SearchCategory }) {
   const [category, setCategory] = useState<SearchCategory>(initial)
   const [selected, setSelected] = useState(0)
   const conversations = useCore((s) => s.conversations)
+  const discussions = useCore((s) => s.discussions)
   const tasks = useCore((s) => s.tasks)
   const profiles = useCore((s) => s.agentProfiles)
   const scope = useFilesScope()
@@ -77,13 +78,13 @@ export function SearchPalette({ initial }: { initial: SearchCategory }) {
   useEffect(() => { dialog.current?.showModal() }, [])
 
   const sections: SearchSection[] = useMemo(() => {
-    const conversationProject = (conversation: { workspacePath: string; projectPaths: readonly string[] }) => {
+    const conversationProject = (conversation: { projectPaths: readonly string[] }) => {
       const [primary] = conversation.projectPaths
       return primary ? projectName(primary) : null
     }
     const taskProject = (task: { repos: readonly { path: string }[] }) => (task.repos[0] ? projectName(task.repos[0].path) : null)
     if (!needle && category === 'all') {
-      const recent = recentEntries(Object.values(conversations), Object.values(tasks), { conversation: conversationProject, task: taskProject })
+      const recent = recentEntries(Object.values(conversations), Object.values(tasks), { conversation: conversationProject, task: taskProject }, Object.values(discussions))
       return recent.length > 0 ? [{ kind: 'conversations', entries: recent }] : []
     }
     const fileEntries: SearchEntry[] = files.map((match, index) => ({
@@ -91,12 +92,12 @@ export function SearchPalette({ initial }: { initial: SearchCategory }) {
       detail: folderOf(match.relative) || null, at: -index, score: needle ? Math.max(1, matchScore(match.path.split(/[\\/]/).at(-1) ?? '', needle)) : 1
     }))
     const entries = needle
-      ? [...conversationEntries(Object.values(conversations), needle, snippets, conversationProject), ...taskEntries(Object.values(tasks), needle, taskProject), ...agentEntries(Object.values(profiles), needle), ...fileEntries]
+      ? [...conversationEntries(Object.values(conversations), needle, snippets, conversationProject), ...discussionEntries(Object.values(discussions), needle, conversationProject), ...taskEntries(Object.values(tasks), needle, taskProject), ...agentEntries(Object.values(profiles), needle), ...fileEntries]
       : category === 'files' ? fileEntries
-        : category === 'conversations' || category === 'tasks' ? recentEntries(Object.values(conversations), Object.values(tasks), { conversation: conversationProject, task: taskProject }).filter((entry) => entry.kind === category)
+        : category === 'conversations' || category === 'tasks' ? recentEntries(Object.values(conversations), Object.values(tasks), { conversation: conversationProject, task: taskProject }, Object.values(discussions)).filter((entry) => entry.kind === category)
           : category === 'agents' ? agentEntries(Object.values(profiles), '') : []
     return searchSections(entries, category)
-  }, [needle, category, conversations, tasks, profiles, snippets, files])
+  }, [needle, category, conversations, discussions, tasks, profiles, snippets, files])
 
   const rows = sections.flatMap((section) => section.entries)
   const recent = !needle && category === 'all'
@@ -105,7 +106,8 @@ export function SearchPalette({ initial }: { initial: SearchCategory }) {
   const choose = (entry: SearchEntry | undefined) => {
     if (!entry) return
     closeSearch()
-    if (entry.kind === 'conversations') selectConversation(entry.id)
+    if (entry.discussion) selectDiscussion(entry.id)
+    else if (entry.kind === 'conversations') selectConversation(entry.id)
     else if (entry.kind === 'tasks') selectTask(entry.id)
     else if (entry.kind === 'agents') openAgentProfile(entry.id)
     else if (scope) {
@@ -117,6 +119,7 @@ export function SearchPalette({ initial }: { initial: SearchCategory }) {
   }
 
   const icon = (entry: SearchEntry): ReactNode => {
+    if (entry.discussion) return <GroupChatIcon />
     if (entry.kind === 'conversations') return <AgentIcon agent={conversations[entry.id]?.agent ?? null} />
     if (entry.kind === 'tasks') return <BoardIcon />
     if (entry.kind === 'agents') return <RobotIcon />

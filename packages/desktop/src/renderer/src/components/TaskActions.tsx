@@ -31,13 +31,13 @@ import { OtherProjectsHint } from './OtherProjectsHint'
 import { PickerItem } from './ChatPicker'
 import { effortLabel, modeLabel, modeOptions } from './ChatOptionsBar'
 import { ContextMenu, MenuItem, type MenuPoint } from './ContextMenu'
-import { ChatIcon, CheckIcon, ChevronDownIcon, ClockIcon, CloseIcon, CopyIcon, DocumentIcon, FolderRemoveIcon, HandoffIcon, InspectorIcon, MoreIcon, PencilIcon, PlayIcon, ReopenIcon, SubmitIcon, TrashIcon } from './icons'
+import { ChatIcon, CheckIcon, ChevronDownIcon, ClockIcon, CloseIcon, CopyIcon, DocumentIcon, FolderRemoveIcon, InspectorIcon, MoreIcon, PencilIcon, PlayIcon, ReopenIcon, SubmitIcon, TrashIcon } from './icons'
 import { Popover } from './Popover'
 import { cleanWithConfirm } from './WorktreeManager'
 import { TaskExecutorPicker } from './TaskExecutorPicker'
 import { SchedulePicker } from './SchedulePicker'
 import { StatusIcon } from './StatusIcon'
-import { useTaskHandoff, type TaskHandoff } from './TaskHandoff'
+import { useTaskHandoff } from './TaskHandoff'
 import { launchOptions, TaskModelPicker, useEditsInPlace, useTaskLaunch, type TaskLaunch } from './TaskLaunch'
 import { createSchedule, openRunForTask, scheduleState } from '../schedules'
 import { useOpenTodoCount, useTodosShown } from '../conversation-todos'
@@ -617,28 +617,6 @@ function InspectorToggle({ view, conversationId }: { view: TaskView; conversatio
   )
 }
 
-// Beside the agent, as a free conversation has it: looks disabled while the agent works, and
-// says why when pressed.
-function HandoffButton({ handoff, labelled }: { handoff: TaskHandoff; labelled: boolean }) {
-  const { blocker } = handoff
-  return (
-    <button
-      type="button"
-      className={`${labelled ? 'button' : 'tool-button'} launch-button`}
-      aria-label={t('TaskActions.handOffToAnotherAgent')}
-      aria-disabled={blocker !== null}
-      data-tooltip={blocker ? t('TaskActions.cannotHandOffYet', { blocker: blocker }) : t('TaskActions.handOffToAnotherAgent')}
-      data-tooltip-align={labelled ? 'start' : undefined}
-      onClick={() => {
-        if (!blocker) handoff.open()
-      }}
-    >
-      <HandoffIcon />
-      {labelled && t('ChatComposer.handOff')}
-    </button>
-  )
-}
-
 // Who carries the task out and what moves it on. Icons in the chat's header; in the details, a row of
 // labelled buttons under the title, led by the one step the task waits for. There, closing a task by
 // hand is left to its status, unless it is the accepting that a task under review waits for.
@@ -671,7 +649,6 @@ export function TaskSteps({ task, labelled = false }: { task: Task; labelled?: b
   const moveButtons = moves.map((status) => <MoveButton key={status} task={task} to={status} labelled={labelled} />)
   // A finished task goes on by a message in its chat.
   const redo = isFinished(task.status) && <RedoButton task={task} labelled={labelled} />
-  const handoffButton = handoff.available && <HandoffButton handoff={handoff} labelled={labelled} />
   const schedule = task.status === 'pending' && <ScheduleButton task={task} dependencies={dependencies} labelled={labelled} />
   return labelled ? (
     <>
@@ -681,13 +658,11 @@ export function TaskSteps({ task, labelled = false }: { task: Task; labelled?: b
       {redo}
       {agent}
       {launch && <TaskModelPicker task={task} launch={launch} />}
-      {handoffButton}
       {schedule}
     </>
   ) : (
     <>
       {agent}
-      {handoffButton}
       {start}
       {schedule}
       {submit}

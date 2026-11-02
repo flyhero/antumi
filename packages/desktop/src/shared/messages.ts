@@ -9059,14 +9059,6 @@ export const MESSAGES = {
     "zh": "查看聊天",
     "en": "View chat"
   },
-  "TaskActions.handOffToAnotherAgent": {
-    "zh": "移交给其他 Agent",
-    "en": "Hand off to another Agent"
-  },
-  "TaskActions.cannotHandOffYet": {
-    "zh": "还不能移交：{blocker}",
-    "en": "Cannot hand off yet: {blocker}"
-  },
   "TaskActions.status": {
     "zh": "状态",
     "en": "Status"

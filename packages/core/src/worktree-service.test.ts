@@ -169,4 +169,20 @@ describe('WorktreeService', () => {
     ])
     expect(existsSync(held)).toBe(true)
   })
+
+  it('keeps a delegated member\'s worktree while its call is open, then lets it go and tells the call', async () => {
+    const member = worktree('m')
+    let open = true
+    const released: string[] = []
+    const conversations = [{ id: id('m'), projectPaths: [realpathSync(member)], chat: { turn: 'idle' as const }, agentCallId: 'call-m', parentConversationId: id('p') }]
+    const worktrees = new WorktreeService(root, hooks, () => {}, { list: () => conversations, callOpen: () => open, releaseCall: async (callId) => { released.push(callId) } })
+    expect((await worktrees.list()).find((each) => each.path === member)).toMatchObject({ conversationId: id('m'), agentCall: { id: 'call-m', parentId: id('p'), open: true }, inUse: true })
+    expect(await worktrees.clean([member])).toEqual([{ path: member, removed: false, reason: 'delegation-open' }])
+    open = false
+    expect((await worktrees.list()).find((each) => each.path === member)).toMatchObject({ agentCall: { open: false }, inUse: false })
+    expect(await worktrees.clean([member])).toEqual([{ path: member, removed: true, reason: null }])
+    expect(released).toEqual(['call-m'])
+    expect(existsSync(member)).toBe(false)
+    expect(git(app, 'branch', '--list', 'antumi/m')).toContain('antumi/m')
+  })
 })

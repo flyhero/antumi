@@ -280,13 +280,13 @@ export async function serveMcp(home: string | undefined, conversationId?: string
   const scope = conversationId ? await withCore(async (rpc) => {
     const conversation = await rpc.call('conversations.get', { id: conversationId })
     const run = rpc.features.includes('squads') ? await rpc.call('squads.roster', { id: conversationId }) : null
-    return { ...conversationToolLimits(conversation), run, delegate: !run && rpc.features.includes('agent-profiles') && !conversation.parentConversationId && !conversation.discussionId && !conversation.squadRunId && !conversation.routineId && !conversation.helperOf }
+    return { ...conversationToolLimits(conversation), run, features: rpc.features, delegate: !run && rpc.features.includes('agent-profiles') && !conversation.parentConversationId && !conversation.discussionId && !conversation.squadRunId && !conversation.routineId && !conversation.helperOf }
   }) : null
   const handle = createMcpHandler({
     planOnly: planOnly || scope?.readOnly,
     ...(conversationId ? { management: await managementToolsOverCore(withCore, conversationId, planOnly) } : {}),
     ...(conversationId && scope?.run ? { squad: squadToolsOverCore(withCore, conversationId, scope.run) } : {}),
-    ...(conversationId && scope?.delegate ? { agents: agentToolsOverCore(withCore, conversationId) } : {}),
+    ...(conversationId && scope?.delegate ? { agents: agentToolsOverCore(withCore, conversationId, scope.features) } : {}),
     initialized,
     ...(listed ? { listed } : {}),
     preview: checkPreviewFile,

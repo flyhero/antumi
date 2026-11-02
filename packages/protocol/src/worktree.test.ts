@@ -23,4 +23,11 @@ describe('checkCleanWorktree', () => {
     expect(checkCleanWorktree({ ...clean, conversationId: 'c' }, null)).toBe('conversation-open')
     expect(checkCleanWorktree({ ...clean, conversationId: null }, null)).toBeNull()
   })
+
+  it('keeps a delegation\'s own only while the call is open, then by what it holds', () => {
+    const member = { ...clean, conversationId: 'c', agentCall: { id: 'call', parentId: 'p', open: true } }
+    expect(checkCleanWorktree(member, null)).toBe('delegation-open')
+    expect(checkCleanWorktree({ ...member, agentCall: { ...member.agentCall, open: false } }, null)).toBeNull()
+    expect(checkCleanWorktree({ ...member, agentCall: { ...member.agentCall, open: false }, changes: 2 }, null)).toBe('worktree-dirty')
+  })
 })

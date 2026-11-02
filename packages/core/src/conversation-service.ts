@@ -549,12 +549,13 @@ export class ConversationService {
 
   // routine: the routine whose run opens it, which also names it for good; id: the run's own,
   // so a start tried again finds the conversation it already made. start.worktree: it works in a
-  // worktree of each project rather than in the project itself.
+  // worktree of each project rather than in the project itself. start.unlisted: its projects are
+  // not remembered as recent ones.
   async create(
     agent: AgentKind,
     projectPaths: readonly string[],
     allowBypass?: boolean,
-    start: { permissionMode?: string; model?: string; effort?: string; worktree?: boolean; branch?: string; deferStart?: boolean; helperOf?: string; modelProvider?: string; profile?: AgentProfile; parentId?: string; callId?: string; readOnly?: boolean; referencePaths?: readonly string[] } = {},
+    start: { permissionMode?: string; model?: string; effort?: string; worktree?: boolean; branch?: string; deferStart?: boolean; helperOf?: string; modelProvider?: string; profile?: AgentProfile; parentId?: string; callId?: string; readOnly?: boolean; referencePaths?: readonly string[]; unlisted?: boolean } = {},
     routine: { id: string; title: string } | null = null,
     id: string = randomUUID(),
     discussion: { id: string; title: string } | null = null,
@@ -629,8 +630,9 @@ export class ConversationService {
     if (allowBypass !== undefined) this.store.setChatOptions(id, { allowBypass })
     if (permissionMode) this.store.setChatOptions(id, { permissionMode })
     if (model || effort) this.store.setChatOptions(id, { [agent]: { model, effort } })
-    // The paths as picked, not resolved: the same strings a task stores for them.
-    this.projects.remember(picked)
+    // The paths as picked, not resolved: the same strings a task stores for them. Not a worktree
+    // Antumi laid out for a delegated member (start.unlisted): no one picks that again.
+    if (!start.unlisted) this.projects.remember(picked)
     // The agent starts once setup ends; a failure shows in its tab, with no first message to tell the agent in.
     if (made.length && setups.length && this.worktreeSetup) {
       this.changed(created)
@@ -1251,7 +1253,7 @@ export class ConversationService {
     const profile = conversation.profile
     const notes = [profile ? `你是用户配置的智能体「${profile.name}」。\n${profile.instructions}` : '']
     if (this.delegationAvailable?.(conversation.id) && !conversation.parentConversationId && !conversation.discussionId && !conversation.squadRunId && !conversation.routineId && !isHelper(conversation)) {
-      notes.push('用户用 @ 点名智能体时，先查找对应智能体并委派，不要自行代替它回答。需要其他专业智能体协助时，可用 Antumi 的 antumi_agent_list 查找可调用的智能体（用户配置的，以及本机可直接调用的外部智能体），再用 antumi_agent_dispatch 委派具体子任务（说明目标、必要背景、文件范围和交付要求）。这是独立子会话，不自动继承聊天历史。调用后结束当前回合，Antumi 会在结果就绪后自动继续当前会话。用 antumi_agent_status 查看进度；不要反复轮询。')
+      notes.push('用户用 @ 点名智能体时，先查找对应智能体并委派，不要自行代替它回答。需要其他专业智能体协助时，可用 Antumi 的 antumi_agent_list 查找可调用的智能体（用户配置的，以及本机可直接调用的外部智能体），再用 antumi_agent_dispatch 委派具体子任务（说明目标、必要背景、文件范围和交付要求）。这是独立子会话，不自动继承聊天历史。调用后结束当前回合，Antumi 会在结果就绪后自动继续当前会话。用 antumi_agent_status 查看进度；不要反复轮询。跨很多目录、彼此不重叠的机械性改动，可以拆成几个 workspace: worktree 的开发委派同时做：先把自己的改动提交，派出后可以继续做不相关的事，但别改派出去的那些文件；结果回来后合并各个分支（git merge），解决冲突，重新跑检查。')
     }
     return notes.filter(Boolean).join('\n\n')
   }

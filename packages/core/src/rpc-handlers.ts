@@ -135,6 +135,7 @@ export function createRpcHandlers(
   service.setGitGuard((dirs) => git.guardAgent(dirs))
   conversations.setGitPreparation((dirs, run) => git.withRepositories(dirs, run))
   worktrees.setGitRemoval((dirs, run) => git.withRepositoryLock(dirs, run))
+  profiles?.setGitLock((dirs, run) => git.withRepositoryLock(dirs, run))
   const files = new ConversationFiles((id) => conversations.get(id))
   const quick = new QuickRequests({
     catalog: (agent) => conversations.chatCatalog(agent),
@@ -226,10 +227,10 @@ export function createRpcHandlers(
     'agentProfiles.available': ({ id }) => profileService().available(id),
     'agentCalls.list': ({ id, read }) => read ? profileService().read(id) : profileService().calls(id),
     'agentCalls.targets': ({ id }) => profileService().targets(id),
-    'agentCalls.dispatch': ({ id, profileId, agent, model, effort, capability, instruction, ref }) => {
+    'agentCalls.dispatch': ({ id, profileId, agent, model, effort, capability, instruction, ref, workspace }) => {
       const target = profileId && !agent ? profileId : agent && !profileId ? { agent, model, effort, capability } : null
       if (!target) throw new Rejection('invalid-params', '请指定 profileId 或 agent 之一')
-      return profileService().dispatch(id, target, instruction, ref)
+      return profileService().dispatch(id, target, instruction, ref, workspace)
     },
     'agentCalls.cancel': ({ id, callId }) => profileService().cancel(id, callId),
     'agentCalls.resumeCheck': ({ id, callId }) => profileService().resumeCheck(id, callId),

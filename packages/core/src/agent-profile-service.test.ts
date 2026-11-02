@@ -1,4 +1,5 @@
-import { mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -333,6 +334,93 @@ describe('reusable agent roles and delegated work', () => {
     await chats.stop(call.conversationId)
     await profiles.reconcile()
     expect(store.call(call.id)).toMatchObject({ state: 'failed', delivered: true })
+  })
+  describe('a member in a worktree of its own', () => {
+    let repo: string
+    let developer: AgentProfile
+    const git = (cwd: string, ...args: string[]) => execFileSync('git', ['-C', cwd, '-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { encoding: 'utf8' }).trim()
+    // What the member's conversation was sent first.
+    const firstMessage = (conversationId: string) => chats.messages(conversationId).find((message) => message.role === 'user')?.text ?? ''
+    beforeEach(async () => {
+      repo = path.join(root, 'repo'); mkdirSync(repo)
+      git(repo, 'init', '-q', '-b', 'main')
+      writeFileSync(path.join(repo, 'a.txt'), 'a')
+      git(repo, 'add', 'a.txt'); git(repo, 'commit', '-q', '-m', 'a')
+      profiles.setWorkspaces({ root: path.join(root, 'worktrees'), setup: null })
+      developer = profiles.save({ name: 'Developer', agent: 'claude', capability: 'develop' })
+      parentId = (await chats.create('claude', [repo], false, { permissionMode: 'ask' })).id
+    })
+
+    it('works beside other members and the caller, on a branch from the caller\'s commit, and reports what git holds', async () => {
+      const head = git(repo, 'rev-parse', 'HEAD')
+      const first = await profiles.dispatch(parentId, developer.id, 'Rename the module', 'wt-1', 'worktree')
+      const second = await profiles.dispatch(parentId, developer.id, 'Rename the other module', 'wt-2', 'worktree')
+      expect(first).toMatchObject({ workspace: 'worktree', worktree: null, readOnly: false })
+      await waitFor(() => store.call(first.id).state === 'running' && store.call(second.id).state === 'running')
+      const laid = store.call(first.id).worktree!
+      expect(laid).toMatchObject({ source: repo, base: head, stage: 'ready', setupFailures: [], outcome: null, removed: false })
+      expect(laid.dir.startsWith(path.join(root, 'worktrees'))).toBe(true)
+      expect(git(laid.dir, 'rev-parse', '--abbrev-ref', 'HEAD')).toBe(laid.branch)
+      expect(chats.get(first.conversationId).projectPaths).toEqual([laid.dir])
+      expect(store.call(second.id).worktree!.dir).not.toBe(laid.dir)
+      expect(firstMessage(first.conversationId)).toContain(`分支 \`${laid.branch}\``)
+      // Neither member edits the caller's checkout: the caller goes on, and nothing reads as writing.
+      expect(profiles.summary(parentId)).toMatchObject({ open: 2, writing: false })
+      await chats.continue(parentId)
+      await chats.send(parentId, 'Meanwhile, update the docs')
+      expect(projects.recent()).not.toContain(laid.dir)
+      // The member commits on its branch; its result carries what git says of it.
+      writeFileSync(path.join(laid.dir, 'b.txt'), 'b')
+      git(laid.dir, 'add', 'b.txt'); git(laid.dir, 'commit', '-q', '-m', 'b')
+      writeFileSync(path.join(laid.dir, 'c.txt'), 'c')
+      complete(chats.get(parentId).sessionId!, 'docs updated')
+      complete(chats.get(first.conversationId).sessionId!, 'Renamed and committed')
+      await waitFor(() => store.call(first.id).delivered)
+      const done = store.call(first.id)
+      expect(done.worktree!.outcome).toEqual({ branch: laid.branch, head: git(laid.dir, 'rev-parse', 'HEAD'), commits: 1, changes: 1, error: null })
+      expect(done.result).toContain('Renamed and committed')
+      expect(done.result).toContain(`（worktree 委派：分支 \`${laid.branch}\`，1 个提交，1 个未提交文件。有 1 个未提交文件留在 worktree 里`)
+      const delivery = chats.messages(parentId).find((message) => message.eventKey.includes('agent-result:'))!
+      expect(JSON.parse(delivery.text.split('\n')[1]!)).toMatchObject({ callId: first.id, worktree: { dir: laid.dir, branch: laid.branch, base: head, outcome: { commits: 1 } } })
+      expect(store.call(second.id).state).toBe('running')
+      await expect(profiles.resume(parentId, first.id)).rejects.toMatchObject({ reason: 'agent-call-resume-worktree' })
+    })
+
+    it('refuses one the caller cannot carry: a reader, an uncommitted checkout, a plain folder', async () => {
+      await expect(profiles.dispatch(parentId, reviewer.id, 'Review', 'r', 'worktree')).rejects.toMatchObject({ reason: 'invalid-params' })
+      writeFileSync(path.join(repo, 'draft.txt'), 'draft')
+      await expect(profiles.dispatch(parentId, developer.id, 'Edit', 'e', 'worktree')).rejects.toMatchObject({ reason: 'delegation-dirty' })
+      rmSync(path.join(repo, 'draft.txt'))
+      const plain = (await chats.create('claude', [path.join(root, 'project')], false, { permissionMode: 'ask' })).id
+      await expect(profiles.dispatch(plain, developer.id, 'Edit', 'e', 'worktree')).rejects.toMatchObject({ reason: 'invalid-params' })
+      // The same reference with the other workspace is other work.
+      await profiles.dispatch(parentId, developer.id, 'Edit', 'e', 'worktree')
+      await expect(profiles.dispatch(parentId, developer.id, 'Edit', 'e')).rejects.toMatchObject({ reason: 'invalid-params' })
+    })
+
+    it('runs the project\'s setup in the worktree before the member starts, and tells it what failed', async () => {
+      const ran: string[] = []
+      profiles.setWorkspaces({ root: path.join(root, 'worktrees'), setup: {
+        requireTrusted: async (paths) => paths.map((repoPath) => ({ repoPath, topLevel: repoPath, config: { setup: 'pnpm install' }, hash: 'h' })),
+        setUp: async (conversationId, worktrees) => { ran.push(...worktrees.map((each) => each.dir)); expect(chats.get(conversationId).projectPaths).toEqual([worktrees[0]!.dir]); return ['在 worktree 运行 `pnpm install` 失败'] }
+      } })
+      const call = await profiles.dispatch(parentId, developer.id, 'Edit', 'e', 'worktree')
+      await waitFor(() => store.call(call.id).state === 'running')
+      expect(ran).toEqual([store.call(call.id).worktree!.dir])
+      expect(store.call(call.id).worktree).toMatchObject({ stage: 'ready', setupFailures: ['在 worktree 运行 `pnpm install` 失败'] })
+      expect(firstMessage(call.conversationId)).toContain('项目的 setup 没有全部成功')
+    })
+
+    it('reads the worktree when a call is cancelled, and lets the folder go only afterwards', async () => {
+      const call = await profiles.dispatch(parentId, developer.id, 'Edit', 'e', 'worktree')
+      await waitFor(() => store.call(call.id).state === 'running')
+      expect(profiles.callOpen(call.id)).toBe(true)
+      await expect(profiles.releaseWorktree(call.id)).rejects.toMatchObject({ reason: 'delegation-open' })
+      await profiles.cancel(parentId, call.id)
+      expect(store.call(call.id)).toMatchObject({ state: 'cancelled', worktree: { outcome: { commits: 0, changes: 0 } } })
+      await profiles.releaseWorktree(call.id)
+      expect(store.call(call.id).worktree!.removed).toBe(true)
+    })
   })
   describe('going on with a call that stopped short', () => {
     // What a session was sent, as text.

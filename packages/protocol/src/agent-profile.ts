@@ -45,11 +45,43 @@ export const DirectAgentCall = z.object({
 })
 export type DirectAgentCall = z.infer<typeof DirectAgentCall>
 
+// Where a developing member works: in the caller's own directories (shared), one such member at a
+// time; or in a worktree of its own on a branch from the caller's commit (worktree), beside the
+// caller and others like it, for the caller to merge (feature delegation-worktree).
+export const AgentCallWorkspace = z.enum(['shared', 'worktree'])
+export type AgentCallWorkspace = z.infer<typeof AgentCallWorkspace>
+// What git read in the member's worktree when the call ended; null fields it could not read.
+export const AgentCallWorktreeOutcome = z.object({
+  // The branch checked out, which should be the call's own; the member may have switched.
+  branch: z.string().nullable(), head: z.string().nullable(),
+  // Commits since the base, and uncommitted files, untracked ones included.
+  commits: z.number().int().nullable(), changes: z.number().int().nullable(),
+  error: z.string().nullable()
+})
+export type AgentCallWorktreeOutcome = z.infer<typeof AgentCallWorktreeOutcome>
+export const AgentCallWorktree = z.object({
+  // The caller's checkout the worktree came from: a task's worktree where the caller is a task.
+  source: z.string(),
+  dir: z.string(), branch: z.string(),
+  // The commit the branch starts from, read before setup ran.
+  base: z.string(),
+  // Laying out: the worktree is made, then the project's setup runs, then the member starts.
+  stage: z.enum(['setup', 'ready']).default('ready'),
+  setupFailures: z.array(z.string()).default([]),
+  outcome: AgentCallWorktreeOutcome.nullable().default(null),
+  // The user cleaned the worktree away; its branch and commits remain.
+  removed: z.boolean().default(false)
+})
+export type AgentCallWorktree = z.infer<typeof AgentCallWorktree>
+
 export const AgentCall = z.object({
   id: z.string().uuid(), parentId: z.string().uuid(), conversationId: z.string().uuid(),
   profile: AgentProfile, instruction: z.string().trim().min(1).max(20000),
   ref: z.string().nullable().default(null),
   permissionMode: z.string(), readOnly: z.boolean(),
+  // Older cores leave both out: shared, with no worktree.
+  workspace: AgentCallWorkspace.default('shared'),
+  worktree: AgentCallWorktree.nullable().default(null),
   state: z.enum(['queued', 'starting', 'running', 'awaiting', 'completed', 'failed', 'cancelled']),
   result: z.string().nullable(), error: z.string().nullable(), delivered: z.boolean(),
   // What a queued call waits for: the caller's turn to end, another edit in the same directories to

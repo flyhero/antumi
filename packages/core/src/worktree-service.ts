@@ -22,8 +22,14 @@ export type WorktreeTasks = {
   forgetWorktree(taskId: string, worktreePath: string): void
 }
 
-// The conversations outside any task, whose projects may be worktrees Antumi laid out for them.
-export type WorktreeConversations = { list(): Pick<Conversation, 'id' | 'projectPaths' | 'chat'>[] }
+// The conversations outside any task, whose projects may be worktrees Antumi laid out for them;
+// a delegated member's among them, whose worktree is the call's while that is open. Letting go of
+// a call's worktree tells the call, which then knows not to look for it.
+export type WorktreeConversations = {
+  list(): Pick<Conversation, 'id' | 'projectPaths' | 'chat' | 'agentCallId' | 'parentConversationId'>[]
+  callOpen?(callId: string): boolean
+  releaseCall?(callId: string): Promise<void>
+}
 
 type Folder = { dir: string; shortId: string; planning: boolean }
 
@@ -144,6 +150,8 @@ export class WorktreeService {
         continue
       }
       try {
+        // The call is asked once more, in its own order, in case it was taken up since the list was read.
+        if (worktree.agentCall && this.conversations.releaseCall) await this.conversations.releaseCall(worktree.agentCall.id)
         results.push(this.gitRemoval ? await this.gitRemoval([worktree.path], () => this.remove(worktree, task)) : await this.remove(worktree, task))
       } catch (error) {
         results.push({ path: worktree.path, removed: false, reason: error instanceof Rejection ? error.reason : 'worktree-failed' })
@@ -182,8 +190,11 @@ export class WorktreeService {
       const taskId = listing.get(folder.dir) ?? byShortId.get(folder.shortId) ?? null
       const real = taskId ? folder.dir : await realpath(folder.dir).catch(() => folder.dir)
       const conversation = taskId ? undefined : conversations.find((each) => each.projectPaths.includes(real))
-      const inUse = taskId !== null ? busy.has(taskId) : conversation?.chat?.turn === 'running'
-      return { ...(await this.inspect(folder, taskId)), conversationId: conversation?.id ?? null, inUse }
+      const agentCall = conversation?.agentCallId && conversation.parentConversationId
+        ? { id: conversation.agentCallId, parentId: conversation.parentConversationId, open: this.conversations.callOpen?.(conversation.agentCallId) ?? false } : null
+      // A member's worktree is in use for as long as its call is open: its setup may be running there.
+      const inUse = taskId !== null ? busy.has(taskId) : agentCall ? agentCall.open : conversation?.chat?.turn === 'running'
+      return { ...(await this.inspect(folder, taskId)), conversationId: conversation?.id ?? null, agentCall, inUse }
     }))
   }
 

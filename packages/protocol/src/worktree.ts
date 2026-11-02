@@ -13,6 +13,9 @@ export const ManagedWorktree = z.object({
   taskId: z.string().nullable(),
   // The conversation it was laid out for, while that conversation is still there. Older cores leave it out.
   conversationId: z.string().nullable().optional(),
+  // The delegation it was laid out for (feature delegation-worktree): open while the member works.
+  // Its parent conversation may be gone by now.
+  agentCall: z.object({ id: z.string(), parentId: z.string(), open: z.boolean() }).nullable().optional(),
   planning: z.boolean(),
   // Uncommitted files, untracked ones included; null when git could not read it.
   changes: z.number().int().nullable(),
@@ -33,17 +36,19 @@ export type ManagedWorktree = z.infer<typeof ManagedWorktree>
 export const WorktreeCleanResult = z.object({ path: z.string(), removed: z.boolean(), reason: z.string().nullable() })
 export type WorktreeCleanResult = z.infer<typeof WorktreeCleanResult>
 
-export type WorktreeCleanBlocker = 'task-active' | 'conversation-open' | 'worktree-in-use' | 'worktree-locked' | 'worktree-unreadable' | 'worktree-dirty' | 'worktree-alone'
+export type WorktreeCleanBlocker = 'task-active' | 'conversation-open' | 'delegation-open' | 'worktree-in-use' | 'worktree-locked' | 'worktree-unreadable' | 'worktree-dirty' | 'worktree-alone'
 
 // Cleaning a worktree loses nothing when it holds nothing uncommitted: its commits stay on its
 // branch, from which continuing the task lays it out again. A task still under way keeps its own,
-// and a conversation keeps its own while it is there, since nothing would lay it out again.
+// and a conversation keeps its own while it is there, since nothing would lay it out again. A
+// delegation's goes once the call ends: its branch is what the caller merges, not the folder.
 export function checkCleanWorktree(
-  worktree: Pick<ManagedWorktree, 'changes' | 'locked' | 'alone' | 'inUse' | 'conversationId'>,
+  worktree: Pick<ManagedWorktree, 'changes' | 'locked' | 'alone' | 'inUse' | 'conversationId' | 'agentCall'>,
   task: Pick<Task, 'status'> | null
 ): WorktreeCleanBlocker | null {
   if (task && task.status !== 'done' && task.status !== 'abandoned') return 'task-active'
-  if (worktree.conversationId) return 'conversation-open'
+  if (worktree.agentCall?.open) return 'delegation-open'
+  if (worktree.conversationId && !worktree.agentCall) return 'conversation-open'
   if (worktree.inUse) return 'worktree-in-use'
   if (worktree.locked) return 'worktree-locked'
   if (worktree.changes === null) return 'worktree-unreadable'

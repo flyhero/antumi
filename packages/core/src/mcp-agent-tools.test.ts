@@ -48,4 +48,26 @@ describe('agent delegation MCP', () => {
     expect((await run('antumi_agent_dispatch', { agent: 'codex', capability: 'develop', instruction: 'Fix the test', ref: 'fix-1' })).isError).toBe(false)
     expect(sent.at(-1)).toMatchObject({ method: 'agentCalls.dispatch', params: { agent: 'codex', capability: 'develop', instruction: 'Fix the test', ref: 'fix-1' } })
   })
+  it('offers a member a worktree of its own only on a core that lays them out, never silently sharing instead', async () => {
+    const sent: { method: string; params: unknown }[] = []
+    const client = createRpcClient((text) => {
+      const frame = z.object({ id: z.number(), method: z.string(), params: z.unknown() }).parse(JSON.parse(text))
+      sent.push(frame)
+      queueMicrotask(() => client.receive(JSON.stringify({ jsonrpc: '2.0', id: frame.id, error: { code: -32000, message: '/repo', data: { reason: 'project-config-untrusted' } } })))
+    })
+    const rpc: RpcConnection = { ...client, features: ['agent-profiles', 'direct-agent-calls', 'delegation-worktree'], close: () => {}, closed: new Promise(() => {}) }
+    const id = '00000001-0000-4000-8000-000000000000'
+    const dispatch = (tools: ReturnType<typeof agentToolsOverCore>) => tools.find((tool) => tool.spec.name === 'antumi_agent_dispatch')!
+    const able = dispatch(agentToolsOverCore(async (action) => action(rpc), id, rpc.features))
+    expect(JSON.stringify(able.spec.inputSchema)).toContain('"workspace"')
+    expect(able.spec.description).toContain('workspace 默认 shared')
+    const refused = await able.run({ agent: 'codex', capability: 'develop', instruction: 'Rename', ref: 'r-1', workspace: 'worktree' })
+    expect(refused).toMatchObject({ isError: true })
+    expect(refused.content[0]!.text).toContain('项目 /repo 的 setup 命令还没确认')
+    expect(sent.at(-1)).toMatchObject({ params: { workspace: 'worktree' } })
+    const older = dispatch(agentToolsOverCore(async (action) => action({ ...rpc, features: ['agent-profiles', 'direct-agent-calls'] }), id, ['agent-profiles', 'direct-agent-calls']))
+    expect(JSON.stringify(older.spec.inputSchema)).not.toContain('"workspace"')
+    expect((await older.run({ agent: 'codex', capability: 'develop', instruction: 'Rename', ref: 'r-2', workspace: 'worktree' })).content[0]!.text).toContain('不支持 worktree 委派')
+    expect(sent.filter((frame) => frame.method === 'agentCalls.dispatch')).toHaveLength(1)
+  })
 })

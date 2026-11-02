@@ -628,7 +628,10 @@ export function TaskSteps({ task, labelled = false }: { task: Task; labelled?: b
   // message takes the new one, which a chat already begun is handed to.
   const handsOff = task.status === 'running' && handoff.available
   const squadsSupported = useCore((state) => state.rpc?.features.includes('squads') ?? false)
-  const agent = (squadsSupported && (task.status === 'pending' || task.squadId) ? <TaskExecutorPicker task={task} size={labelled ? 'large' : undefined} /> :
+  // In the chat the composer's own agent picker switches agents, and hands the chat over as this one
+  // would; only the assignee, which may be a squad, stays in the header.
+  const executor = squadsSupported && (task.status === 'pending' || task.squadId)
+  const agent = executor ? <TaskExecutorPicker task={task} size={labelled ? 'large' : undefined} /> : (labelled || !handoff.available) && (
     <AgentPicker
       agent={task.agent}
       locked={task.status === 'abandoned' || (task.status === 'running' && !handsOff)}

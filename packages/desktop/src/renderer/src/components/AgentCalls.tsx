@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { agentCallOpen, type AgentCall, type Conversation } from '@antumi/protocol'
-import { perform, useCore } from '../core-store'
+import { openGit, perform, showError, useCore } from '../core-store'
+import { worktreeStatusText } from '../delegation-worktree'
 import { t } from '../i18n'
 import { chatDayAndTime } from '../labels'
 import { AgentIcon } from './icons'
@@ -17,6 +18,12 @@ export function AgentCalls({ conversation }: { conversation: Conversation }) {
     setCancelling((items) => items.filter((id) => id !== call.id))
   }
   const focus = useCore((state) => state.agentCallFocus)
+  const gitProjects = useCore((state) => state.rpc?.features.includes('git-projects') ?? false)
+  const [copied, setCopied] = useState<string | null>(null)
+  const copyBranch = async (call: AgentCall) => {
+    if (!call.worktree) return
+    try { await navigator.clipboard.writeText(call.worktree.branch); setCopied(call.id); setTimeout(() => setCopied((current) => current === call.id ? null : current), 2000) } catch { showError(t('fileActions.copyFailedTryAgain')) }
+  }
   const list = useRef<HTMLOListElement>(null)
   // A card's 详情 brings its record into view.
   useEffect(() => {
@@ -35,10 +42,13 @@ export function AgentCalls({ conversation }: { conversation: Conversation }) {
       <div className="delegation-record-head"><AgentIcon agent={call.profile.agent} /><strong>{call.profile.name}</strong><span className="delegation-status" data-state={call.state}>{t(`AgentProfiles.${call.state}`)}</span></div>
       <time className="muted" dateTime={new Date(call.createdAt).toISOString()}>{chatDayAndTime(call.createdAt)}</time>
       <details className="delegation-instruction"><summary title={call.instruction}>{call.instruction.split('\n').filter((line) => line.trim()).slice(0, 2).join(' · ')}</summary><p>{call.instruction}</p></details>
+      {(() => { const worktree = worktreeStatusText(call); return worktree && <p className="delegation-worktree" data-warn={worktree.warn || undefined}><span className="delegation-badge">{t('AgentProfiles.worktreeBadge')}</span>{call.worktree && <span className="mono" title={call.worktree.dir}>{call.worktree.branch}</span>}{worktree.text && <span>{worktree.text}</span>}</p> })()}
       {call.result && <details key={`result:${call.id === focus}`} className="delegation-result" open={call.id === focus || undefined}><summary>{t('AgentProfiles.result')}</summary><p>{call.result}</p></details>}
       {call.error && <p className="modal-error" role="status">{call.error}</p>}
       <footer className="delegation-record-actions">
         {call.state !== 'queued' && call.state !== 'starting' && <button type="button" className="link-button" onClick={() => void openAgentCall(call)}>{t('AgentProfiles.openConversation')}</button>}
+        {call.worktree && <button type="button" className="link-button" onClick={() => void copyBranch(call)}>{copied === call.id ? t('AgentProfiles.branchCopied') : t('AgentProfiles.copyBranch')}</button>}
+        {call.worktree && gitProjects && <button type="button" className="link-button" onClick={() => openGit(call.worktree?.source)}>{t('GitPage.openInGit')}</button>}
         {agentCallOpen(call) && <button type="button" className="link-button" disabled={cancelling.includes(call.id)} onClick={() => void cancel(call)}>{t('AgentProfiles.cancelCall')}</button>}
       </footer>
       </article>

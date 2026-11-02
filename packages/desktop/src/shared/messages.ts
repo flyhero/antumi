@@ -318,6 +318,17 @@ export const MESSAGES = {
   "AgentProfiles.instructions": {"zh": "工作指令", "en": "Instructions"},
   "AgentProfiles.engine": {"zh": "外部智能体", "en": "External agent"},
   "AgentProfiles.allowEdits": {"zh": "允许修改文件", "en": "Allow file edits"},
+  "AgentProfiles.inWorktree": {"zh": "在独立 worktree 里做", "en": "Work in its own worktree"},
+  "AgentProfiles.inWorktreeHint": {"zh": "从当前提交拉出分支，和主会话互不阻塞；做完要你或主会话合并。项目须已提交所有改动。", "en": "Branches from the current commit and runs beside this conversation; you or the main agent merge it afterwards. The project must have no uncommitted changes."},
+  "AgentProfiles.worktreeBadge": {"zh": "独立 worktree", "en": "Own worktree"},
+  "AgentProfiles.worktreeLayingOut": {"zh": "正在建 worktree", "en": "Laying out the worktree"},
+  "AgentProfiles.worktreeSetup": {"zh": "正在运行项目的 setup", "en": "Running the project's setup"},
+  "AgentProfiles.worktreeOutcome": {"zh": "{commits} 个提交 · {changes} 个未提交", "en": "{commits} commits · {changes} uncommitted"},
+  "AgentProfiles.worktreeOnOtherBranch": {"zh": "成员切到了分支 {branch}", "en": "The member switched to branch {branch}"},
+  "AgentProfiles.worktreeUnread": {"zh": "读不到 worktree 的状态", "en": "Could not read the worktree"},
+  "AgentProfiles.worktreeRemoved": {"zh": "worktree 已清理，分支还在", "en": "Worktree cleaned; the branch remains"},
+  "AgentProfiles.copyBranch": {"zh": "复制分支名", "en": "Copy branch name"},
+  "AgentProfiles.branchCopied": {"zh": "已复制分支名", "en": "Branch name copied"},
   "AgentProfiles.callable": {"zh": "允许调用的智能体", "en": "Agents it can call"},
   "AgentProfiles.callableHint": {"zh": "选中的智能体可在主会话中接受委派；子会话完成工作后返回结果。", "en": "Selected agents can receive delegated work from the main conversation and return results."},
   "AgentProfiles.skills": {"zh": "技能", "en": "Skills"},
@@ -10057,6 +10068,22 @@ export const MESSAGES = {
     "zh": "没有分支",
     "en": "No branch"
   },
+  "WorktreeManager.delegation": {
+    "zh": "委派",
+    "en": "Delegation"
+  },
+  "WorktreeManager.delegationOf": {
+    "zh": "{title} 的委派",
+    "en": "Delegated from {title}"
+  },
+  "WorktreeManager.delegationParentDeleted": {
+    "zh": "委派的主会话已删除",
+    "en": "The delegating conversation was deleted"
+  },
+  "WorktreeManager.openParentConversation": {
+    "zh": "打开主会话",
+    "en": "Open main conversation"
+  },
   "WorktreeManager.openConversation": {
     "zh": "打开会话",
     "en": "Open conversation"
@@ -10560,6 +10587,22 @@ export const MESSAGES = {
   "labels.hasUncommittedChanges": {
     "zh": "有没提交的改动",
     "en": "Has uncommitted changes"
+  },
+  "labels.delegationOpen": {
+    "zh": "委派还在进行，结束后才能清理",
+    "en": "The delegation is still under way; clean it once it ends"
+  },
+  "labels.delegationDirty": {
+    "zh": "项目有未提交的改动，先提交再派 worktree 委派",
+    "en": "The project has uncommitted changes; commit before delegating in a worktree"
+  },
+  "labels.delegationWorktreeUnavailable": {
+    "zh": "这个 core 不支持 worktree 委派",
+    "en": "This core cannot lay out worktrees for delegations"
+  },
+  "labels.worktreeCallNotResumable": {
+    "zh": "worktree 委派不支持续跑，请重新委派",
+    "en": "A worktree delegation cannot be taken up again; delegate anew"
   },
   "labels.hasCommitsNotReachableFromAnotherReference": {
     "zh": "有只在它里面的提交",

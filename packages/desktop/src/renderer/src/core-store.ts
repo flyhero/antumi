@@ -1420,11 +1420,11 @@ export async function perform<T>(action: (rpc: RpcConnection) => Promise<T>): Pr
   }
 }
 
-const DECLINED = Symbol('declined')
+export const DECLINED = Symbol('declined')
 
 // A start or submit refused until the user allows a project's setup and check is asked about and
-// tried again; each project is asked at most once. Declining ends it without an error.
-async function withProjectTrust<T>(rpc: RpcConnection, action: (rpc: RpcConnection) => Promise<T>): Promise<T> {
+// tried again; each project is asked at most once. Declining ends it without an error (DECLINED).
+export async function withProjectTrust<T>(rpc: RpcConnection, action: (rpc: RpcConnection) => Promise<T>): Promise<T> {
   const asked = new Set<string>()
   for (;;) {
     try {

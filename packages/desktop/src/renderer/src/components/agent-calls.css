@@ -5,6 +5,10 @@
 .delegation-field { display: flex; flex-direction: column; gap: 8px; font-size: 12px; }
 .delegation-field textarea { resize: vertical; min-height: 64px; max-height: 200px; font: inherit; line-height: 1.6; }
 .delegation-check { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.delegation-check-group { display: flex; flex-direction: column; gap: 4px; }
+.delegation-check-hint { margin: 0 0 0 24px; font-size: 12px; line-height: 1.6; }
+.delegation-worktree { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0 0; color: var(--text-muted); overflow-wrap: anywhere; }
+.delegation-worktree[data-warn] { color: var(--warning); }
 .delegation-dialog .modal-footer { gap: 8px; justify-content: flex-end; }
 .delegation-history { margin-right: auto; font-size: 12px; }
 .delegation-panel { padding: 0 16px 24px; }

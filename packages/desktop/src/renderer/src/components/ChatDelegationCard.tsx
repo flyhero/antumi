@@ -4,6 +4,7 @@ import { openAgentCall, showAgentCalls } from '../agent-calls'
 import { useJustFinished } from '../chat-motion'
 import { workedFor } from '../chat-tools'
 import { perform, useCore } from '../core-store'
+import { worktreeStatusText } from '../delegation-worktree'
 import { t } from '../i18n'
 import { ChatCopyRegion } from './ChatCopyRegion'
 import { useChatSurface } from './chat-surface'
@@ -47,7 +48,8 @@ export function ChatDelegationCard({ call, fresh = false }: { call: AgentCall; f
   const status = t(`AgentProfiles.${call.state}`)
   const inspect = () => { pane?.focus(); showAgentCalls(surface.inspector, call.id) }
   // Whether it can go on where it stopped; core has the last word, with what changed since.
-  const resumable = useCore((state) => state.rpc?.features.includes('agent-call-resume') ?? false) && checkResumeAgentCall(call, { readOnly: false }) === null
+  const resumable = useCore((state) => state.rpc?.features.includes('agent-call-resume') ?? false) && call.workspace !== 'worktree' && checkResumeAgentCall(call, { readOnly: false }) === null
+  const worktree = worktreeStatusText(call)
   const cancel = async () => {
     if (cancelling) return
     setCancelling(true)
@@ -59,6 +61,7 @@ export function ChatDelegationCard({ call, fresh = false }: { call: AgentCall; f
       <header className="chat-delegation-header"><span className="chat-delegation-heading"><ForkIcon />{t('AgentProfiles.delegatedAgent')}</span><span className="chat-delegation-state" role="status">{active ? <Spinner label={status} /> : call.state === 'completed' ? <CheckIcon /> : call.state === 'awaiting' || call.state === 'failed' ? <WarningIcon /> : call.state === 'cancelled' ? <CloseIcon /> : <ClockIcon />}<span>{status}</span></span></header>
       <div className="chat-delegation-recipient"><span className="chat-delegation-avatar" data-line-end=""><AgentIcon agent={call.profile.agent} /></span><strong>{call.profile.name}</strong></div>
       <p className="chat-delegation-goal" title={call.instruction}>{call.instruction.split('\n').filter((line) => line.trim()).slice(0, 2).join(' · ')}</p>
+      {worktree && <p className="chat-delegation-worktree" data-warn={worktree.warn || undefined}><span className="chat-delegation-badge">{t('AgentProfiles.worktreeBadge')}</span>{call.worktree && <span className="mono" title={call.worktree.dir}>{call.worktree.branch}</span>}{worktree.text && <span>{worktree.text}</span>}</p>}
       {call.error ? <p className="chat-delegation-error">{call.error}</p> : call.result ? <div className="chat-delegation-preview">{call.state === 'completed' ? <CheckIcon /> : <ChatIcon />}<p>{call.result}</p></div> : <p className="chat-delegation-hint">{call.state === 'queued' ? t(QUEUED_HINT[call.waiting ?? 'unknown']) : call.state === 'awaiting' ? t('AgentProfiles.needsAttention') : call.state === 'starting' ? t('AgentProfiles.startingHint') : open ? t('AgentProfiles.workingHint') : t('AgentProfiles.noResult')}</p>}
       <footer className="chat-delegation-footer"><span className="chat-delegation-meta"><DelegationTime call={call} />{call.attempt > 0 && <span className="chat-delegation-attempt">{t('AgentCallResume.attempt', { count: call.attempt + 1 })}</span>}</span><div className="chat-delegation-actions"><button type="button" className="link-button chat-delegation-details-link" aria-pressed={focused} onClick={inspect}>{t('AgentProfiles.details')}</button>{call.state === 'awaiting' && <button type="button" className="link-button" onClick={() => void openAgentCall(call)}>{t('AgentProfiles.handleRequest')}</button>}{resumable && <AgentCallResume call={call} inspector={surface.inspector} />}{open && <button type="button" className="link-button" disabled={cancelling} onClick={() => void cancel()}>{t('AgentProfiles.cancelCall')}</button>}</div></footer>
     </article>

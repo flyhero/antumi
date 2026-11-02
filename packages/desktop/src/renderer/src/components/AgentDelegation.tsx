@@ -3,7 +3,7 @@ import type { ChatItem, Conversation, DelegationTarget } from '@antumi/protocol'
 import { showAgentCalls, useAgentCalls } from '../agent-calls'
 import { useOccludesBrowser } from '../browser-occlusion'
 import { useDisclosure } from '../chat-disclosure'
-import { useCore } from '../core-store'
+import { DECLINED, useCore, withProjectTrust } from '../core-store'
 import { agentResultCallIds, deliveredResults } from '../delegation-delivery'
 import { usePreferences } from '../preferences'
 import { t } from '../i18n'
@@ -31,6 +31,7 @@ export function DelegationDialog({ conversation, onClose, onHistory, initial }: 
   const display = usePreferences((state) => state.usageDisplay)
   const now = useNow(60_000)
   const [develop, setDevelop] = useState(false)
+  const [inWorktree, setInWorktree] = useState(false)
   const [loading, setLoading] = useState(true)
   const [profileId, setProfileId] = useState<string | null>(initial?.target ?? null)
   const [goal, setGoal] = useState(initial?.goal ?? '')
@@ -60,17 +61,26 @@ export function DelegationDialog({ conversation, onClose, onHistory, initial }: 
   const valueOf = (item: DelegationTarget) => item.profileId ?? `agent:${item.agent}`
   const selected = offered.find((item) => valueOf(item) === profileId && item.quota.state !== 'exhausted')
   const direct = selected?.profileId === null ? selected : null
-  const edits = direct ? develop || !direct.readOnly : false
+  const edits = direct ? develop || !direct.readOnly : selected?.capability === 'develop'
+  // A member that edits may work in a worktree of its own, where core lays them out and the
+  // conversation has one writable project to branch from. Core checks the rest (committed, git).
+  const worktreeOffered = edits && (rpc?.features.includes('delegation-worktree') ?? false)
+    && conversation.projectPaths.filter((project) => !(conversation.referencePaths ?? []).includes(project)).length === 1
   const dispatch = async () => {
     if (!rpc || busy || !selected || !goal.trim() || conversation.archivedAt != null) return
     setBusy(true)
     setError(null)
     try {
       const target = selected.profileId ? { profileId: selected.profileId } : { agent: selected.agent, capability: edits ? 'develop' as const : 'readOnly' as const }
-      await rpc.call('agentCalls.dispatch', { id: conversation.id, ...target, instruction: [goal.trim(), context.trim()].filter(Boolean).join('\n\n'), ref: requestRef.current })
+      const workspace = worktreeOffered && inWorktree ? { workspace: 'worktree' as const } : {}
+      // The project's setup, asked about and tried again, as a start in a worktree is.
+      await withProjectTrust(rpc, (connection) => connection.call('agentCalls.dispatch', { id: conversation.id, ...target, ...workspace, instruction: [goal.trim(), context.trim()].filter(Boolean).join('\n\n'), ref: requestRef.current }))
       onHistory()
       onClose()
-    } catch (reason) { setError(String(reason)); setBusy(false) }
+    } catch (reason) {
+      if (reason !== DECLINED) setError(reason instanceof Error ? reason.message : String(reason))
+      setBusy(false)
+    }
   }
   return <dialog ref={dialog} className="modal delegation-dialog" aria-labelledby={titleId} onCancel={(event) => { event.preventDefault(); if (!busy) onClose() }}>
     <form className="modal-body" onSubmit={(event) => { event.preventDefault(); void dispatch() }}>
@@ -81,6 +91,7 @@ export function DelegationDialog({ conversation, onClose, onHistory, initial }: 
         onChange={(value) => { setProfileId(value); requestRef.current = crypto.randomUUID() }} /></div>
       {!loading && !offered.length && <p className="muted">{t('AgentProfiles.noAvailable')}</p>}
       {direct && <label className="delegation-check"><input type="checkbox" checked={edits} disabled={busy || !direct.readOnly} onChange={(event) => { setDevelop(event.target.checked); requestRef.current = crypto.randomUUID() }} />{t('AgentProfiles.allowEdits')}</label>}
+      {worktreeOffered && <div className="delegation-check-group"><label className="delegation-check"><input type="checkbox" checked={inWorktree} disabled={busy} onChange={(event) => { setInWorktree(event.target.checked); requestRef.current = crypto.randomUUID() }} />{t('AgentProfiles.inWorktree')}</label><p className="delegation-check-hint muted">{t('AgentProfiles.inWorktreeHint')}</p></div>}
       <label className="delegation-field">{t('AgentProfiles.goal')}<textarea className="input" autoFocus required rows={3} maxLength={10000} placeholder={t('AgentProfiles.goalPlaceholder')} value={goal} disabled={busy} onChange={(event) => { setGoal(event.target.value); requestRef.current = crypto.randomUUID() }} /></label>
       <label className="delegation-field">{t('AgentProfiles.context')}<textarea className="input" rows={2} maxLength={9998} placeholder={t('AgentProfiles.contextPlaceholder')} value={context} disabled={busy} onChange={(event) => { setContext(event.target.value); requestRef.current = crypto.randomUUID() }} /></label>
       {error && <p className="modal-error" role="alert">{error}</p>}

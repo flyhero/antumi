@@ -24,8 +24,9 @@ export function worktreeRows(
 }
 
 function groupOf(row: WorktreeRow): WorktreeGroupId {
-  if (row.blocker === 'conversation-open') return 'active'
-  if (!row.task) return 'orphaned'
+  if (row.blocker === 'conversation-open' || row.blocker === 'delegation-open') return 'active'
+  // A delegation's worktree is its call's, cleanable once that ended, whether or not the caller is still there.
+  if (!row.task && !row.worktree.agentCall) return 'orphaned'
   if (row.blocker === 'task-active') return 'active'
   return row.blocker ? 'attention' : 'cleanable'
 }

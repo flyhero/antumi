@@ -59,17 +59,21 @@ function RowState({ row, cleaning, failure }: { row: WorktreeRow; cleaning: RowC
 function Row({ row, now, checked, onToggle, cleaning, failure, locked }: { row: WorktreeRow; now: number; checked: boolean | null; onToggle: () => void; cleaning?: RowCleaning; failure?: string; locked: boolean }) {
   const { worktree, task, conversation } = row
   const project = projectName(worktree.repo ?? worktree.path)
+  // A delegated member's worktree goes by the conversation that delegated, which may be gone.
+  const parent = useCore((s) => (worktree.agentCall ? s.conversations[worktree.agentCall.parentId] : undefined) ?? null)
+  const title = task?.title ?? (worktree.agentCall ? (parent ? t('WorktreeManager.delegationOf', { title: parent.title }) : t('WorktreeManager.delegationParentDeleted'))
+    : conversation?.title ?? (worktree.conversationId ? t('BrowserPanel.conversation') : t('WorktreeManager.taskOrConversationDeleted')))
   return (
     <li className="worktree-row" data-cleaning={cleaning}>
       <span className="worktree-check">
         {checked !== null && (
-          <input type="checkbox" checked={checked} disabled={locked} onChange={onToggle} aria-label={t('WorktreeManager.clean_2235', { value1: task?.title ?? conversation?.title ?? worktree.path })} />
+          <input type="checkbox" checked={checked} disabled={locked} onChange={onToggle} aria-label={t('WorktreeManager.clean_2235', { value1: title })} />
         )}
       </span>
       <span className="worktree-main">
-        <span className="worktree-title" title={worktree.path}>{task?.title ?? conversation?.title ?? (worktree.conversationId ? t('BrowserPanel.conversation') : t('WorktreeManager.taskOrConversationDeleted'))}</span>
+        <span className="worktree-title" title={worktree.path}>{title}</span>
         <span className="worktree-meta">
-          {[task && STATUS_LABEL[task.status], worktree.conversationId && t('BrowserPanel.conversation'), timeAgo(worktree.touchedAt, now), project, worktree.planning && t('WorktreeManager.planningCheckout')].filter(Boolean).join(' · ')}
+          {[task && STATUS_LABEL[task.status], worktree.agentCall ? t('WorktreeManager.delegation') : worktree.conversationId && t('BrowserPanel.conversation'), timeAgo(worktree.touchedAt, now), project, worktree.planning && t('WorktreeManager.planningCheckout')].filter(Boolean).join(' · ')}
         </span>
       </span>
       <span className="worktree-branch mono" title={worktree.path}>{worktree.branch ?? t('WorktreeManager.noBranch')}</span>
@@ -79,7 +83,10 @@ function Row({ row, now, checked, onToggle, cleaning, failure, locked }: { row: 
         {task && (
           <button type="button" className="button ghost worktree-open" onClick={() => selectTask(task.id)}>{t('SourceInboxView.openTask')}</button>
         )}
-        {worktree.conversationId && (
+        {worktree.agentCall && parent && (
+          <button type="button" className="button ghost worktree-open" onClick={() => selectConversation(parent.id)}>{t('WorktreeManager.openParentConversation')}</button>
+        )}
+        {worktree.conversationId && !worktree.agentCall && (
           <button type="button" className="button ghost worktree-open" onClick={() => selectConversation(worktree.conversationId ?? null)}>{t('WorktreeManager.openConversation')}</button>
         )}
         <button type="button" className="tool-button" aria-label={t('WorktreeManager.openInTerminal')} data-tooltip={t('WorktreeManager.openInTerminal')} onClick={() => void openTerminal(worktree.path)}>

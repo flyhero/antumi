@@ -27,8 +27,12 @@ export type WorktreeTasks = {
 // a call's worktree tells the call, which then knows not to look for it.
 export type WorktreeConversations = {
   list(): Pick<Conversation, 'id' | 'projectPaths' | 'chat' | 'agentCallId' | 'parentConversationId'>[]
-  callOpen?(callId: string): boolean
-  releaseCall?(callId: string): Promise<void>
+  // Each delegation's worktree as the call records it: the member's conversation may not exist yet.
+  callWorktrees?(): { dir: string; id: string; parentId: string; conversationId: string; open: boolean }[]
+  // Refuses, in the call's own order, if it was taken up since the list was read.
+  confirmCallClosed?(callId: string): Promise<void>
+  // Told once the folder is actually gone, never before.
+  worktreeRemoved?(callId: string): Promise<void>
 }
 
 type Folder = { dir: string; shortId: string; planning: boolean }
@@ -151,7 +155,7 @@ export class WorktreeService {
       }
       try {
         // The call is asked once more, in its own order, in case it was taken up since the list was read.
-        if (worktree.agentCall && this.conversations.releaseCall) await this.conversations.releaseCall(worktree.agentCall.id)
+        if (worktree.agentCall && this.conversations.confirmCallClosed) await this.conversations.confirmCallClosed(worktree.agentCall.id)
         results.push(this.gitRemoval ? await this.gitRemoval([worktree.path], () => this.remove(worktree, task)) : await this.remove(worktree, task))
       } catch (error) {
         results.push({ path: worktree.path, removed: false, reason: error instanceof Rejection ? error.reason : 'worktree-failed' })
@@ -171,6 +175,7 @@ export class WorktreeService {
       return { path: worktree.path, removed: false, reason }
     }
     if (task) this.tasks.forgetWorktree(task.id, worktree.path)
+    if (worktree.agentCall) await this.conversations.worktreeRemoved?.(worktree.agentCall.id).catch(() => {})
     this.sizes.delete(worktree.path)
     // Folders Antumi made for it go when nothing else is left in them.
     for (let dir = path.dirname(worktree.path); dir.startsWith(this.root + path.sep); dir = path.dirname(dir)) {
@@ -183,18 +188,19 @@ export class WorktreeService {
     const tasks = this.tasks.list()
     const listing = new Map(tasks.flatMap((task) => task.repos.flatMap((repo) => (repo.worktreePath ? [[repo.worktreePath, task.id] as const] : []))))
     const byShortId = new Map(tasks.map((task) => [shortTaskId(task.id), task.id]))
-    // Conversations keep their projects by real path.
+    // Conversations keep their projects by real path, and so do delegations their worktrees.
     const conversations = this.conversations.list()
+    const calls = this.conversations.callWorktrees?.() ?? []
     const [found, busy] = await Promise.all([folders(this.root), this.tasks.inUse()])
     return Promise.all(found.map(async (folder) => {
       const taskId = listing.get(folder.dir) ?? byShortId.get(folder.shortId) ?? null
       const real = taskId ? folder.dir : await realpath(folder.dir).catch(() => folder.dir)
-      const conversation = taskId ? undefined : conversations.find((each) => each.projectPaths.includes(real))
-      const agentCall = conversation?.agentCallId && conversation.parentConversationId
-        ? { id: conversation.agentCallId, parentId: conversation.parentConversationId, open: this.conversations.callOpen?.(conversation.agentCallId) ?? false } : null
+      const call = taskId ? undefined : calls.find((each) => each.dir === real)
+      const conversation = taskId ? undefined : conversations.find((each) => each.projectPaths.includes(real)) ?? (call ? conversations.find((each) => each.id === call.conversationId) : undefined)
+      const agentCall = call ? { id: call.id, parentId: call.parentId, open: call.open } : null
       // A member's worktree is in use for as long as its call is open: its setup may be running there.
       const inUse = taskId !== null ? busy.has(taskId) : agentCall ? agentCall.open : conversation?.chat?.turn === 'running'
-      return { ...(await this.inspect(folder, taskId)), conversationId: conversation?.id ?? null, agentCall, inUse }
+      return { ...(await this.inspect(folder, taskId)), conversationId: conversation?.id ?? call?.conversationId ?? null, agentCall, inUse }
     }))
   }
 

@@ -64,7 +64,9 @@ export function DelegationDialog({ conversation, onClose, onHistory, initial }: 
   const edits = direct ? develop || !direct.readOnly : selected?.capability === 'develop'
   // A member that edits may work in a worktree of its own, where core lays them out and the
   // conversation has one writable project to branch from. Core checks the rest (committed, git).
-  const worktreeOffered = edits && (rpc?.features.includes('delegation-worktree') ?? false)
+  // Not for a caller that may only read now: its members read too, and core would refuse.
+  const callerReads = Boolean(conversation.workspaceReadOnly || conversation.planOnly) || ['plan', 'readOnly'].includes(conversation.chatOptions?.permissionMode ?? '')
+  const worktreeOffered = edits && !callerReads && (rpc?.features.includes('delegation-worktree') ?? false)
     && conversation.projectPaths.filter((project) => !(conversation.referencePaths ?? []).includes(project)).length === 1
   const dispatch = async () => {
     if (!rpc || busy || !selected || !goal.trim() || conversation.archivedAt != null) return

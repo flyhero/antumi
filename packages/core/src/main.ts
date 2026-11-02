@@ -423,8 +423,9 @@ const chatCommands = new ChatCommandStore(paths.database, (commands) => server?.
 // Delegated members' conversations are listed too: their worktrees are theirs while the call is open.
 const worktrees = new WorktreeService(paths.worktrees, service, () => server?.broadcast('worktrees.changed', {}), {
   list: () => conversations.list(false, false, true),
-  callOpen: (callId) => profiles.callOpen(callId),
-  releaseCall: (callId) => profiles.releaseWorktree(callId)
+  callWorktrees: () => profiles.worktreeCalls(),
+  confirmCallClosed: (callId) => profiles.confirmCallClosed(callId),
+  worktreeRemoved: (callId) => profiles.worktreeRemoved(callId)
 })
 awake = new ComputerAwakeService(daemon, new AwakeConfigStore(paths.awakeConfig), (status) =>
   server?.broadcast('system.awakeChanged', { status })

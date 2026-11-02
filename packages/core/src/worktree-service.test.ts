@@ -170,18 +170,29 @@ describe('WorktreeService', () => {
     expect(existsSync(held)).toBe(true)
   })
 
-  it('keeps a delegated member\'s worktree while its call is open, then lets it go and tells the call', async () => {
+  it('keeps a delegated member\'s worktree while its call is open, then lets it go and tells the call only once it is gone', async () => {
     const member = worktree('m')
     let open = true
-    const released: string[] = []
-    const conversations = [{ id: id('m'), projectPaths: [realpathSync(member)], chat: { turn: 'idle' as const }, agentCallId: 'call-m', parentConversationId: id('p') }]
-    const worktrees = new WorktreeService(root, hooks, () => {}, { list: () => conversations, callOpen: () => open, releaseCall: async (callId) => { released.push(callId) } })
+    const confirmed: string[] = []
+    const removed: string[] = []
+    // The call records its worktree before the member's conversation exists: attribution needs no conversation.
+    const source = { list: () => [], callWorktrees: () => [{ dir: realpathSync(member), id: 'call-m', parentId: id('p'), conversationId: id('m'), open }],
+      confirmCallClosed: async (callId: string) => { confirmed.push(callId) }, worktreeRemoved: async (callId: string) => { removed.push(callId) } }
+    const worktrees = new WorktreeService(root, hooks, () => {}, source)
     expect((await worktrees.list()).find((each) => each.path === member)).toMatchObject({ conversationId: id('m'), agentCall: { id: 'call-m', parentId: id('p'), open: true }, inUse: true })
     expect(await worktrees.clean([member])).toEqual([{ path: member, removed: false, reason: 'delegation-open' }])
     open = false
     expect((await worktrees.list()).find((each) => each.path === member)).toMatchObject({ agentCall: { open: false }, inUse: false })
+    // A removal that fails leaves the call believing its worktree is still there, as it is.
+    const { Rejection } = await import('./rejection')
+    worktrees.setGitRemoval(async () => { throw new Rejection('git-busy') })
+    expect(await worktrees.clean([member])).toEqual([{ path: member, removed: false, reason: 'git-busy' }])
+    expect(confirmed).toEqual(['call-m'])
+    expect(removed).toEqual([])
+    expect(existsSync(member)).toBe(true)
+    worktrees.setGitRemoval((_dirs, run) => run())
     expect(await worktrees.clean([member])).toEqual([{ path: member, removed: true, reason: null }])
-    expect(released).toEqual(['call-m'])
+    expect(removed).toEqual(['call-m'])
     expect(existsSync(member)).toBe(false)
     expect(git(app, 'branch', '--list', 'antumi/m')).toContain('antumi/m')
   })

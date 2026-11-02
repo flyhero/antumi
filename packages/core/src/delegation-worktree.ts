@@ -10,12 +10,27 @@ import { gitTopLevel, prepareConversationWorktrees } from './workspace'
 // when the member is done. The caller's checkout has to be committed for the branch to start from
 // what the caller sees.
 
-const git = async (dir: string, args: readonly string[]): Promise<string> => (await execFileAsync('git', ['--no-optional-locks', '-C', dir, ...args])).stdout.trim()
+// Reads are bounded: the delegation chain waits on them, and a repository that hangs must not
+// hold every other call's start and end.
+const GIT_TIMEOUT_MS = 15_000
+const git = async (dir: string, args: readonly string[]): Promise<string> => (await execFileAsync('git', ['--no-optional-locks', '-C', dir, ...args], { timeout: GIT_TIMEOUT_MS })).stdout.trim()
 
-// Uncommitted entries, untracked files one by one; -z keeps a path from spanning lines.
+// Uncommitted entries, untracked files one by one; -z keeps a path from spanning lines. A rename
+// (type 2) carries its original path as a field of its own, which is not another entry.
+export function countStatusEntries(out: string): number {
+  const fields = out.split('\0')
+  let count = 0
+  for (let i = 0; i < fields.length; i++) {
+    const field = fields[i]
+    if (!field) continue
+    count++
+    if (field.startsWith('2 ')) i++
+  }
+  return count
+}
 async function uncommitted(dir: string): Promise<number> {
-  const out = (await execFileAsync('git', ['--no-optional-locks', '-C', dir, 'status', '--porcelain=v2', '-z', '--untracked-files=all'])).stdout
-  return out.split('\0').filter(Boolean).length
+  const out = (await execFileAsync('git', ['--no-optional-locks', '-C', dir, 'status', '--porcelain=v2', '-z', '--untracked-files=all'], { timeout: GIT_TIMEOUT_MS })).stdout
+  return countStatusEntries(out)
 }
 
 // The commit a member's branch would start from; refuses a checkout with anything uncommitted,
@@ -49,10 +64,14 @@ export type DelegationLayout = { source: string; topLevel: string; dir: string; 
 export async function layOutDelegationWorktree(conversationId: string, source: string, worktreesRoot: string): Promise<DelegationLayout> {
   const topLevel = await gitTopLevel(source)
   if (!topLevel) throw new Rejection('worktree-not-git', `not a git repo: ${source}`)
-  const base = await committedHead(source)
+  const head = await committedHead(source)
   const [made] = await prepareConversationWorktrees(conversationId, [source], worktreesRoot)
   if (!made) throw new Rejection('worktree-failed', 'no worktree was laid out')
-  return { source, topLevel, dir: await realpath(made.dir), branch: `antumi/${shortTaskId(conversationId)}`, base, created: made.created }
+  const dir = await realpath(made.dir)
+  // A worktree found rather than made (a start tried again) started from where its branch and
+  // the source last met, not from where the source is now.
+  const base = made.created ? head : await git(dir, ['merge-base', 'HEAD', head]).catch(() => head)
+  return { source, topLevel, dir, branch: `antumi/${shortTaskId(conversationId)}`, base, created: made.created }
 }
 
 // What the member left: read from git rather than taken from its report. A field git could not
@@ -74,13 +93,17 @@ export async function readWorktreeOutcome(dir: string, base: string): Promise<Ag
 // The outcome as the caller is told of it, after the member's own result.
 export function describeWorktreeOutcome(branch: string, outcome: AgentCallWorktreeOutcome): string {
   const parts = [`分支 \`${branch}\``]
-  if (outcome.commits !== null) parts.push(`${outcome.commits} 个提交`)
-  if (outcome.changes !== null) parts.push(`${outcome.changes} 个未提交文件`)
+  const nothing = outcome.commits === 0 && outcome.changes === 0
+  if (nothing) parts.push('没有新的提交，也没有未提交的文件')
+  else {
+    if (outcome.commits !== null) parts.push(`${outcome.commits} 个提交`)
+    if (outcome.changes !== null) parts.push(`${outcome.changes} 个未提交文件`)
+  }
   const notes: string[] = []
   if (outcome.changes) notes.push(`有 ${outcome.changes} 个未提交文件留在 worktree 里，合并前不要清理它`)
   if (outcome.branch !== null && outcome.branch !== branch) notes.push(`成员当前在分支 \`${outcome.branch}\`，不是 \`${branch}\``)
   if (outcome.error) notes.push(`读取 worktree 状态时出错：${outcome.error}`)
-  return `（worktree 委派：${parts.join('，')}。${notes.length ? `${notes.join('；')}。` : ''}合并后请重新运行检查。）`
+  return `（worktree 委派：${parts.join('，')}。${notes.length ? `${notes.join('；')}。` : ''}${nothing ? '没有要合并的。' : '合并后请重新运行检查。'}）`
 }
 
 export const worktreeMemberNote = (layout: Pick<DelegationLayout, 'dir' | 'branch' | 'base'>, setupFailures: readonly string[]): string =>

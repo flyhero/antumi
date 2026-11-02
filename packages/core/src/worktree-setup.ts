@@ -39,17 +39,21 @@ type Runner = Pick<TerminalService, 'run' | 'waitForExit' | 'read' | 'kill'>
 // A project's setup or check in a tab of the conversation's, so the user can watch or stop it and
 // its agent can read it; resolves once it ends. A run that passed closes its tab: nothing in it
 // needs a look, while a failed one stays for the user and the agent it is reported to.
+// signal: a run called off before its command starts runs nothing; one called off as its tab is
+// made is killed, since a stop by conversation cannot see a tab not yet registered.
 export async function runProjectCommand(
   terminals: Runner,
   conversationId: string,
   setup: ProjectSetup,
   worktree: string,
-  purpose: 'setup' | 'check'
+  purpose: 'setup' | 'check',
+  signal?: AbortSignal
 ): Promise<ProjectRun | null> {
   const command = setup.config[purpose]
-  if (!command) return null
+  if (!command || signal?.aborted) return null
   const env = { ANTUMI_ROOT_PATH: setup.topLevel, ANTUMI_WORKTREE_PATH: worktree }
   const terminal = await terminals.run(conversationId, worktree, command, { title: `${purpose} · ${path.basename(worktree)}`, env, purpose })
+  if (signal?.aborted) await terminals.kill(terminal.id).catch(() => {})
   const exitCode = await terminals.waitForExit(terminal.id)
   const output = await terminals.read(conversationId, terminal.id, FAILURE_TAIL).catch(() => null)
   if (exitCode === 0) await terminals.kill(terminal.id).catch(() => {})
@@ -84,7 +88,7 @@ export class WorktreeSetup {
   // Copies the listed files into each new worktree, then runs setup in them all at once. The
   // setups are the ones the user trusted before the start, not the file as it may stand now.
   // Returns each failure as the agent is told of it.
-  async setUp(conversationId: string, worktrees: readonly NewWorktree[], setups: readonly ProjectSetup[]): Promise<string[]> {
+  async setUp(conversationId: string, worktrees: readonly NewWorktree[], setups: readonly ProjectSetup[], signal?: AbortSignal): Promise<string[]> {
     const failures = await Promise.all(worktrees.map(async ({ topLevel, dir }) => {
       const setup = setups.find((each) => each.topLevel === topLevel)
       if (!setup) return null
@@ -93,8 +97,9 @@ export class WorktreeSetup {
       } catch (error) {
         return `把项目列出的文件复制到 ${dir} 时失败：${error instanceof Error ? error.message : String(error)}`
       }
+      if (signal?.aborted) return null
       try {
-        const run = await runProjectCommand(this.terminals, conversationId, setup, dir, 'setup')
+        const run = await runProjectCommand(this.terminals, conversationId, setup, dir, 'setup', signal)
         return runFailed(run) && setup.config.setup ? describeFailedRun(setup.config.setup, dir, run) : null
       } catch (error) {
         return `在 ${dir} 启动 setup 失败：${error instanceof Error ? error.message : String(error)}`

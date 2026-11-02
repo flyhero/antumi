@@ -7,6 +7,7 @@ import { AgentProfileStore } from './agent-profile-store'
 import { committedHead, describeWorktreeOutcome, isGitCheckout, layOutDelegationWorktree, readWorktreeOutcome, worktreeMemberNote } from './delegation-worktree'
 import type { TrustedSetup } from './project-config'
 import { Rejection } from './rejection'
+import { gitTopLevel } from './workspace'
 import type { WorktreeSetup } from './worktree-setup'
 
 type Chats = Pick<ConversationService, 'get' | 'listAll' | 'create' | 'continue' | 'resumeDelegation' | 'send' | 'stop' | 'interrupt' | 'chatPage' | 'messages' | 'capacityAvailable' | 'validateStartOptions' | 'turnOver' | 'agentIdle' | 'allowsBypass'>
@@ -79,7 +80,8 @@ export class AgentProfileService {
   private workspaces: DelegationWorkspaces | null = null
   private gitLock: GitLock = (_dirs, run) => run()
   // Calls whose worktree's setup runs now, outside the chain: a long install must not hold it.
-  private readonly settingUp = new Set<string>()
+  // Cancelling the call calls the setup off through its controller.
+  private readonly settingUp = new Map<string, AbortController>()
   constructor(private readonly store: AgentProfileStore, private readonly chats: Chats,
     private readonly events: { profile: (profile: AgentProfile) => void; call: (call: AgentCall) => void },
     private readonly stopTerminals: (id: string) => Promise<void> = async () => {},
@@ -126,11 +128,22 @@ export class AgentProfileService {
   callOpen(callId: string): boolean {
     try { return agentCallOpen(this.store.call(callId)) } catch { return false }
   }
+  // Every call's worktree still on disk as far as it knows, for the cleanup page to attribute by
+  // folder: a member's conversation may not exist yet, or may be gone.
+  worktreeCalls(): { dir: string; id: string; parentId: string; conversationId: string; open: boolean }[] {
+    return this.store.calls().flatMap((call) => call.worktree && !call.worktree.removed
+      ? [{ dir: call.worktree.dir, id: call.id, parentId: call.parentId, conversationId: call.conversationId, open: agentCallOpen(call) }] : [])
+  }
+  // Asked in the call's own order right before its worktree goes, in case it was taken up since.
+  async confirmCallClosed(callId: string): Promise<void> {
+    await this.serially(async () => {
+      if (agentCallOpen(this.store.call(callId))) throw new Rejection('delegation-open', '委派还在进行')
+    })
+  }
   // The user cleaned the call's worktree away; noted so nothing goes looking for it.
-  async releaseWorktree(callId: string): Promise<void> {
+  async worktreeRemoved(callId: string): Promise<void> {
     await this.serially(async () => {
       const call = this.store.call(callId)
-      if (agentCallOpen(call)) throw new Rejection('delegation-open', '委派还在进行')
       if (call.worktree) this.patch(call.id, { worktree: { ...call.worktree, removed: true } })
     })
   }
@@ -327,6 +340,8 @@ export class AgentProfileService {
     return this.patch(id, patch)
   }
   private async stopChild(call: AgentCall): Promise<void> {
+    // A setup still copying or about to run its command runs nothing more.
+    this.settingUp.get(call.id)?.abort()
     const conversation = this.lookup(call.conversationId)
     if (!conversation) return
     if (this.working(conversation)) await this.chats.interrupt(conversation.id)
@@ -435,8 +450,8 @@ export class AgentProfileService {
       if (call.workspace === 'worktree') {
         if (!call.worktree) { await this.layOut(call, current); continue }
         if (call.worktree.stage !== 'ready') {
-          // Setup interrupted by a restart: nothing runs it again on a worktree already laid out.
-          if (!this.settingUp.has(call.id)) this.patch(call.id, { worktree: { ...call.worktree, stage: 'ready' } })
+          // A setup this process is not running was cut short by a restart: it runs again.
+          if (!this.settingUp.has(call.id)) await this.resumeSetup(call)
           continue
         }
         this.patch(call.id, { state: 'starting' })
@@ -509,18 +524,42 @@ export class AgentProfileService {
       return
     }
     if (stage !== 'setup' || !workspaces.setup) return
-    // Setup runs in the member's name, in a tab of its own, so cancelling the call stops it. Its
-    // failures go to the member in its first message, as a task's do; they end nothing.
-    this.settingUp.add(call.id)
-    void workspaces.setup.setUp(call.conversationId, [{ topLevel: layout.topLevel, dir: layout.dir }], setups)
+    this.runSetup(call.id, call.conversationId, workspaces.setup, { topLevel: layout.topLevel, dir: layout.dir }, setups)
+  }
+  // Setup runs in the member's name, in a tab of its own, so cancelling the call stops it. Its
+  // failures go to the member in its first message, as a task's do; they end nothing. A call that
+  // ended meanwhile still has its stage settled, so nothing shows it as setting up for good.
+  private runSetup(callId: string, conversationId: string, setup: NonNullable<DelegationWorkspaces['setup']>, worktree: { topLevel: string; dir: string }, setups: readonly TrustedSetup[]): void {
+    const controller = new AbortController()
+    this.settingUp.set(callId, controller)
+    void setup.setUp(conversationId, [worktree], setups, controller.signal)
       .then((failures) => failures, (error: unknown) => [`setup 没有运行：${failure(error)}`])
       .then((failures) => this.serially(async () => {
-        this.settingUp.delete(call.id)
-        const now = this.store.call(call.id)
-        if (!agentCallOpen(now) || !now.worktree) return
-        this.patch(call.id, { worktree: { ...now.worktree, stage: 'ready', setupFailures: failures } })
-        this.tick()
+        this.settingUp.delete(callId)
+        const now = this.store.call(callId)
+        if (!now.worktree) return
+        this.patch(callId, { worktree: { ...now.worktree, stage: 'ready', setupFailures: controller.signal.aborted ? now.worktree.setupFailures : failures } })
+        if (agentCallOpen(now)) this.tick()
       }))
+  }
+  // A setup found under way in the record but not in this process was cut short by a restart.
+  // What it left cannot be told, so it runs again from the start, after any tab of its own is
+  // stopped; a project that no longer runs setup, or whose config lost its trust, is settled too.
+  private async resumeSetup(call: AgentCall): Promise<void> {
+    const { worktree } = call
+    const setup = this.workspaces?.setup
+    if (!worktree) return
+    await this.stopTerminals(call.conversationId)
+    let setups: TrustedSetup[]
+    try {
+      setups = setup ? await setup.requireTrusted([worktree.source]) : []
+    } catch (error) {
+      await this.end(call.id, { state: 'failed', error: failure(error) })
+      return
+    }
+    const topLevel = await gitTopLevel(worktree.source)
+    if (!setup || !setups.length || !topLevel) { this.patch(call.id, { worktree: { ...worktree, stage: 'ready' } }); return }
+    this.runSetup(call.id, call.conversationId, setup, { topLevel, dir: worktree.dir }, setups)
   }
   // A member that edits is told what other agents left running in the same directories (a dev
   // server, a watcher): its edits may meet them, and they are not its to stop. One in a worktree

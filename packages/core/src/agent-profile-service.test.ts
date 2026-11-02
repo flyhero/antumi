@@ -435,11 +435,73 @@ describe('reusable agent roles and delegated work', () => {
       const call = await profiles.dispatch(parentId, developer.id, 'Edit', 'e', 'worktree')
       await waitFor(() => store.call(call.id).state === 'running')
       expect(profiles.callOpen(call.id)).toBe(true)
-      await expect(profiles.releaseWorktree(call.id)).rejects.toMatchObject({ reason: 'delegation-open' })
+      expect(profiles.worktreeCalls()).toEqual([{ dir: store.call(call.id).worktree!.dir, id: call.id, parentId, conversationId: call.conversationId, open: true }])
+      await expect(profiles.confirmCallClosed(call.id)).rejects.toMatchObject({ reason: 'delegation-open' })
       await profiles.cancel(parentId, call.id)
       expect(store.call(call.id)).toMatchObject({ state: 'cancelled', worktree: { outcome: { commits: 0, changes: 0 } } })
-      await profiles.releaseWorktree(call.id)
+      await profiles.confirmCallClosed(call.id)
+      expect(store.call(call.id).worktree!.removed).toBe(false)
+      await profiles.worktreeRemoved(call.id)
       expect(store.call(call.id).worktree!.removed).toBe(true)
+      expect(profiles.worktreeCalls()).toEqual([])
+    })
+
+    // A setup that waits to be let go, telling whether it was called off meanwhile.
+    const heldSetup = () => {
+      let release = () => {}
+      const held = new Promise<void>((resolve) => { release = resolve })
+      const seen: { aborted: boolean }[] = []
+      const setup = {
+        requireTrusted: async (paths: readonly string[]) => paths.map((repoPath) => ({ repoPath, topLevel: repoPath, config: { setup: 'pnpm install' }, hash: 'h' })),
+        setUp: async (_id: string, _worktrees: readonly { dir: string }[], _setups: readonly unknown[], signal?: AbortSignal) => {
+          await held
+          seen.push({ aborted: signal?.aborted ?? false })
+          return signal?.aborted ? [] : ['setup failed']
+        }
+      }
+      return { setup, release: () => release(), seen }
+    }
+
+    it('calls a setup off when the call is cancelled while it runs, and settles the stage so nothing shows it setting up', async () => {
+      const { setup, release, seen } = heldSetup()
+      profiles.setWorkspaces({ root: path.join(root, 'worktrees'), setup })
+      const call = await profiles.dispatch(parentId, developer.id, 'Edit', 'e', 'worktree')
+      await waitFor(() => store.call(call.id).worktree?.stage === 'setup')
+      await profiles.cancel(parentId, call.id)
+      expect(store.call(call.id)).toMatchObject({ state: 'cancelled', worktree: { stage: 'setup' } })
+      release()
+      await waitFor(() => store.call(call.id).worktree?.stage === 'ready')
+      expect(seen).toEqual([{ aborted: true }])
+      expect(store.call(call.id)).toMatchObject({ state: 'cancelled', worktree: { setupFailures: [] } })
+    })
+
+    it('runs a setup cut short by a restart again before the member starts', async () => {
+      const { setup } = heldSetup()
+      profiles.setWorkspaces({ root: path.join(root, 'worktrees'), setup })
+      const call = await profiles.dispatch(parentId, developer.id, 'Edit', 'e', 'worktree')
+      await waitFor(() => store.call(call.id).worktree?.stage === 'setup')
+      // A new process finds the record mid-setup, with no setup of its own running.
+      const ran: string[] = []
+      const fresh = new AgentProfileService(store, chats, { profile: () => {}, call: () => {} }, undefined, undefined, { ready: () => ready, disabled: () => disabled, usage: () => usage })
+      fresh.setWorkspaces({ root: path.join(root, 'worktrees'), setup: { ...setup, setUp: async (_id: string, worktrees: readonly { dir: string }[]) => { ran.push(...worktrees.map((each) => each.dir)); return ['second run failed'] } } })
+      await fresh.reconcile()
+      await waitFor(() => store.call(call.id).worktree?.stage === 'ready')
+      expect(ran).toEqual([store.call(call.id).worktree!.dir])
+      await waitFor(() => store.call(call.id).state === 'running')
+      expect(firstMessage(call.conversationId)).toContain('second run failed')
+    })
+
+    it('stays queued while the repository is busy, and fails if the caller turned dirty meanwhile', async () => {
+      let busy = true
+      profiles.setGitLock(async (_dirs, run) => { if (busy) throw new (await import('./rejection')).Rejection('git-busy'); return run() })
+      const call = await profiles.dispatch(parentId, developer.id, 'Edit', 'e', 'worktree')
+      await waitFor(() => store.call(call.id).waiting === 'writer')
+      expect(store.call(call.id)).toMatchObject({ state: 'queued', worktree: null })
+      writeFileSync(path.join(repo, 'draft.txt'), 'draft')
+      busy = false
+      profiles.tick()
+      await waitFor(() => store.call(call.id).state === 'failed')
+      expect(store.call(call.id).error).toContain('未提交')
     })
   })
   describe('going on with a call that stopped short', () => {

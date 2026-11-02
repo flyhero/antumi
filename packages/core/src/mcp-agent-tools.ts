@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { AGENT_CALL_TOOLS, AgentCallWorkspace, DirectAgentCall, type DelegationQuota, type DelegationTarget, type RpcConnection } from '@antumi/protocol'
+import { AGENT_CALL_TOOLS, AgentCallWorkspace, DirectAgentCall, type ChatCatalog, type DelegationQuota, type DelegationTarget, type RpcConnection } from '@antumi/protocol'
 
 const dispatchArguments = z.object({ profileId: z.string().uuid().optional(), ...DirectAgentCall.partial().shape, instruction: z.string().trim().min(1).max(20000), ref: z.string().min(1).max(200) })
 const argumentsFor = {
@@ -17,12 +17,29 @@ function quotaSummary(quota: DelegationQuota) {
   return { state: quota.state, ...window ? { window: window.kind, ...window.model ? { model: window.model } : {}, usedPercent: Math.round(window.usedPercent),
     ...window.resetsAt ? { resetsAt: new Date(window.resetsAt).toLocaleString('zh-CN', { hour12: false }) } : {} } : {}, ...quota.stale ? { stale: true } : {} }
 }
-const listed = (target: DelegationTarget) => target.profileId
+// The models an agent called as it is takes, by id, with the efforts each takes: what dispatch's
+// model and effort may be. null when the agent lists none.
+const modelsOf = (catalog: ChatCatalog | null) => catalog?.models.length
+  ? catalog.models.map((model) => ({ id: model.id, label: model.label, ...model.isDefault ? { default: true } : {}, ...model.efforts.length ? { efforts: model.efforts } : {} })) : null
+const listed = (target: DelegationTarget, catalog: ChatCatalog | null) => target.profileId
   ? { id: target.profileId, name: target.name, description: target.description, agent: target.agent, capability: target.capability, quota: quotaSummary(target.quota) }
-  : { name: target.name, agent: target.agent, readOnly: target.readOnly, quota: quotaSummary(target.quota) }
+  : { name: target.name, agent: target.agent, readOnly: target.readOnly, quota: quotaSummary(target.quota), models: modelsOf(catalog) }
+// Each direct agent's catalog, asked once per agent and provider.
+async function catalogsFor(rpc: RpcConnection, targets: readonly DelegationTarget[]): Promise<Map<DelegationTarget, ChatCatalog | null>> {
+  const found = new Map<string, Promise<ChatCatalog | null>>()
+  const out = new Map<DelegationTarget, ChatCatalog | null>()
+  for (const target of targets) {
+    if (target.profileId) continue
+    const key = `${target.agent}|${target.modelProvider ?? ''}`
+    const asked = found.get(key) ?? rpc.call('conversations.chatCatalog', { agent: target.agent, ...(target.modelProvider ? { modelProvider: target.modelProvider } : {}) }).catch(() => null)
+    found.set(key, asked)
+    out.set(target, await asked)
+  }
+  return out
+}
 const descriptions = {
-  list: '查找当前会话可以调用的智能体。带 id 的是用户配置的智能体，返回名称、擅长的工作、所用外部智能体和能力；不带 id 的是本机可直接调用的外部智能体，readOnly 表示能否只读工作。quota 是委派时会用到的额度：ok 充足，tight 紧张，exhausted 已用完（委派会被拒绝，resetsAt 后恢复），unknown 未知，provider 走模型服务、不计订阅额度。委派前先看额度，紧张时优先选额度充足的。',
-  dispatch: '委派独立子任务，立即返回调用记录。用户配置的智能体传 profileId；外部智能体传 agent，可选 model、effort，capability 默认 readOnly，需要修改文件时传 develop。二者只传其一。额度已用完的会被拒绝。instruction 须包含目标、必要背景、文件范围和交付要求；子会话不继承聊天历史。ref 为本次工作自定的唯一引用，重试沿用。只读委派派出即开始，开发委派等你这一轮结束才开始；结果都在这一轮结束后送回并自动继续主会话，所以派完没有别的事就结束回合。',
+  list: '查找当前会话可以调用的智能体。带 id 的是用户配置的智能体，返回名称、擅长的工作、所用外部智能体和能力；不带 id 的是本机可直接调用的外部智能体，readOnly 表示能否只读工作，models 是它能用的模型（id、默认的标 default、各自接受的 effort），委派时的 model 和 effort 从这里选，不传就用默认。quota 是委派时会用到的额度：ok 充足，tight 紧张，exhausted 已用完（委派会被拒绝，resetsAt 后恢复），unknown 未知，provider 走模型服务、不计订阅额度。委派前先看额度，紧张时优先选额度充足的。',
+  dispatch: '委派独立子任务，立即返回调用记录。用户配置的智能体传 profileId；外部智能体传 agent，可选 model 和 effort（取 antumi_agent_list 返回的 models 里的 id 和 efforts；简单的活用小模型或低 effort，难的活再用大的），capability 默认 readOnly，需要修改文件时传 develop。二者只传其一。额度已用完的会被拒绝。instruction 须包含目标、必要背景、文件范围和交付要求；子会话不继承聊天历史。ref 为本次工作自定的唯一引用，重试沿用。只读委派派出即开始，开发委派等你这一轮结束才开始；结果都在这一轮结束后送回并自动继续主会话，所以派完没有别的事就结束回合。',
   workspace: 'workspace 默认 shared：成员直接在主会话的目录里改，同目录的开发委派排队。worktree：成员在从当前提交拉出的独立 worktree 和分支上做，几个这样的委派可以并行，主会话也不用等；适合跨很多目录、彼此不重叠的机械性改动。要求主会话只有一个可写项目、是 Git 仓库、没有未提交的改动（未跟踪文件也算）。成员结束时把工作提交到自己的分支，结果里带分支名和提交数，由你合并并在合并后重新验证。每个 worktree 都要跑项目的 setup（可能装依赖），小改动不值得。',
   status: '查看当前会话的委派记录、状态和结果。不要反复轮询，结果会自动投递；在这里已看到的完成结果不会再投递。',
   cancel: '取消当前会话的一项委派，停止其 Agent 和归属命令，保留工作记录和文件。',
@@ -41,8 +58,12 @@ export function agentToolsOverCore(withCore: <T>(action: (rpc: RpcConnection) =>
     run: async (raw: Record<string, unknown>) => {
       try {
         let result: unknown
-        if (kind === 'list') result = await withCore(async (rpc) => rpc.features.includes('direct-agent-calls') ? (await rpc.call('agentCalls.targets', { id })).map(listed)
-          : (await rpc.call('agentProfiles.available', { id })).map((profile) => ({ id: profile.id, name: profile.name, description: profile.description, agent: profile.agent, capability: profile.capability })))
+        if (kind === 'list') result = await withCore(async (rpc) => {
+          if (!rpc.features.includes('direct-agent-calls')) return (await rpc.call('agentProfiles.available', { id })).map((profile) => ({ id: profile.id, name: profile.name, description: profile.description, agent: profile.agent, capability: profile.capability }))
+          const targets = await rpc.call('agentCalls.targets', { id })
+          const catalogs = await catalogsFor(rpc, targets)
+          return targets.map((target) => listed(target, catalogs.get(target) ?? null))
+        })
         else if (kind === 'dispatch') {
           const parsed = argumentsFor.dispatchInWorktree.parse(raw)
           if (parsed.workspace === 'worktree' && !worktrees) throw new Error('这个 core 不支持 worktree 委派，请不传 workspace')

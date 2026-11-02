@@ -172,7 +172,7 @@ export class AgentProfileService {
       ...this.available(id).map((profile) => ({ profileId: profile.id, name: profile.name, description: profile.description, agent: profile.agent,
         capability: profile.capability, readOnly: readOnly(profile.agent), quota: this.quota(profile.agent, profile.model, profile.modelProvider) })),
       ...this.agents(id).map(({ agent, modelProvider }) => ({ profileId: null, name: agentDescriptor(agent).label, description: '', agent,
-        capability: null, readOnly: readOnly(agent), quota: this.quota(agent, null, modelProvider) }))
+        capability: null, readOnly: readOnly(agent), quota: this.quota(agent, null, modelProvider), modelProvider }))
     ]
   }
   private quota(agent: AgentKind, model: string | null, modelProvider: string | null): DelegationQuota {

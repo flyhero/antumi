@@ -26,8 +26,12 @@ describe('agent delegation MCP', () => {
       'agentCalls.targets': [
         { profileId: profile.id, name: 'Reviewer', description: 'Reviews', agent: 'claude', capability: 'readOnly', readOnly: true,
           quota: { state: 'exhausted', window: { kind: 'session', model: null, usedPercent: 100, windowMinutes: 300, resetsAt }, stale: false } },
-        { profileId: null, name: 'Codex', description: '', agent: 'codex', capability: null, readOnly: true, quota: { state: 'provider', window: null, stale: false } }
+        { profileId: null, name: 'Codex', description: '', agent: 'codex', capability: null, readOnly: true, quota: { state: 'provider', window: null, stale: false }, modelProvider: 'openrouter' }
       ],
+      'conversations.chatCatalog': { models: [
+        { id: 'gpt-5', label: 'GPT-5', description: null, efforts: ['low', 'medium', 'high'], isDefault: true },
+        { id: 'gpt-5-mini', label: 'GPT-5 mini', description: null, efforts: [], isDefault: false }
+      ] },
       'agentCalls.dispatch': { id: '00000003-0000-4000-8000-000000000000', parentId: '00000001-0000-4000-8000-000000000000', conversationId: '00000004-0000-4000-8000-000000000000',
         profile: { ...profile, name: 'Codex', agent: 'codex', capability: 'develop' }, instruction: 'Fix the test', ref: 'fix-1', permissionMode: 'ask', readOnly: false,
         state: 'queued', result: null, error: null, delivered: false, createdAt: 0, updatedAt: 0 }
@@ -43,8 +47,10 @@ describe('agent delegation MCP', () => {
     expect(JSON.parse((await run('antumi_agent_list', {})).content[0]!.text)).toEqual([
       { id: profile.id, name: 'Reviewer', description: 'Reviews', agent: 'claude', capability: 'readOnly',
         quota: { state: 'exhausted', window: 'session', usedPercent: 100, resetsAt: new Date(resetsAt).toLocaleString('zh-CN', { hour12: false }) } },
-      { name: 'Codex', agent: 'codex', readOnly: true, quota: { state: 'provider' } }
+      { name: 'Codex', agent: 'codex', readOnly: true, quota: { state: 'provider' }, models: [{ id: 'gpt-5', label: 'GPT-5', default: true, efforts: ['low', 'medium', 'high'] }, { id: 'gpt-5-mini', label: 'GPT-5 mini' }] }
     ])
+    // The catalog is asked for the provider the agent would run on.
+    expect(sent.find((frame) => frame.method === 'conversations.chatCatalog')).toMatchObject({ params: { agent: 'codex', modelProvider: 'openrouter' } })
     expect((await run('antumi_agent_dispatch', { agent: 'codex', capability: 'develop', instruction: 'Fix the test', ref: 'fix-1' })).isError).toBe(false)
     expect(sent.at(-1)).toMatchObject({ method: 'agentCalls.dispatch', params: { agent: 'codex', capability: 'develop', instruction: 'Fix the test', ref: 'fix-1' } })
   })

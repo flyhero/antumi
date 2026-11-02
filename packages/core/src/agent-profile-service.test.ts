@@ -101,7 +101,7 @@ describe('reusable agent roles and delegated work', () => {
     ready = [{ agent: 'claude', modelProvider: null }]
     expect(profiles.targets(parentId)).toEqual([
       { profileId: reviewer.id, name: 'Reviewer', description: '', agent: 'claude', capability: 'readOnly', readOnly: true, quota: { state: 'unknown', window: null, stale: false } },
-      { profileId: null, name: 'Claude Code', description: '', agent: 'claude', capability: null, readOnly: true, quota: { state: 'unknown', window: null, stale: false } }
+      { profileId: null, name: 'Claude Code', description: '', agent: 'claude', capability: null, readOnly: true, quota: { state: 'unknown', window: null, stale: false }, modelProvider: null }
     ])
     const call = await profiles.dispatch(parentId, { agent: 'claude' }, 'Look into the failure', 'direct-1')
     expect(call).toMatchObject({ readOnly: true, profile: { agent: 'claude', name: 'Claude Code', instructions: '', capability: 'readOnly', modelProvider: null } })

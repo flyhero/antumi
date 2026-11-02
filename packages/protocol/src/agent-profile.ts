@@ -34,7 +34,10 @@ export type DelegationQuota = z.infer<typeof DelegationQuota>
 // whether it can work with its folders read-only.
 export const DelegationTarget = z.object({
   profileId: z.string().uuid().nullable(), name: z.string(), description: z.string(), agent: AgentKind,
-  capability: z.enum(['readOnly', 'develop']).nullable(), readOnly: z.boolean(), quota: DelegationQuota
+  capability: z.enum(['readOnly', 'develop']).nullable(), readOnly: z.boolean(), quota: DelegationQuota,
+  // The provider an agent called as it is would run on, whose models a caller picks from; null
+  // on its own account. Older cores leave it out.
+  modelProvider: ModelProviderId.nullable().optional()
 })
 export type DelegationTarget = z.infer<typeof DelegationTarget>
 export const DirectAgentCall = z.object({

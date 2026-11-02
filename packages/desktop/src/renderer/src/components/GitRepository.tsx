@@ -15,7 +15,7 @@ import { commitSubject, commitWithWrittenMessage, useCanWriteCommitMessage, useW
 import { GitRefLabel, GitRefName } from './GitRefLabel'
 import { ContextMenu, MenuItem, menuPoint, MenuRadioItem, MenuSubmenu, type MenuPoint } from './ContextMenu'
 import { FileDiffView, FileList, useFocusCount } from './Inspector'
-import { BranchIcon, LinkIcon, RefreshIcon, CheckIcon, ClockIcon, CloseIcon, CommitIcon, CompareIcon, CopyIcon, DocumentIcon, MergeIcon, PencilIcon, StarIcon, TagIcon, TrashIcon } from './icons'
+import { BranchIcon, CheckIcon, ClockIcon, CloseIcon, CommitIcon, CompareIcon, ContinueIcon, CopyIcon, FetchIcon, LinkIcon, MergeIcon, PencilIcon, PlusIcon, PushIcon, RebaseIcon, StarIcon, TagIcon, TrashIcon, UpdateIcon } from './icons'
 import { ChatPicker } from './ChatPicker'
 import { GitPushDialog, GitPushRejectedDialog } from './GitPushDialog'
 import { setPreference, usePreferences } from '../preferences'
@@ -169,18 +169,18 @@ export function GitRepository({ target, updatedAt = 0, refresh = 0 }: { target: 
     {favoritesSupported && <MenuItem label={entry.favorite ? t('GitInspector.removeFavorite') : t('GitInspector.addFavorite')} icon={<StarIcon />} disabled={favoriting.has(entry.ref)} onSelect={() => { close(); void toggleFavorite(entry) }} />}
     <MenuItem label={t('GitInspector.viewHistory')} icon={<ClockIcon />} onSelect={() => { pick(entry.ref); close() }} />
     <MenuItem label={t('GitInspector.switchToThisBranch')} icon={<CheckIcon />} hint={entry.ref === `refs/heads/${status?.branch}` ? t('GitInspector.currentBranch') : hint({ kind: 'switch', ref: entry.ref })} disabled={!can({ kind: 'switch', ref: entry.ref }) || entry.ref === `refs/heads/${status?.branch}` || Boolean(entry.worktree && entry.worktree !== status?.directory)} onSelect={() => { close(); void run({ kind: 'switch', ref: entry.ref }) }} />
-    {updateSupported && !entry.remote && entry.upstream && <MenuItem label={t('GitInspector.updateFromRemote')} icon={<RefreshIcon />} hint={hint({ kind: 'update', ref: entry.ref })} disabled={!can({ kind: 'update', ref: entry.ref })} onSelect={() => { close(); update(entry) }} />}
+    {updateSupported && !entry.remote && entry.upstream && <MenuItem label={t('GitInspector.updateFromRemote')} icon={<UpdateIcon />} hint={hint({ kind: 'update', ref: entry.ref })} disabled={!can({ kind: 'update', ref: entry.ref })} onSelect={() => { close(); update(entry) }} />}
     <div className="menu-separator" role="separator" />
     {pushTargetSupported && !entry.remote && <MenuSubmenu label={t('GitInspector.trackedBranch')} icon={<LinkIcon />} value={hint({ kind: 'track', ref: entry.ref, upstream: null }) ?? entry.upstream?.replace(/^refs\/remotes\//, '') ?? t('GitInspector.noTrackedBranch')} disabled={!can({ kind: 'track', ref: entry.ref, upstream: null })} open={trackOpen && can({ kind: 'track', ref: entry.ref, upstream: null })} onOpen={() => setTrackOpen(true)} onClose={() => setTrackOpen(false)}>
       <MenuItem label={t('GitInspector.untrack')} disabled={!entry.upstream || !can({ kind: 'track', ref: entry.ref, upstream: null })} onSelect={() => track(entry, null, close)} />
       <div className="menu-separator" role="separator" />
       {status?.branches.filter((remote) => remote.remote).map((remote) => <MenuRadioItem key={remote.ref} label={`${remote.remote}/${remote.name}`} checked={entry.upstream === remote.ref} onSelect={() => track(entry, remote.ref, close)} />)}
     </MenuSubmenu>}
-    <MenuItem label={t('GitInspector.newBranchFromHere')} icon={<BranchIcon />} hint={hint({ kind: 'create', ref: entry.ref, name: 'new', checkout: false })} disabled={!can({ kind: 'create', ref: entry.ref, name: 'new', checkout: false })} onSelect={() => { setDialog({ kind: 'create', branch: entry }); close() }} />
+    <MenuItem label={t('GitInspector.newBranchFromHere')} icon={<PlusIcon />} hint={hint({ kind: 'create', ref: entry.ref, name: 'new', checkout: false })} disabled={!can({ kind: 'create', ref: entry.ref, name: 'new', checkout: false })} onSelect={() => { setDialog({ kind: 'create', branch: entry }); close() }} />
     <MenuItem label={t('GitInspector.compareWithCurrentBranch')} icon={<CompareIcon />} disabled={!status?.head} onSelect={() => { pick(entry.ref); setComparison(entry.ref); setDetailView(true); close() }} />
     <div className="menu-separator" role="separator" />
     <MenuItem label={t('GitInspector.mergeIntoCurrentBranch')} icon={<MergeIcon />} hint={entry.ref === `refs/heads/${status?.branch}` ? t('GitInspector.currentBranch') : hint({ kind: 'merge', ref: entry.ref })} disabled={!can({ kind: 'merge', ref: entry.ref }) || entry.ref === `refs/heads/${status?.branch}`} onSelect={() => { setDialog({ kind: 'merge', branch: entry }); close() }} />
-    {rpc?.features.includes('git-rebase') && <MenuItem label={t('GitPage.rebaseOnto', { branch: entry.remote ? `${entry.remote}/${entry.name}` : entry.name })} icon={<MergeIcon />} hint={hint({ kind: 'rebase', ref: entry.ref })} disabled={!can({ kind: 'rebase', ref: entry.ref }) || entry.ref === `refs/heads/${status?.branch}`} onSelect={() => { setDialog({ kind: 'rebase', branch: entry, from: status?.branch ?? undefined }); close() }} />}
+    {rpc?.features.includes('git-rebase') && <MenuItem label={t('GitPage.rebaseOnto', { branch: entry.remote ? `${entry.remote}/${entry.name}` : entry.name })} icon={<RebaseIcon />} hint={hint({ kind: 'rebase', ref: entry.ref })} disabled={!can({ kind: 'rebase', ref: entry.ref }) || entry.ref === `refs/heads/${status?.branch}`} onSelect={() => { setDialog({ kind: 'rebase', branch: entry, from: status?.branch ?? undefined }); close() }} />}
     <div className="menu-separator" role="separator" />
     {!entry.remote && <MenuItem label={t('ConversationActions.rename')} icon={<PencilIcon />} hint={hint({ kind: 'rename', ref: entry.ref, name: 'new' })} disabled={!can({ kind: 'rename', ref: entry.ref, name: 'new' }) || entry.protected || Boolean(entry.worktree && entry.worktree !== status?.directory)} onSelect={() => { setDialog({ kind: 'rename', branch: entry }); close() }} />}
     <MenuItem label={entry.remote ? t('GitInspector.deleteRemoteBranch') : t('GitInspector.deleteLocalBranch')} icon={<TrashIcon />} danger hint={hint({ kind: 'delete', ref: entry.ref })} disabled={!can({ kind: 'delete', ref: entry.ref }) || entry.protected || Boolean(entry.worktree)} onSelect={() => { setDialog({ kind: 'delete', branch: entry }); close() }} />
@@ -190,7 +190,7 @@ export function GitRepository({ target, updatedAt = 0, refresh = 0 }: { target: 
     <MenuItem label={t('GitInspector.viewHistory')} icon={<ClockIcon />} onSelect={() => { pick(tag.ref); close() }} />
     <MenuItem label={t('GitInspector.compareWithCurrentBranch')} icon={<CompareIcon />} disabled={!status?.head} onSelect={() => { pick(tag.ref); setComparison(tag.ref); setDetailView(true); close() }} />
     <div className="menu-separator" role="separator" />
-    <MenuItem label={t('GitPage.newBranchFromTag')} icon={<BranchIcon />} hint={hint({ kind: 'create', name: 'new', ref: tag.ref, checkout: false })} disabled={!can({ kind: 'create', name: 'new', ref: tag.ref, checkout: false })} onSelect={() => { setDialog({ kind: 'create', source: tag }); close() }} />
+    <MenuItem label={t('GitPage.newBranchFromTag')} icon={<PlusIcon />} hint={hint({ kind: 'create', name: 'new', ref: tag.ref, checkout: false })} disabled={!can({ kind: 'create', name: 'new', ref: tag.ref, checkout: false })} onSelect={() => { setDialog({ kind: 'create', source: tag }); close() }} />
     <MenuItem label={t('GitPage.checkoutTag')} icon={<TagIcon />} hint={hint({ kind: 'detach', ref: tag.ref })} disabled={!can({ kind: 'detach', ref: tag.ref })} onSelect={() => { setDialog({ kind: 'detach', source: tag }); close() }} />
     <MenuItem label={t('GitPage.copyTag')} icon={<CopyIcon />} onSelect={() => { void navigator.clipboard.writeText(tag.name); close() }} />
   </>
@@ -201,9 +201,9 @@ export function GitRepository({ target, updatedAt = 0, refresh = 0 }: { target: 
   }
   const commitActions = (commit: GitCommit, close: () => void) => <>
     <MenuItem label={t('GitInspector.copySha')} icon={<CopyIcon />} onSelect={() => { void navigator.clipboard.writeText(commit.sha); close() }} />
-    <MenuItem label={t('GitInspector.copyCommitMessage')} icon={<DocumentIcon />} onSelect={() => { close(); void copyMessage(commit.sha) }} />
+    <MenuItem label={t('GitInspector.copyCommitMessage')} icon={<CopyIcon />} onSelect={() => { close(); void copyMessage(commit.sha) }} />
     <div className="menu-separator" role="separator" />
-    <MenuItem label={t('GitInspector.newBranchFromThisCommit')} icon={<BranchIcon />} disabled={!can({ kind: 'create', name: 'new', ref: commit.sha, checkout: false })} onSelect={() => { setDialog({ kind: 'create', commit }); close() }} />
+    <MenuItem label={t('GitInspector.newBranchFromThisCommit')} icon={<PlusIcon />} disabled={!can({ kind: 'create', name: 'new', ref: commit.sha, checkout: false })} onSelect={() => { setDialog({ kind: 'create', commit }); close() }} />
     {commitActionsSupported && <MenuItem label={t('GitInspector.newTag')} icon={<TagIcon />} disabled={!can({ kind: 'tag', name: 'new', ref: commit.sha })} onSelect={() => { setDialog({ kind: 'tag', commit }); close() }} />}
     {commitActionsSupported && <MenuItem label={t('GitInspector.checkOutThisCommit')} icon={<CommitIcon />} disabled={!can({ kind: 'detach', ref: commit.sha }) || (!status?.branch && commit.sha === status?.head)} onSelect={() => { setDialog({ kind: 'detach', commit }); close() }} />}
     <div className="menu-separator" role="separator" />
@@ -217,14 +217,14 @@ export function GitRepository({ target, updatedAt = 0, refresh = 0 }: { target: 
         <span className="muted mono" title={status.upstream ?? ''}>{status.upstream ?? t('GitInspector.noUpstream')}</span>
       </div>
       <div className="git-toolbar">
-        <button className="button" disabled={!can({ kind: 'create', ref: 'HEAD', name: 'new', checkout: false }) || !status.head} onClick={() => setDialog({ kind: 'create', branch })}>{t('ConversationChat.new')}</button>
-        <button className="button" disabled={disabled || Boolean(status.operation) || !status.remotes.length} onClick={() => void run({ kind: 'fetch' })}>Fetch</button>
+        <button className="button" disabled={!can({ kind: 'create', ref: 'HEAD', name: 'new', checkout: false }) || !status.head} onClick={() => setDialog({ kind: 'create', branch })}><PlusIcon />{t('ConversationChat.new')}</button>
+        <button className="button" disabled={disabled || Boolean(status.operation) || !status.remotes.length} onClick={() => void run({ kind: 'fetch' })}><FetchIcon />Fetch</button>
         {updateSupported
-          ? <button className="button" disabled={!currentBranch?.upstream || !can({ kind: 'update', ref: currentBranch.ref })} onClick={() => { if (currentBranch) update(currentBranch) }}>Update</button>
-          : <button className="button" disabled={!can({ kind: 'pull' }) || !status.branch || !status.upstream || status.changes > 0} onClick={() => void run({ kind: 'pull' })}>Pull</button>}
-        <button className="button" disabled={!can({ kind: 'push' }) || !status.branch || !status.remotes.length} onClick={() => (pushTargetSupported ? openPush() : setDialog({ kind: 'push' }))}>Push</button>
+          ? <button className="button" disabled={!currentBranch?.upstream || !can({ kind: 'update', ref: currentBranch.ref })} onClick={() => { if (currentBranch) update(currentBranch) }}><UpdateIcon />Update</button>
+          : <button className="button" disabled={!can({ kind: 'pull' }) || !status.branch || !status.upstream || status.changes > 0} onClick={() => void run({ kind: 'pull' })}><UpdateIcon />Pull</button>}
+        <button className="button" disabled={!can({ kind: 'push' }) || !status.branch || !status.remotes.length} onClick={() => (pushTargetSupported ? openPush() : setDialog({ kind: 'push' }))}><PushIcon />Push</button>
         {target.kind !== 'project' && rpc?.features.includes('git-projects') && <button className="button ghost" onClick={() => openGit(status.directory)}>{t('GitPage.openInGit')}</button>}
-        <button className="button" disabled={!can({ kind: 'commit', message: 'commit', push: false }) || !status.branch || !status.changes} onClick={() => setDialog({ kind: 'commit' })}>Commit</button>
+        <button className="button" disabled={!can({ kind: 'commit', message: 'commit', push: false }) || !status.branch || !status.changes} onClick={() => setDialog({ kind: 'commit' })}><CommitIcon />Commit</button>
         {status.readOnly && <span className="git-toolbar-note muted" role="status">{t('GitPage.planningReadOnly')}</span>}
         {status.taskId && target.kind === 'project' && <span className="git-toolbar-note muted">{t('GitPage.taskBound')}</span>}
         {status.blocker && <span className="git-toolbar-note muted" role="status">{status.blocker}</span>}
@@ -242,8 +242,8 @@ export function GitRepository({ target, updatedAt = 0, refresh = 0 }: { target: 
         <div className="git-toolbar">
           <button className="button" onClick={() => void openTerminal(status.directory)}>{t('GitInspector.openTerminal')}</button>
           {(status.operation === 'merge' || status.rebase) && <>
-            <button className="button" disabled={disabled || status.conflicts.length > 0} onClick={() => void run({ kind: 'continue' })}>{status.rebase ? t('GitInspector.continueRebase') : t('GitInspector.finishMerge')}</button>
-            <button className="button" disabled={disabled} onClick={() => setDialog({ kind: 'abort' })}>{status.rebase ? t('GitInspector.abortRebase') : t('GitInspector.abortMerge')}</button>
+            <button className="button" disabled={disabled || status.conflicts.length > 0} onClick={() => void run({ kind: 'continue' })}><ContinueIcon />{status.rebase ? t('GitInspector.continueRebase') : t('GitInspector.finishMerge')}</button>
+            <button className="button" disabled={disabled} onClick={() => setDialog({ kind: 'abort' })}><CloseIcon />{status.rebase ? t('GitInspector.abortRebase') : t('GitInspector.abortMerge')}</button>
           </>}
         </div>
       </div>}

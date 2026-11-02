@@ -7,7 +7,7 @@ import { shortRef } from '../task-starts'
 import { BranchStatusDetails } from './BranchStatus'
 import { folderName, heldBranchText, HeldBranchNote, holderLabel } from './BranchHolder'
 import { CommitMessageButton } from './CommitMessageButton'
-import { ArrowUpIcon, BranchIcon, CheckIcon, CommitIcon, PlusIcon } from './icons'
+import { BranchIcon, CheckIcon, CommitIcon, PlusIcon, PushIcon } from './icons'
 import { isShortcut, useShortcutLabel } from '../keyboard-shortcuts'
 import { useOccludesBrowser } from '../browser-occlusion'
 import { commitSubject, commitWithWrittenMessage, useCanWriteCommitMessage, useWritingCommit } from '../written-commits'
@@ -291,7 +291,7 @@ function ProjectActions({ conversation, head, option, onChanged }: {
         {button('switch', blocker === null, hint, <>{tr('ConversationBranches.switch', { value1: <BranchIcon /> })}</>)}
         {button('create', blocker === null, hint, <>{tr('ConversationBranches.new', { value1: <PlusIcon /> })}</>)}
         {commitPush && button('commit', canCommit, commitHint, <><CommitIcon />{steps ? 'Commit' : 'Commit & Push'}</>, canCommit)}
-        {commitPush && steps && button('push', canPush, pushHint, <><ArrowUpIcon />Push</>, !canCommit && canPush && (head.ahead ?? 0) > 0)}
+        {commitPush && steps && button('push', canPush, pushHint, <><PushIcon />Push</>, !canCommit && canPush && (head.ahead ?? 0) > 0)}
         {blocker ? <span className="branch-actions-blocked">{hint}</span> : writing ? <span className="branch-actions-blocked">{t('ConversationBranches.writingCommitMessageThenCommitting')}</span>
           : pushing && <span className="branch-actions-blocked" role="status">{t('ConversationBranches.pushing', { value1: head.branch })}</span>}
       </div>

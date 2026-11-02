@@ -9803,6 +9803,7 @@ summary.agent-group-head:focus-visible { outline: 2px solid var(--focus); outlin
 .git-summary > .mono { overflow: hidden; text-overflow: ellipsis; }
 .git-summary svg { width: 16px; height: 16px; }
 .git-toolbar .button { padding: 4px 8px; font-size: var(--chat-font-small, 12px); }
+.git-toolbar .button svg { width: 14px; height: 14px; flex-shrink: 0; }
 /* Why the buttons are off, beside them; wraps under them once the row runs out of room. */
 .git-toolbar-note { min-width: 0; overflow-wrap: anywhere; font-size: var(--chat-font-small, 12px); }
 .git-message { margin: 0; padding: 8px 12px; overflow-wrap: anywhere; font-size: var(--chat-font-small, 12px); }

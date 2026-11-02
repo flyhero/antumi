@@ -898,16 +898,60 @@ export function LinkIcon() {
 }
 
 // Two ways, for comparing one side with the other.
+// The Git actions draw as IntelliJ's do, so a page beside an IDE reads the same: two arrows passing
+// for a diff, two lines joining for a merge, arrows out of and into the corner for push and update.
 export function CompareIcon() {
   return (
     <svg {...stroked}>
-      <path d="M4 7h11.5m0 0-3-3m3 3-3 3M16 13H4.5m0 0 3-3m-3 3 3 3" />
+      <path d="M18 5.6H9m3.5-3.5L9 5.6l3.5 3.5M2 14.4h9M7.5 10.9l3.5 3.5-3.5 3.5" />
     </svg>
   )
 }
 
-// A branch joining back into the line it left.
 export function MergeIcon() {
+  return (
+    <svg {...stroked}>
+      <path d="M7.5 5.1 10 2.6l2.5 2.5" />
+      <path d="M10 3.2v4.5c0 .73-.32 1.43-.87 1.9l-2.63 2.26c-.55.47-.87 1.16-.87 1.9v3.84M10 7.7c0 .73.32 1.43.87 1.9l2.63 2.26c.55.47.87 1.16.87 1.9v3.84" />
+    </svg>
+  )
+}
+
+export function UpdateIcon() {
+  return (
+    <svg {...stroked}>
+      <path d="M16 4 4.5 15.5M4.5 7v8.5H13" />
+    </svg>
+  )
+}
+
+// Update's arrow, dashed: what comes in is only looked at, not taken.
+export function FetchIcon() {
+  return (
+    <svg {...stroked} strokeDasharray="2.2 2.4">
+      <path d="M16 4 4.5 15.5M4.5 7v8.5H13" />
+    </svg>
+  )
+}
+
+export function PushIcon() {
+  return (
+    <svg {...stroked}>
+      <path d="M4 16 15.5 4.5M7 4.5h8.5V13" />
+    </svg>
+  )
+}
+
+export function ContinueIcon() {
+  return (
+    <svg {...stroked}>
+      <path d="m10.6 15.6 5.6-5.6-5.6-5.6M4.4 15.6 10 10 4.4 4.4" />
+    </svg>
+  )
+}
+
+// A branch's line taken off its base and set on another's: rebase, which IntelliJ draws no icon for.
+export function RebaseIcon() {
   return (
     <svg {...stroked}>
       <circle cx="6" cy="4.8" r="1.8" />

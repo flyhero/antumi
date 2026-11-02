@@ -1,6 +1,7 @@
 import { AGENT_KINDS, type AgentKind, type Conversation, type Discussion } from '@antumi/protocol'
 import { getLocale, t } from './i18n'
 import { agentLabel } from './labels'
+import { conversationState } from './conversation-state'
 import { primaryProjectName, projectName } from './components/ProjectPicker'
 import type { Preferences } from './preferences'
 
@@ -39,6 +40,30 @@ export function itemRunning(item: ListItem): boolean {
 
 export function itemShown(item: ListItem, kinds: ConversationKinds): boolean {
   return kinds === 'all' || (kinds === 'conversations') === (item.kind === 'conversation')
+}
+
+export type GroupActivity = { awaiting: number; failed: number; unseen: number; running: number }
+
+// Unread replies stay visible even if the same conversation has started another turn.
+export function groupActivity(items: readonly ListItem[], unseen: Readonly<Record<string, true>>): GroupActivity {
+  const counts: GroupActivity = { awaiting: 0, failed: 0, unseen: 0, running: 0 }
+  for (const item of items) {
+    if (itemArchived(item)) continue
+    if (item.kind === 'discussion') {
+      if (item.discussion.members.some((member) => member.status === 'awaiting')) counts.awaiting++
+      else if (itemRunning(item)) counts.running++
+      continue
+    }
+    const conversation = item.conversation
+    const state = conversationState(conversation)
+    const awaiting = conversation.sessionId !== null && (conversation.chat?.turn === 'awaiting' || conversation.chat?.turn === 'idle' && conversation.chat.request?.async)
+      || conversation.delegation?.open && conversation.delegation.awaiting
+    if (awaiting) counts.awaiting++
+    else if (state.failed) counts.failed++
+    else if (state.running) counts.running++
+    if (unseen[item.id]) counts.unseen++
+  }
+  return counts
 }
 
 const COMPARE: Record<SortBy, (a: ListItem, b: ListItem) => number> = {

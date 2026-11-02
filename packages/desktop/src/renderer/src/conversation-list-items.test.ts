@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { Conversation, Discussion } from '@antumi/protocol'
-import { arrangeItems, conversationItem, discussionItem, GROUP_LIMIT, groupOf, itemMatches, itemRunning, itemShown, shownRows } from './conversation-list-items'
+import { arrangeItems, conversationItem, discussionItem, GROUP_LIMIT, groupActivity, groupOf, itemMatches, itemRunning, itemShown, shownRows } from './conversation-list-items'
 
 const id = (n: number) => `${String(n).padStart(8, '0')}-0000-4000-8000-000000000000`
 const chat = (n: number, patch: Partial<Conversation> = {}) => conversationItem(Conversation.parse({
@@ -14,6 +14,43 @@ const group = (n: number, patch: Partial<Discussion> = {}) => discussionItem(Dis
 }))
 
 describe('conversation list items', () => {
+  it('summarizes all rows in a folded group, keeping unread replies through a new turn until read', () => {
+    const items = [
+      chat(1, { sessionId: 's', chat: { turn: 'awaiting' } }),
+      chat(2, { sessionId: 's', chat: { turn: 'running' } }),
+      chat(3, { lastExit: { code: 1, at: 1 } }),
+      chat(4, { sessionId: 's', chat: { turn: 'idle' } }),
+      chat(5, { starting: true }),
+      ...Array.from({ length: GROUP_LIMIT }, (_, index) => chat(10 + index))
+    ]
+    const unread = { [id(2)]: true, [id(15)]: true } as const
+    expect(groupActivity(items, unread)).toEqual({ awaiting: 1, failed: 1, unseen: 2, running: 2 })
+    expect(groupActivity(items, {})).toEqual({ awaiting: 1, failed: 1, unseen: 0, running: 2 })
+    expect(groupActivity([chat(2)], unread)).toEqual({ awaiting: 0, failed: 0, unseen: 1, running: 0 })
+    expect(groupActivity([], unread)).toEqual({ awaiting: 0, failed: 0, unseen: 0, running: 0 })
+  })
+
+  it('includes async questions and delegated approvals, ignoring archived activity and stale requests', () => {
+    const request = { requestId: 'async:c1', kind: 'question', tool: null, title: '?', decisions: [], open: 1, async: true } as const
+    expect(groupActivity([
+      chat(1, { sessionId: 's', chat: { turn: 'idle', request: { ...request, decisions: [] } } }),
+      chat(2, { delegation: { open: 1, awaiting: 1, writing: false }, chat: { turn: 'idle' } }),
+      chat(3, { archivedAt: 1, lastExit: { code: 1, at: 1 } }),
+      chat(4, { chat: { turn: 'awaiting' } }),
+      chat(5, { delegation: { open: 1, awaiting: 0, writing: false }, chat: { turn: 'idle' } })
+    ], { [id(3)]: true })).toEqual({ awaiting: 2, failed: 0, unseen: 0, running: 1 })
+  })
+
+  it('counts each group chat once, prioritizing members needing input over the running round', () => {
+    expect(groupActivity([
+      group(1, { state: 'running', members: [member(1, 'awaiting'), member(2, 'awaiting')] }),
+      group(2, { state: 'running' }),
+      group(3, { state: 'paused', members: [member(1, 'working')] }),
+      group(4),
+      group(5, { state: 'running', archivedAt: 1 })
+    ], {})).toEqual({ awaiting: 1, failed: 0, unseen: 0, running: 2 })
+  })
+
   it('puts a conversation or group chat under its primary project, whatever else it reaches, and one without last', () => {
     expect(groupOf(chat(1, { projectPaths: ['/code/antumi', '/code/lobehub'] }), 'project')).toEqual({ label: 'antumi', rank: 0 })
     expect(groupOf(group(2, { projectPaths: ['/code/antumi'] }), 'project')).toEqual({ label: 'antumi', rank: 0 })

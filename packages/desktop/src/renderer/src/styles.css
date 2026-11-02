@@ -697,6 +697,13 @@ body.stacked-panel-resizing * {
 .conversation-group-title .conversation-group-mark svg { width: 16px; height: 16px; transition: none; }
 .conversation-group-mark .agent-mark { width: 14px; height: 14px; }
 .conversation-group-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conversation-group-activity { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; flex-shrink: 0; font-size: 12px; font-weight: 400; }
+.conversation-group-signal { display: inline-flex; align-items: center; gap: 4px; }
+.conversation-group-signal[data-state='awaiting'] { color: var(--warning); }
+.conversation-group-signal[data-state='unseen'] { color: var(--accent); }
+.conversation-group-signal[data-state='failed'] { color: var(--danger); }
+.conversation-group-signal[data-state='running'] { color: var(--status-running); }
+.conversation-group-signal .chat-spinner { width: 12px; height: 12px; }
 /* The rows keep their place, titles in line with the folder's name: the guide runs down their icon
    column, each row's mark sits on it, and it breaks around the mark. `--row-pad` is the row's top
    padding, where the mark starts. */

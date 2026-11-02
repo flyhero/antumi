@@ -35,10 +35,39 @@ beforeEach(() => {
     conversations: { [id(1)]: chat(1, '在用的会话', null), [id(2)]: chat(2, '归档的会话', 5) },
     discussions: { [id(3)]: discussion(3, '在用的群聊', null), [id(4)]: discussion(4, '归档的群聊', 5) }
   })
-  usePreferences.setState({ showArchivedConversations: false, conversationKinds: 'all' })
+  usePreferences.setState({ showArchivedConversations: false, conversationKinds: 'all', conversationGroup: 'project', foldedConversationGroups: [] })
 })
 
 describe('conversations and group chats in the sidebar', () => {
+  it('keeps the most urgent status compact while the tooltip includes every state', () => {
+    const first = { ...chat(1, '等待批准', null), sessionId: 's', chat: { turn: 'awaiting' as const } }
+    const second = { ...chat(2, '正在运行', null), sessionId: 's', chat: { turn: 'running' as const } }
+    useCore.setState({ conversations: { [first.id]: first, [second.id]: second }, discussions: {}, unseen: { [second.id]: true } })
+    usePreferences.setState({ foldedConversationGroups: ['project:group:无项目'] })
+    const html = renderToStaticMarkup(createElement(ConversationList))
+    expect(html).toContain('title="1 个等你处理 · 1 个有新回复 · 1 个运行中"')
+    expect(html).toContain('data-state="awaiting"')
+    expect(html).not.toContain('data-state="running"')
+    expect(html).not.toContain('data-state="unseen"')
+  })
+
+  it('shows activity only in folded headings and preserves unread state when the group opens', () => {
+    useCore.setState({ unseen: { [id(1)]: true } })
+    usePreferences.setState({ foldedConversationGroups: ['project:group:无项目'] })
+    const folded = renderToStaticMarkup(createElement(ConversationList))
+    expect(folded).toContain('conversation-group-activity')
+    expect(folded).toContain('1 个有新回复')
+    expect(folded).not.toContain('data-conversation-id')
+    usePreferences.setState({ foldedConversationGroups: [] })
+    const opened = renderToStaticMarkup(createElement(ConversationList))
+    expect(opened).not.toContain('conversation-group-activity')
+    expect(opened).toContain('data-glyph="unseen"')
+    expect(useCore.getState().unseen[id(1)]).toBe(true)
+    usePreferences.setState({ foldedConversationGroups: ['project:group:无项目'] })
+    useCore.setState({ unseen: {} })
+    expect(renderToStaticMarkup(createElement(ConversationList))).not.toContain('conversation-group-activity')
+  })
+
   it('lists both in one list, archived ones out of sight until asked for', () => {
     const list = renderToStaticMarkup(createElement(ConversationList))
     expect(list).toContain('在用的会话')

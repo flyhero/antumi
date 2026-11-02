@@ -3600,6 +3600,22 @@ export const MESSAGES = {
     "zh": "运行中",
     "en": "Running"
   },
+  "ConversationList.groupAwaiting": {
+    "zh": "{count} 个等你处理",
+    "en": "{count} need your input"
+  },
+  "ConversationList.groupUnseen": {
+    "zh": "{count} 个有新回复",
+    "en": "{count} with unread replies"
+  },
+  "ConversationList.groupFailed": {
+    "zh": "{count} 个异常退出",
+    "en": "{count} with unexpected exits"
+  },
+  "ConversationList.groupRunning": {
+    "zh": "{count} 个运行中",
+    "en": "{count} running"
+  },
   "ConversationList.stopped": {
     "zh": "已停止",
     "en": "Stopped"

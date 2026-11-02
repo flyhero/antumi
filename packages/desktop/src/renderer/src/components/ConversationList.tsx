@@ -14,6 +14,7 @@ import { agentLabel } from '../labels'
 import { CONVERSATION_DENSITIES, CONVERSATION_GROUPS, CONVERSATION_KINDS, CONVERSATION_SORTS, setPreference, usePreferences, type Preferences } from '../preferences'
 import { beginHandoff, ConversationContextMenu, newConversation, renameConversation } from './ConversationActions'
 import { ConversationStatus } from './ConversationStatus'
+import { ConversationGroupActivity } from './ConversationGroupActivity'
 import { ConversationPeek, useConversationPeek } from './ConversationPeek'
 import { conversationActivity } from '../work-activity'
 import { ContextMenu, MenuCheckboxItem, menuPoint, MenuRadioItem, MenuSubmenu, type MenuPoint } from './ContextMenu'
@@ -396,6 +397,7 @@ export function ConversationList() {
                 {mark ? <span className="conversation-group-mark">{mark}</span> : <ChevronDownIcon />}
                 <span className="conversation-group-label">{group.label}</span>
                 <span className="count">{group.items.length}</span>
+                {isFolded(group.key) && <ConversationGroupActivity items={group.items} />}
                 {mark && <ChevronDownIcon />}
               </button>
               {group.project && (

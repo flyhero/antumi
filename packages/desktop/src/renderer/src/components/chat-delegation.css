@@ -17,6 +17,7 @@
 .chat-delegation-recipient .chat-delegation-avatar { position: relative; }
 .chat-delegation[data-active] .chat-delegation-recipient .chat-delegation-avatar::after { content: ''; position: absolute; inset: -4px; border: 1px solid var(--delegation-tone); border-radius: var(--radius-lg); animation: delegation-breathe 2.4s ease-out infinite; pointer-events: none; }
 .chat-delegation-goal { margin: 4px 16px 12px; font-size: var(--chat-font-size); line-height: 1.6; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+.chat-delegation-model { color: var(--text-muted); font-size: 12px; font-weight: 400; white-space: nowrap; }
 .chat-delegation-worktree { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: -4px 16px 12px; font-size: 12px; color: var(--text-muted); overflow-wrap: anywhere; }
 .chat-delegation-worktree[data-warn] { color: var(--warning); }
 .chat-delegation-badge, .delegation-badge { padding: 1px 6px; border-radius: var(--radius-sm); background: var(--fill); color: var(--text-muted); font-size: 11px; white-space: nowrap; }

@@ -23,6 +23,7 @@
 .delegation-record-head { display: flex; align-items: center; gap: 8px; }
 .delegation-record-head > svg { width: 18px; height: 18px; flex-shrink: 0; }
 .delegation-record-head strong { min-width: 0; flex: 1; overflow-wrap: anywhere; font-weight: 500; }
+.delegation-model { flex-shrink: 0; white-space: nowrap; }
 .delegation-status { flex-shrink: 0; color: var(--text-muted); }
 .delegation-status[data-state='completed'] { color: var(--status-done); }
 .delegation-status[data-state='running'], .delegation-status[data-state='starting'] { color: var(--status-running); }

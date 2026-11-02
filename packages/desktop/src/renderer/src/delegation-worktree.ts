@@ -1,5 +1,11 @@
 import { agentCallOpen, type AgentCall } from '@antumi/protocol'
+import { effortLabel } from './components/ChatOptionsBar'
 import { t } from './i18n'
+
+// The model and effort a call runs its agent on, as its frozen profile says; empty on the defaults.
+export function callModelText(call: Pick<AgentCall, 'profile'>): string {
+  return [call.profile.model, call.profile.effort ? effortLabel(call.profile.effort) : null].filter(Boolean).join(' · ')
+}
 
 // How a worktree delegation's worktree stands, in a few words: where it is being laid out, what
 // git read in it when the call ended, or that the user cleaned it away.

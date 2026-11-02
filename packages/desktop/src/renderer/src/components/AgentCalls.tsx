@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { agentCallOpen, type AgentCall, type Conversation } from '@antumi/protocol'
 import { openGit, perform, showError, useCore } from '../core-store'
-import { worktreeStatusText } from '../delegation-worktree'
+import { callModelText, worktreeStatusText } from '../delegation-worktree'
 import { t } from '../i18n'
 import { chatDayAndTime } from '../labels'
 import { AgentIcon } from './icons'
@@ -39,7 +39,7 @@ export function AgentCalls({ conversation }: { conversation: Conversation }) {
     {ordered.length > 0 && <ol ref={list} className="delegation-list" aria-label={t('AgentProfiles.history')}>
     {ordered.map((call) => <li className="delegation-item" key={call.id} data-call-id={call.id} data-focused={call.id === focus || undefined}>
       <article className="delegation-record">
-      <div className="delegation-record-head"><AgentIcon agent={call.profile.agent} /><strong>{call.profile.name}</strong><span className="delegation-status" data-state={call.state}>{t(`AgentProfiles.${call.state}`)}</span></div>
+      <div className="delegation-record-head"><AgentIcon agent={call.profile.agent} /><strong>{call.profile.name}</strong>{callModelText(call) && <span className="delegation-model muted">{callModelText(call)}</span>}<span className="delegation-status" data-state={call.state}>{t(`AgentProfiles.${call.state}`)}</span></div>
       <time className="muted" dateTime={new Date(call.createdAt).toISOString()}>{chatDayAndTime(call.createdAt)}</time>
       <details className="delegation-instruction"><summary title={call.instruction}>{call.instruction.split('\n').filter((line) => line.trim()).slice(0, 2).join(' · ')}</summary><p>{call.instruction}</p></details>
       {(() => { const worktree = worktreeStatusText(call); return worktree && <p className="delegation-worktree" data-warn={worktree.warn || undefined}><span className="delegation-badge">{t('AgentProfiles.worktreeBadge')}</span>{call.worktree && <span className="mono" title={call.worktree.dir}>{call.worktree.branch}</span>}{worktree.text && <span>{worktree.text}</span>}</p> })()}

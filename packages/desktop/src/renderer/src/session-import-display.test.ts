@@ -28,5 +28,6 @@ describe('imported session presentation', () => {
     expect(html).toContain('桌面')
     expect(html).toContain('历史移交')
     expect(html).toContain('接着聊')
+    expect(html).toContain('resumable-session-meta"><span>Cursor</span>')
   })
 })

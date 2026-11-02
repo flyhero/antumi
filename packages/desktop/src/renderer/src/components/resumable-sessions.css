@@ -3,9 +3,10 @@
 .resumable-session + .resumable-session { border-top: 1px solid var(--border); }
 .resumable-session-main { display: grid; min-width: 0; }
 .resumable-session-title { overflow: hidden; color: var(--text); font-size: 13px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
-.resumable-session-meta { display: flex; min-width: 0; font-size: 12px; color: var(--text-3); }
+.resumable-session-meta { display: flex; flex-wrap: wrap; row-gap: 4px; min-width: 0; font-size: 12px; color: var(--text-3); }
 .resumable-session-meta > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .resumable-session-meta > span + span { flex-shrink: 0; }
+.resumable-session-meta .resumable-session-project { flex-shrink: 1; min-width: 0; }
 .resumable-session-meta > span + span::before { content: '·'; margin: 0 6px; color: var(--border-2); }
 .resumable-session .button { height: 28px; padding: 0 10px; font-size: 12px; }
 /* In the overview's card the rows run edge to edge, as its other rows do. */

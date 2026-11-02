@@ -32,7 +32,7 @@ export function ResumableSessionList({ sessions, onResumed }: { sessions: readon
           <span className="overview-avatar" title={agentLabel(session.agent)}><AgentIcon agent={session.agent} /></span>
           <span className="resumable-session-main">
             <span className="resumable-session-title" title={session.firstPrompt}>{session.title}</span>
-            <span className="resumable-session-meta"><span title={session.cwd}>{projectName(session.cwd)}</span><span>{agoText(session.updatedAt)}</span>{session.source === 'desktop' && <span>{t('SessionImportSettings.desktop')}</span>}{session.continuation === 'handoff' && <span title={t('SessionImportSettings.handoffHint')}>{t('SessionImportSettings.handoff')}</span>}</span>
+            <span className="resumable-session-meta"><span>{agentLabel(session.agent)}</span><span className="resumable-session-project" title={session.cwd}>{projectName(session.cwd)}</span><span>{agoText(session.updatedAt)}</span>{session.source === 'desktop' && <span>{t('SessionImportSettings.desktop')}</span>}{session.continuation === 'handoff' && <span title={t('SessionImportSettings.handoffHint')}>{t('SessionImportSettings.handoff')}</span>}</span>
           </span>
           <button type="button" className="button" disabled={busy !== null} aria-label={t('ResumableSessions.resumeLabel', { title: session.title })} onClick={() => void resume(session)}>
             {t(busy === session.sessionId ? 'ResumableSessions.resuming' : 'ResumableSessions.resume')}

@@ -12,7 +12,7 @@ import { configuredSources, preferredSetupAgent, setupResumable, setupStep } fro
 import { useExternalSessionsWhen } from '../external-sessions'
 import { ChatPicker } from './ChatPicker'
 import { PetSpeech } from './PetSpeech'
-import { ResumableSessionList, resumableSummary } from './ResumableSessions'
+import { ResumableSessionList } from './ResumableSessions'
 import { usePetSkin } from './PetSprite'
 import { settingsSectionOf } from './SourceInboxView'
 import { AgentIcon } from './icons'
@@ -71,7 +71,7 @@ export function SetupGuide() {
   const problem = Object.values(inboxes).find((inbox) => inbox.problem && configured.some((entry) => entry.provider === inbox.provider))?.problem
   const text = step === 'waiting' ? t(connected ? 'SetupGuide.waiting' : 'SetupGuide.disconnected')
     : step === 'agent' ? readiness ? agentReadinessText(readiness, agent ?? undefined) : t('SetupGuide.noSupportedAgent')
-    : step === 'sessions' ? sessions === null ? t('SetupGuide.findingSessions') : resumableSummary(resumable.count, resumable.agents)
+    : step === 'sessions' ? t('ResumableSessions.title')
     : step === 'sources' ? t('SetupGuide.sourceQuestion')
     : t('SetupGuide.done')
 
@@ -81,7 +81,7 @@ export function SetupGuide() {
         {petLevel !== 'off' && <div className="setup-guide-pet" aria-hidden="true">{skin.render({ pose: step === 'done' ? 'review' : 'idle', walking: false, lookX: 0, lookY: 0, reduced })}</div>}
         <div className="setup-guide-speech">
           <PetSpeech text={<span className="setup-guide-heading">
-              {step !== 'waiting' && agent && <ChatPicker
+              {step === 'agent' && agent && <ChatPicker
                 label={t('SetupGuide.chooseAgent')} value={agent} placeholder={t('SetupGuide.chooseAgent')} placement="above"
                 options={AGENT_KINDS.filter((kind) => environment?.checks.some((entry) => entry.tool === kind)).map((kind) => ({ value: kind, label: agentLabel(kind), icon: <AgentIcon agent={kind} />, description: agentReadinessText(agentReadiness(kind, environment, disabled, providers, probes), kind) }))}
                 onChange={(value) => { if (isAgentKind(value)) updateSetup({ agent: value, confirmed: null }) }}
@@ -92,10 +92,11 @@ export function SetupGuide() {
               {step === 'agent' && descriptor && <p>{readiness?.state === 'missing' || readiness?.state === 'cli-missing' ? descriptor.environment.missing?.hint ?? descriptor.environment.install
                 : readiness?.state === 'incompatible-version' ? descriptor.environment.outdated?.status
                 : readiness?.state === 'needs-account' || readiness?.state === 'needs-provider' || readiness?.state === 'unknown-auth' || readiness?.state === 'authorize-on-use' ? descriptor.environment.signIn : null}</p>}
-              {step !== 'agent' && step !== 'waiting' && readiness?.state === 'unknown-auth' && <p>{t('SetupGuide.confirmed')}</p>}
+              {step !== 'agent' && step !== 'waiting' && step !== 'sessions' && readiness?.state === 'unknown-auth' && <p>{t('SetupGuide.confirmed')}</p>}
               {step === 'agent' && readiness?.state === 'provider-failed' && readiness.message && <p>{readiness.message}</p>}
-              {step !== 'agent' && step !== 'waiting' && readiness?.state === 'authorize-on-use' && <p>{t('SetupGuide.deferredAuth')}</p>}
-              {step !== 'waiting' && provider && <p>{t('SetupGuide.providerConfigured', { name: provider.name })} {t(probe === 'running' ? 'SetupGuide.providerTesting' : probe ? probe.ok ? 'SetupGuide.providerPassed' : 'SetupGuide.providerFailed' : 'SetupGuide.providerUntested')}</p>}
+              {step !== 'agent' && step !== 'waiting' && step !== 'sessions' && readiness?.state === 'authorize-on-use' && <p>{t('SetupGuide.deferredAuth')}</p>}
+              {step !== 'waiting' && step !== 'sessions' && provider && <p>{t('SetupGuide.providerConfigured', { name: provider.name })} {t(probe === 'running' ? 'SetupGuide.providerTesting' : probe ? probe.ok ? 'SetupGuide.providerPassed' : 'SetupGuide.providerFailed' : 'SetupGuide.providerUntested')}</p>}
+              {step === 'sessions' && <p>{sessions === null ? t('SetupGuide.findingSessions') : t('SetupGuide.sessionsFound', { count: resumable.count })}</p>}
               {step === 'sessions' && resumable.shown.length > 0 && <>
                 <p>{t('SetupGuide.sessionsNote')}</p>
                 <ResumableSessionList sessions={resumable.shown} onResumed={() => updateSetup({ sessionChoice: 'resumed' })} />
@@ -121,7 +122,7 @@ export function SetupGuide() {
               {step === 'sources' && progress.sourceChoice === 'configure' && source && features?.includes('plugins') && <button type="button" className="button" onClick={() => setSettingsOpen(true, 'plugins')}>{t('SetupGuide.installSources')}</button>}
               {step === 'sources' && <button type="button" className="button ghost" onClick={() => updateSetup({ sourceChoice: 'skip' })}>{t('SetupGuide.skipSources')}</button>}
               {step === 'done' && <button type="button" className={primaryClass} onClick={() => updateSetup({ status: 'complete' })}>{t('SetupGuide.finish')}</button>}
-              {step !== 'waiting' && provider && <button type="button" className="button ghost" onClick={goProviders}>{t('SetupGuide.providers')}</button>}
+              {step !== 'waiting' && step !== 'sessions' && provider && <button type="button" className="button ghost" onClick={goProviders}>{t('SetupGuide.providers')}</button>}
               <button type="button" className="button ghost" onClick={pause} title={t('SetupGuide.resumeHint')}>{t('SetupGuide.pause')}</button>
             </div>
           </PetSpeech>

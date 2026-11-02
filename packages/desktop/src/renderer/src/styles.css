@@ -760,7 +760,8 @@ body.stacked-panel-resizing * {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .conversation-status[data-glyph='awaiting'] { animation: none; }
+  .conversation-status[data-glyph='awaiting'],
+  .discussion-mark[data-tone='awaiting'] { animation: none; }
 }
 /* The message a search matched, under the row's meta line. */
 .conversation-snippet {
@@ -10167,8 +10168,6 @@ button.island-compact:focus-visible { outline: 2px solid var(--focus); outline-o
 .request-popup-loading { margin: 0; padding: 12px; color: var(--text-3); }
 
 /* Group chats share the conversation list: a group mark before their members' marks tells them apart. */
-.conversation-kind { display: inline-flex; vertical-align: -2px; margin-right: 4px; color: var(--text-3); }
-.conversation-kind svg { width: 12px; height: 12px; }
 /* The kind the list keeps to, when it keeps to one, stays in sight with a way back to both. */
 .conversation-list-filter { display: flex; align-items: center; gap: 2px; margin: 0 16px 4px; padding: 0 2px 0 8px; width: fit-content; border-radius: 999px; background: var(--fill-2); color: var(--text-muted); font-size: 12px; }
 .conversation-list-filter .icon-button { width: 18px; height: 18px; }
@@ -10184,6 +10183,12 @@ button.island-compact:focus-visible { outline: 2px solid var(--focus); outline-o
 .discussion-dot[data-tone='awaiting'] { background: var(--warning); transform: scale(0.75); animation: status-pulse 1.6s ease-out infinite; }
 .discussion-dot[data-tone='done'] { background: var(--status-done); transform: scale(0.75); }
 .discussion-view .detail-header .discussion-dot { margin-top: 0; }
+/* A group chat's row in the list: its mark in the status column, coloured as the dot would be. */
+.discussion-mark { justify-self: center; display: grid; place-items: center; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; color: var(--text-muted); }
+.discussion-mark svg { width: 14px; height: 14px; }
+.discussion-mark[data-tone='working'] { color: var(--status-running); }
+.discussion-mark[data-tone='awaiting'] { color: var(--warning); animation: status-pulse 1.6s ease-out infinite; }
+.discussion-mark[data-tone='done'] { color: var(--status-done); }
 
 .discussion-view .toolbar .discussion-action { display: inline-flex; align-items: center; gap: 4px; }
 .discussion-view .toolbar .discussion-action svg { width: 14px; height: 14px; }
@@ -10691,6 +10696,7 @@ button.squad-member-main { cursor: pointer; }
   .chat-browser-activity[data-status='running'] *,
   .dashboard-refresh[data-loading] svg,
   .discussion-dot[data-tone='awaiting'],
+  .discussion-mark[data-tone='awaiting'],
   .discussion-typing i
 ) { animation-play-state: paused; }
 /* A pseudo-element cannot stand inside :is(): the list is forgiving and drops what it cannot

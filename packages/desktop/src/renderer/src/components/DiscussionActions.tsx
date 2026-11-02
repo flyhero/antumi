@@ -13,12 +13,22 @@ export async function removeDiscussion(discussion: Discussion): Promise<void> {
 }
 
 // A dot for where it stands: someone at work, someone waiting on the user, or quiet.
+function discussionTone(discussion: Discussion): { tone: 'awaiting' | 'working' | 'done' | 'idle'; label: string } {
+  if (discussion.members.some((member) => member.status === 'awaiting')) return { tone: 'awaiting', label: t('SidebarDiscussions.aMemberNeedsYourApproval') }
+  if (discussion.members.some((member) => member.status === 'working')) return { tone: 'working', label: t('SidebarDiscussions.aMemberIsSpeaking') }
+  return { tone: discussion.state === 'done' ? 'done' : 'idle', label: discussionProgress(discussion) }
+}
+
 export function DiscussionDot({ discussion }: { discussion: Discussion }) {
-  const awaiting = discussion.members.some((member) => member.status === 'awaiting')
-  const working = discussion.members.some((member) => member.status === 'working')
-  const tone = awaiting ? 'awaiting' : working ? 'working' : discussion.state === 'done' ? 'done' : 'idle'
-  const label = awaiting ? t('SidebarDiscussions.aMemberNeedsYourApproval') : working ? t('SidebarDiscussions.aMemberIsSpeaking') : discussionProgress(discussion)
+  const { tone, label } = discussionTone(discussion)
   return <span className="discussion-dot" data-tone={tone} role="img" aria-label={label} title={label} />
+}
+
+// In a list beside conversations, the same state on the group chat mark, so the kind reads from the
+// status column alone, compact rows included.
+export function DiscussionMark({ discussion }: { discussion: Discussion }) {
+  const { tone, label } = discussionTone(discussion)
+  return <span className="discussion-mark" data-tone={tone} role="img" aria-label={`${t('DiscussionView.groupChat_910')} · ${label}`} title={label}><GroupChatIcon /></span>
 }
 
 export function DiscussionMarks({ discussion }: { discussion: Discussion }) {

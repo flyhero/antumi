@@ -5,7 +5,7 @@ import { openBeside, selectConversation, selectDiscussion, useCore, useDiscussio
 import { arrangeItems, conversationItem, discussionItem, GROUP_LIMIT, itemArchived, itemMatches, itemShown, shownRows, sortItems, type ItemGroup, type ListItem } from '../conversation-list-items'
 import { isListedConversation } from '../search-palette'
 import { discussionProgress, renameDiscussion } from '../discussions'
-import { DiscussionContextMenu, DiscussionDot, DiscussionMarks } from './DiscussionActions'
+import { DiscussionContextMenu, DiscussionMark, DiscussionMarks } from './DiscussionActions'
 import { canSplit } from '../conversation-split'
 import { endConversationDrag, startConversationDrag } from '../conversation-drag'
 import { hasPrimaryModifier } from '../shortcut-keys'
@@ -109,13 +109,11 @@ function ConversationMeta({ conversation, heading = 'none' }: { conversation: Co
   )
 }
 
-// Its members' marks and where it stands; under the agent grouping its group says it is a group
-// chat, elsewhere a mark does.
+// Its members' marks and where it stands; that it is a group chat, its status mark says.
 function DiscussionMeta({ discussion, heading = 'none' }: { discussion: Discussion; heading?: GroupBy }) {
   const projects = metaProjects(discussion.projectPaths, heading === 'project')
   return (
     <>
-      {heading !== 'agent' && <span className="conversation-kind" role="img" aria-label={t('DiscussionView.groupChat_910')} title={t('DiscussionView.groupChat_910')}><GroupChatIcon /></span>}
       <DiscussionMarks discussion={discussion} />
       {projects !== null && <>{projects}{' · '}</>}
       <span className="conversation-live">{discussionProgress(discussion)}</span>
@@ -323,7 +321,7 @@ export function ConversationList() {
     <li key={discussion.id}>
       {renamingId === discussion.id
         ? <div className="task-row conversation-row" data-renaming>
-          <DiscussionDot discussion={discussion} />
+          <DiscussionMark discussion={discussion} />
           <TitleEditor title={discussion.title} label={t('DiscussionView.groupChatTitle')} onSave={(title) => void renameDiscussion(discussion.id, title)} onDone={() => setRenamingId(null)} />
           <span className="task-row-meta"><DiscussionMeta discussion={discussion} heading={heading} /></span>
         </div>
@@ -337,7 +335,7 @@ export function ConversationList() {
           onClick={() => selectDiscussion(discussion.id)}
           onContextMenu={openMenu(discussion.id)}
         >
-          <DiscussionDot discussion={discussion} />
+          <DiscussionMark discussion={discussion} />
           <span className="task-row-title">{discussion.title}</span>
           <span className="conversation-age">{timeAgo(discussion.updatedAt, now)}</span>
           <span className="task-row-meta"><DiscussionMeta discussion={discussion} heading={heading} /></span>

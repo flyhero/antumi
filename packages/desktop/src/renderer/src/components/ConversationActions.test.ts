@@ -93,13 +93,13 @@ describe('new conversation from current settings', () => {
   it('offers the header action only for ordinary conversations on a supporting core', () => {
     connect()
     const render = () => renderToStaticMarkup(createElement(ConversationView, { id: source.id }))
-    expect(render()).toContain('aria-label="同配置新建"')
+    expect(render()).toContain('aria-label="沿用配置开新会话"')
     connect([])
-    expect(render()).not.toContain('aria-label="同配置新建"')
+    expect(render()).not.toContain('aria-label="沿用配置开新会话"')
     connect()
     for (const patch of [{ taskId: 'task' }, { discussionId: 'group' }, { routineId: 'routine' }, { squadRunId: 'squad' }, { helperOf: 'parent' }]) {
       useCore.setState({ conversations: { [source.id]: { ...source, ...patch } } })
-      expect(render()).not.toContain('aria-label="同配置新建"')
+      expect(render()).not.toContain('aria-label="沿用配置开新会话"')
     }
   })
 })

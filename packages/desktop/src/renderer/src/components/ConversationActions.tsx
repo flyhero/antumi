@@ -8,7 +8,7 @@ import { offerDraft } from '../chat-drafts'
 import { saidText } from '../chat-state'
 import { confirmQuota } from './AgentQuota'
 import { ContextMenu, MenuItem, type MenuPoint } from './ContextMenu'
-import { ArchiveIcon, CopyIcon, HandoffIcon, PencilIcon, PinIcon, SplitIcon, StopIcon, TrashIcon } from './icons'
+import { ArchiveIcon, CopyIcon, HandoffIcon, PencilIcon, PinIcon, SplitIcon, SquadIcon, StopIcon, TrashIcon } from './icons'
 import { EMPTY_DRAFT, saveComposerDraft } from '../composer-drafts'
 import { keepInitialMessage, sendInitialMessage } from '../initial-messages'
 import { PRIMARY_KEY_LABEL } from '../shortcut-keys'
@@ -167,7 +167,7 @@ export function ConversationContextMenu({ conversation, at, onClose, onRename, o
       {split && <MenuItem label={split === 'right' ? t('ConversationActions.openInRightSplitPane') : t('ConversationActions.openInOtherPane')} icon={<SplitIcon />} hint={t('ConversationActions.click', { PRIMARY_KEY_LABEL: PRIMARY_KEY_LABEL })} onSelect={pick(() => openBeside(conversation.id))} />}
       {pinnable && !archived && <MenuItem label={pinned ? t('ConversationActions.unpin') : t('ConversationActions.pin')} icon={<PinIcon />} onSelect={pick(() => void pinConversation(conversation.id, !pinned))} />}
       <MenuItem label={t('ConversationActions.rename')} icon={<PencilIcon />} onSelect={pick(onRename)} />
-      {profilesSupported && canReuseConversation(conversation) && <MenuItem label={t('AgentProfiles.saveFromConversation')} icon={<CopyIcon />} onSelect={pick(() => editAgentProfile({ name: conversation.title.slice(0, 60), agent: conversation.agent, model: conversation.chatOptions?.model ?? null, effort: conversation.chatOptions?.effort ?? null, modelProvider: conversation.modelProvider ?? null, capability: conversation.workspaceReadOnly || conversation.planOnly ? 'readOnly' : 'develop', instructions: conversation.profile?.instructions ?? '' }))} />}
+      {profilesSupported && canReuseConversation(conversation) && <MenuItem label={t('AgentProfiles.saveFromConversation')} icon={<SquadIcon />} onSelect={pick(() => editAgentProfile({ name: conversation.title.slice(0, 60), agent: conversation.agent, model: conversation.chatOptions?.model ?? null, effort: conversation.chatOptions?.effort ?? null, modelProvider: conversation.modelProvider ?? null, capability: conversation.workspaceReadOnly || conversation.planOnly ? 'readOnly' : 'develop', instructions: conversation.profile?.instructions ?? '' }))} />}
       {(reusable || handoff || conversation.sessionId) && <>
         <div className="menu-separator" role="separator" />
         {reusable && <MenuItem label={t('ConversationActions.newWithSameConfiguration')} icon={<CopyIcon />} onSelect={pick(() => void newConversationFrom(conversation))} />}

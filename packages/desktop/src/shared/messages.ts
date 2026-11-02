@@ -3071,8 +3071,8 @@ export const MESSAGES = {
     "en": "Rename"
   },
   "ConversationActions.newWithSameConfiguration": {
-    "zh": "同配置新建",
-    "en": "New with same configuration"
+    "zh": "沿用配置开新会话",
+    "en": "New conversation with same settings"
   },
   "ConversationActions.handOff": {
     "zh": "移交…",

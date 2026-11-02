@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ModelProvider, type AgentKind, type AgentProfile, type AgentUsage } from '@antumi/protocol'
 import { AgentProfileService, delegatedMode, readyAgents, type ReadyAgent } from './agent-profile-service'
 import { AgentProfileStore } from './agent-profile-store'
@@ -299,6 +299,20 @@ describe('reusable agent roles and delegated work', () => {
     complete(chats.get(parentId).sessionId!, 'delegated')
     await waitFor(() => chats.get(parentId).sessionId === null)
     expect(store.call(call.id).state).toBe('running')
+  })
+
+  it('stops the idle caller before starting a member that waited on its slot, in the one pass', async () => {
+    await chats.send(parentId, 'Get a review')
+    chats.setCapacity({ maxConcurrentAgents: 20, agentConcurrency: { claude: 1 } }, () => profiles.tick())
+    const call = await profiles.dispatch(parentId, reviewer.id, 'Review the module')
+    await waitFor(() => store.call(call.id).waiting === 'capacity')
+    // From here only the pass below runs, so the member can start in no other.
+    vi.spyOn(profiles, 'tick').mockImplementation(() => {})
+    complete(chats.get(parentId).sessionId!, 'delegated')
+    await waitFor(() => chats.get(parentId).chat?.turn === 'idle')
+    await profiles.reconcile()
+    expect(chats.get(parentId).sessionId).toBeNull()
+    expect(store.call(call.id)).toMatchObject({ state: 'running', waiting: null })
   })
 
   it('finishes a member that leaves a command running, stopping it and saying so', async () => {

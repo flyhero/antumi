@@ -415,8 +415,11 @@ export class AgentProfileService {
     // A member that only reads meets no edit of the caller's, so it starts while the caller's turn
     // goes on; one that edits waits for that turn, and every result does.
     const working = this.working(current)
-    if (working) this.waitOn(calls.filter((call) => call.state === 'queued' && !call.readOnly), 'parent')
-    const queued = calls.filter((call) => call.state === 'queued' && (!working || call.readOnly))
+    // One list, split once: what the turn holds back and what may start now cannot drift apart.
+    const waiting = calls.filter((call) => call.state === 'queued')
+    const held = working ? waiting.filter((call) => !call.readOnly) : []
+    this.waitOn(held, 'parent')
+    const queued = waiting.filter((call) => !held.includes(call))
     // A member in a worktree of its own is no reason to hold results or the caller's next turn.
     const writer = calls.some((call) => !call.readOnly && underway(call) && call.workspace !== 'worktree')
     // Every result back by now goes in one message, for one turn of the caller's rather than one each.

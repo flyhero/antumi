@@ -1,6 +1,6 @@
 import type { BranchHolder } from '@antumi/protocol'
 import { t } from '../i18n'
-import { selectConversation, setWorktreesOpen, useCore } from '../core-store'
+import { selectConversation, useCore } from '../core-store'
 import { revealFile } from '../desktop-bridge'
 import { FILE_MANAGER } from '../file-actions'
 
@@ -32,9 +32,7 @@ export function HeldBranchNote({ branch, folder, holder, onLeave }: { branch: st
       <div className="branch-held-note" role="status">
         <p>{heldBranchText(branch, folder, holder)}</p>
         <div className="branch-held-actions">
-          {holder.archived
-            ? <button type="button" className="link-button" onClick={() => { onLeave(); setWorktreesOpen(true) }}>{t('BranchHolder.manageWorktrees')}</button>
-            : known && <button type="button" className="link-button" onClick={() => { onLeave(); selectConversation(id) }}>{t('WorktreeManager.openConversation')}</button>}
+          {known && <button type="button" className="link-button" onClick={() => { onLeave(); selectConversation(id) }}>{t('WorktreeManager.openConversation')}</button>}
           {reveal}
         </div>
       </div>

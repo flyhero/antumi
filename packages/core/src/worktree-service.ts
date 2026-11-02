@@ -5,6 +5,7 @@ import { gitOrNull } from './git-changes'
 import { Rejection } from './rejection'
 import { originDefault } from './task-start'
 import { execFileAsync } from './hidden-exec'
+import { worktreeOwner } from './worktree-owner'
 
 
 // Sizes are counted again once this old: a worktree grows as its task builds and installs.
@@ -26,7 +27,7 @@ export type WorktreeTasks = {
 // a delegated member's among them, whose worktree is the call's while that is open. Letting go of
 // a call's worktree tells the call, which then knows not to look for it.
 export type WorktreeConversations = {
-  list(): Pick<Conversation, 'id' | 'projectPaths' | 'chat' | 'agentCallId' | 'parentConversationId'>[]
+  list(): Pick<Conversation, 'id' | 'taskId' | 'projectPaths' | 'chat' | 'agentCallId' | 'parentConversationId' | 'archivedAt' | 'updatedAt'>[]
   // Each delegation's worktree as the call records it: the member's conversation may not exist yet.
   callWorktrees?(): { dir: string; id: string; parentId: string; conversationId: string; open: boolean }[]
   // Refuses, in the call's own order, if it was taken up since the list was read.
@@ -196,7 +197,7 @@ export class WorktreeService {
       const taskId = listing.get(folder.dir) ?? byShortId.get(folder.shortId) ?? null
       const real = taskId ? folder.dir : await realpath(folder.dir).catch(() => folder.dir)
       const call = taskId ? undefined : calls.find((each) => each.dir === real)
-      const conversation = taskId ? undefined : conversations.find((each) => each.projectPaths.includes(real)) ?? (call ? conversations.find((each) => each.id === call.conversationId) : undefined)
+      const conversation = taskId ? undefined : worktreeOwner(conversations.filter((each) => each.projectPaths.includes(real)), folder.shortId) ?? (call ? conversations.find((each) => each.id === call.conversationId) : undefined)
       const agentCall = call ? { id: call.id, parentId: call.parentId, open: call.open } : null
       // A member's worktree is in use for as long as its call is open: its setup may be running there.
       const inUse = taskId !== null ? busy.has(taskId) : agentCall ? agentCall.open : conversation?.chat?.turn === 'running'

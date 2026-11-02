@@ -158,7 +158,11 @@ describe('WorktreeService', () => {
   it('keeps a conversation\'s worktree while the conversation is there, and says when its agent is at work', async () => {
     const held = worktree('c')
     const left = worktree('f')
-    const conversations = [{ id: id('c'), projectPaths: [realpathSync(held)], chat: { turn: 'running' as const } }]
+    // An archived one working there too gives way, though it was active since.
+    const conversations = [
+      { id: id('x'), projectPaths: [realpathSync(held)], archivedAt: 9, updatedAt: 9 },
+      { id: id('c'), projectPaths: [realpathSync(held)], chat: { turn: 'running' as const }, updatedAt: 1 }
+    ]
     const worktrees = new WorktreeService(root, hooks, () => {}, { list: () => conversations })
     const listed = new Map((await worktrees.list()).map((each) => [each.path, each]))
     expect(listed.get(held)).toMatchObject({ taskId: null, conversationId: id('c'), inUse: true })

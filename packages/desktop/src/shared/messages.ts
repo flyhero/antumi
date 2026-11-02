@@ -3143,8 +3143,8 @@ export const MESSAGES = {
     "en": "{branch} is in use in the worktree of “{title}” and cannot be checked out here too. Open that conversation, wait for its Agent to stop, switch it to another branch, then select this branch here."
   },
   "BranchHolder.heldByArchivedConversation": {
-    "zh": "「{branch}」仍被已归档会话「{title}」的 worktree 占用，归档不会释放分支。点击底栏的 Worktree，找到该会话，确认要保留的文件已提交或移走后清理它，再回来选择这个分支。",
-    "en": "{branch} is still checked out in the worktree of archived “{title}”; archiving does not release the branch. Click Worktree in the bottom bar, find that conversation, commit or move any files you need to keep, then clean up its worktree and select this branch here."
+    "zh": "「{branch}」仍被已归档会话「{title}」的 worktree 占用，归档不会释放分支。打开那个会话，将它切到其他分支，再回来选择这个分支。",
+    "en": "{branch} is still checked out in the worktree of archived “{title}”; archiving does not release the branch. Open that conversation, switch it to another branch, then select this branch here."
   },
   "BranchHolder.heldByMainFolder": {
     "zh": "「{branch}」正在仓库主目录里检出，git 不允许同一个分支同时在两个地方检出。先在主目录切到别的分支，这里才能切过去。",
@@ -3153,10 +3153,6 @@ export const MESSAGES = {
   "BranchHolder.heldElsewhere": {
     "zh": "「{branch}」已在另一个 worktree 里使用：{folder}。在终端进入这个目录，先提交或暂存未提交的改动，再用 git switch <其他分支名> 切到其他分支，之后即可在这里选择这个分支。",
     "en": "{branch} is checked out in another worktree: {folder}. Open that directory in a terminal, commit or stash any uncommitted changes, then run git switch <other-branch-name> to switch it to another branch. You can then select this branch here."
-  },
-  "BranchHolder.manageWorktrees": {
-    "zh": "去 worktree 管理",
-    "en": "Manage worktrees"
   },
   "ConversationBranches.noMatchingBranches": {
     "zh": "没有匹配的分支",

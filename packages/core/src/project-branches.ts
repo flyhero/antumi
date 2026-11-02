@@ -1,8 +1,9 @@
 import path from 'node:path'
-import { shortTaskId, type BranchHolder, type Conversation, type ProjectBranches } from '@antumi/protocol'
+import { type BranchHolder, type Conversation, type ProjectBranches } from '@antumi/protocol'
 import { gitOrNull } from './git-changes'
 import { Rejection } from './rejection'
 import { execFileAsync } from './hidden-exec'
+import { worktreeOwner } from './worktree-owner'
 
 
 const MAX_REFS = 300
@@ -27,16 +28,14 @@ async function checkedOutElsewhere(dir: string, topLevel: string): Promise<{ els
 }
 
 // Who holds each branch checked out in another folder: the repo's own folder, a conversation
-// working there (the one that made the worktree, named by its folder's <id>/<repo>, else the one
-// last active in it), or something else. Archived conversations count: their worktrees stay.
+// working there (see worktreeOwner; its folder is named <id>/<repo>), or something else. An
+// archived one holds it only when no other works there: their worktrees stay.
 export function branchHolders(elsewhere: Record<string, string>, main: string | null, conversations: readonly Conversation[]): Record<string, BranchHolder> {
   const same = (a: string, b: string) => path.resolve(a) === path.resolve(b)
   return Object.fromEntries(Object.entries(elsewhere).map(([ref, folder]): [string, BranchHolder] => {
     if (main && same(folder, main)) return [ref, { kind: 'main' }]
     const users = conversations.filter((conversation) => same(conversation.workspacePath, folder) || conversation.projectPaths.some((project) => same(project, folder)))
-    const made = path.basename(path.dirname(folder))
-    const owner = users.find((conversation) => shortTaskId(conversation.id) === made || (conversation.taskId && shortTaskId(conversation.taskId) === made))
-      ?? [...users].sort((a, b) => b.updatedAt - a.updatedAt)[0]
+    const owner = worktreeOwner(users, path.basename(path.dirname(folder)))
     return [ref, owner ? { kind: 'conversation', conversationId: owner.id, title: owner.title, archived: owner.archivedAt != null } : { kind: 'other' }]
   }))
 }

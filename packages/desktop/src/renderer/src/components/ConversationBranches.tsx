@@ -71,7 +71,7 @@ function SwitchList({ option, onPick, onLeave }: { option: ProjectBranches; onPi
               <button type="button" className="menu-item" disabled={ref === current} data-held={holder ? true : undefined} aria-expanded={holder ? held === ref : undefined}
                 title={holder ? heldBranchText(shortRef(ref), holder, option.holders?.[ref]) : undefined} onClick={() => (holder ? setHeld(held === ref ? null : ref) : onPick(ref))}>
                 <span className="menu-item-title mono">{shortRef(ref)}</span>
-                {holder && <span className="menu-item-path">{holderLabel(holder, option.holders?.[ref])}</span>}
+                {holder && <span className="menu-item-path branch-holder">{holderLabel(holder, option.holders?.[ref])}</span>}
                 {ref === current && <span className="menu-check"><CheckIcon /></span>}
               </button>
             </li>

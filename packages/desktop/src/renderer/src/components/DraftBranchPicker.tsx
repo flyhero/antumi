@@ -100,7 +100,7 @@ export function DraftBranchPicker({ options, picked, worktree, locked, onOpen, o
                   <button type="button" className="menu-item" disabled={!pickable(ref)} onClick={() => pick(ref)}>
                     <span className="menu-item-title mono">{shortRef(ref)}</span>
                     {ref === current && <span className="menu-item-path">{t('DraftBranchPicker.current')}</span>}
-                    {holder && !worktree && <span className="menu-item-path">{holderLabel(holder, options.holders?.[ref])}</span>}
+                    {holder && !worktree && <span className="menu-item-path branch-holder">{holderLabel(holder, options.holders?.[ref])}</span>}
                     {ref === chosen && <span className="menu-check"><CheckIcon /></span>}
                   </button>
                 </li>

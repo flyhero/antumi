@@ -92,21 +92,28 @@ describe('project branches', () => {
     })
     const made = '/home/u/.antumi/worktrees/c24ff62b/menu-service'
     const shared = '/home/u/.antumi/worktrees/c8471a20/menu-service'
+    const left = '/home/u/.antumi/worktrees/b1a2c3d4/menu-service'
     const conversations = [
       at('c24ff62b-0000-4000-8000-000000000000', made, 1, { archivedAt: 5 }),
       at('d7142a6f-0000-4000-8000-000000000000', shared, 9),
-      at('c8471a20-0000-4000-8000-000000000000', shared, 2)
+      at('c8471a20-0000-4000-8000-000000000000', shared, 2),
+      at('b1a2c3d4-0000-4000-8000-000000000000', left, 3, { archivedAt: 6 }),
+      at('2a7b7444-0000-4000-8000-000000000000', left, 8),
+      at('eb17ef3d-0000-4000-8000-000000000000', left, 4)
     ]
     expect(branchHolders({
       'refs/heads/main': '/home/u/menu-service',
       'refs/heads/heic': made,
       'refs/heads/fix': shared,
+      'refs/heads/left': left,
       'refs/heads/release': '/home/u/menu-service/.claude/worktrees/resolve'
     }, '/home/u/menu-service', conversations)).toEqual({
       'refs/heads/main': { kind: 'main' },
       'refs/heads/heic': { kind: 'conversation', conversationId: conversations[0]!.id, title: 'conversation c24f', archived: true },
       // The one that made the worktree, though another sharing it was active since.
       'refs/heads/fix': { kind: 'conversation', conversationId: conversations[2]!.id, title: 'conversation c847', archived: false },
+      // Archived, so the one last active of those still working there.
+      'refs/heads/left': { kind: 'conversation', conversationId: conversations[4]!.id, title: 'conversation 2a7b', archived: false },
       'refs/heads/release': { kind: 'other' }
     })
   })

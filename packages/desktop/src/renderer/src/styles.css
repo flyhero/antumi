@@ -2366,6 +2366,10 @@ button.task-tag:hover {
   white-space: nowrap;
 }
 
+/* A held branch keeps its name; where it is held gives way first, the full reason shown below. */
+.menu-item:has(.branch-holder) .menu-item-title { flex: 0 1 auto; }
+.menu-item-path.branch-holder { flex: 0 1000 auto; min-width: 5em; margin-left: auto; }
+
 .menu-search {
   margin-bottom: 4px;
 }

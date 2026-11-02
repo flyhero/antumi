@@ -397,14 +397,17 @@ export class AgentProfileService {
     }
     const current = this.chats.get(id)
     const calls = this.store.calls(id)
-    const queued = calls.filter((call) => call.state === 'queued')
-    if (this.working(current)) return this.waitOn(queued, 'parent')
+    // A member that only reads meets no edit of the caller's, so it starts while the caller's turn
+    // goes on; one that edits waits for that turn, and every result does.
+    const working = this.working(current)
+    if (working) this.waitOn(calls.filter((call) => call.state === 'queued' && !call.readOnly), 'parent')
+    const queued = calls.filter((call) => call.state === 'queued' && (!working || call.readOnly))
     // A member in a worktree of its own is no reason to hold results or the caller's next turn.
     const writer = calls.some((call) => !call.readOnly && underway(call) && call.workspace !== 'worktree')
     // Every result back by now goes in one message, for one turn of the caller's rather than one each.
     // A call taken up again is keyed with its go: core takes a key it sent once for a replay and drops it.
     const returned = calls.filter((call) => !agentCallOpen(call) && !call.delivered)
-    if (returned.length && !writer) {
+    if (!working && returned.length && !writer) {
       if (!this.chats.capacityAvailable(current.agent, current.id)) return
       if (!current.sessionId) await this.chats.resumeDelegation(id)
       const results = returned.map((call) => ({ callId: call.id, name: call.profile.name, state: call.state, result: call.result?.slice(0, 20000), error: call.error, ...resumedNote(call), ...worktreeNote(call) }))
@@ -412,10 +415,9 @@ export class AgentProfileService {
       for (const call of returned) this.patch(call.id, { delivered: true })
       return
     }
-    if (!queued.length) return
-    // Waiting on its members frees the caller's slot; it comes back with their results. Not while it
-    // runs something in the background, which would go with it.
-    if (current.sessionId && this.chats.agentIdle(id)) await this.chats.stop(id)
+    // Waiting on its members frees the caller's slot, those started during its turn included; it
+    // comes back with their results. Not while it runs something in the background, which would go with it.
+    if (!working && current.sessionId && calls.some(agentCallOpen) && this.chats.agentIdle(id)) await this.chats.stop(id)
     for (const call of queued) {
       // What it would edit, against every edit under way: another member's, or a conversation's.
       const roots = this.writableRoots(call, current)

@@ -215,10 +215,11 @@ describe('reusable agent roles and delegated work', () => {
     expect(chats.messages(parentId).some((message) => message.text.includes('"state":"failed"'))).toBe(true)
   })
   it('restores queued work and archived roles do not change its saved snapshot', async () => {
+    const developer = profiles.save({ name: 'Developer', agent: 'claude', capability: 'develop' })
     await chats.send(parentId, 'Working')
-    const call = await profiles.dispatch(parentId, reviewer.id, 'Review later')
-    profiles.archive(reviewer.id, true)
-    expect(profiles.available(parentId)).toEqual([])
+    const call = await profiles.dispatch(parentId, developer.id, 'Build later')
+    profiles.archive(developer.id, true)
+    expect(profiles.available(parentId).map((profile) => profile.id)).toEqual([reviewer.id])
     await profiles.close()
     store = new AgentProfileStore(path.join(root, 'antumi.db'))
     profiles = new AgentProfileService(store, chats, { profile: () => {}, call: () => {} })
@@ -256,29 +257,48 @@ describe('reusable agent roles and delegated work', () => {
     expect(chats.list(false, false, true).some((conversation) => conversation.id === second.conversationId)).toBe(true)
   })
 
-  it('starts members once the caller\'s turn ends, leaving the dev server it runs alone', async () => {
-    await chats.send(parentId, 'Start the dev server, then get a review')
+  it('starts a developing member once the caller\'s turn ends, leaving the dev server it runs alone', async () => {
+    const developer = profiles.save({ name: 'Developer', agent: 'claude', capability: 'develop' })
+    await chats.send(parentId, 'Start the dev server, then get the module built')
     const session = chats.get(parentId).sessionId!
     background(session, 'bg-parent', 'pnpm dev')
-    const call = await profiles.dispatch(parentId, reviewer.id, 'Review the module')
+    const call = await profiles.dispatch(parentId, developer.id, 'Build the module')
     await waitFor(() => store.call(call.id).waiting === 'parent')
     expect(store.call(call.id).state).toBe('queued')
     complete(session, 'delegated')
     await waitFor(() => store.call(call.id).state === 'running')
     expect(store.call(call.id).waiting).toBeNull()
     expect(chats.get(parentId)).toMatchObject({ sessionId: session, chat: { turn: 'running' } })
-    complete(chats.get(call.conversationId).sessionId!, 'No defects found')
+    complete(chats.get(call.conversationId).sessionId!, 'Built')
     await waitFor(() => store.call(call.id).delivered)
     expect(chats.get(parentId).sessionId).toBe(session)
+    expect(chats.messages(parentId).some((message) => message.text.includes('Built'))).toBe(true)
+  })
+
+  it('starts a reading member while the caller works on, holding its result until the turn ends', async () => {
+    await chats.send(parentId, 'Get a review, then keep going')
+    const session = chats.get(parentId).sessionId!
+    const call = await profiles.dispatch(parentId, reviewer.id, 'Review the module')
+    await waitFor(() => store.call(call.id).state === 'running')
+    expect(store.call(call.id).waiting).toBeNull()
+    expect(chats.get(parentId).chat?.turn).toBe('running')
+    complete(chats.get(call.conversationId).sessionId!, 'No defects found')
+    await waitFor(() => store.call(call.id).state === 'completed')
+    await profiles.reconcile()
+    expect(store.call(call.id).delivered).toBe(false)
+    complete(session, 'Kept going')
+    await waitFor(() => store.call(call.id).delivered)
     expect(chats.messages(parentId).some((message) => message.text.includes('No defects found'))).toBe(true)
   })
 
   it('frees an idle caller\'s slot while its members work', async () => {
     await chats.send(parentId, 'Get a review')
     const call = await profiles.dispatch(parentId, reviewer.id, 'Review the module')
-    complete(chats.get(parentId).sessionId!, 'delegated')
     await waitFor(() => store.call(call.id).state === 'running')
-    expect(chats.get(parentId).sessionId).toBeNull()
+    expect(chats.get(parentId).sessionId).not.toBeNull()
+    complete(chats.get(parentId).sessionId!, 'delegated')
+    await waitFor(() => chats.get(parentId).sessionId === null)
+    expect(store.call(call.id).state).toBe('running')
   })
 
   it('finishes a member that leaves a command running, stopping it and saying so', async () => {

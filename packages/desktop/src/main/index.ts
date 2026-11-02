@@ -323,6 +323,21 @@ ipcMain.handle('antumi:set-language', (event, locale: unknown) => {
   Menu.setApplicationMenu(Menu.buildFromTemplate(applicationMenu(uiLocale, process.platform)))
 })
 
+// Chrome's words for a page that asks before it is left, over the window the user is in. Modal and
+// synchronous: Electron needs the answer before the page's leaving goes on or is called off.
+function confirmLeavePage(): boolean {
+  const window = BrowserWindow.getFocusedWindow() ?? mainWindow
+  const options = {
+    type: 'question' as const,
+    buttons: [uiText('Leave', '离开'), uiText('Stay', '留下')],
+    defaultId: 1,
+    cancelId: 1,
+    message: uiText('Leave site?', '离开此网站？'),
+    detail: uiText('Changes you made may not be saved.', '系统可能不会保存您所做的更改。')
+  }
+  return (window && !window.isDestroyed() ? dialog.showMessageBoxSync(window, options) : dialog.showMessageBoxSync(options)) === 0
+}
+
 ipcMain.handle('antumi:pick-plugin', async (event, kind: unknown) => {
   if (kind !== 'directory' && kind !== 'zip') return null
   const options: OpenDialogOptions = kind === 'directory'
@@ -604,7 +619,7 @@ void app.whenReady().then(async () => {
   createWindow()
   void removeUpdateLeftovers()
   // After the backend: ensureBackend may move the home, and the host file belongs in the one core reads.
-  void ensureBackend().finally(() => startBrowserHost(slot, antumiPaths().browserHostFile).then(
+  void ensureBackend().finally(() => startBrowserHost(slot, antumiPaths().browserHostFile, confirmLeavePage).then(
     (host) => { browserHost = host },
     (error: unknown) => console.error('[antumi] the browser host did not start', error)
   ))

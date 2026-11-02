@@ -35,7 +35,8 @@ export type BrowserHost = {
 // The browser host, in the app: tabs are WebContentsViews, driven for the agent through Playwright
 // over each tab's own CDP proxy, and shown to the user by the window slot. Core connects over the
 // host server, finding it through the host file, and keeps every policy; this only does.
-export async function startBrowserHost(slot: WindowSlot, hostFile: string): Promise<BrowserHost> {
+// confirmLeave: asks the user, there and then, whether to leave a page that asks before it is left.
+export async function startBrowserHost(slot: WindowSlot, hostFile: string, confirmLeave: () => boolean): Promise<BrowserHost> {
   const tabSession = session.fromPartition(PARTITION)
   tabSession.setUserAgent(chromeUserAgent(tabSession.getUserAgent(), process.versions.chrome))
   const views = new Map<string, WebContentsView>()
@@ -136,6 +137,13 @@ export async function startBrowserHost(slot: WindowSlot, hostFile: string): Prom
       return { action: 'deny' }
     })
     bindBrowserShortcuts(contents, tab.id, slot, process.platform === 'darwin' ? 'darwin' : process.platform === 'win32' ? 'win32' : 'linux', () => capture.active)
+    // A page that asks before it is left (an editor with unsaved work) has its leaving called off
+    // by Electron without a word unless this answers; the dialog Playwright is told of is gone by
+    // the time it replies. Back, reload and the page's own links then all did nothing. The user is
+    // asked, as Chrome asks.
+    contents.on('will-prevent-unload', (event) => {
+      if (confirmLeave()) event.preventDefault()
+    })
     contents.on('focus', () => slot.sendToRenderer('antumi:browser-focused', { tabId: tab.id, focused: true }))
     contents.on('blur', () => slot.sendToRenderer('antumi:browser-focused', { tabId: tab.id, focused: false }))
     return tab

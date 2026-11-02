@@ -448,7 +448,8 @@ export class AgentProfileService {
         continue
       }
       if (!this.chats.capacityAvailable(call.profile.agent)) {
-        this.waitOn([call], 'capacity')
+        // The slot the caller holds frees when its turn ends: then the turn is what it waits for.
+        this.waitOn([call], working && this.chats.capacityAvailable(call.profile.agent, current.id) ? 'parent' : 'capacity')
         continue
       }
       if (call.workspace === 'worktree') {

@@ -1253,7 +1253,7 @@ export class ConversationService {
     const profile = conversation.profile
     const notes = [profile ? `你是用户配置的智能体「${profile.name}」。\n${profile.instructions}` : '']
     if (this.delegationAvailable?.(conversation.id) && !conversation.parentConversationId && !conversation.discussionId && !conversation.squadRunId && !conversation.routineId && !isHelper(conversation)) {
-      notes.push('用户用 @ 点名智能体时，先查找对应智能体并委派，不要自行代替它回答。需要其他专业智能体协助时，可用 Antumi 的 antumi_agent_list 查找可调用的智能体（用户配置的，以及本机可直接调用的外部智能体），再用 antumi_agent_dispatch 委派具体子任务（说明目标、必要背景、文件范围和交付要求）。这是独立子会话，不自动继承聊天历史。只读委派和 workspace: worktree 的开发委派派出即开始，在主会话目录里改文件的开发委派等这一轮结束才开始；结果都在这一轮结束后交回，Antumi 会自动继续当前会话，所以派完没有别的事就结束回合。用 antumi_agent_status 查看进度；不要反复轮询。跨很多目录、彼此不重叠的机械性改动，可以拆成几个 workspace: worktree 的开发委派同时做：先把自己的改动提交，派出后可以继续做不相关的事，但别改派出去的那些文件；结果回来后合并各个分支（git merge），解决冲突，重新跑检查。')
+      notes.push('用户用 @ 点名智能体时，先查找对应智能体并委派，不要自行代替它回答。需要其他专业智能体协助时，可用 Antumi 的 antumi_agent_list 查找可调用的智能体（用户配置的，以及本机可直接调用的外部智能体），再用 antumi_agent_dispatch 委派具体子任务（说明目标、必要背景、文件范围和交付要求）。这是独立子会话，不自动继承聊天历史。只读委派和 workspace: worktree 的开发委派派出即开始，在主会话目录里改文件的开发委派等这一轮结束才开始；派出只读审阅后，别再改派给它看的那些文件，等它的结果回来。结果都在这一轮结束后交回，Antumi 会自动继续当前会话，所以派完没有别的事就结束回合。用 antumi_agent_status 查看进度；不要反复轮询。跨很多目录、彼此不重叠的机械性改动，可以拆成几个 workspace: worktree 的开发委派同时做：先把自己的改动提交，派出后可以继续做不相关的事，但别改派出去的那些文件；结果回来后合并各个分支（git merge），解决冲突，重新跑检查。')
     }
     return notes.filter(Boolean).join('\n\n')
   }

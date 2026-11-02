@@ -305,7 +305,8 @@ describe('reusable agent roles and delegated work', () => {
     await chats.send(parentId, 'Get a review')
     chats.setCapacity({ maxConcurrentAgents: 20, agentConcurrency: { claude: 1 } }, () => profiles.tick())
     const call = await profiles.dispatch(parentId, reviewer.id, 'Review the module')
-    await waitFor(() => store.call(call.id).waiting === 'capacity')
+    // The caller's own slot is the one it waits on, so it waits on the caller's turn, not on a slot.
+    await waitFor(() => store.call(call.id).waiting === 'parent')
     // From here only the pass below runs, so the member can start in no other.
     vi.spyOn(profiles, 'tick').mockImplementation(() => {})
     complete(chats.get(parentId).sessionId!, 'delegated')

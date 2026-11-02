@@ -118,7 +118,7 @@ export function ConversationView({ id, pane }: { id: string; pane?: Conversation
       }
     }
   }
-  return <section
+  const view = <section
     className="detail terminal-view conversation-view"
     aria-label={pane ? t('ConversationView.pane', { value1: pane.index + 1, value2: conversation.title }) : t('ConversationView.conversation', { value1: conversation.title })}
     data-split-pane={pane ? pane.index + 1 : undefined}
@@ -176,8 +176,15 @@ export function ConversationView({ id, pane }: { id: string; pane?: Conversation
     </header>
     <div className="terminal-body">
       <ConversationChat conversation={conversation} onHandoff={conversation.discussionId || conversation.parentConversationId ? undefined : openHandoff} />
-      {!pane && hasPanel && inspectorOpen && <ConversationInspector conversation={conversation} widthRatio={panelRatio} onWidthRatioChange={setPanelRatio} wire={wire} />}
     </div>
     {dropping && <div className="split-drop" aria-hidden="true"><SplitIcon /><strong>{t('ConversationView.releaseToOpenInARightSplitPane')}</strong></div>}
   </section>
+  if (pane) return view
+  // The inspector stands beside the whole conversation, header and all, as it does beside a split.
+  return (
+    <div className="conversation-split">
+      {view}
+      {hasPanel && inspectorOpen && <ConversationInspector conversation={conversation} widthRatio={panelRatio} onWidthRatioChange={setPanelRatio} wire={wire} />}
+    </div>
+  )
 }

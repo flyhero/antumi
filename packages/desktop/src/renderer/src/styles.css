@@ -2901,6 +2901,7 @@ body.side-panel-resizing * {
 }
 
 .terminal-body:has(> .inspector-panel[data-maximized]) > .chat-view { display: none; }
+.conversation-split:has(> .inspector-panel[data-maximized]) > :not(.inspector-panel) { display: none; }
 .inspector-body:has(> .file-editor) { display: flex; flex-direction: column; overflow: hidden; padding: 0; }
 .file-editor { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; }
 .file-editor-bar { display: flex; align-items: center; flex-shrink: 0; gap: 4px; padding: 4px 8px; border-bottom: 1px solid var(--border); }

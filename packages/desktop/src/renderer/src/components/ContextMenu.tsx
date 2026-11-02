@@ -179,6 +179,25 @@ export function MenuSubmenu({ label, icon, value, disabled, open, onOpen, onClos
     })
   }, [open])
 
+  // The pointer moving on to another item of the menu it opened from closes it, as native menus do;
+  // a sibling submenu's row opens its own instead, the parent keeping one open at a time.
+  const close = useRef(onClose)
+  close.current = onClose
+  useEffect(() => {
+    const menu = row.current?.closest('[role="menu"]')
+    if (!open || !menu) return
+    const onPointerOver = (event: Event) => {
+      const target = event.target
+      if (!(target instanceof Element) || panel.current?.contains(target) || row.current?.contains(target)) return
+      const item = target.closest('[role^="menuitem"]')
+      if (item && item.closest('[role="menu"]') === menu && item.getAttribute('aria-haspopup') !== 'menu') close.current()
+    }
+    menu.addEventListener('pointerover', onPointerOver)
+    return () => menu.removeEventListener('pointerover', onPointerOver)
+  }, [open])
+  // A menu closed with its submenu open must not open with it the next time.
+  useEffect(() => () => close.current(), [])
+
   // Only once placed: until then the panel is hidden, and hidden elements can't take focus.
   useLayoutEffect(() => {
     if (place && focusOnOpen.current) {

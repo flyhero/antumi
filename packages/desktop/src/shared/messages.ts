@@ -50,11 +50,11 @@ export const MESSAGES = {
   "KeyboardShortcuts.findContent": {"zh": "查找当前内容", "en": "Find in current content"},
   "KeyboardShortcuts.findNext": {"zh": "下一个查找结果", "en": "Next search result"},
   "KeyboardShortcuts.findPrevious": {"zh": "上一个查找结果", "en": "Previous search result"},
-  "KeyboardShortcuts.searchEverything": {"zh": "搜索会话、任务、智能体和文件", "en": "Search conversations, tasks, agents and files"},
+  "KeyboardShortcuts.searchEverything": {"zh": "搜索会话、任务、智能体和文件", "en": "Search chats, tasks, agents and files"},
   "SearchPalette.label": {"zh": "搜索", "en": "Search"},
-  "SearchPalette.placeholder": {"zh": "搜索会话、任务、智能体和文件", "en": "Search conversations, tasks, agents and files"},
+  "SearchPalette.placeholder": {"zh": "搜索会话、任务、智能体和文件", "en": "Search chats, tasks, agents and files"},
   "SearchPalette.all": {"zh": "全部", "en": "All"},
-  "SearchPalette.conversations": {"zh": "会话", "en": "Conversations"},
+  "SearchPalette.conversations": {"zh": "会话", "en": "Chats"},
   "SearchPalette.tasks": {"zh": "任务", "en": "Tasks"},
   "SearchPalette.agents": {"zh": "智能体", "en": "Agents"},
   "SearchPalette.files": {"zh": "文件", "en": "Files"},
@@ -268,7 +268,7 @@ export const MESSAGES = {
   "AgentProfiles.createHint": { "zh": "配置指令、模型和工具", "en": "Configure instructions, models and tools" },
   "AgentProfiles.createWithAgentHint": { "zh": "也可以在会话中描述你需要什么样的智能体，让 Agent 帮你创建。", "en": "You can also describe the agent you need in a conversation and ask Agent to create it for you." },
   "Squads.createWithAgentHint": { "zh": "也可以在会话中描述团队目标和成员分工，让 Agent 帮你创建团队。", "en": "You can also describe your team's goal and member roles in a conversation and ask Agent to create the team for you." },
-  "AgentsPageHeader.openNewConversation": { "zh": "前往新建会话", "en": "Start a conversation" },
+  "AgentsPageHeader.openNewConversation": { "zh": "前往新建会话", "en": "Start a chat" },
   "AgentProfiles.pendingReturn": {"zh": "等待回传", "en": "Returning result"},
   "AgentProfiles.startingHint": {"zh": "正在准备独立会话，即将开始执行。", "en": "Preparing an independent conversation. Work will begin shortly."},
   "AgentProfiles.cardLabel": {"zh": "委派给 {name}", "en": "Delegated to {name}"},
@@ -570,7 +570,7 @@ export const MESSAGES = {
 
   "sidebar.toggleSection": { "zh": "{action}{label}", "en": "{action} {label}" },
   "sidebar.tasks": { "zh": "任务", "en": "Tasks" },
-  "sidebar.conversations": { "zh": "会话", "en": "Conversations" },
+  "sidebar.conversations": { "zh": "会话", "en": "Chats" },
   "squad.leaderReadOnly": { "zh": "队长必须是只读成员", "en": "The team lead must be a read-only member" },
   "squad.developerRequired": { "zh": "至少需要一名开发成员", "en": "At least one developer is required" },
   "squad.memberDuplicate": { "zh": "成员标识和名称不能重复", "en": "Member IDs and names must be unique" },
@@ -590,7 +590,7 @@ export const MESSAGES = {
   },
   "App.chooseOrCreateAConversation": {
     "zh": "选择或新建一条会话",
-    "en": "Choose or create a conversation"
+    "en": "Choose or create a chat"
   },
   "approvalChoiceText.thisRun": {
     "zh": "这次运行内",
@@ -3634,7 +3634,7 @@ export const MESSAGES = {
   },
   "ConversationList.groupAndSortConversations": {
     "zh": "会话的分组和排序",
-    "en": "Group and sort conversations"
+    "en": "Group and sort chats"
   },
   "ConversationList.density": {"zh": "列表样式", "en": "Rows"},
   "ConversationList.comfortable": {"zh": "标准", "en": "Comfortable"},
@@ -3678,11 +3678,11 @@ export const MESSAGES = {
   },
   "ConversationList.conversations": {
     "zh": "会话列表",
-    "en": "Conversations"
+    "en": "Chats"
   },
   "ConversationList.searchConversations": {
     "zh": "搜索会话",
-    "en": "Search conversations"
+    "en": "Search chats"
   },
   "ConversationList.groupAndSort": {
     "zh": "分组和排序",
@@ -3690,7 +3690,7 @@ export const MESSAGES = {
   },
   "ConversationList.newConversation": {
     "zh": "新建会话",
-    "en": "New conversation"
+    "en": "New chat"
   },
   "ConversationList.titleProjectNameOrChatContent": {
     "zh": "标题、项目名或聊天内容",
@@ -3698,15 +3698,15 @@ export const MESSAGES = {
   },
   "ConversationList.noConversationsYetClickAtTheTopRight": {
     "zh": "还没有会话，点右上角的 ＋ 新建。",
-    "en": "No conversations yet. Click ＋ at the top right to create one."
+    "en": "No chats yet. Click ＋ at the top right to create one."
   },
   "ConversationList.noConversationsMatch": {
     "zh": "没有找到匹配「{needle}」的会话。",
-    "en": "No conversations match “{needle}”."
+    "en": "No chats match “{needle}”."
   },
   "ConversationList.newConversationIn": {
     "zh": "在 {value1} 新建会话",
-    "en": "New conversation in {value1}"
+    "en": "New chat in {value1}"
   },
   "ConversationList.archived": {
     "zh": "已归档",

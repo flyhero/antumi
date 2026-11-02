@@ -18,6 +18,8 @@ import { FileDiffView, FileList, useFocusCount } from './Inspector'
 import { BranchIcon, CheckIcon, ClockIcon, CloseIcon, CommitIcon, CompareIcon, ContinueIcon, CopyIcon, FetchIcon, LinkIcon, MergeIcon, PencilIcon, PlusIcon, PushIcon, RebaseIcon, StarIcon, TagIcon, TrashIcon, UpdateIcon } from './icons'
 import { ChatPicker } from './ChatPicker'
 import { GitPushDialog, GitPushRejectedDialog } from './GitPushDialog'
+import { GitProblemDialog } from './GitProblemDialog'
+import { describeGitAction, handGitProblemToAgent } from '../git-handoff'
 import { setPreference, usePreferences } from '../preferences'
 import { CopyButton } from './CopyButton'
 import { projectName } from './ProjectPicker'
@@ -58,6 +60,9 @@ export function GitRepository({ target, updatedAt = 0, refresh = 0 }: { target: 
   const [dialog, setDialog] = useState<DialogChoice | null>(null)
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState<{ message: string; persistent?: boolean } | null>(null)
+  // An action that failed or stopped on conflicts, told in a dialog that can hand it to an agent;
+  // conflicts are read from the status, which is fresh by the time the dialog shows.
+  const [problem, setProblem] = useState<{ operation: string; message: string | null; conflicted: boolean } | null>(null)
   useEffect(() => {
     if (!note || note.persistent) return
     const timer = setTimeout(() => setNote(null), 5_000)
@@ -86,10 +91,12 @@ export function GitRepository({ target, updatedAt = 0, refresh = 0 }: { target: 
           return await rpc.call('git.execute', { ...target, action })
         } catch (error) {
           if (intercept?.(error)) return null
-          throw error
+          setProblem({ operation: describeGitAction(action), message: error instanceof RpcError && error.reason ? reasonText(error.reason, error.message) : error instanceof Error ? error.message : String(error), conflicted: false })
+          return null
         }
       })
       if (!result) return null
+      if (result.state === 'conflicts') setProblem({ operation: describeGitAction(action), message: null, conflicted: true })
       setNote({ message: resultNote(action, result, status?.rebase === true), persistent: result.state === 'conflicts' || result.stash === 'kept' })
       if (action.kind === 'switch' || action.kind === 'detach' || (action.kind === 'create' && action.checkout) || action.kind === 'rename') {
         setSelected('HEAD'); setSelectedCommit(null); setComparison(null)
@@ -241,6 +248,7 @@ export function GitRepository({ target, updatedAt = 0, refresh = 0 }: { target: 
         {status.conflicts.map((file) => <ConflictRow key={file} target={target} directory={status.directory} file={file} disabled={disabled} resolve={() => void run({ kind: 'resolve', file })} />)}
         <div className="git-toolbar">
           <button className="button" onClick={() => void openTerminal(status.directory)}>{t('GitInspector.openTerminal')}</button>
+          {status.conflicts.length > 0 && <button className="button" data-tooltip={t('GitHandoff.handOffHint')} onClick={() => void handGitProblemToAgent({ operation: status.rebase ? 'rebase' : status.operation === 'merge' ? 'merge' : 'cherry-pick / revert', message: null, conflicts: status.conflicts }, { directory: status.directory, branch: status.branch })}>{t('GitHandoff.handOff')}</button>}
           {(status.operation === 'merge' || status.rebase) && <>
             <button className="button" disabled={disabled || status.conflicts.length > 0} onClick={() => void run({ kind: 'continue' })}><ContinueIcon />{status.rebase ? t('GitInspector.continueRebase') : t('GitInspector.finishMerge')}</button>
             <button className="button" disabled={disabled} onClick={() => setDialog({ kind: 'abort' })}><CloseIcon />{status.rebase ? t('GitInspector.abortRebase') : t('GitInspector.abortMerge')}</button>
@@ -264,6 +272,7 @@ export function GitRepository({ target, updatedAt = 0, refresh = 0 }: { target: 
       {dialog?.kind === 'push' && pushTargetSupported
         ? status.branch && <GitPushDialog key={status.branch} target={target} status={status} busy={busy} push={(remote, name) => void pushTo(remote, name)} close={() => setDialog(null)} />
         : dialog && <ActionDialog choice={dialog} target={target} status={status} busy={busy} run={run} commitWritten={(push) => void commitWritten(push)} close={() => setDialog(null)} />}
+      {problem && (!problem.conflicted || status.conflicts.length > 0) && <GitProblemDialog problem={{ operation: problem.operation, message: problem.message, conflicts: problem.conflicted ? status.conflicts : [] }} where={{ directory: status.directory, branch: status.branch }} close={() => setProblem(null)} />}
       {rejected && <GitPushRejectedDialog target={`${rejected.remote}/${rejected.name}`} busy={busy} close={() => setRejected(null)} choose={(method, remember) => {
         if (remember) setPreference('gitPushRejectedUpdate', method)
         void updateAndPush(method, rejected.remote, rejected.name)

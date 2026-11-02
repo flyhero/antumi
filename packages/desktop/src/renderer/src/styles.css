@@ -9848,6 +9848,9 @@ summary.agent-group-head:focus-visible { outline: 2px solid var(--focus); outlin
 .git-push-note { margin: 0; font-size: 12px; line-height: 1.6; }
 .git-push-note .link-button { margin-left: 0; font-size: 12px; }
 .git-push-remember { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+/* What git said when an action failed, as it said it, and the files it stopped on. */
+.git-problem-output { max-height: 240px; overflow: auto; margin: 0; padding: 8px 10px; border-radius: 6px; background: var(--fill-2); font-family: var(--mono); font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.git-problem-files { max-height: 200px; overflow: auto; margin: 0; padding-left: 18px; font-size: 12px; }
 /* How far a local branch is from its upstream, as IntelliJ shows it: incoming, then outgoing. */
 .git-branch-track { display: inline-flex; gap: 4px; flex-shrink: 0; font-size: var(--chat-font-small, 12px); font-variant-numeric: tabular-nums; }
 .git-branch-track [data-side='behind'] { color: var(--info); }

@@ -405,6 +405,42 @@ describe('Git management', () => {
     expect(await service.status(target)).toMatchObject({ operation: null, changes: 0 })
   })
 
+  it('cherry-picks and reverts a commit, and carries on or aborts one stopped on conflicts', async () => {
+    git(repo, 'switch', '-q', '-c', 'feature')
+    const added = commit('added.txt', 'added\n')
+    const clash = commit('file.txt', 'feature\n')
+    git(repo, 'switch', '-q', 'main')
+    expect(await service.execute(target, { kind: 'cherryPick', sha: added })).toEqual({ state: 'done' })
+    expect(git(repo, 'log', '-1', '--format=%s')).toBe('added.txt')
+
+    commit('file.txt', 'main\n')
+    expect(await service.execute(target, { kind: 'cherryPick', sha: clash })).toEqual({ state: 'conflicts' })
+    expect(await service.status(target)).toMatchObject({ operation: 'other', picking: 'cherry-pick', conflicts: ['file.txt'] })
+    await service.execute(target, { kind: 'abort' })
+    expect(await service.status(target)).toMatchObject({ operation: null, changes: 0 })
+    expect(git(repo, 'show', 'HEAD:file.txt')).toBe('main')
+
+    await service.execute(target, { kind: 'cherryPick', sha: clash })
+    writeFileSync(path.join(repo, 'file.txt'), 'both\n')
+    await service.execute(target, { kind: 'resolve', file: 'file.txt' }); await service.execute(target, { kind: 'continue' })
+    expect(await service.status(target)).toMatchObject({ operation: null, changes: 0 })
+    expect(git(repo, 'log', '-1', '--format=%s')).toBe('file.txt')
+
+    const head = git(repo, 'rev-parse', 'HEAD')
+    expect(await service.execute(target, { kind: 'revert', sha: head })).toEqual({ state: 'done' })
+    expect(git(repo, 'show', 'HEAD:file.txt')).toBe('main')
+    expect(git(repo, 'log', '-1', '--format=%s')).toMatch(/^Revert/)
+  })
+
+  it('calls off a cherry-pick that would change nothing', async () => {
+    git(repo, 'switch', '-q', '-c', 'feature')
+    const added = commit('added.txt', 'added\n')
+    git(repo, 'switch', '-q', 'main')
+    await service.execute(target, { kind: 'cherryPick', sha: added })
+    await expect(service.execute(target, { kind: 'cherryPick', sha: added })).rejects.toMatchObject({ reason: 'git-operation-failed' })
+    expect(await service.status(target)).toMatchObject({ operation: null, changes: 0 })
+  })
+
   it('pushes new branches explicitly and retains a local commit if push fails', async () => {
     await service.execute(target, { kind: 'create', name: 'new', ref: 'HEAD', checkout: true })
     commit('new.txt', 'new')

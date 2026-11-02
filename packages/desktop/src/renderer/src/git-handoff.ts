@@ -27,6 +27,8 @@ export function describeGitAction(action: GitAction): string {
     case 'track': return `branch --set-upstream-to ${action.upstream ? short(action.upstream) : '(none)'} ${short(action.ref)}`
     case 'resolve': return `add ${action.file}`
     case 'pull': case 'continue': case 'abort': return action.kind
+    case 'cherryPick': return `cherry-pick ${action.sha.slice(0, 8)}`
+    case 'revert': return `revert ${action.sha.slice(0, 8)}`
     case 'switch': case 'delete': case 'detach': case 'merge': case 'rebase': return `${action.kind} ${short(action.ref)}`
   }
 }

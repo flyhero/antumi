@@ -34,7 +34,9 @@ export const GitStatus = z.object({
   branches: z.array(GitBranch), remotes: z.array(z.string()), blocker: z.string().nullable(),
   operation: z.enum(['merge', 'other']).nullable(), conflicts: z.array(z.string()),
   // The 'other' operation is a rebase, which a core with git-update carries on like a merge.
-  rebase: z.boolean().optional(), tags: z.array(GitTag).optional(), recentBranches: z.array(Ref).optional(), taskId: z.string().optional(), readOnly: z.boolean().optional()
+  rebase: z.boolean().optional(),
+  // Or a cherry-pick or revert, carried on and aborted the same way by a core with git-cherry-pick.
+  picking: z.enum(['cherry-pick', 'revert']).optional(), tags: z.array(GitTag).optional(), recentBranches: z.array(Ref).optional(), taskId: z.string().optional(), readOnly: z.boolean().optional()
 })
 export type GitStatus = z.infer<typeof GitStatus>
 export const GitDetail = z.object({ commit: GitCommit, message: z.string(), parent: z.string().nullable(), files: z.array(ChangedFile) })
@@ -65,6 +67,10 @@ export const GitAction = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('track'), ref: Ref, upstream: Ref.nullable() }),
   z.object({ kind: z.literal('commit'), message: z.string().trim().min(1).max(10000), push: z.boolean() }),
   z.object({ kind: z.literal('merge'), ref: Ref }),
+  // A commit's change applied onto the current branch as a new commit, or undone by one; a merge
+  // commit by its first parent. Needs git-cherry-pick.
+  z.object({ kind: z.literal('cherryPick'), sha: Ref }),
+  z.object({ kind: z.literal('revert'), sha: Ref }),
   z.object({ kind: z.literal('rebase'), ref: Ref, from: Ref.optional() }),
   z.object({ kind: z.literal('resolve'), file: z.string().min(1) }),
   z.object({ kind: z.literal('continue') }),
@@ -99,9 +105,9 @@ export function checkGitOperation(kind: GitTarget['kind'], action: GitAction, bu
   if (action.kind === 'rebase' && action.from && action.from !== status.branch) return 'git-branch-changed'
   const mergeAction = ['resolve', 'continue', 'abort'].includes(action.kind)
   if (status.operation && !mergeAction) return 'git-in-progress'
-  if (mergeAction && status.operation !== 'merge' && !status.rebase) return 'git-in-progress'
-  if (['switch', 'detach', 'pull', 'merge', 'rebase'].includes(action.kind) && status.changes > 0) return 'uncommitted-changes'
-  if (['commit', 'push', 'pull', 'merge', 'rebase'].includes(action.kind) && !status.branch) return 'git-no-branch'
+  if (mergeAction && status.operation !== 'merge' && !status.rebase && !status.picking) return 'git-in-progress'
+  if (['switch', 'detach', 'pull', 'merge', 'rebase', 'cherryPick', 'revert'].includes(action.kind) && status.changes > 0) return 'uncommitted-changes'
+  if (['commit', 'push', 'pull', 'merge', 'rebase', 'cherryPick', 'revert'].includes(action.kind) && !status.branch) return 'git-no-branch'
   if (action.kind === 'switch') {
     const branch = status.branches.find((branch) => branch.ref === action.ref)
     const local = branch?.remote ? status.branches.find((entry) => entry.ref === `refs/heads/${branch.name}`) : branch

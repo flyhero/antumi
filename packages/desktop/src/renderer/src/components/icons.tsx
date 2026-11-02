@@ -950,6 +950,25 @@ export function ContinueIcon() {
   )
 }
 
+export function CherryPickIcon() {
+  return (
+    <svg {...stroked}>
+      <circle cx="5.6" cy="13.8" r="2.6" />
+      <circle cx="14.4" cy="13.8" r="2.6" />
+      <path d="M5.6 11.2c.4-3.6 3-7.5 8.8-9.2M14.4 11.2c-.6-3-.6-6.2 0-9.2" />
+    </svg>
+  )
+}
+
+export function RevertIcon() {
+  return (
+    <svg {...stroked}>
+      <path d="M7 1.9 2.6 6.3 7 10.6" />
+      <path d="M2.6 6.3h10.5a4.7 4.7 0 0 1 0 9.4H6.9" />
+    </svg>
+  )
+}
+
 // A branch's line taken off its base and set on another's: rebase, which IntelliJ draws no icon for.
 export function RebaseIcon() {
   return (

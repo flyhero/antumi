@@ -48,6 +48,15 @@ export async function gitOperation(dir: string): Promise<'merge' | 'other' | nul
   return null
 }
 
+// Which of the picking operations stopped part way, carried on and aborted by its own command.
+export async function picking(dir: string): Promise<'cherry-pick' | 'revert' | undefined> {
+  for (const [name, kind] of [['CHERRY_PICK_HEAD', 'cherry-pick'], ['REVERT_HEAD', 'revert']] as const) {
+    const file = await gitOrNull(dir, ['rev-parse', '--git-path', name])
+    if (file && await access(path.resolve(dir, file)).then(() => true, () => false)) return kind
+  }
+  return undefined
+}
+
 export async function conflictFiles(dir: string): Promise<string[]> {
   const output = await git(dir, ['ls-files', '--unmerged', '-z'])
   return [...new Set(output.split('\0').filter(Boolean).map((entry) => entry.slice(entry.indexOf('\t') + 1)))]

@@ -7,8 +7,8 @@ import { git, gitOrNull } from './git-changes'
 import { projectHead } from './workspace'
 import { commitAll } from './project-commit'
 import { Rejection } from './rejection'
-import { checkoutKey, commitRef, committedDiff, conflictFiles, filesBetween, gitOperation, logCommits, repositoryKey, writeGit } from './git-repository'
-import { abortOperation, clearDirectRebase, continueOperation, parseTrack, rebaseBranch, rebasing, updateBranch } from './git-update'
+import { checkoutKey, commitRef, committedDiff, conflictFiles, filesBetween, gitOperation, logCommits, picking, repositoryKey, writeGit } from './git-repository'
+import { abortOperation, clearDirectRebase, continueOperation, parseTrack, pickCommit, rebaseBranch, rebasing, updateBranch } from './git-update'
 import { outgoingCommits, pushBranch, trackBranch } from './git-push'
 import type { GitFavoriteStore } from './git-favorite-store'
 import { gitWorkspaces } from './git-workspaces'
@@ -162,7 +162,7 @@ export class GitService {
     return {
       ...empty, git: true, directory, branch: head.detached ? null : head.branch, head: sha,
       upstream: head.upstream ?? null, ahead: head.ahead ?? 0, behind: head.behind ?? 0, changes: head.changes ?? 0,
-      remotes: remotes.trim().split('\n').filter(Boolean), operation, conflicts, rebase: operation === 'other' && await rebasing(dir),
+      remotes: remotes.trim().split('\n').filter(Boolean), operation, conflicts, rebase: operation === 'other' && await rebasing(dir), picking: operation === 'other' ? await picking(dir) : undefined,
       blocker: busy ? 'Agent 正在处理、等待批准或启动，请等这一轮结束。' : this.locked.has(key) ? 'Git 操作进行中。' : null,
       taskId: binding?.task.id, readOnly: directory.split(/[\\/]/).includes('.planning'),
       tags: tags.split('\n').filter(Boolean).flatMap((line) => {
@@ -390,6 +390,11 @@ export class GitService {
       case 'rebase': {
         requireBranch()
         return rebaseBranch(dir, await commitRef(dir, action.ref))
+      }
+      case 'cherryPick':
+      case 'revert': {
+        requireBranch()
+        return pickCommit(dir, action.kind === 'revert' ? 'revert' : 'cherry-pick', await commitRef(dir, action.sha))
       }
       case 'resolve': {
         if (!status.conflicts.includes(action.file)) throw new Rejection('file-not-changed', '文件不在当前冲突列表中。')

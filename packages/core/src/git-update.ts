@@ -2,7 +2,7 @@ import { access, unlink, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { GitResult, GitStatus } from '@antumi/protocol'
 import { git, gitOrNull } from './git-changes'
-import { conflictFiles, gitOperation, writeGit } from './git-repository'
+import { conflictFiles, gitOperation, picking, writeGit } from './git-repository'
 import { Rejection } from './rejection'
 
 // What an update stashes the checkout's changes under, so only its own stash is ever put back.
@@ -29,6 +29,21 @@ export async function rebaseBranch(dir: string, sha: string): Promise<GitResult>
     throw error
   } finally {
     if (!await rebasing(dir)) await clearDirectRebase(dir)
+  }
+}
+
+// A commit's change applied onto the current branch, or undone, as a new commit; a merge commit's by
+// its first parent. Stopped on conflicts, it waits for the user as a merge does. One that would
+// change nothing (already applied, or already undone) is called off rather than left half done.
+export async function pickCommit(dir: string, command: 'cherry-pick' | 'revert', sha: string): Promise<GitResult> {
+  const parents = (await git(dir, ['rev-list', '--parents', '-n', '1', sha])).trim().split(/\s+/).length - 1
+  try {
+    await writeGit(dir, [command, ...command === 'revert' ? ['--no-edit'] : [], ...parents > 1 ? ['-m', '1'] : [], sha])
+    return { state: 'done' }
+  } catch (error) {
+    if (await gitOperation(dir) && (await conflictFiles(dir)).length) return { state: 'conflicts' }
+    if (await picking(dir)) await writeGit(dir, [command, '--abort']).catch(() => undefined)
+    throw error
   }
 }
 
@@ -90,7 +105,8 @@ export async function continueOperation(dir: string, status: GitStatus): Promise
 }
 
 export async function abortOperation(dir: string, status: GitStatus): Promise<GitResult> {
-  await writeGit(dir, status.rebase ? ['rebase', '--abort'] : ['merge', '--abort'])
+  const picked = await picking(dir)
+  await writeGit(dir, status.rebase ? ['rebase', '--abort'] : picked ? [picked, '--abort'] : ['merge', '--abort'])
   return settled(dir)
 }
 

@@ -3646,6 +3646,8 @@ export const MESSAGES = {
   "ConversationList.showAllKinds": {"zh": "显示全部", "en": "Show all"},
   "ConversationList.noGroupChatsYet": {"zh": "还没有群聊。点右上角的 ＋，在新建页切到「群聊讨论」。", "en": "No group chats yet. Click ＋ at the top right and switch to Group chat."},
   "ConversationPeek.details": {"zh": "会话详情", "en": "Conversation details"},
+  "DiscussionPeek.details": {"zh": "群聊详情", "en": "Group chat details"},
+  "DiscussionPeek.chair": {"zh": "主持", "en": "Chair"},
   "ConversationPeek.agent": {"zh": "Agent", "en": "Agent"},
   "ConversationPeek.status": {"zh": "状态", "en": "Status"},
   "ConversationPeek.projects": {"zh": "项目", "en": "Projects"},

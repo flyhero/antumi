@@ -15,7 +15,7 @@ import { CONVERSATION_DENSITIES, CONVERSATION_GROUPS, CONVERSATION_KINDS, CONVER
 import { beginHandoff, ConversationContextMenu, newConversation, renameConversation } from './ConversationActions'
 import { ConversationStatus } from './ConversationStatus'
 import { ConversationGroupActivity } from './ConversationGroupActivity'
-import { ConversationPeek, useConversationPeek } from './ConversationPeek'
+import { ConversationPeek, DiscussionPeek, useConversationPeek } from './ConversationPeek'
 import { conversationActivity } from '../work-activity'
 import { ContextMenu, MenuCheckboxItem, menuPoint, MenuRadioItem, MenuSubmenu, type MenuPoint } from './ContextMenu'
 import { AgentIcon, ChatIcon, ChevronDownIcon, CloseIcon, FolderIcon, GroupChatIcon, PinIcon, PlusIcon, SlidersIcon } from './icons'
@@ -274,7 +274,9 @@ export function ConversationList() {
   const menuDiscussion = menu ? discussions[menu.id] : undefined
   const density = usePreferences((p) => p.conversationDensity)
   const { peek, rowProps } = useConversationPeek()
-  const peeked = peek && !menu && !renamingId ? conversations[peek.id] : undefined
+  const peekable = peek && !menu && !renamingId ? peek : null
+  const peeked = peekable ? conversations[peekable.id] : undefined
+  const peekedDiscussion = peekable ? discussions[peekable.id] : undefined
   const openMenu = (id: string) => (event: MouseEvent<HTMLElement>) => {
     event.preventDefault()
     setMenu({ id, at: menuPoint(event) })
@@ -315,8 +317,7 @@ export function ConversationList() {
     </li>
   }
 
-  // A group chat opens its page: it is not dragged into a split or peeked at, as its members'
-  // conversations are not. Compact rows hide the meta, so the tooltip carries it.
+  // A group chat opens its page: it is not dragged into a split, as its members' conversations are not.
   const discussionRow = (discussion: Discussion, heading: GroupBy) => (
     <li key={discussion.id}>
       {renamingId === discussion.id
@@ -331,7 +332,7 @@ export function ConversationList() {
           data-discussion-id={discussion.id}
           data-menu-open={menu?.id === discussion.id || undefined}
           aria-current={section === 'discussions' && selectedDiscussion === discussion.id}
-          title={density === 'compact' ? `${discussion.title}\n${discussion.members.map((member) => member.name).join('、')} · ${discussionProgress(discussion)}` : undefined}
+          {...rowProps(discussion.id)}
           onClick={() => selectDiscussion(discussion.id)}
           onContextMenu={openMenu(discussion.id)}
         >
@@ -444,7 +445,8 @@ export function ConversationList() {
         </section>
       )}
       </div>
-      {peek && peeked && <ConversationPeek conversation={peeked} row={peek.row} />}
+      {peekable && peeked && <ConversationPeek conversation={peeked} row={peekable.row} />}
+      {peekable && peekedDiscussion && <DiscussionPeek discussion={peekedDiscussion} row={peekable.row} />}
       {viewAt && <ViewMenu at={viewAt} trigger={viewButton.current} archived={archivedAll.length} kinds={discussionsSupported} onClose={closeView} />}
       {menu && menuConversation && (
         <ConversationContextMenu

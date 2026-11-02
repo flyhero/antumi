@@ -1126,6 +1126,11 @@ span.chat-translate .spinner { width: 12px; height: 12px; }
 .conversation-peek .conversation-peek-agent { flex-direction: row; align-items: center; gap: 6px; }
 .conversation-peek-agent .agent-mark { width: 14px; height: 14px; flex-shrink: 0; }
 .conversation-peek-path { font-family: var(--mono); font-size: 11px; overflow-wrap: anywhere; }
+/* A group chat's members, one to a line, with what the busy ones are doing at the end. */
+.conversation-peek dd > .conversation-peek-agent { display: flex; }
+.conversation-peek-member-status { margin-left: auto; padding-left: 8px; flex-shrink: 0; color: var(--text-muted); }
+.conversation-peek-member-status[data-status='working'] { color: var(--status-running); }
+.conversation-peek-member-status[data-status='awaiting'] { color: var(--warning); }
 
 .task-row-tags {
   grid-column: 2;

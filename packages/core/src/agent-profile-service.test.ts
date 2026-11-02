@@ -420,6 +420,21 @@ describe('reusable agent roles and delegated work', () => {
       await expect(profiles.resume(parentId, first.id)).rejects.toMatchObject({ reason: 'agent-call-resume-worktree' })
     })
 
+    it('starts while the caller\'s turn goes on, as it edits nothing of the caller\'s', async () => {
+      await chats.send(parentId, 'Rename things, and get the other module renamed meanwhile')
+      const session = chats.get(parentId).sessionId!
+      const call = await profiles.dispatch(parentId, developer.id, 'Rename the other module', 'wt-mid', 'worktree')
+      await waitFor(() => store.call(call.id).state === 'running')
+      expect(chats.get(parentId)).toMatchObject({ sessionId: session, chat: { turn: 'running' } })
+      expect(store.call(call.id).worktree?.stage).toBe('ready')
+      complete(chats.get(call.conversationId).sessionId!, 'Renamed')
+      await waitFor(() => store.call(call.id).state === 'completed')
+      // Its result waits for the caller's turn all the same.
+      expect(store.call(call.id).delivered).toBe(false)
+      complete(session, 'done for now')
+      await waitFor(() => store.call(call.id).delivered)
+    })
+
     it('refuses one the caller cannot carry: a reader, an uncommitted checkout, a plain folder', async () => {
       await expect(profiles.dispatch(parentId, reviewer.id, 'Review', 'r', 'worktree')).rejects.toMatchObject({ reason: 'invalid-params' })
       writeFileSync(path.join(repo, 'draft.txt'), 'draft')

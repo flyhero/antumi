@@ -412,12 +412,13 @@ export class AgentProfileService {
     }
     const current = this.chats.get(id)
     const calls = this.store.calls(id)
-    // A member that only reads meets no edit of the caller's, so it starts while the caller's turn
-    // goes on; one that edits waits for that turn, and every result does.
+    // A member that edits nothing of the caller's (one that only reads, or edits a worktree of its
+    // own) starts while the caller's turn goes on; one that edits the caller's directories waits
+    // for that turn, and every result does.
     const working = this.working(current)
     // One list, split once: what the turn holds back and what may start now cannot drift apart.
     const waiting = calls.filter((call) => call.state === 'queued')
-    const held = working ? waiting.filter((call) => !call.readOnly) : []
+    const held = working ? waiting.filter((call) => !call.readOnly && call.workspace !== 'worktree') : []
     this.waitOn(held, 'parent')
     const queued = waiting.filter((call) => !held.includes(call))
     // A member in a worktree of its own is no reason to hold results or the caller's next turn.

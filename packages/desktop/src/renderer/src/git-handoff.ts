@@ -17,7 +17,7 @@ const short = (ref: string) => ref.replace(/^refs\/(heads|remotes|tags)\//, '')
 // The action as git would say it, for the agent: `merge feature`, `push origin/main`.
 export function describeGitAction(action: GitAction): string {
   switch (action.kind) {
-    case 'push': return ['push', action.remote && action.name ? `${action.remote}/${action.name}` : action.remote ?? action.name].filter(Boolean).join(' ')
+    case 'push': return ['push', action.force && '--force-with-lease', action.remote && action.name ? `${action.remote}/${action.name}` : action.remote ?? action.name].filter(Boolean).join(' ')
     case 'fetch': return ['fetch', action.remote].filter(Boolean).join(' ')
     case 'commit': return action.amend ? 'commit --amend' : action.push ? 'commit && push' : 'commit'
     case 'update': return ['update', short(action.ref), action.method && `(${action.method})`].filter(Boolean).join(' ')

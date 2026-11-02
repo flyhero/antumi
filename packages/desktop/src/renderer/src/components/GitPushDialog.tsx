@@ -15,7 +15,7 @@ export function GitPushDialog({ target, status, busy, push, close }: {
   target: GitTarget
   status: GitStatus
   busy: boolean
-  push: (remote: string, name: string) => void
+  push: (remote: string, name: string, force: boolean) => void
   close: () => void
 }) {
   useOccludesBrowser()
@@ -28,6 +28,8 @@ export function GitPushDialog({ target, status, busy, push, close }: {
   const [name, setName] = useState(tracked?.name ?? branch)
   const [outgoing, setOutgoing] = useState<{ key: string; value: GitOutgoing | null } | null>(null)
   const remembered = usePreferences((s) => s.gitPushRejectedUpdate)
+  const forceSupported = rpc?.features.includes('git-force-push') ?? false
+  const [force, setForce] = useState(false)
   useEffect(() => { dialog.current?.showModal() }, [])
 
   const trimmed = name.trim()
@@ -50,10 +52,10 @@ export function GitPushDialog({ target, status, busy, push, close }: {
   const upstream = tracked ? `${tracked.remote}/${tracked.name}` : null
   const other = trimmed !== '' && trimmed !== branch
   const remoteBranches = status.branches.filter((entry) => entry.remote === remote).map((entry) => entry.name)
-  const enabled = !busy && Boolean(remote && trimmed && branch) && current !== undefined && (current === null || current.total > 0 || current.isNew)
+  const enabled = !busy && Boolean(remote && trimmed && branch) && current !== undefined && (current === null || current.total > 0 || current.isNew || force)
 
   return <dialog ref={dialog} className="modal branch-dialog git-dialog git-push-dialog" onCancel={(event) => { event.preventDefault(); if (!busy) close() }}>
-    <form className="modal-body" onSubmit={(event) => { event.preventDefault(); if (enabled) push(remote, trimmed) }}>
+    <form className="modal-body" onSubmit={(event) => { event.preventDefault(); if (enabled) push(remote, trimmed, force) }}>
       <h2>Push</h2><p className="muted">{projectName(target.project)}</p>
       <div className="git-push-route">
         <span className="mono">{branch}</span>
@@ -87,9 +89,11 @@ export function GitPushDialog({ target, status, busy, push, close }: {
         {remembered === 'merge' ? t('GitPush.rememberedMerge') : t('GitPush.rememberedRebase')}{' '}
         <button type="button" className="link-button" onClick={() => setPreference('gitPushRejectedUpdate', 'ask')}>{t('GitPush.askEachTime')}</button>
       </p>}
+      {forceSupported && !isNew && <label className="git-push-remember"><input type="checkbox" checked={force} onChange={(event) => setForce(event.target.checked)} />{t('GitPush.force')}</label>}
+      {force && <p className="git-push-other">{t('GitPush.forceExplained', { target: `${remote}/${trimmed}` })}</p>}
       <div className="branch-commit-buttons">
         <button type="button" className="button" disabled={busy} onClick={close}>{t('ChatCommandSettings.cancel')}</button>
-        <button type="submit" className="button primary" disabled={!enabled}>{busy ? t('GitInspector.processing') : other ? t('GitPush.pushTo', { name: trimmed }) : 'Push'}</button>
+        <button type="submit" className={force ? 'button danger' : 'button primary'} disabled={!enabled}>{busy ? t('GitInspector.processing') : force ? 'Force Push' : other ? t('GitPush.pushTo', { name: trimmed }) : 'Push'}</button>
       </div>
     </form>
   </dialog>

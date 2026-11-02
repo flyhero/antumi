@@ -62,7 +62,8 @@ export const GitAction = z.discriminatedUnion('kind', [
   // another name is refused (as git's push.default=simple). from: the local branch the user saw,
   // refused once the checkout has moved on (needs git-push-target). The upstream is set only when
   // the branch has none.
-  z.object({ kind: z.literal('push'), remote: z.string().optional(), name: Ref.optional(), from: Ref.optional() }),
+  // force: --force-with-lease, against the remote branch as last fetched; needs git-force-push.
+  z.object({ kind: z.literal('push'), remote: z.string().optional(), name: Ref.optional(), from: Ref.optional(), force: z.boolean().optional() }),
   // A local branch set to track a remote one (refs/remotes/…), or to track none; needs git-push-target.
   z.object({ kind: z.literal('track'), ref: Ref, upstream: Ref.nullable() }),
   // amend: folds the changes into the commit checked out, its message replaced; needs git-amend.

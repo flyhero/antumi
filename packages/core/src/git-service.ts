@@ -307,7 +307,7 @@ export class GitService {
       if (!status.branch) throw new Rejection('git-no-branch', '请先检出一个本地分支。')
       return status.branch
     }
-    const push = (change: { remote?: string; name?: string; from?: string } = {}) => pushBranch(dir, status, change, { remoteAt, validName })
+    const push = (change: { remote?: string; name?: string; from?: string; force?: boolean } = {}) => pushBranch(dir, status, change, { remoteAt, validName })
     switch (action.kind) {
       case 'create': {
         await validName(action.name)

@@ -595,6 +595,22 @@ describe('Git management', () => {
       await expect(service.execute(target, { kind: 'push', remote: 'origin', name: 'main', from: 'main' })).rejects.toMatchObject({ reason: 'git-push-rejected' })
     })
 
+    it('force-pushes an amended commit, but not over one pushed since the last fetch', async () => {
+      commit('local.txt', 'local\n', 'local'); git(repo, 'push', '-q', 'origin', 'main')
+      await service.execute(target, { kind: 'commit', message: 'local, reworded', push: false, amend: true })
+      await expect(service.execute(target, { kind: 'push', remote: 'origin', name: 'main', from: 'main' })).rejects.toMatchObject({ reason: 'git-push-rejected' })
+      await service.execute(target, { kind: 'push', remote: 'origin', name: 'main', from: 'main', force: true })
+      expect(git(remote, 'log', '-1', '--format=%s', 'main')).toBe('local, reworded')
+
+      const other = path.join(root, 'other')
+      git(root, 'clone', '-q', remote, other)
+      git(other, 'config', 'user.name', 'Other'); git(other, 'config', 'user.email', 'other@example.com')
+      writeFileSync(path.join(other, 'remote.txt'), 'remote\n'); git(other, 'add', '--', 'remote.txt'); git(other, 'commit', '-q', '-m', 'remote'); git(other, 'push', '-q', 'origin', 'main')
+      await service.execute(target, { kind: 'commit', message: 'local, again', push: false, amend: true })
+      await expect(service.execute(target, { kind: 'push', remote: 'origin', name: 'main', from: 'main', force: true })).rejects.toMatchObject({ reason: 'git-operation-failed' })
+      expect(git(remote, 'log', '-1', '--format=%s', 'main')).toBe('remote')
+    })
+
     it('sets a branch to track a remote branch, or none', async () => {
       git(repo, 'switch', '-q', '-c', 'feature')
       git(repo, 'push', '-q', 'origin', 'feature')

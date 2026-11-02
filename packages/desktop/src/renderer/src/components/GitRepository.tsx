@@ -128,10 +128,10 @@ export function GitRepository({ target, updatedAt = 0, refresh = 0 }: { target: 
   const [rejected, setRejected] = useState<{ remote: string; name: string } | null>(null)
   // A push its own upstream rejected can take the upstream in and go again; one to another branch
   // cannot, as updating takes in the upstream, not the target.
-  const pushTo = async (remote: string, name: string): Promise<void> => {
+  const pushTo = async (remote: string, name: string, force = false): Promise<void> => {
     const tracked = trackedBranch(currentBranch)
     const retriable = updateSupported && tracked?.remote === remote && tracked.name === name
-    const pushed = await execute({ kind: 'push', remote, name, from: status?.branch ?? undefined }, (error) => {
+    const pushed = await execute({ kind: 'push', remote, name, from: status?.branch ?? undefined, ...(force ? { force } : {}) }, (error) => {
       if (!retriable || !(error instanceof RpcError) || error.reason !== 'git-push-rejected') return false
       setDialog(null)
       const method = usePreferences.getState().gitPushRejectedUpdate
@@ -274,7 +274,7 @@ export function GitRepository({ target, updatedAt = 0, refresh = 0 }: { target: 
         </div>
       </GitLayout>
       {dialog?.kind === 'push' && pushTargetSupported
-        ? status.branch && <GitPushDialog key={status.branch} target={target} status={status} busy={busy} push={(remote, name) => void pushTo(remote, name)} close={() => setDialog(null)} />
+        ? status.branch && <GitPushDialog key={status.branch} target={target} status={status} busy={busy} push={(remote, name, force) => void pushTo(remote, name, force)} close={() => setDialog(null)} />
         : dialog && <ActionDialog choice={dialog} target={target} status={status} busy={busy} run={run} commitWritten={(push) => void commitWritten(push)} close={() => setDialog(null)} />}
       {problem && (!problem.conflicted || status.conflicts.length > 0) && <GitProblemDialog problem={{ operation: problem.operation, message: problem.message, conflicts: problem.conflicted ? status.conflicts : [] }} where={{ directory: status.directory, branch: status.branch }} close={() => setProblem(null)} />}
       {rejected && <GitPushRejectedDialog target={`${rejected.remote}/${rejected.name}`} busy={busy} close={() => setRejected(null)} choose={(method, remember) => {

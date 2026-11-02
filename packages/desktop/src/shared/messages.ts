@@ -12190,6 +12190,8 @@ export const MESSAGES = {
   "GitPage.amend": {"zh": "修改上一次提交（Amend）", "en": "Amend last commit"},
   "GitPage.amendExplained": {"zh": "把改动并进上一次提交，并用上面的说明替换它原来的说明。", "en": "Folds the changes into the last commit and replaces its message with the one above."},
   "GitPage.amendPushed": {"zh": "上一次提交已经推送到 {upstream}，修改后要强制推送才能更新远端。", "en": "The last commit is already on {upstream}; after amending, only a force push updates it."},
+  "GitPush.force": {"zh": "强制推送（--force-with-lease）", "en": "Force push (--force-with-lease)"},
+  "GitPush.forceExplained": {"zh": "会用本地分支替换 {target}，远端上本地没有的提交会丢掉。如果上次 Fetch 之后有人推送过，推送会被拒绝，不会覆盖别人的提交。", "en": "Replaces {target} with the local branch, dropping commits the branch lacks. If someone pushed since the last fetch, the push is refused rather than overwrite their work."},
   "GitPage.cherryPick": {"zh": "Cherry-Pick 到当前分支", "en": "Cherry-pick onto current branch"},
   "GitPage.revertCommit": {"zh": "撤销此提交（Revert）", "en": "Revert commit"},
   "GitPage.pickUnfinished": {"zh": "Cherry-Pick 尚未完成", "en": "Cherry-pick is unfinished"},

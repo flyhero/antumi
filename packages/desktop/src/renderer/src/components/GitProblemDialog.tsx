@@ -19,7 +19,7 @@ export function GitProblemDialog({ problem, where, close }: { problem: GitProble
           <ul className="git-problem-files">{problem.conflicts.map((file) => <li key={file} className="mono">{file}</li>)}</ul>
         </>
         : <pre className="git-problem-output">{problem.message}</pre>}
-      <p className="muted">{t('GitHandoff.handOffHint')}</p>
+      <p className="muted">{conflicted ? t('GitHandoff.handOffHint') : t('GitHandoff.handOffFailureHint')}</p>
       <div className="branch-commit-buttons">
         <button className="button" onClick={close}>{t('BackdropPicker.close')}</button>
         <button className="button primary" onClick={() => { close(); void handGitProblemToAgent(problem, where) }}>{t('GitHandoff.handOff')}</button>

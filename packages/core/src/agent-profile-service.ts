@@ -435,8 +435,11 @@ export class AgentProfileService {
       return
     }
     // Waiting on its members frees the caller's slot, those started during its turn included; it
-    // comes back with their results. Not while it runs something in the background, which would go with it.
-    if (!working && current.sessionId && calls.some(agentCallOpen) && this.chats.agentIdle(id)) await this.chats.stop(id)
+    // comes back with their results. Not while it runs something in the background, which would go
+    // with it; and not for a member that only waits on the user, which frees nothing by itself and
+    // would have the caller restarted on every turn meanwhile.
+    const busyMembers = calls.some((call) => call.state === 'queued' || call.state === 'starting' || call.state === 'running')
+    if (!working && current.sessionId && busyMembers && this.chats.agentIdle(id)) await this.chats.stop(id)
     for (const call of queued) {
       // What it would edit, against every edit under way: another member's, or a conversation's.
       const roots = this.writableRoots(call, current)

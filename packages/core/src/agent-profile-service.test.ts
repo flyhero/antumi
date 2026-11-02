@@ -363,6 +363,24 @@ describe('reusable agent roles and delegated work', () => {
     await waitFor(() => store.call(call.id).state === 'completed')
   })
 
+  it('keeps an idle caller running while its only open member waits on the user', async () => {
+    await chats.send(parentId, 'Get the module inspected')
+    const session = chats.get(parentId).sessionId!
+    const call = await profiles.dispatch(parentId, reviewer.id, 'Inspect the module')
+    await waitFor(() => store.call(call.id).state === 'running')
+    const child = chats.get(call.conversationId)
+    daemon.emit(child.sessionId!, { type: 'control_request', request_id: 'ask-2', request: { subtype: 'can_use_tool', tool_name: 'Bash', input: { command: 'ls' }, tool_use_id: 'toolu_ask-2' } })
+    await waitFor(() => store.call(call.id).state === 'awaiting')
+    complete(session, 'delegated')
+    await waitFor(() => chats.get(parentId).chat?.turn === 'idle')
+    await profiles.reconcile()
+    expect(chats.get(parentId).sessionId).toBe(session)
+    // Back at work, the member is what the caller's slot goes to.
+    await chats.respond(child.id, 'ask-2', { decision: 'allow' })
+    await waitFor(() => store.call(call.id).state === 'running')
+    await waitFor(() => chats.get(parentId).sessionId === null)
+  })
+
   it('marks a vanished process as failed after reconciliation', async () => {
     const call = await profiles.dispatch(parentId, reviewer.id, 'Inspect the module')
     await waitFor(() => store.call(call.id).state === 'running')

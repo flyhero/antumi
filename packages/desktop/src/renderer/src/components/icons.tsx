@@ -309,12 +309,12 @@ export function PortsIcon() {
 // An open book, for reading. Its last page lies on the right one and turns over the spine while a
 // read runs (see .book-page in the stylesheet); otherwise it is hidden.
 export function BookIcon() {
-  const right = 'M10 6.2C10 4.9 11.1 4 12.4 4h4.3a.8.8 0 0 1 .8.8v10a.8.8 0 0 1-.8.8h-4.2a2.5 2.5 0 0 0-2.5 2.5'
+  const right = 'M10 5.15C10 3.85 11.1 2.95 12.4 2.95h4.3a.8.8 0 0 1 .8.8v10a.8.8 0 0 1-.8.8h-4.2a2.5 2.5 0 0 0-2.5 2.5'
   return (
     <svg {...stroked}>
-      <path d="M10 6.2C10 4.9 8.9 4 7.6 4H3.3a.8.8 0 0 0-.8.8v10a.8.8 0 0 0 .8.8h4.2a2.5 2.5 0 0 1 2.5 2.5" />
+      <path d="M10 5.15C10 3.85 8.9 2.95 7.6 2.95H3.3a.8.8 0 0 0-.8.8v10a.8.8 0 0 0 .8.8h4.2a2.5 2.5 0 0 1 2.5 2.5" />
       <path d={right} />
-      <path d="M10 6.2v11.9" />
+      <path d="M10 5.15v11.9" />
       <path className="book-page" d={right} />
     </svg>
   )
@@ -516,7 +516,7 @@ export function GaugeIcon() {
 export function SparkIcon() {
   return (
     <svg {...stroked}>
-      <path d="M10 2.8l1.7 4.5 4.5 1.7-4.5 1.7L10 15.2l-1.7-4.5L3.8 9l4.5-1.7z" />
+      <path d="M10 3.8l1.7 4.5 4.5 1.7-4.5 1.7L10 16.2l-1.7-4.5L3.8 10l4.5-1.7z" />
     </svg>
   )
 }

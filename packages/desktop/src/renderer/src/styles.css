@@ -9900,8 +9900,9 @@ summary.agent-group-head:focus-visible { outline: 2px solid var(--focus); outlin
 .git-ref-more { flex-shrink: 0; padding: 0 4px; border-radius: var(--radius-xs); background: var(--fill); color: var(--text-muted); }
 .git-ref-list { display: grid; gap: 6px; margin: 0; padding: 4px 6px; list-style: none; font-size: var(--chat-font-small, 12px); }
 .git-commit-branches { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 0 12px 8px; font-size: var(--chat-font-small, 12px); }
-.git-commit-author { flex: 0 0 clamp(48px, 18cqw, 96px); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.git-commit-date { flex: 0 0 64px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* The date sits against the author, not out at the edge: right-aligned, the gap between them read as a column apart. */
+.git-commit-author { flex: 0 0 clamp(48px, 12cqw, 64px); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.git-commit-date { flex: 0 0 64px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .git-load-more { margin: 8px; }
 .git-details { display: none; min-width: 0; min-height: 0; overflow: auto; }
 .git-layout[data-detail] .git-details { display: block; flex: 1; }

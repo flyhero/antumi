@@ -4,7 +4,7 @@ import type { ProjectBranches } from '@antumi/protocol'
 import { useCore } from '../core-store'
 import { shortRef } from '../task-starts'
 import { BranchIcon, CheckIcon, ChevronDownIcon, WarningIcon } from './icons'
-import { holderLabel } from './BranchHolder'
+import { heldBranchText, holderLabel } from './BranchHolder'
 import { Popover } from './Popover'
 import { projectName } from './ProjectPicker'
 
@@ -96,8 +96,8 @@ export function DraftBranchPicker({ options, picked, worktree, locked, onOpen, o
             {refs.map((ref) => {
               const holder = options.elsewhere[ref]
               return (
-                <li key={ref} className="menu-row">
-                  <button type="button" className="menu-item" disabled={!pickable(ref)} title={holder && !worktree ? t('ConversationBranches.checkedOutIn', { holder: holder }) : undefined} onClick={() => pick(ref)}>
+                <li key={ref} className="menu-row" title={holder && !pickable(ref) ? heldBranchText(shortRef(ref), holder, options.holders?.[ref]) : undefined}>
+                  <button type="button" className="menu-item" disabled={!pickable(ref)} onClick={() => pick(ref)}>
                     <span className="menu-item-title mono">{shortRef(ref)}</span>
                     {ref === current && <span className="menu-item-path">{t('DraftBranchPicker.current')}</span>}
                     {holder && !worktree && <span className="menu-item-path">{holderLabel(holder, options.holders?.[ref])}</span>}

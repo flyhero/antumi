@@ -3127,20 +3127,20 @@ export const MESSAGES = {
     "en": "In archived “{title}”"
   },
   "BranchHolder.heldByConversation": {
-    "zh": "「{branch}」检出在会话「{title}」的 worktree 里，git 不允许同一个分支同时在两个地方检出。那个会话换了分支或不再需要这个 worktree 后，这里才能切过去。",
-    "en": "{branch} is checked out in the worktree of “{title}”, and git checks a branch out in one place at a time. Switch to it here once that conversation moves to another branch or its worktree goes."
+    "zh": "「{branch}」正在会话「{title}」的 worktree 里使用，不能同时在这里切换。打开那个会话，等 Agent 停止后，将它切到其他分支，再回来选择这个分支。",
+    "en": "{branch} is in use in the worktree of “{title}” and cannot be checked out here too. Open that conversation, wait for its Agent to stop, switch it to another branch, then select this branch here."
   },
   "BranchHolder.heldByArchivedConversation": {
-    "zh": "「{branch}」检出在已归档会话「{title}」的 worktree 里。里面没有要留的改动的话，到 worktree 管理里把它清理掉，这里就能切过去。",
-    "en": "{branch} is checked out in the worktree of archived “{title}”. If nothing there needs keeping, clean it up in worktree management and switch to it here."
+    "zh": "「{branch}」仍被已归档会话「{title}」的 worktree 占用，归档不会释放分支。点击底栏的 Worktree，找到该会话，确认要保留的文件已提交或移走后清理它，再回来选择这个分支。",
+    "en": "{branch} is still checked out in the worktree of archived “{title}”; archiving does not release the branch. Click Worktree in the bottom bar, find that conversation, commit or move any files you need to keep, then clean up its worktree and select this branch here."
   },
   "BranchHolder.heldByMainFolder": {
     "zh": "「{branch}」正在仓库主目录里检出，git 不允许同一个分支同时在两个地方检出。先在主目录切到别的分支，这里才能切过去。",
     "en": "{branch} is checked out in the repository's main folder, and git checks a branch out in one place at a time. Switch the main folder to another branch first."
   },
   "BranchHolder.heldElsewhere": {
-    "zh": "「{branch}」检出在另一个 worktree 里：{folder}。它不是 Antumi 建的，用完后可以用 git worktree remove 删掉，这里就能切过去。",
-    "en": "{branch} is checked out in another worktree: {folder}. Antumi did not make it; once done with it, remove it with git worktree remove and switch to the branch here."
+    "zh": "「{branch}」已在另一个 worktree 里使用：{folder}。在终端进入这个目录，先提交或暂存未提交的改动，再用 git switch <其他分支名> 切到其他分支，之后即可在这里选择这个分支。",
+    "en": "{branch} is checked out in another worktree: {folder}. Open that directory in a terminal, commit or stash any uncommitted changes, then run git switch <other-branch-name> to switch it to another branch. You can then select this branch here."
   },
   "BranchHolder.manageWorktrees": {
     "zh": "去 worktree 管理",

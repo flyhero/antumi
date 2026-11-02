@@ -16,6 +16,11 @@ export function holderLabel(folder: string, holder: BranchHolder | undefined): s
   return t('ConversationBranches.in', { value1: folderName(folder) })
 }
 
+export function heldBranchText(branch: string, folder: string, holder: BranchHolder | undefined): string {
+  if (holder?.kind === 'conversation') return t(holder.archived ? 'BranchHolder.heldByArchivedConversation' : 'BranchHolder.heldByConversation', { branch, title: holder.title ?? folderName(folder) })
+  return holder?.kind === 'main' ? t('BranchHolder.heldByMainFolder', { branch }) : t('BranchHolder.heldElsewhere', { branch, folder })
+}
+
 // Why a branch cannot be switched to, said when it is picked, and what frees it: git checks a
 // branch out in one folder at a time. `onLeave` closes what showed it before going elsewhere.
 export function HeldBranchNote({ branch, folder, holder, onLeave }: { branch: string; folder: string; holder: BranchHolder | undefined; onLeave: () => void }) {
@@ -25,7 +30,7 @@ export function HeldBranchNote({ branch, folder, holder, onLeave }: { branch: st
     const id = holder.conversationId
     return (
       <div className="branch-held-note" role="status">
-        <p>{t(holder.archived ? 'BranchHolder.heldByArchivedConversation' : 'BranchHolder.heldByConversation', { branch, title: holder.title ?? folderName(folder) })}</p>
+        <p>{heldBranchText(branch, folder, holder)}</p>
         <div className="branch-held-actions">
           {holder.archived
             ? <button type="button" className="link-button" onClick={() => { onLeave(); setWorktreesOpen(true) }}>{t('BranchHolder.manageWorktrees')}</button>
@@ -37,7 +42,7 @@ export function HeldBranchNote({ branch, folder, holder, onLeave }: { branch: st
   }
   return (
     <div className="branch-held-note" role="status">
-      <p>{holder?.kind === 'main' ? t('BranchHolder.heldByMainFolder', { branch }) : t('BranchHolder.heldElsewhere', { branch, folder })}</p>
+      <p>{heldBranchText(branch, folder, holder)}</p>
       <div className="branch-held-actions">{reveal}</div>
     </div>
   )

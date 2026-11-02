@@ -5,7 +5,7 @@ import { perform, useCore } from '../core-store'
 import { reasonText } from '../labels'
 import { shortRef } from '../task-starts'
 import { BranchStatusDetails } from './BranchStatus'
-import { folderName, HeldBranchNote, holderLabel } from './BranchHolder'
+import { folderName, heldBranchText, HeldBranchNote, holderLabel } from './BranchHolder'
 import { CommitMessageButton } from './CommitMessageButton'
 import { ArrowUpIcon, BranchIcon, CheckIcon, CommitIcon, PlusIcon } from './icons'
 import { isShortcut, useShortcutLabel } from '../keyboard-shortcuts'
@@ -69,7 +69,7 @@ function SwitchList({ option, onPick, onLeave }: { option: ProjectBranches; onPi
           return (
             <li key={ref} className="menu-row">
               <button type="button" className="menu-item" disabled={ref === current} data-held={holder ? true : undefined} aria-expanded={holder ? held === ref : undefined}
-                title={holder ? t('ConversationBranches.checkedOutIn', { holder: holder }) : undefined} onClick={() => (holder ? setHeld(held === ref ? null : ref) : onPick(ref))}>
+                title={holder ? heldBranchText(shortRef(ref), holder, option.holders?.[ref]) : undefined} onClick={() => (holder ? setHeld(held === ref ? null : ref) : onPick(ref))}>
                 <span className="menu-item-title mono">{shortRef(ref)}</span>
                 {holder && <span className="menu-item-path">{holderLabel(holder, option.holders?.[ref])}</span>}
                 {ref === current && <span className="menu-check"><CheckIcon /></span>}

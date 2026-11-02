@@ -372,7 +372,7 @@ export class GitService {
       case 'track': return trackBranch(dir, status, action.ref, action.upstream)
       case 'commit': {
         requireBranch()
-        const commit = await commitAll(dir, action.message)
+        const commit = await commitAll(dir, action.message, action.amend)
         if (!action.push) return { state: 'done', ...commit }
         try { return { ...await push(), commit: commit.commit } }
         catch (error) { throw new Rejection('git-push-after-commit-failed', `已提交 ${commit.commit}，但推送失败，本地提交已保留。${error instanceof Error ? error.message : ''}`) }

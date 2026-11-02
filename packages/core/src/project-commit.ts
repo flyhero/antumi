@@ -28,11 +28,12 @@ async function repoRoot(dir: string): Promise<{ root: string; branch: string }> 
 }
 
 // Everything in the repo staged and committed, without a shell, on the branch checked out.
-export async function commitAll(dir: string, message: string): Promise<CommitResult> {
+// amend: into the commit checked out instead, which may take no more than a new message.
+export async function commitAll(dir: string, message: string, amend = false): Promise<CommitResult> {
   const { root, branch } = await repoRoot(dir)
-  if (!(await git(root, ['status', '--porcelain'])).trim()) throw new Rejection('git-no-changes')
+  if (!amend && !(await git(root, ['status', '--porcelain'])).trim()) throw new Rejection('git-no-changes')
   await writeGit(root, ['add', '-A'], 'git-commit-failed')
-  await writeGit(root, ['commit', '-m', message], 'git-commit-failed')
+  await writeGit(root, ['commit', ...amend ? ['--amend'] : [], '-m', message], 'git-commit-failed')
   const commit = (await git(root, ['rev-parse', '--short', 'HEAD'])).trim()
   return { commit, branch }
 }

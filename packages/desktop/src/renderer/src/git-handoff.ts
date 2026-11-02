@@ -19,7 +19,7 @@ export function describeGitAction(action: GitAction): string {
   switch (action.kind) {
     case 'push': return ['push', action.remote && action.name ? `${action.remote}/${action.name}` : action.remote ?? action.name].filter(Boolean).join(' ')
     case 'fetch': return ['fetch', action.remote].filter(Boolean).join(' ')
-    case 'commit': return action.push ? 'commit && push' : 'commit'
+    case 'commit': return action.amend ? 'commit --amend' : action.push ? 'commit && push' : 'commit'
     case 'update': return ['update', short(action.ref), action.method && `(${action.method})`].filter(Boolean).join(' ')
     case 'create': return `branch ${action.name} ${short(action.ref)}`
     case 'rename': return `branch -m ${short(action.ref)} ${action.name}`

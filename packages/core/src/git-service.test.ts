@@ -441,6 +441,21 @@ describe('Git management', () => {
     expect(await service.status(target)).toMatchObject({ operation: null, changes: 0 })
   })
 
+  it('amends the commit checked out, with changes or with only a new message', async () => {
+    const before = git(repo, 'rev-parse', 'HEAD~0')
+    commit('more.txt', 'more\n', 'first try')
+    writeFileSync(path.join(repo, 'more.txt'), 'more, fixed\n')
+    await service.execute(target, { kind: 'commit', message: 'add more', push: false, amend: true })
+    expect(git(repo, 'log', '-1', '--format=%s')).toBe('add more')
+    expect(git(repo, 'show', 'HEAD:more.txt')).toBe('more, fixed')
+    expect(git(repo, 'rev-parse', 'HEAD~1')).toBe(before)
+
+    await service.execute(target, { kind: 'commit', message: 'add more files', push: false, amend: true })
+    expect(git(repo, 'log', '-1', '--format=%s')).toBe('add more files')
+    expect(git(repo, 'rev-parse', 'HEAD~1')).toBe(before)
+    await expect(service.execute(target, { kind: 'commit', message: 'nothing', push: false })).rejects.toMatchObject({ reason: 'git-no-changes' })
+  })
+
   it('pushes new branches explicitly and retains a local commit if push fails', async () => {
     await service.execute(target, { kind: 'create', name: 'new', ref: 'HEAD', checkout: true })
     commit('new.txt', 'new')

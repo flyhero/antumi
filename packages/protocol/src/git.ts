@@ -65,7 +65,8 @@ export const GitAction = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('push'), remote: z.string().optional(), name: Ref.optional(), from: Ref.optional() }),
   // A local branch set to track a remote one (refs/remotes/…), or to track none; needs git-push-target.
   z.object({ kind: z.literal('track'), ref: Ref, upstream: Ref.nullable() }),
-  z.object({ kind: z.literal('commit'), message: z.string().trim().min(1).max(10000), push: z.boolean() }),
+  // amend: folds the changes into the commit checked out, its message replaced; needs git-amend.
+  z.object({ kind: z.literal('commit'), message: z.string().trim().min(1).max(10000), push: z.boolean(), amend: z.boolean().optional() }),
   z.object({ kind: z.literal('merge'), ref: Ref }),
   // A commit's change applied onto the current branch as a new commit, or undone by one; a merge
   // commit by its first parent. Needs git-cherry-pick.

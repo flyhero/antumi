@@ -203,6 +203,7 @@ export function GitRepository({ target, updatedAt = 0, refresh = 0 }: { target: 
   </>
   const commitActionsSupported = rpc?.features.includes('git-commit-actions') ?? false
   const pickSupported = rpc?.features.includes('git-cherry-pick') ?? false
+  const amendSupported = rpc?.features.includes('git-amend') ?? false
   const copyMessage = async (sha: string) => {
     const detail = await perform((rpc) => rpc.call('git.detail', { ...target, sha }))
     if (detail) await navigator.clipboard.writeText(detail.message)
@@ -234,7 +235,7 @@ export function GitRepository({ target, updatedAt = 0, refresh = 0 }: { target: 
           : <button className="button" disabled={!can({ kind: 'pull' }) || !status.branch || !status.upstream || status.changes > 0} onClick={() => void run({ kind: 'pull' })}><UpdateIcon />Pull</button>}
         <button className="button" disabled={!can({ kind: 'push' }) || !status.branch || !status.remotes.length} onClick={() => (pushTargetSupported ? openPush() : setDialog({ kind: 'push' }))}><PushIcon />Push</button>
         {target.kind !== 'project' && rpc?.features.includes('git-projects') && <button className="button ghost" onClick={() => openGit(status.directory)}>{t('GitPage.openInGit')}</button>}
-        <button className="button" disabled={!can({ kind: 'commit', message: 'commit', push: false }) || !status.branch || !status.changes} onClick={() => setDialog({ kind: 'commit' })}><CommitIcon />Commit</button>
+        <button className="button" disabled={!can({ kind: 'commit', message: 'commit', push: false }) || !status.branch || (!status.changes && !(amendSupported && status.head))} onClick={() => setDialog({ kind: 'commit' })}><CommitIcon />Commit</button>
         {status.readOnly && <span className="git-toolbar-note muted" role="status">{t('GitPage.planningReadOnly')}</span>}
         {status.taskId && target.kind === 'project' && <span className="git-toolbar-note muted">{t('GitPage.taskBound')}</span>}
         {status.blocker && <span className="git-toolbar-note muted" role="status">{status.blocker}</span>}
@@ -451,6 +452,18 @@ function ActionDialog({ choice, target, status, busy, run, commitWritten, close 
   const [remote, setRemote] = useState(status.upstream?.split('/')[0] ?? (status.remotes.includes('origin') ? 'origin' : status.remotes[0] ?? ''))
   const [message, setMessage] = useState('')
   const writable = useCanWriteCommitMessage(target)
+  // With nothing to commit the dialog can only amend: the last commit's message, rewritten.
+  const amendable = useCore((s) => s.rpc?.features.includes('git-amend') ?? false) && Boolean(status.head)
+  const [amend, setAmend] = useState(choice.kind === 'commit' && amendable && !status.changes)
+  // Its message to start from, unless something was written already.
+  useEffect(() => {
+    if (!amend || !status.head) return
+    let current = true
+    void perform((rpc) => rpc.call('git.detail', { ...target, sha: status.head ?? 'HEAD' })).then((detail) => { if (current && detail) setMessage((written) => written.trim() ? written : detail.message.trim()) })
+    return () => { current = false }
+  }, [amend])
+  // Its commit already upstream: amending rewrites what others may have.
+  const pushed = Boolean(status.upstream) && status.ahead === 0
   const [confirm, setConfirm] = useState('')
   const [method, setMethod] = useState<'merge' | 'rebase'>('merge')
   useEffect(() => { dialog.current?.showModal() }, [])
@@ -465,7 +478,8 @@ function ActionDialog({ choice, target, status, busy, run, commitWritten, close 
       case 'delete': if (choice.branch) void performAction({ kind: 'delete', ref: choice.branch.ref }); break
       case 'push': void performAction({ kind: 'push', remote, name: name.trim() }); break
       case 'commit':
-        if (message.trim()) void performAction({ kind: 'commit', message: message.trim(), push })
+        if (amend) void performAction({ kind: 'commit', message: message.trim(), push: false, amend: true })
+        else if (message.trim()) void performAction({ kind: 'commit', message: message.trim(), push })
         else { close(); commitWritten(push) }
         break
       case 'rebase': if (choice.branch) void performAction({ kind: 'rebase', ref: choice.branch.ref, from: choice.from }); break
@@ -474,7 +488,7 @@ function ActionDialog({ choice, target, status, busy, run, commitWritten, close 
       case 'update': if (choice.branch) void performAction({ kind: 'update', ref: choice.branch.ref, method }); break
     }
   }
-  const enabled = !busy && (choice.kind === 'commit' ? Boolean(message.trim()) || writable : ['create', 'tag', 'rename', 'push'].includes(choice.kind) ? Boolean(name.trim()) : choice.kind === 'delete' && choice.branch?.remote ? confirm === `${choice.branch.remote}/${choice.branch.name}` : true)
+  const enabled = !busy && (choice.kind === 'commit' ? Boolean(message.trim()) || (writable && !amend) : ['create', 'tag', 'rename', 'push'].includes(choice.kind) ? Boolean(name.trim()) : choice.kind === 'delete' && choice.branch?.remote ? confirm === `${choice.branch.remote}/${choice.branch.name}` : true)
   return <dialog ref={dialog} className="modal branch-dialog git-dialog" onCancel={(event) => { event.preventDefault(); if (!busy) close() }}>
     <div className="modal-body">
       <h2>{choice.kind === 'abort' && status.rebase ? t('GitInspector.abortRebaseTitle') : choice.kind === 'abort' && status.picking ? t(status.picking === 'revert' ? 'GitPage.abortRevertTitle' : 'GitPage.abortPickTitle') : choice.kind === 'update' && choice.branch ? t('GitInspector.updateBranch', { branch: choice.branch.name }) : TITLES[choice.kind]}</h2><p className="muted">{projectName(target.project)} · {status.branch ?? t('GitInspector.detachedHead')}</p>
@@ -485,7 +499,9 @@ function ActionDialog({ choice, target, status, busy, run, commitWritten, close 
       {choice.kind === 'detach' && choice.source && <p>{t('GitPage.detachTag', { tag: choice.source.name })}</p>}
       {choice.kind === 'rebase' && choice.branch && <p>{t('GitPage.rebaseConfirm', { current: choice.from ?? status.branch ?? '', target: choice.branch.remote ? `${choice.branch.remote}/${choice.branch.name}` : choice.branch.name })}</p>}
       {choice.kind === 'push' && <label>Remote<select className="input" value={remote} onChange={(event) => setRemote(event.target.value)}>{status.remotes.map((remote) => <option key={remote}>{remote}</option>)}</select></label>}
-      {choice.kind === 'commit' && <><textarea className="input branch-commit-message" aria-label={t('ConversationBranches.commitMessage')} autoFocus maxLength={10000} placeholder={writable ? t('GitInspector.commitTitleBlankLineThenDetailsLeaveEmpty') : t('GitInspector.commitTitleBlankLineThenDetails')} value={message} onChange={(event) => setMessage(event.target.value)} /><p className="muted">{t('GitInspector.commitAllChangesInThisRepositoryLocalCommits')}</p></>}
+      {choice.kind === 'commit' && <><textarea className="input branch-commit-message" aria-label={t('ConversationBranches.commitMessage')} autoFocus maxLength={10000} placeholder={writable ? t('GitInspector.commitTitleBlankLineThenDetailsLeaveEmpty') : t('GitInspector.commitTitleBlankLineThenDetails')} value={message} onChange={(event) => setMessage(event.target.value)} />
+        {amendable && <label className="git-push-remember"><input type="checkbox" checked={amend} disabled={!status.changes} onChange={(event) => setAmend(event.target.checked)} />{t('GitPage.amend')}</label>}
+        <p className="muted">{amend ? (pushed ? t('GitPage.amendPushed', { upstream: status.upstream ?? '' }) : t('GitPage.amendExplained')) : t('GitInspector.commitAllChangesInThisRepositoryLocalCommits')}</p></>}
       {choice.kind === 'delete' && <><p>{tr('GitInspector.repository', { value1: <span className="mono">{status.directory}</span>, value2: <br />, value3: choice.branch?.remote ? t('GitInspector.deleteRemote', { value1: choice.branch.remote, value2: choice.branch.name }) : t('GitInspector.safelyDeleteLocalGitRefusesIfItIs', { value1: choice.branch?.name }) })}</p>{choice.branch?.remote && <label>{tr('GitInspector.typeTheFullRemoteBranchNameToConfirm', { value1: <input className="input" autoFocus placeholder={`${choice.branch.remote}/${choice.branch.name}`} value={confirm} onChange={(event) => setConfirm(event.target.value)} /> })}</label>}</>}
       {choice.kind === 'merge' && <p>{tr('GitInspector.mergeIntoDivergedBranchesCreateAMergeCommit', { value1: <span className="mono">{choice.branch?.ref.replace(/^refs\/(heads|remotes|tags)\//, '')}</span>, value2: <span className="mono">{status.branch}</span> })}</p>}
       {choice.kind === 'abort' && <p>{status.rebase ? t('GitInspector.abortRebaseExplained') : status.picking ? t(status.picking === 'revert' ? 'GitPage.abortRevertExplained' : 'GitPage.abortPickExplained') : t('GitInspector.abortTheCurrentMergeAndDiscardItsConflict')}</p>}
@@ -499,7 +515,7 @@ function ActionDialog({ choice, target, status, busy, run, commitWritten, close 
         </div>
         {status.changes > 0 && <p className="muted">{t('GitInspector.updateStashNote')}</p>}
       </>}
-      <div className="branch-commit-buttons">{choice.kind === 'commit' && <CommitMessageButton target={target} disabled={busy} onMessage={setMessage} />}<button className="button" disabled={busy} onClick={close}>{t('ChatCommandSettings.cancel')}</button>{choice.kind === 'commit' && <button className="button" disabled={!enabled} onClick={(event) => submit(event, true)}>Commit &amp; Push</button>}<button className="button primary" disabled={!enabled} onClick={submit}>{busy ? t('GitInspector.processing') : TITLES[choice.kind]}</button></div>
+      <div className="branch-commit-buttons">{choice.kind === 'commit' && <CommitMessageButton target={target} disabled={busy} onMessage={setMessage} />}<button className="button" disabled={busy} onClick={close}>{t('ChatCommandSettings.cancel')}</button>{choice.kind === 'commit' && !amend && <button className="button" disabled={!enabled} onClick={(event) => submit(event, true)}>Commit &amp; Push</button>}<button className="button primary" disabled={!enabled} onClick={submit}>{busy ? t('GitInspector.processing') : TITLES[choice.kind]}</button></div>
     </div>
   </dialog>
 }

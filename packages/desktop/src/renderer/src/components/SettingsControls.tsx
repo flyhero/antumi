@@ -99,6 +99,7 @@ export function Stepper({
   min,
   max,
   unit,
+  step = 1,
   onChange
 }: {
   labelId: string
@@ -106,17 +107,18 @@ export function Stepper({
   min: number
   max: number
   unit: string
+  step?: number
   onChange: (value: number) => void
 }) {
   return (
     <div className="stepper" role="group" aria-labelledby={labelId}>
-      <button type="button" aria-label={t('SettingsControls.decrease')} disabled={value <= min} onClick={() => onChange(value - 1)}>
+      <button type="button" aria-label={t('SettingsControls.decrease')} disabled={value <= min} onClick={() => onChange(Math.max(min, Number((value - step).toFixed(2))))}>
         −
       </button>
       <output aria-live="polite">
         {value} {unit}
       </output>
-      <button type="button" aria-label={t('SettingsControls.increase')} disabled={value >= max} onClick={() => onChange(value + 1)}>
+      <button type="button" aria-label={t('SettingsControls.increase')} disabled={value >= max} onClick={() => onChange(Math.min(max, Number((value + step).toFixed(2))))}>
         +
       </button>
     </div>

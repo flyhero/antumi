@@ -1,8 +1,9 @@
-import { useEffect, useId, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useId, useState, type ReactNode } from 'react'
 import { t } from '../i18n'
 import { useCore } from '../core-store'
 import { DEFAULT_PREFERENCES, setPreference, usePreferences } from '../preferences'
 import { useChatTypeface } from '../chat-typeface'
+import { readingStyle } from '../reading-style'
 import { changedAppearancePreferences, withAppearanceDefaults, type AppearanceSection } from '../appearance-preferences'
 import { codeFontStack } from '../code-font'
 import { PALETTE_LABEL } from '../palettes'
@@ -13,6 +14,10 @@ import { CodeFontPicker } from './CodeFontPicker'
 import { CjkFontPicker } from './CjkFontPicker'
 import { PalettePicker } from './PalettePicker'
 import { BackdropPicker } from './BackdropPicker'
+import { MarkdownThemePicker } from './MarkdownThemePicker'
+import { MarkdownThemePreview } from './MarkdownThemePreview'
+import { resolveMarkdownTheme, type MarkdownThemePack } from '../markdown-theme-packs'
+import { MarkdownThemeLibrary } from './MarkdownThemeLibrary'
 import { ArrowUpIcon, BoardIcon, CheckIcon, ChatIcon, ChevronDownIcon, ClockIcon, GitIcon, InboxIcon, RobotIcon, RotateLeftIcon, TerminalIcon } from './icons'
 import { inboxLocked, SIDEBAR_ENTRIES, SIDEBAR_PREFERENCE, sidebarShows, type SidebarEntry } from '../sidebar-entries'
 
@@ -92,10 +97,12 @@ function SidebarSettings() {
   )
 }
 
-function AppearancePreview({ section, comparing, onCompare }: { section: AppearanceSection; comparing: boolean; onCompare: () => void }) {
+function AppearancePreview({ section, comparing, onCompare, draft }: { section: AppearanceSection; comparing: boolean; onCompare: () => void; draft: MarkdownThemePack | null }) {
   const typeface = useChatTypeface()
   const current = usePreferences()
   const preview = comparing ? withAppearanceDefaults(current, DEFAULT_PREFERENCES, section) : current
+  const markdownPacks = draft && !comparing ? [...preview.markdownThemePacks.filter((each) => each.id !== draft.id), draft] : preview.markdownThemePacks
+  const markdownSelection = draft && !comparing ? `user:${draft.id}` : preview.markdownTheme
   const { palette, theme, backdrop, chatWidth, foldTurns, terminalFontSize, terminalLineHeight, colorPrompt } = preview
   const codeStyle = { fontFamily: codeFontStack(preview.codeFontFamily, preview.codeCjkFontFamily) }
   const [systemDark, setSystemDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches)
@@ -111,13 +118,14 @@ function AppearancePreview({ section, comparing, onCompare }: { section: Appeara
     : typeface
   return (
     <aside className="appearance-preview" aria-label={t('SettingsPage.livePreview')}>
-      <div className="appearance-preview-heading"><h3>{t('SettingsPage.livePreview')}</h3><span>{PALETTE_LABEL[palette].name}</span></div>
-      {section !== 'language' && <button type="button" className="button appearance-compare" disabled={!comparing && changedAppearancePreferences(current, DEFAULT_PREFERENCES, section).length === 0} aria-pressed={comparing} onClick={onCompare}>{comparing ? t('SettingsPage.showCurrent') : t('SettingsPage.compareDefaults')}</button>}
-      <div className="appearance-preview-window" data-palette={palette} data-backdrop={backdrop === 'none' ? undefined : backdrop} data-section={section} data-comparing={comparing || undefined} style={{ colorScheme: scheme }}>
+      <div className="appearance-preview-heading"><h3>{t('SettingsPage.livePreview')}</h3><span>{section === 'markdown' ? resolveMarkdownTheme(markdownSelection, markdownPacks).name : PALETTE_LABEL[palette].name}</span></div>
+      {section !== 'language' && <button type="button" className="button appearance-compare" disabled={!comparing && !(section === 'markdown' && draft) && changedAppearancePreferences(current, DEFAULT_PREFERENCES, section).length === 0} aria-pressed={comparing} onClick={onCompare}>{comparing ? t('SettingsPage.showCurrent') : t('SettingsPage.compareDefaults')}</button>}
+      <div className="appearance-preview-window" data-palette={palette} data-backdrop={backdrop === 'none' ? undefined : backdrop} data-section={section} data-comparing={comparing || undefined} style={{ colorScheme: scheme, ...{ '--md-color-scheme': scheme } }}>
         <div className="appearance-preview-toolbar"><ChatIcon /><span>Antumi</span><span className="appearance-preview-sample">{t('SettingsPage.sample')}</span></div>
+        {section === 'markdown' ? <MarkdownThemePreview theme={markdownSelection} packs={markdownPacks} reading={preview} /> : <>
         {section === 'sidebar' && <SidebarPreview preferences={preview} />}
         <div className="appearance-preview-chat chat-view" {...previewTypeface}>
-          <div className="appearance-preview-thread" data-width={chatWidth}>
+          <div className="appearance-preview-thread" data-width={chatWidth} style={readingStyle(preview)}>
             <p className="appearance-preview-user">{t('SettingsPage.previewPrompt')}</p>
             <div className="appearance-preview-agent"><span className="appearance-preview-mark"><RobotIcon /></span><strong>Agent</strong></div>
             <details className="appearance-preview-work" key={String(foldTurns)} open={!foldTurns}>
@@ -135,8 +143,9 @@ function AppearancePreview({ section, comparing, onCompare }: { section: Appeara
           <p className="appearance-preview-terminal-comment">{t('SettingsPage.previewTerminal')}</p>
           {section === 'terminal' && <pre className="appearance-preview-code"><code><span className="code-keyword">const</span> title ={'\n'}  <span className="code-string">'{t('SettingsPage.previewCodeTitle')}'</span>{'\n'}<span className="code-keyword">const</span> task = {'{'}{'\n'}  title,{'\n'}  status: <span className="code-string">'pending'</span>{'\n'}{'}'}</code></pre>}
         </div>
+        </>}
       </div>
-      <p className="appearance-preview-caption" role="status">{comparing ? t('SettingsPage.comparingDefaults') : t('SettingsPage.previewHint')}</p>
+      <p className="appearance-preview-caption" role="status">{comparing ? t('SettingsPage.comparingDefaults') : section === 'markdown' ? t('MarkdownTheme.previewHint') : t('SettingsPage.previewHint')}</p>
     </aside>
   )
 }
@@ -147,6 +156,8 @@ export function AppearanceSettings() {
   const [section, setSection] = useState<AppearanceSection>(() => useCore.getState().appearanceTab ?? 'colors')
   useEffect(() => { useCore.setState({ appearanceTab: null }) }, [])
   const [comparing, setComparing] = useState(false)
+  const [markdownDraft, setMarkdownDraft] = useState<MarkdownThemePack | null>(null)
+  const previewMarkdownDraft = useCallback((pack: MarkdownThemePack | null) => { setMarkdownDraft(pack); setComparing(false) }, [])
   const current = usePreferences()
   const changed = changedAppearancePreferences(current, DEFAULT_PREFERENCES, section)
   const resetGroup = () => {
@@ -161,6 +172,8 @@ export function AppearanceSettings() {
   const colorPrompt = usePreferences((s) => s.colorPrompt)
   const colorPromptSupported = useCore((s) => s.rpc?.features.includes('terminal-color-prompt') ?? false)
   const chatFontSize = usePreferences((s) => s.chatFontSize)
+  const chatLineHeight = usePreferences((s) => s.chatLineHeight)
+  const chatParagraphSpacing = usePreferences((s) => s.chatParagraphSpacing)
   const chatWidth = usePreferences((s) => s.chatWidth)
   const foldTurns = usePreferences((s) => s.foldTurns)
   return (
@@ -169,7 +182,8 @@ export function AppearanceSettings() {
         <span id={sectionLabelId} hidden>{t('SettingsPage.appearanceSections')}</span>
         <Segmented labelId={sectionLabelId} value={section} onChange={(next) => { setSection(next); setComparing(false) }} options={[
           { value: 'colors', label: t('SettingsPage.theme') },
-          { value: 'chat', label: t('SettingsPage.chat') },
+          { value: 'chat', label: t('MarkdownTheme.reading') },
+          { value: 'markdown', label: 'Markdown' },
           { value: 'terminal', label: t('SettingsPage.terminal') },
           { value: 'sidebar', label: t('SettingsPage.sidebar') },
           { value: 'language', label: t('SettingsPage.language') }
@@ -197,7 +211,8 @@ export function AppearanceSettings() {
         </SettingsGroup>
         </div>
         <div hidden={section !== 'chat'}>
-        <SettingsGroup title={t('SettingsPage.chat')}>
+        <SettingsGroup title={t('MarkdownTheme.reading')}>
+          <p className="settings-note">{t('MarkdownTheme.readingHint')}</p>
           <SettingsRow
             label={t('SettingsPage.fontSize')}
             description={t('SettingsPage.textSizeForMessagesWorkDetailsAndComposer')}
@@ -213,6 +228,19 @@ export function AppearanceSettings() {
                 />
               </Resettable>
             )}
+          />
+          <SettingsRow
+            label={t('SettingsPage.lineHeight')}
+            description={t('MarkdownTheme.lineHeightHint')}
+            control={(labelId) => <Resettable label={t('SettingsPage.lineHeight')} changed={chatLineHeight !== DEFAULT_PREFERENCES.chatLineHeight} onReset={() => setPreference('chatLineHeight', DEFAULT_PREFERENCES.chatLineHeight)}>
+              <Stepper labelId={labelId} value={chatLineHeight} min={1.4} max={2.4} step={0.1} unit="" onChange={(next) => setPreference('chatLineHeight', next)} />
+            </Resettable>}
+          />
+          <SettingsRow
+            label={t('MarkdownTheme.spacing')}
+            control={(labelId) => <Resettable label={t('MarkdownTheme.spacing')} changed={chatParagraphSpacing !== DEFAULT_PREFERENCES.chatParagraphSpacing} onReset={() => setPreference('chatParagraphSpacing', DEFAULT_PREFERENCES.chatParagraphSpacing)}>
+              <Stepper labelId={labelId} value={chatParagraphSpacing} min={0.2} max={1.6} step={0.1} unit="em" onChange={(next) => setPreference('chatParagraphSpacing', next)} />
+            </Resettable>}
           />
           <SettingsRow
             label={t('SettingsPage.font')}
@@ -248,6 +276,12 @@ export function AppearanceSettings() {
             )}
           />
         </SettingsGroup>
+        </div>
+        <div hidden={section !== 'markdown'}>
+          <SettingsGroup title="Markdown"><MarkdownThemePicker />
+            <p className="settings-note">{t('MarkdownTheme.readingHint')} <button type="button" className="link-button" onClick={() => setSection('chat')}>{t('MarkdownTheme.adjustReading')}</button></p>
+          </SettingsGroup>
+          <MarkdownThemeLibrary onPreview={previewMarkdownDraft} />
         </div>
         <div hidden={section !== 'terminal'}>
         <SettingsGroup title={t('SettingsPage.terminalAndCode')}>
@@ -319,7 +353,7 @@ export function AppearanceSettings() {
           <button type="button" className="button ghost" disabled={changed.length === 0} onClick={resetGroup}><RotateLeftIcon />{t('SettingsPage.resetGroup')}</button>
         </footer>
       </div>
-      <AppearancePreview section={section} comparing={comparing} onCompare={() => setComparing(!comparing)} />
+      <AppearancePreview section={section} comparing={comparing} onCompare={() => setComparing(!comparing)} draft={markdownDraft} />
       </div>
     </div>
   )

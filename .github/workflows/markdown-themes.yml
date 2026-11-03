@@ -1,0 +1,37 @@
+name: Markdown themes
+
+on:
+  pull_request:
+    paths:
+      - 'community/markdown-themes/**'
+      - 'packages/desktop/src/renderer/src/*theme*'
+      - '.github/workflows/markdown-themes.yml'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Read the PR base for theme version checks
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_BRANCH: ${{ github.base_ref }}
+        run: |
+          git fetch --depth=1 origin "$BASE_BRANCH"
+          echo 'COMMUNITY_THEME_BASE=FETCH_HEAD' >> "$GITHUB_ENV"
+      - run: pnpm check:markdown-themes

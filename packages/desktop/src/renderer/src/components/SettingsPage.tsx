@@ -532,7 +532,7 @@ const SECTIONS: readonly Section[] = localized(() => ([
     group: t('SettingsPage.interface'),
     title: t('SettingsPage.appearance'),
     description: t('SettingsPage.colorsChatAndTerminalDisplay'),
-    keywords: ['language', 'locale', 'English', '简体中文', '语言', t('language.interfaceLanguage'), t('SettingsPage.theme'), t('SettingsPage.light'), t('SettingsPage.dark'), t('SettingsPage.system'), t('SettingsPage.colors'), t('SettingsPage.palette'), t('SettingsPage.terminal'), t('SettingsPage.code'), t('SettingsPage.fontSize'), t('SettingsPage.font'), t('SettingsPage.lineHeight'), t('SettingsPage.prompt'), 'zsh', t('SettingsPage.chat'), t('SettingsPage.width'), t('SettingsPage.fullWidth'), t('FileSource.fold'), t('ModelBreakdown.turns'), t('SettingsPage.worked'), t('SettingsPage.chineseFont'), t('SettingsControls.resetToDefault_1523'), t('CjkFontPicker.default')],
+    keywords: [t('MarkdownTheme.reading'), 'Markdown', 'md', t('MarkdownTheme.title'), 'language', 'locale', 'English', '简体中文', '语言', t('language.interfaceLanguage'), t('SettingsPage.theme'), t('SettingsPage.light'), t('SettingsPage.dark'), t('SettingsPage.system'), t('SettingsPage.colors'), t('SettingsPage.palette'), t('SettingsPage.terminal'), t('SettingsPage.code'), t('SettingsPage.fontSize'), t('SettingsPage.font'), t('SettingsPage.lineHeight'), t('SettingsPage.prompt'), 'zsh', t('SettingsPage.chat'), t('SettingsPage.width'), t('SettingsPage.fullWidth'), t('FileSource.fold'), t('ModelBreakdown.turns'), t('SettingsPage.worked'), t('SettingsPage.chineseFont'), t('SettingsControls.resetToDefault_1523'), t('CjkFontPicker.default')],
     Icon: ContrastIcon,
     Body: AppearanceSettings,
     grouped: true

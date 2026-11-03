@@ -18,6 +18,8 @@ import { ImageViewer, type ViewerImage } from './ImageViewer'
 import { ExternalIcon } from './icons'
 import { conversationReferenceId } from '@antumi/protocol'
 import { ConversationReferenceLink } from './ConversationReferenceLink'
+import { usePreferences } from '../preferences'
+import { MarkdownSurface } from './MarkdownSurface'
 
 // The folders a conversation works in, the primary first: where a file a reply names is looked for.
 export const ChatRoots = createContext<readonly string[]>([])
@@ -221,7 +223,7 @@ const components: Components = {
             <CopyButton text={text.replace(/\n$/, '')} label={t('ChatContextMenu.copyCode')} />
           </span>
         </div>
-        <pre {...props} />
+        <pre className="code__pre" {...props} />
       </div>
     )
   }
@@ -234,8 +236,10 @@ function SettledDiagram({ source, code }: { source: string; code: ReactNode }) {
 // A reply still streaming is left uncoloured: it would be highlighted again at every delta.
 // runnable: its shell blocks may be run in the conversation's terminal (see ChatRunScope).
 export function ChatMarkdown({ text, highlight = true, runnable = false }: { text: string; highlight?: boolean; runnable?: boolean }) {
+  const theme = usePreferences((state) => state.markdownTheme)
+  const packs = usePreferences((state) => state.markdownThemePacks)
   return (
-    <div className="chat-markdown">
+    <MarkdownSurface theme={theme} packs={packs}>
       <ChatRunnable.Provider value={runnable}>
         <ChatSettled.Provider value={highlight}>
           <Markdown remarkPlugins={chatRemarkPlugins} rehypePlugins={highlight ? rehypePlugins : []} components={components} urlTransform={urlTransform}>
@@ -243,6 +247,6 @@ export function ChatMarkdown({ text, highlight = true, runnable = false }: { tex
           </Markdown>
         </ChatSettled.Provider>
       </ChatRunnable.Provider>
-    </div>
+    </MarkdownSurface>
   )
 }

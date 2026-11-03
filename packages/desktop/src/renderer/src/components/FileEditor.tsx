@@ -17,6 +17,7 @@ import { FileMenu, FileMenuItems } from './FileMenu'
 import { Segmented } from './SettingsControls'
 import { CheckIcon, CloseIcon, MoreIcon, RefreshIcon, SearchIcon, SidebarIcon } from './icons'
 import { askConfirm } from '../confirm-dialog'
+import { MarkdownThemePicker } from './MarkdownThemePicker'
 
 const REASON: Record<Extract<FileRead, { kind: 'unavailable' }>['reason'], string> = localized(() => ({
   'not-found': t('FileEditor.fileDoesNotExistItMayHaveBeen'),
@@ -182,6 +183,7 @@ export function FileEditor({ scope, updatedAt, editor }: { scope: FileScope; upd
         {active ? <>
           <div className="file-editor-location">
             <Breadcrumb file={active.file} onFolder={showFolder} />
+            {markdown && preview && <MarkdownThemePicker compact />}
             {(markdown || svg) && <div className="file-editor-mode">
               <span id={modeLabel} className="visually-hidden">{tr('FileEditor.viewMode', { value1: svg ? 'SVG' : 'Markdown' })}</span>
               <Segmented labelId={modeLabel} value={preview ? 'preview' : 'edit'} options={[{ value: 'edit', label: writable ? t('chatTools.edit') : t('FileEditor.source') }, { value: 'preview', label: t('chatTools.preview') }]} onChange={(mode) => setPreview(mode === 'preview')} />

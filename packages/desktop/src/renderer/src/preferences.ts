@@ -4,6 +4,7 @@ import { create } from 'zustand'
 import { BACKDROPS } from './backdrops'
 import { PALETTES } from './palettes'
 import { PROJECT_COLORS } from './project-colors'
+import { MarkdownThemeLibrary, MarkdownThemeSelection } from './markdown-theme-packs'
 import { PetLevelPreference, PetSizePreference, PetStylePreference } from './pet-preferences'
 import { DEFAULT_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH, MIN_SIDEBAR_WIDTH } from './sidebar-width'
 import { SetupProgress } from './setup-progress'
@@ -30,6 +31,8 @@ const Preferences = z.object({
   // The set of colours the interface is drawn in; each has a light and a dark side.
   palette: z.enum(PALETTES).catch('terracotta'),
   projectColors: z.record(z.string(), z.enum(PROJECT_COLORS)).catch({}),
+  markdownTheme: MarkdownThemeSelection.catch('default'),
+  markdownThemePacks: MarkdownThemeLibrary,
   // Experimental: the gradient behind the sidebar and status bar; none keeps the flat canvas.
   backdrop: z.enum(['none', ...BACKDROPS]).catch('none'),
   petStyle: PetStylePreference,
@@ -47,6 +50,9 @@ const Preferences = z.object({
   // the platform's own.
   codeCjkFontFamily: z.string().max(200).catch(''),
   chatFontSize: z.number().int().min(10).max(20).catch(14),
+  // Shared by replies, plans and Markdown files; themes never own reading preferences.
+  chatLineHeight: z.number().min(1.4).max(2.4).catch(1.7),
+  chatParagraphSpacing: z.number().min(0.2).max(1.6).catch(0.4),
   // What the chat is set in: the system's font, a serif for the prose, or a family the user
   // picked from those installed (chatFontFamily). A preset since dropped reads as the system's.
   chatFont: z.enum(['system', 'serif', 'custom']).catch('system'),

@@ -20,7 +20,8 @@
     "test:dsh-runtime": "node --import tsx scripts/smoke-dsh-runtime.mjs",
     "dist:mac": "pnpm --filter @antumi/desktop run dist:mac",
     "dist:win": "pnpm --filter @antumi/desktop run dist:win",
-    "dist:linux": "pnpm --filter @antumi/desktop run dist:linux"
+    "dist:linux": "pnpm --filter @antumi/desktop run dist:linux",
+    "check:markdown-themes": "vitest run packages/desktop/src/renderer/src/community-theme-catalog.test.ts packages/desktop/src/renderer/src/community-theme-packages.test.ts"
   },
   "devDependencies": {
     "@types/node": "catalog:",

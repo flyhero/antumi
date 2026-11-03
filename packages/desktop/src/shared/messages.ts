@@ -10,6 +10,63 @@ export const MESSAGES = {
   "ProjectColor.red": {"zh": "红色", "en": "Red"},
   "ProjectColor.pink": {"zh": "粉色", "en": "Pink"},
   "ProjectColor.purple": {"zh": "紫色", "en": "Purple"},
+  "MarkdownTheme.communityAvailable": {"zh": "以下主题由作者通过项目 PR 提交，审核后随 Antumi 版本发布，安装后可离线使用。", "en": "These themes are contributed by PR, reviewed, and included in Antumi releases. Installed themes work offline."},
+  "MarkdownTheme.contribute": {"zh": "提交社区主题", "en": "Contribute a theme"},
+  "MarkdownTheme.update": {"zh": "更新并使用", "en": "Update and use"},
+  "MarkdownTheme.useInstalled": {"zh": "使用已安装主题", "en": "Use installed theme"},
+  "MarkdownTheme.updateConfirm": {"zh": "更新「{name}」到 {version}？这会替换本机对该主题的修改；可先导出备份。", "en": "Update “{name}” to {version}? This replaces local changes to this theme. You can export a backup first."},
+  "MarkdownTheme.lightPreview": {"zh": "{name} · 浅色预览", "en": "{name} · light preview"},
+  "MarkdownTheme.darkPreview": {"zh": "{name} · 深色预览", "en": "{name} · dark preview"},
+
+  "MarkdownTheme.reading": {"zh": "阅读与聊天", "en": "Reading & chat"},
+  "MarkdownTheme.readingHint": {"zh": "聊天回复、计划和 Markdown 文件预览共用字体、字号、行高、段距与内容宽度，切换主题不会改变这些设置。", "en": "Replies, plans, and Markdown previews share font, size, line height, paragraph spacing, and content width. Switching themes keeps these settings."},
+  "MarkdownTheme.adjustReading": {"zh": "调整阅读设置", "en": "Adjust reading settings"},
+  "MarkdownTheme.lineHeightHint": {"zh": "聊天回复、计划和 Markdown 文件预览共用正文行高。", "en": "Shared body line height for replies, plans, and Markdown previews."},
+
+  "MarkdownTheme.title": {"zh": "Markdown 主题", "en": "Markdown theme"},
+  "MarkdownTheme.library": {"zh": "我的主题", "en": "My themes"},
+  "MarkdownTheme.community": {"zh": "社区主题", "en": "Community themes"},
+  "MarkdownTheme.custom": {"zh": "自定义主题", "en": "Custom theme"},
+  "MarkdownTheme.create": {"zh": "基于当前主题新建", "en": "Create from current theme"},
+  "MarkdownTheme.newName": {"zh": "我的新主题", "en": "My new theme"},
+  "MarkdownTheme.import": {"zh": "导入 CSS / 主题文件", "en": "Import CSS / theme file"},
+  "MarkdownTheme.export": {"zh": "导出", "en": "Export"},
+  "MarkdownTheme.install": {"zh": "安装并使用", "en": "Install and use"},
+  "MarkdownTheme.preview": {"zh": "预览并定制", "en": "Preview and customize"},
+  "MarkdownTheme.source": {"zh": "查看来源", "en": "View source"},
+  "MarkdownTheme.name": {"zh": "主题名称", "en": "Theme name"},
+  "MarkdownTheme.author": {"zh": "作者", "en": "Author"},
+  "MarkdownTheme.summary": {"zh": "主题说明", "en": "Theme description"},
+  "MarkdownTheme.base": {"zh": "基础样式", "en": "Base style"},
+  "MarkdownTheme.spacing": {"zh": "段落间距（em）", "en": "Paragraph spacing (em)"},
+  "MarkdownTheme.primary": {"zh": "自定义深浅点缀色", "en": "Custom light and dark accents"},
+  "MarkdownTheme.save": {"zh": "保存并使用", "en": "Save and use"},
+  "MarkdownTheme.cancel": {"zh": "取消编辑", "en": "Cancel editing"},
+  "MarkdownTheme.remove": {"zh": "移除", "en": "Remove"},
+  "MarkdownTheme.removeConfirm": {"zh": "移除主题「{name}」？正在使用时会回到默认主题。", "en": "Remove “{name}”? If active, the default theme will be used."},
+  "MarkdownTheme.saved": {"zh": "主题已保存并应用。", "en": "Theme saved and applied."},
+  "MarkdownTheme.libraryFull": {"zh": "最多保存 {count} 款主题，请先移除不再使用的主题。", "en": "You can save up to {count} themes. Remove an unused theme first."},
+  "MarkdownTheme.importError": {"zh": "无法导入：请选择 64 KB 以内的 CSS 或 Antumi 主题 JSON，检查格式及样式规则。", "en": "Import failed. Choose a CSS or Antumi theme JSON file under 64 KB and check its format and style rules."},
+  "MarkdownTheme.communityHint": {"zh": "暂无社区主题。可以自行创建主题，或导入自己选择的 CSS / 主题文件。", "en": "No community themes yet. Create your own theme or import a CSS or theme file of your choice."},
+  "MarkdownTheme.draftHint": {"zh": "正在实时预览草稿；保存后才会应用到聊天回复、计划和文件预览。", "en": "The preview shows your draft. Replies, plans, and file previews change only after saving."},
+  "MarkdownTheme.cssHint": {"zh": "主题仅调整配色与装饰。字体、字号、行高、内容宽度和缩放声明会被忽略；段距使用统一阅读设置。支持深浅模式 @media，背景和正文沿用 Antumi 配色。", "en": "Themes change colors and decoration only. Font family, font size, line height, width, and transforms are ignored; paragraph spacing follows reading settings. Light/dark @media rules are supported. Background and body text follow Antumi."},
+  "MarkdownTheme.cssError": {"zh": "样式未应用：{reason}。不支持外部资源、定位、脚本或导入规则。", "en": "Style not applied: {reason}. External resources, positioning, scripts and import rules are unsupported."},
+  "MarkdownTheme.invalidFields": {"zh": "请检查主题名称、颜色和 CSS。", "en": "Check the theme name, colors, and CSS."},
+  "MarkdownTheme.description": {"zh": "统一聊天回复、计划和文件预览的配色与装饰，阅读设置保持不变。", "en": "Use the same colors and decoration for replies, plans, and file previews without changing reading settings."},
+  "MarkdownTheme.default": {"zh": "默认", "en": "Default"},
+  "MarkdownTheme.defaultDescription": {"zh": "沿用界面配色，紧凑清晰。", "en": "Compact and clear, using your interface palette."},
+  "MarkdownTheme.sunset": {"zh": "落日", "en": "Sunset"},
+  "MarkdownTheme.sunsetDescription": {"zh": "朱红标题与莓紫、金色点缀，像一本热烈的杂志。", "en": "Vermilion headings with berry and gold accents, like a vivid magazine."},
+  "MarkdownTheme.ocean": {"zh": "海盐", "en": "Ocean"},
+  "MarkdownTheme.oceanDescription": {"zh": "青绿标题与琥珀点缀，清透而鲜明。", "en": "Teal headings and amber accents, crisp and vivid."},
+  "MarkdownTheme.neon": {"zh": "霓虹", "en": "Neon"},
+  "MarkdownTheme.neonDescription": {"zh": "亮粉标题与紫罗兰、电光青色，灵感大胆发光。", "en": "Hot pink headings with violet and electric cyan accents, for bold ideas."},
+  "MarkdownTheme.newsprint": {"zh": "报刊", "en": "Newsprint"},
+  "MarkdownTheme.newsprintDescription": {"zh": "字重层次与双线分节，鲜明的报刊风格。", "en": "Editorial heading weights and double rules."},
+  "MarkdownTheme.quiet": {"zh": "静阅", "en": "Quiet"},
+  "MarkdownTheme.quietDescription": {"zh": "轻盈标题与柔和引用，安静而清晰。", "en": "Light headings and soft blockquotes for calm reading."},
+  "MarkdownTheme.previewHint": {"zh": "使用真实 Markdown 渲染；文件预览也可直接切换主题。", "en": "Rendered with the actual Markdown viewer. You can also switch themes in file previews."},
+  "MarkdownTheme.sample": {"zh": "# 让文字安静下来\n\nGood design makes room for words. 好的排版，让阅读自然发生。\n\n## 留白，也是一种表达\n\n一段文字，一点呼吸的空间。用 **清晰的层次** 组织想法，把 *重要的细节* 留给读者。\n\n> 写下值得记住的事，让想法慢慢生长。\n\n### 从一个小想法开始\n\n- 记录灵感与笔记\n- 用 `Markdown` 整理思路\n\n```ts\nconst idea = 'Less, but better'\n```\n\n| 细节 | 感受 |\n| --- | --- |\n| 字体与行距 | 从容易读 |\n| 标题与留白 | 层次分明 |\n\n- [x] 留下一个好想法\n- [ ] 写下新的篇章\n\n---\n\n[了解 Markdown](https://www.markdownguide.org/)", "en": "# A little room for words\n\nGood design makes room for words. A quiet page lets the story unfold.\n\n## Space to think\n\nA few words and room to breathe. Use **clear structure** to organize ideas and let *small details* speak.\n\n> Write what is worth remembering. Give ideas time to grow.\n\n### Start with a small idea\n\n- Capture a moment of inspiration\n- Think clearly with `Markdown`\n\n```ts\nconst idea = 'Less, but better'\n```\n\n| Detail | Feeling |\n| --- | --- |\n| Type and spacing | Easy to read |\n| Headings and margins | Clear structure |\n\n- [x] Save a good idea\n- [ ] Begin a new chapter\n\n---\n\n[About Markdown](https://www.markdownguide.org/)"},
   "BrowserDownloads.title": {"zh": "下载", "en": "Downloads"},
   "BrowserDownloads.session": {"zh": "本次运行", "en": "This session"},
   "BrowserDownloads.empty": {"zh": "尚无下载，网页下载的文件会显示在这里。", "en": "No downloads yet. Files downloaded from web pages appear here."},
@@ -7168,14 +7225,8 @@ export const MESSAGES = {
     "zh": "字号",
     "en": "Font size"
   },
-  "SettingsPage.textSizeForMessagesWorkDetailsAndComposer": {
-    "zh": "消息、过程信息和输入框的文字大小。",
-    "en": "Text size for messages, work details, and composer."
-  },
-  "SettingsPage.chatFontSize": {
-    "zh": "聊天字号",
-    "en": "Chat font size"
-  },
+  "SettingsPage.textSizeForMessagesWorkDetailsAndComposer": {"zh": "聊天回复、计划、Markdown 文件预览与输入框的文字大小。", "en": "Text size for replies, plans, Markdown file previews, and the composer."},
+  "SettingsPage.chatFontSize": {"zh": "阅读字号", "en": "Reading font size"},
   "SettingsPage.font": {
     "zh": "字体",
     "en": "Font"
@@ -7188,22 +7239,13 @@ export const MESSAGES = {
     "zh": "中文字体",
     "en": "Chinese font"
   },
-  "SettingsPage.chineseTextInChatUsesThisFontEnglish": {
-    "zh": "聊天里的中文用它显示，英文仍用上面的字体。默认是苹方，选衬线时是宋体。",
-    "en": "Chinese text in chat uses this font; English keeps the font above. Defaults to PingFang, or Songti with serif."
-  },
-  "SettingsPage.chooseChineseChatFont": {
-    "zh": "选择聊天的中文字体",
-    "en": "Choose Chinese chat font"
-  },
+  "SettingsPage.chineseTextInChatUsesThisFontEnglish": {"zh": "聊天、计划和 Markdown 文件里的中文使用此字体，英文沿用上面的字体。", "en": "Chinese text in replies, plans, and Markdown files uses this font; English keeps the font above."},
+  "SettingsPage.chooseChineseChatFont": {"zh": "选择阅读的中文字体", "en": "Choose Chinese reading font"},
   "SettingsPage.pageWidth": {
     "zh": "页面宽度",
     "en": "Page width"
   },
-  "SettingsPage.maximumMessageAndComposerWidthNarrow800pxMedium": {
-    "zh": "消息和输入框的最大宽度：窄 800px，中等 1200px。",
-    "en": "Maximum message and composer width: narrow 800px, medium 1200px."
-  },
+  "SettingsPage.maximumMessageAndComposerWidthNarrow800pxMedium": {"zh": "聊天、计划和 Markdown 文件共用最大内容宽度：窄 800px，中等 1200px；窄面板自动收窄。", "en": "Shared maximum content width for replies, plans, and Markdown files: narrow 800px, medium 1200px. Narrow panels shrink to fit."},
   "SettingsPage.narrow": {
     "zh": "窄",
     "en": "Narrow"
@@ -7576,8 +7618,8 @@ export const MESSAGES = {
     "en": "Appearance"
   },
   "SettingsPage.colorsChatAndTerminalDisplay": {
-    "zh": "颜色、聊天页和终端的显示。",
-    "en": "Colors, chat, and terminal display."
+    "zh": "颜色、聊天页、Markdown 和终端的显示。",
+    "en": "Colors, chat, Markdown, and terminal display."
   },
   "SettingsPage.terminal": {
     "zh": "终端",

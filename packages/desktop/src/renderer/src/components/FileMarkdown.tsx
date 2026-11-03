@@ -7,6 +7,9 @@ import type { ResolvedFile } from '@antumi/protocol'
 import { remarkPlugins } from '../markdown-syntax'
 import { showChatFile } from '../file-actions'
 import type { FileScope } from '../file-tabs'
+import type { MarkdownThemePack } from '../markdown-theme-packs'
+import { MarkdownSurface } from './MarkdownSurface'
+import type { ReadingPreferences } from '../reading-style'
 import { isAbsolutePath, isImagePath, linkTarget, previewUrl, urlPath, type FileReference } from '../file-links'
 
 // Relative links and images belong to this document, including on Windows.
@@ -21,9 +24,10 @@ export function markdownFileReference(href: string, path: string): FileReference
 
 const plugins = [rehypeRaw, rehypeSanitize, rehypeHighlight]
 
-export function FileMarkdown({ text, file, scope }: { text: string; file: ResolvedFile; scope: FileScope }) {
-  return <div className="chat-markdown file-markdown">
+export function FileMarkdown({ text, file, scope, theme = 'default', packs = [], reading }: { text: string; file: ResolvedFile; scope: FileScope; theme?: string; packs?: readonly MarkdownThemePack[]; reading?: ReadingPreferences }) {
+  return <MarkdownSurface className="file-markdown" theme={theme} packs={packs} reading={reading}>
     <Markdown remarkPlugins={remarkPlugins} rehypePlugins={plugins} components={{
+      pre: ({ children }) => <pre className="code__pre">{children}</pre>,
       a: ({ href, children, title }) => {
         const reference = href ? markdownFileReference(href, file.path) : null
         if (reference) return <button type="button" className="chat-link" title={reference.path} onClick={() => void showChatFile(scope, reference)}>{children}</button>
@@ -36,5 +40,5 @@ export function FileMarkdown({ text, file, scope }: { text: string; file: Resolv
           : <a href={typeof src === 'string' ? src : undefined} target="_blank" rel="noreferrer">{alt || t('FileMarkdown.image')}</a>
       }
     }}>{text}</Markdown>
-  </div>
+  </MarkdownSurface>
 }

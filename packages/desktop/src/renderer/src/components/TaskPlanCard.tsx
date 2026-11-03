@@ -4,9 +4,7 @@ import type { Task } from '@antumi/protocol'
 import { useCore, useSquadsSupported } from '../core-store'
 import { agentLabel, dayAndTime } from '../labels'
 import { ChevronDownIcon } from './icons'
-import { MarkdownEditor } from './MarkdownEditor'
-
-const ignore = () => {}
+import { ChatMarkdown, ChatRoots } from './ChatMarkdown'
 
 // The plan settled in the task's chat, read-only: the details stay as the user wrote them. A saved
 // one waits for the task to run, so it opens; an approved one is already being carried out.
@@ -32,7 +30,11 @@ export function TaskPlanCard({ task }: { task: Task }) {
       </header>
       {supported && task.status === 'pending' && !task.squadId && <button type="button" className="link-button" onClick={() => useCore.setState({ taskLaunchId: task.id, squadPlan: null, squadLaunch: true })}>{t('TaskPlanCard.chooseDevelopmentSquad')}</button>}
       {open && (
-        <MarkdownEditor key={plan.createdAt} value={plan.markdown} onSave={ignore} label={title} hint="" readOnly />
+        <div className="task-plan-body" role="region" aria-label={title} tabIndex={0}>
+          <ChatRoots.Provider value={task.repos.map((repo) => repo.worktreePath ?? repo.path)}>
+            <ChatMarkdown text={plan.markdown} />
+          </ChatRoots.Provider>
+        </div>
       )}
     </section>
   )

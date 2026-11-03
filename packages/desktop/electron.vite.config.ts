@@ -1,6 +1,7 @@
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'electron-vite'
 import type { Plugin } from 'vite'
+import { communityThemePackages } from './community-theme-packages.vite'
 
 // Everything lives in devDependencies so electron-vite bundles it (including the
 // TS-source @antumi/protocol) instead of externalizing it into a runtime require. playwright-core
@@ -41,6 +42,6 @@ export default defineConfig({
   main: { build: { rollupOptions: { external: ['playwright-core', 'bufferutil', 'utf-8-validate'] } } },
   preload: {},
   renderer: {
-    plugins: [react(), productionCsp()]
+    plugins: [react(), productionCsp(), communityThemePackages()]
   }
 })

@@ -17,6 +17,8 @@ import { isShortcut, useShortcutLabel } from '../keyboard-shortcuts'
 import { createFileSearchPanel, runFileSearchShortcut } from '../file-search-panel'
 import { FileImage } from './FileImage'
 import { askConfirm } from '../confirm-dialog'
+import { usePreferences } from '../preferences'
+import { resolveMarkdownTheme } from '../markdown-theme-packs'
 
 const FileMarkdown = lazy(() => import('./FileMarkdown').then((module) => ({ default: module.FileMarkdown })))
 
@@ -88,6 +90,9 @@ export function FileSource({ scope, tab, disk, wrap, writable, preview, ref }: {
   scope: FileScope; tab: FileTab; disk: FileDisk; wrap: boolean; writable: boolean; preview: boolean; ref?: Ref<FileSourceHandle>
 }) {
   const key = fileScopeKey(scope)
+  const markdownTheme = usePreferences((state) => state.markdownTheme)
+  const markdownThemePacks = usePreferences((state) => state.markdownThemePacks)
+  const markdownBase = resolveMarkdownTheme(markdownTheme, markdownThemePacks).base
   const host = useRef<HTMLDivElement>(null)
   const saveKey = useShortcutLabel('save-file')
   const editor = useRef<EditorView | null>(null)
@@ -253,7 +258,7 @@ export function FileSource({ scope, tab, disk, wrap, writable, preview, ref }: {
     </div>}
     {preview && (/\.svg$/i.test(path)
       ? <FileImage path={path} text={previewText} />
-      : <div className="file-markdown-scroll" tabIndex={0} role="region" aria-label={t('FileSource.markdownPreview')}><Suspense fallback={<p className="inspector-empty muted" role="status">{t('FileSource.renderingMarkdown')}</p>}><FileMarkdown text={previewText} file={tab.file} scope={scope} /></Suspense></div>)}
+      : <div className="file-markdown-scroll markdown-sheet" data-md-theme={markdownBase} tabIndex={0} role="region" aria-label={t('FileSource.markdownPreview')}><Suspense fallback={<p className="inspector-empty muted" role="status">{t('FileSource.renderingMarkdown')}</p>}><FileMarkdown text={previewText} file={tab.file} scope={scope} theme={markdownTheme} packs={markdownThemePacks} /></Suspense></div>)}
     <div className="file-source" hidden={preview} ref={host} onContextMenu={(event) => {
       event.preventDefault()
       const view = editor.current

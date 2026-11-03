@@ -10207,10 +10207,6 @@ export const MESSAGES = {
     "zh": "{minutes} 分钟前",
     "en": "{minutes} {minutes, plural, one {minute} other {minutes}} ago"
   },
-  "conversationState.compactAgo": {
-    "zh": "{value}前",
-    "en": "{value} ago"
-  },
   "conversationState.hoursAgo": {
     "zh": "{hours} 小时前",
     "en": "{hours} {hours, plural, one {hour} other {hours}} ago"

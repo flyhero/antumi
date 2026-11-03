@@ -18,14 +18,26 @@ export function conversationGlyph(conversation: Conversation, unseen: boolean): 
 // How long ago, as the list says it: short, and a date past a week.
 export function timeAgo(at: number, now: number, format: 'relative' | 'compact' = 'relative'): string {
   const minutes = Math.floor((now - at) / 60_000)
-  if (minutes < 1) return t('conversationState.justNow')
-  if (minutes < 60) return format === 'compact' ? t('conversationState.compactAgo', { value: `${minutes}m` }) : t('conversationState.minutesAgo', { minutes: minutes })
   const hours = Math.floor(minutes / 60)
-  if (hours < 24) return format === 'compact' ? t('conversationState.compactAgo', { value: `${hours}h` }) : t('conversationState.hoursAgo', { hours: hours })
   const days = Math.floor(hours / 24)
-  if (days < 7) return format === 'compact' ? t('conversationState.compactAgo', { value: `${days}d` }) : t('conversationState.daysAgo', { days: days })
-  const date = new Date(at)
-  return t('SourceInboxView.monthAndDay', { value1: date.getMonth() + 1, value2: date.getDate() })
+  if (days >= 7) {
+    const date = new Date(at)
+    return t('SourceInboxView.monthAndDay', { value1: date.getMonth() + 1, value2: date.getDate() })
+  }
+  if (format === 'compact') return compactAge(minutes)
+  if (minutes < 1) return t('conversationState.justNow')
+  if (minutes < 60) return t('conversationState.minutesAgo', { minutes: minutes })
+  if (hours < 24) return t('conversationState.hoursAgo', { hours: hours })
+  return t('conversationState.daysAgo', { days: days })
+}
+
+// The bound the age is under, so it never reads less than the time gone (5m40s is <6m), in the
+// next unit up where the bound would be a whole one of it: 59m is <1h, not <60m.
+function compactAge(minutes: number): string {
+  if (minutes < 59) return `<${minutes + 1}m`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 23) return `<${hours + 1}h`
+  return `<${Math.floor(hours / 24) + 1}d`
 }
 
 // One wording for the list, the header and grouping. A conversation has no stopped state: its

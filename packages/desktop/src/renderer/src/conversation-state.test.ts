@@ -48,22 +48,25 @@ describe('conversationGlyph', () => {
 })
 
 describe('timeAgo', () => {
-  it('uses compact units in lists while keeping full relative wording elsewhere', () => {
+  it('gives the list the bound the age is under, keeping full relative wording elsewhere', () => {
     const now = new Date(2026, 8, 29, 12, 0).getTime()
-    expect(timeAgo(now - 59_999, now, 'compact')).toBe('刚刚')
-    expect(timeAgo(now - 60_000, now, 'compact')).toBe('1m前')
-    expect(timeAgo(now - 59 * 60_000, now, 'compact')).toBe('59m前')
-    expect(timeAgo(now - 3_600_000, now, 'compact')).toBe('1h前')
-    expect(timeAgo(now - 23 * 3_600_000, now, 'compact')).toBe('23h前')
-    expect(timeAgo(now - 86_400_000, now, 'compact')).toBe('1d前')
-    expect(timeAgo(now - 6 * 86_400_000, now, 'compact')).toBe('6d前')
+    expect(timeAgo(now - 59_999, now, 'compact')).toBe('<1m')
+    expect(timeAgo(now - 60_000, now, 'compact')).toBe('<2m')
+    expect(timeAgo(now - (5 * 60 + 40) * 1000, now, 'compact')).toBe('<6m')
+    expect(timeAgo(now - 58 * 60_000, now, 'compact')).toBe('<59m')
+    expect(timeAgo(now - 59 * 60_000, now, 'compact')).toBe('<1h')
+    expect(timeAgo(now - 3_600_000, now, 'compact')).toBe('<2h')
+    expect(timeAgo(now - 80 * 60_000, now, 'compact')).toBe('<2h')
+    expect(timeAgo(now - 22 * 3_600_000, now, 'compact')).toBe('<23h')
+    expect(timeAgo(now - 23 * 3_600_000, now, 'compact')).toBe('<1d')
+    expect(timeAgo(now - 86_400_000, now, 'compact')).toBe('<2d')
+    expect(timeAgo(now - 6 * 86_400_000, now, 'compact')).toBe('<7d')
     expect(timeAgo(now - 7 * 86_400_000, now, 'compact')).toBe('9月22日')
     expect(timeAgo(now - 60_000, now)).toBe('1 分钟前')
     setLocale('en')
     try {
-      expect(timeAgo(now - 60_000, now, 'compact')).toBe('1m ago')
-      expect(timeAgo(now - 3_600_000, now, 'compact')).toBe('1h ago')
-      expect(timeAgo(now - 86_400_000, now, 'compact')).toBe('1d ago')
+      expect(timeAgo(now - 60_000, now, 'compact')).toBe('<2m')
+      expect(timeAgo(now - 60_000, now)).toBe('1 minute ago')
     } finally { setLocale('zh-CN') }
   })
 

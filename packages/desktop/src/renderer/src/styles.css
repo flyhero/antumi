@@ -3451,6 +3451,59 @@ div.inspector-empty > p { margin: 0 0 8px; }
   list-style: none;
 }
 
+/* A small button at the end of a row, the row's own height. */
+.inspector-row-action {
+  width: 22px;
+  height: 22px;
+  margin-left: auto;
+  border-radius: var(--radius-xs);
+}
+
+.inspector-row-action svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* The tree view: a folder's chevron where a file's mark goes, its name where a file's name does;
+   each level a mark's width further in. */
+.changed-folder .changed-files {
+  padding-left: 14px;
+}
+
+.changed-folder > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  list-style: none;
+  cursor: pointer;
+  color: var(--text-muted);
+}
+
+.changed-folder > summary::-webkit-details-marker {
+  display: none;
+}
+
+.changed-folder > summary:hover {
+  background: var(--surface-muted);
+}
+
+.changed-folder > summary .chat-tool-chevron {
+  transition: transform 0.15s;
+}
+
+.changed-folder[open] > summary .chat-tool-chevron {
+  transform: rotate(90deg);
+}
+
+.changed-folder-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .changed-file {
   width: 100%;
   display: flex;

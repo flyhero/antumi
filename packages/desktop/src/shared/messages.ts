@@ -5583,6 +5583,14 @@ export const MESSAGES = {
     "zh": "{value1} 个文件",
     "en": "{value1} {value1, plural, one {file} other {files}}"
   },
+  "Inspector.showAsTree": {
+    "zh": "按目录显示",
+    "en": "Show as tree"
+  },
+  "Inspector.showAsList": {
+    "zh": "平铺显示",
+    "en": "Show as list"
+  },
   "Inspector.newFile": {
     "zh": "新文件",
     "en": "New file"

@@ -424,6 +424,16 @@ export function ListIcon() {
   )
 }
 
+// Lines hung off a stem, deeper ones further in: a folder tree.
+export function TreeIcon() {
+  return (
+    <svg {...stroked}>
+      <path d="M3.5 4.5h7M7.5 10h9M7.5 15.5h9" />
+      <path d="M5 4.5v11h2.5M5 10h2.5" />
+    </svg>
+  )
+}
+
 export function ArrowDownIcon() {
   return (
     <svg {...stroked}>

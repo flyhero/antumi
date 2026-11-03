@@ -120,6 +120,8 @@ const Preferences = z.object({
   gitBranchWidth: z.number().min(160).max(480).catch(240),
   gitDetailWidth: z.number().min(240).max(640).catch(320),
   gitGroupByDirectory: z.boolean().catch(true),
+  // How the inspector's changes list its files: flat, each with its folder, or as a folder tree.
+  changedFilesView: z.enum(['list', 'tree']).catch('list'),
   gitShowRecent: z.boolean().catch(true),
   gitShowTags: z.boolean().catch(true),
   gitFoldedGroups: z.record(z.string(), z.array(z.string())).catch({}),

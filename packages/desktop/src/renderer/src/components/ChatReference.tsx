@@ -1,7 +1,7 @@
 import type { ChatReferenceTarget } from '@antumi/protocol'
 import { useSyncExternalStore, type MouseEventHandler, type ReactNode } from 'react'
 import { isDarkTheme, onThemeChange } from '../appearance'
-import { mentionLabel } from '../chat-mentions'
+import { isHeldPaste, mentionLabel } from '../chat-mentions'
 import { shortLink } from '../text-links'
 import { selectConversation, useCore } from '../core-store'
 import { revealFile } from '../desktop-bridge'
@@ -34,7 +34,7 @@ export function ReferenceMark({ target, children, title, disabled, onClick, onMo
 }) {
   const label = children ?? mentionLabel(target)
   const content = <><span className="chat-reference-icon" aria-hidden="true"><ReferenceIcon target={target} /></span><span className="chat-reference-name">{label}</span></>
-  const hint = title ?? (target.kind === 'conversation' ? target.title : target.kind === 'agent' ? target.name : target.path)
+  const hint = title ?? (target.kind === 'conversation' ? target.title : target.kind === 'agent' ? target.name : isHeldPaste(target) ? mentionLabel(target) : target.path)
   return onClick ? <button type="button" className="chat-reference" data-reference-kind={target.kind}
     data-file-path={target.kind === 'file' || target.kind === 'directory' || target.kind === 'project' ? target.path : undefined}
     data-conversation-id={target.kind === 'conversation' ? target.id : undefined}
@@ -46,6 +46,8 @@ export function ReferenceMark({ target, children, title, disabled, onClick, onMo
 export function useOpenReference(): (target: ChatReferenceTarget) => void {
   const scope = useChatFiles()
   return (target) => {
+    // A draft's paste is no file until its conversation is made.
+    if (isHeldPaste(target)) return
     if (target.kind === 'conversation') {
       if (useCore.getState().conversations[target.id]) selectConversation(target.id)
     }

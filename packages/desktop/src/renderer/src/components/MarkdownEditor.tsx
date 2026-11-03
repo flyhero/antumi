@@ -7,6 +7,7 @@ import { EditorView, keymap, placeholder } from '@codemirror/view'
 import { tags } from '@lezer/highlight'
 import { isShortcut } from '../keyboard-shortcuts'
 import { imageFilesOf } from '../attachment-images'
+import { pathForFile } from '../desktop-bridge'
 import { livePreview } from './markdown-live-preview'
 
 const SAVE_DELAY_MS = 600
@@ -20,6 +21,19 @@ const theme = EditorView.theme({
   '.cm-cursor': { borderLeftColor: 'var(--accent)' },
   '.cm-placeholder': { color: 'var(--text-muted)' }
 })
+
+// Any other file dropped is named by its path, as code so a space keeps it whole, rather than having
+// its content put in: what the text is for is an agent, which reads the file from there.
+function dropPaths(view: EditorView, event: DragEvent): boolean {
+  const paths = [...(event.dataTransfer?.files ?? [])].flatMap((file) => pathForFile(file) ?? [])
+  if (paths.length === 0 || view.state.readOnly) return false
+  const at = view.posAtCoords({ x: event.clientX, y: event.clientY }, false)
+  const lead = at > 0 && !/\s/.test(view.state.sliceDoc(at - 1, at)) ? ' ' : ''
+  const insert = `${lead}${paths.map((path) => `\`${path}\``).join(' ')} `
+  view.dispatch({ changes: { from: at, insert }, selection: { anchor: at + insert.length }, userEvent: 'input.drop' })
+  view.focus()
+  return true
+}
 
 const highlight = HighlightStyle.define([
   { tag: tags.heading, fontWeight: '700' },
@@ -96,7 +110,7 @@ export function MarkdownEditor({ value, onSave, onChange, onSubmit, label, hint,
           // editor must neither paste nor drop them as text; returning true lets them pass through.
           EditorView.domEventHandlers({
             paste: (event) => imageFilesOf(event.clipboardData).length > 0,
-            drop: (event) => imageFilesOf(event.dataTransfer).length > 0
+            drop: (event, view) => imageFilesOf(event.dataTransfer).length > 0 || dropPaths(view, event)
           }),
           readOnly ? [EditorState.readOnly.of(true), EditorView.editable.of(false)] : [],
           EditorView.updateListener.of((update) => {

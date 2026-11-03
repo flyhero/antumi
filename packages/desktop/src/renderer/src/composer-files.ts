@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef, useState, type ClipboardEvent, type DragEvent,
 import type { EditorView } from '@codemirror/view'
 import { ATTACHMENT_CHUNK_BYTES, IMAGE_MIME_TYPES, MAX_ATTACHMENT_BYTES } from '@antumi/protocol'
 import { bytesToBase64 } from './base64'
-import { CLIPBOARD_TYPE, pathTarget, placeTargets, type MentionedText, type MentionTarget } from './chat-mentions'
+import { CLIPBOARD_TYPE, heldPastePath, isHeldPaste, pathTarget, placeTargets, type Mention, type MentionedText, type MentionTarget } from './chat-mentions'
 import { useCore } from './core-store'
 import { pathForFile } from './desktop-bridge'
 import { t } from './i18n'
@@ -32,13 +32,55 @@ async function keepPastedText(conversationId: string, text: string): Promise<Men
   }
 }
 
+// A draft's long pastes, by the stand-in path their mention carries until its conversation exists.
+// Not saved with the draft: one reloaded without them is caught before it goes (lostPastes).
+const held = new Map<string, string>()
+
+export function holdPaste(text: string): MentionTarget {
+  const path = heldPastePath(crypto.randomUUID())
+  held.set(path, text)
+  return { kind: 'file', path, relative: null, pasted: { lines: pastedLines(text) } }
+}
+
+export function lostPastes(value: MentionedText): boolean {
+  return value.mentions.some(({ target }) => target.kind === 'file' && isHeldPaste(target) && !held.has(target.path))
+}
+
+// The draft's held pastes kept for the conversation now made for it. One core did not keep goes in
+// as the text it was, so nothing pasted is lost.
+export async function keepHeldPastes(conversationId: string, value: MentionedText): Promise<MentionedText> {
+  let text = ''
+  let at = 0
+  let failed = false
+  const mentions: Mention[] = []
+  for (const mention of [...value.mentions].sort((a, b) => a.start - b.start)) {
+    text += value.text.slice(at, mention.start)
+    at = mention.end
+    const { target } = mention
+    const pasted = target.kind === 'file' && isHeldPaste(target) ? held.get(target.path) : undefined
+    const kept = pasted === undefined ? target : await keepPastedText(conversationId, pasted)
+    if (target.kind === 'file') held.delete(target.path)
+    if (kept) {
+      const shown = value.text.slice(mention.start, mention.end)
+      mentions.push({ start: text.length, end: text.length + shown.length, target: kept })
+      text += shown
+    } else {
+      failed = true
+      text += pasted ?? ''
+    }
+  }
+  if (failed) useCore.setState({ error: t('composerFiles.pasteKeptAsText') })
+  return { text: text + value.text.slice(at), mentions }
+}
+
 const isImage = (file: File) => IMAGE_MIME_TYPES.some((type) => type === file.type)
 
 // Files dropped on the composer and long pastes. Images go to `addImages` where the agent takes
 // them; any other file or folder becomes a mention of its path, where the drop landed. A long paste
-// becomes a mention of the file core keeps it in; the message waits for it (`pasting`).
+// becomes a mention of the file core keeps it in; the message waits for it (`pasting`). A draft
+// (no `conversationId` yet) holds it instead, for keepHeldPastes once the conversation is made.
 export function useComposerFiles({ conversationId, cwd, input, setValue, addImages, images, mentions, pastes, readOnly }: {
-  conversationId: string
+  conversationId: string | null
   cwd: string | null
   input: RefObject<EditorView | null>
   setValue: (change: (current: MentionedText) => MentionedText) => void
@@ -74,6 +116,7 @@ export function useComposerFiles({ conversationId, cwd, input, setValue, addImag
     const text = data.getData('text/plain')
     if (text.length <= PASTE_AS_FILE_CHARS) return
     event.preventDefault()
+    if (conversationId === null) return place([holdPaste(text)], null)
     setPasting((count) => count + 1)
     void keepPastedText(conversationId, text).then((target) => {
       setPasting((count) => count - 1)

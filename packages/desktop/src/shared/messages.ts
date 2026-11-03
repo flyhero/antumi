@@ -2137,6 +2137,10 @@ export const MESSAGES = {
     "zh": "粘贴的文本 · {lines} 行",
     "en": "Pasted text · {lines} {lines, plural, one {line} other {lines}}"
   },
+  "composerFiles.pasteLost": {
+    "zh": "粘贴的长文本在重新打开后已不在，请删掉「粘贴的文本」再粘贴一次",
+    "en": "The long paste was lost when the app reopened; remove “Pasted text” and paste it again"
+  },
   "composerFiles.pasteKeptAsText": {
     "zh": "长文本没能存成文件，已作为文字放进输入框",
     "en": "The long paste could not be kept as a file, so it went into the message as text"

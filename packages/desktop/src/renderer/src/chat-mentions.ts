@@ -5,6 +5,11 @@ const MAX_PROJECTS = 8
 // What a copy out of the input carries beside its text: the mentions in it.
 export const CLIPBOARD_TYPE = 'application/x-antumi-references'
 
+// The stand-in path of a long paste a draft holds until its conversation exists to keep it.
+const HELD_PASTE = 'antumi-held-paste:'
+export const heldPastePath = (id: string) => `${HELD_PASTE}${id}`
+export const isHeldPaste = (target: MentionTarget) => target.kind === 'file' && target.path.startsWith(HELD_PASTE)
+
 // The @word the caret is in: an @ not right after a letter or digit of a word (an address like
 // me@host is no mention, but Chinese runs straight into one: 看看@README), what follows it up to the
 // caret being the query, and the whole word being what a pick replaces.

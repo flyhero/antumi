@@ -4,7 +4,8 @@ import { useShortcutLabel } from '../keyboard-shortcuts'
 import { getLocale, t, tr } from '../i18n'
 import { useEffect, useMemo, useState } from 'react'
 import { agentDescriptor, ChatPermissionMode, type AgentKind, type ChatCatalog } from '@antumi/protocol'
-import { closeConversationDraft, perform, selectConversation, switchDraftMode, useChatImagesSupported, useChatOptionsSupported, useConversationWorktreesSupported, useCore, useDiscussionsSupported, useSourceInvestigateSupported, useStartBranchSupported } from '../core-store'
+import { closeConversationDraft, perform, selectConversation, switchDraftMode, useChatImagesSupported, useChatOptionsSupported, useConversationWorktreesSupported, useCore, useDiscussionsSupported, useFileMentionsSupported, usePastedTextSupported, useSourceInvestigateSupported, useStartBranchSupported } from '../core-store'
+import { keepHeldPastes, lostPastes, useComposerFiles } from '../composer-files'
 import { OtherProjectsHint } from './OtherProjectsHint'
 import { ConversationTip } from './ConversationTip'
 import { defaultAgent } from '../default-agent'
@@ -90,6 +91,8 @@ export function ConversationDraft() {
   const deferStart = rpc?.features.includes('deferred-conversation-start') ?? false
   const optionsSupported = useChatOptionsSupported()
   const imagesSupported = useChatImagesSupported()
+  const mentionsSupported = useFileMentionsSupported()
+  const pastedTextSupported = usePastedTextSupported()
   const worktreesSupported = useConversationWorktreesSupported()
   const inWorktree = worktree && worktreesSupported && projectPaths.length > 0
   // The primary project's branch: where its worktree starts, or what it is switched to; null keeps
@@ -114,6 +117,11 @@ export function ConversationDraft() {
   const commandMenu = useChatCommandMenu({ text, entries: commandEntries, agentLabel: agent ? agentLabel(agent) : '', setText, sendCommand: () => {} })
   // The agent will work in the first project picked.
   const mentionMenu = useChatMentionMenu({ value, setText, setValue, roots: projectPaths, cwd: projectPaths[0] ?? null, agent })
+  // An issue's note goes with the conversation's start, so a long paste in it stays text.
+  const files = useComposerFiles({
+    conversationId: null, cwd: projectPaths[0] ?? null, input: mentionMenu.inputProps.input, setValue, addImages: attached.add,
+    images: imagesSupported && !issue, mentions: mentionsSupported, pastes: pastedTextSupported && !issue, readOnly: busy
+  })
   // Written out for the agent picked when it goes, which may not be the one picked before.
   const writtenMessage = agent ? writeMentionedText(value, agent) : { text, references: [] }
   const written = writtenMessage.text
@@ -197,10 +205,17 @@ export function ConversationDraft() {
     }
     if (!canSend) return
     if (issue) return investigate()
+    if (lostPastes(value)) {
+      useCore.setState({ error: t('composerFiles.pasteLost') })
+      return
+    }
     setBusy(true)
     const created = await create()
     if (created) {
-      if (await openWithFirstMessage(created, written.trim(), attached.images, deferStart, messageReferences(writtenMessage, written.trim()))) saveComposerDraft(composerId, EMPTY_DRAFT)
+      // The long pastes go to the conversation now that there is one, their paths into the message.
+      const kept = agent ? writeMentionedText(await keepHeldPastes(created.id, value), agent) : writtenMessage
+      const message = kept.text.trim()
+      if (await openWithFirstMessage(created, message, attached.images, deferStart, messageReferences(kept, message))) saveComposerDraft(composerId, EMPTY_DRAFT)
       return
     }
     setBusy(false)
@@ -298,8 +313,8 @@ export function ConversationDraft() {
             <div
               className="chat-input-card"
               data-working={busy || undefined}
-              onDragOver={imagesSupported ? attached.handlers.onDragOver : undefined}
-              onDrop={imagesSupported ? attached.handlers.onDrop : undefined}
+              onDragOver={files.onDragOver}
+              onDropCapture={files.onDropCapture}
             >
               {commandMenu.menu}
               {mentionMenu.menu}
@@ -313,7 +328,10 @@ export function ConversationDraft() {
                 readOnly={busy}
                 aria-label={t('ConversationDraft.firstMessage')}
                 placeholder={!agent ? t('ConversationDraft.chooseAnAgentAboveFirst') : issue ? t('ConversationDraft.additionalInstructionsOptionalEnterToInvestigate', { send: sendHint }) : t('ConversationDraft.sendTheFirstMessageToEnterToSend', { value1: agentLabel(agent), send: sendHint })}
-                onPasteCapture={imagesSupported ? attached.handlers.onPaste : undefined}
+                onPasteCapture={(event) => {
+                  if (imagesSupported) attached.handlers.onPaste(event)
+                  files.onPasteCapture(event)
+                }}
                 onKeyDownCapture={(event) => {
                   if (commandMenu.onKeyDown(event) || mentionMenu.onKeyDown(event) || !sendsMessage(event)) return
                   event.preventDefault()

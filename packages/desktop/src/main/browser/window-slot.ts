@@ -7,6 +7,7 @@ import type { ShortcutSettings } from '../../shared/keyboard-shortcuts'
 // window: the main window, or the browser's own window.
 interface HostView {
   setBounds(bounds: Rectangle): void
+  setVisible(visible: boolean): void
 }
 export interface SlotWindow {
   isDestroyed(): boolean
@@ -26,6 +27,9 @@ export interface SlotWindow {
 // lets go of the tab does not take it out of a different window. Bounds can arrive before the
 // show, so each window keeps its own rectangle. A dialog covers the view only in the window that
 // has it. The tabs themselves live on regardless.
+// A tab off the panel rests hidden in the main window, its frames and timers held back as any
+// hidden page's are: a view out of every window counts as on show and runs them at full rate. One
+// the agent works in leaves the window for that while, since its clicks wait on a page that paints.
 export class WindowSlot {
   private main: SlotWindow | null = null
   private host: SlotWindow | null = null
@@ -34,6 +38,8 @@ export class WindowSlot {
   private readonly occludedBy = new WeakMap<SlotWindow, boolean>()
   private readonly hosts = new WeakSet<SlotWindow>()
   private occluded = false
+  private readonly views = new Set<HostView>()
+  private readonly awake = new Set<HostView>()
   private panelShortcuts: ShortcutSettings = { version: 1 }
 
   setPanelShortcuts(settings: ShortcutSettings): void {
@@ -51,6 +57,7 @@ export class WindowSlot {
     window.once('closed', () => {
       if (this.main === window) this.main = null
     })
+    for (const view of this.views) if (this.shown?.view !== view) this.park(view)
   }
 
   // The renderer's choice of tab, or none. Null from a window that is not showing it leaves the
@@ -96,6 +103,24 @@ export class WindowSlot {
     else this.place()
   }
 
+  rest(view: HostView): void {
+    this.views.add(view)
+    this.awake.delete(view)
+    if (this.shown?.view !== view) this.park(view)
+  }
+
+  wake(view: HostView): void {
+    this.awake.add(view)
+    if (this.shown?.view !== view) this.unpark(view)
+  }
+
+  // Its tab went: the view is no window's to hold.
+  release(view: HostView): void {
+    this.views.delete(view)
+    this.awake.delete(view)
+    this.unpark(view)
+  }
+
   // The tab went: nothing to show until a window picks another.
   tabClosed(tabId: string): void {
     if (this.shown?.tabId === tabId) {
@@ -124,14 +149,32 @@ export class WindowSlot {
     if (!host || host.isDestroyed() || !shown || this.occluded) return
     const bounds = this.boundsOf.get(host)
     if (!bounds) return
-    if (!host.contentView.children.includes(shown.view)) host.contentView.addChildView(shown.view)
+    if (!host.contentView.children.includes(shown.view)) {
+      this.unpark(shown.view)
+      host.contentView.addChildView(shown.view)
+    }
     shown.view.setBounds(fitViewport(bounds, shown.viewport))
+    shown.view.setVisible(true)
   }
 
   private takeDown(): void {
     const { host, shown } = this
     if (!host || host.isDestroyed() || !shown) return
+    shown.view.setVisible(false)
     if (host.contentView.children.includes(shown.view)) host.contentView.removeChildView(shown.view)
+    this.park(shown.view)
+  }
+
+  private park(view: HostView): void {
+    const { main } = this
+    if (!main || main.isDestroyed() || !this.views.has(view) || this.awake.has(view)) return
+    view.setVisible(false)
+    if (!main.contentView.children.includes(view)) main.contentView.addChildView(view)
+  }
+
+  private unpark(view: HostView): void {
+    const { main } = this
+    if (main && !main.isDestroyed() && main.contentView.children.includes(view)) main.contentView.removeChildView(view)
   }
 
   private clearHost(): void {

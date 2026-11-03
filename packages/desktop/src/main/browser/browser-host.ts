@@ -58,18 +58,42 @@ export async function startBrowserHost(slot: WindowSlot, hostFile: string, confi
   // Tabs an agent's action is at work in: its clicks and keys reach the page as the user's do,
   // and are not to be told to core as the user taking the tab.
   const agentActing = new Set<string>()
+  // The agent's clicks wait on an element being visible and still, which a resting tab never is:
+  // while any of the agent's calls is on it, it lays out, paints and runs its frames.
+  const awake = new Map<string, number>()
+  const keepAwake = async <T>(tabId: string, run: () => Promise<T>): Promise<T> => {
+    const view = views.get(tabId)
+    const contents = view?.webContents
+    awake.set(tabId, (awake.get(tabId) ?? 0) + 1)
+    contents?.setBackgroundThrottling(false)
+    if (view) slot.wake(view)
+    try {
+      return await run()
+    } finally {
+      const left = (awake.get(tabId) ?? 1) - 1
+      if (left > 0) awake.set(tabId, left)
+      else {
+        awake.delete(tabId)
+        if (contents && !contents.isDestroyed()) contents.setBackgroundThrottling(true)
+        if (view && views.has(tabId)) slot.rest(view)
+      }
+    }
+  }
 
   const forget = (tab: Tab) => {
+    const view = views.get(tab.id)
+    if (view) slot.release(view)
     views.delete(tab.id)
+    awake.delete(tab.id)
     captures.delete(tab.id)
     slot.tabClosed(tab.id)
     registry.remove(tab.id)
   }
 
   const open = async (conversationId: string | null, viewport: BrowserViewport | null, userOwned = conversationId === null): Promise<Tab> => {
-    // A tab off the panel still lays out, paints and runs its frames: the agent's clicks wait
-    // on an element being visible and still, which a throttled or sizeless page never is.
-    const view = new WebContentsView({ webPreferences: { partition: PARTITION, sandbox: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: false } })
+    // Off the panel a tab rests as a hidden page does (see WindowSlot), its frames and timers held
+    // back, so a video or an animation left open costs nothing; keepAwake lifts that for the agent.
+    const view = new WebContentsView({ webPreferences: { partition: PARTITION, sandbox: true, contextIsolation: true, nodeIntegration: false } })
     view.setBounds({ x: 0, y: 0, ...BROWSER_VIEWPORT })
     const contents = view.webContents
     await contents.loadURL('about:blank')
@@ -136,6 +160,7 @@ export async function startBrowserHost(slot: WindowSlot, hostFile: string, confi
     }, viewport, userOwned)
     captures.set(tab.id, capture)
     views.set(tab.id, view)
+    slot.rest(view)
     contents.once('destroyed', () => void close())
     // A link that wants a window of its own gets a tab of the same owner's instead.
     contents.setWindowOpenHandler(({ url }) => {
@@ -185,7 +210,7 @@ export async function startBrowserHost(slot: WindowSlot, hostFile: string, confi
   }
 
   // An action on a tab, then the page as it stands afterwards.
-  const act = async (tabId: string, run: (tab: Tab) => Promise<void>): Promise<BrowserHostResult<'click'>> => {
+  const act = (tabId: string, run: (tab: Tab) => Promise<void>): Promise<BrowserHostResult<'click'>> => keepAwake(tabId, async () => {
     const tab = registry.get(tabId)
     registry.touch(tab)
     agentActing.add(tabId)
@@ -197,7 +222,7 @@ export async function startBrowserHost(slot: WindowSlot, hostFile: string, confi
     }
     await registry.refreshTitle(tab)
     return { tab: registry.describe(tab), snapshot: await actions.snapshot(tab.page) }
-  }
+  })
 
   const shutdown = async () => {
     if (closing) return
@@ -216,7 +241,7 @@ export async function startBrowserHost(slot: WindowSlot, hostFile: string, confi
     'tabs.open': async ({ conversationId, url, viewport }) => {
       const tab = await open(conversationId ?? null, viewport ?? null)
       if (!url) return { tab: registry.describe(tab), outcome: 'done', snapshot: null }
-      return goto(tab, { url })
+      return keepAwake(tab.id, () => goto(tab, { url }))
     },
     'tabs.close': async ({ tabId }) => {
       await registry.get(tabId).attachment.close()
@@ -247,7 +272,7 @@ export async function startBrowserHost(slot: WindowSlot, hostFile: string, confi
       const tab = registry.get(tabId)
       registry.touch(tab)
       if (viewport !== undefined && JSON.stringify(viewport) !== JSON.stringify(tab.viewport)) await tab.attachment.setViewport(viewport)
-      return goto(tab, to)
+      return keepAwake(tabId, () => goto(tab, to))
     },
     viewport: async ({ tabId, viewport }) => {
       await registry.get(tabId).attachment.setViewport(viewport)
@@ -257,7 +282,7 @@ export async function startBrowserHost(slot: WindowSlot, hostFile: string, confi
     screenshot: async ({ tabId, ...options }) => {
       const tab = registry.get(tabId)
       registry.touch(tab)
-      const jpeg = await actions.screenshot(tab.page, options)
+      const jpeg = await keepAwake(tabId, () => actions.screenshot(tab.page, options))
       return { tab: registry.describe(tab), jpeg: jpeg.toString('base64') }
     },
     click: ({ tabId, ...params }) => act(tabId, (tab) => actions.click(tab.page, params)),

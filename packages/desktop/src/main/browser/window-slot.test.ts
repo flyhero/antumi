@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import type { Rectangle } from 'electron'
 import { WindowSlot, type SlotWindow } from './window-slot'
 
-function fakeWindow(): SlotWindow & { views: { setBounds(bounds: Rectangle): void }[]; sent: [string, unknown][]; focused: () => number; close(): void } {
-  const views: { setBounds(bounds: Rectangle): void }[] = []
+function fakeWindow(): SlotWindow & { views: { setBounds(bounds: Rectangle): void; setVisible(visible: boolean): void }[]; sent: [string, unknown][]; focused: () => number; close(): void } {
+  const views: { setBounds(bounds: Rectangle): void; setVisible(visible: boolean): void }[] = []
   const sent: [string, unknown][] = []
   let focused = 0
   const onClosed: (() => void)[] = []
@@ -27,7 +27,7 @@ function fakeWindow(): SlotWindow & { views: { setBounds(bounds: Rectangle): voi
 }
 
 function page(bounds: Rectangle | null = null) {
-  return { bounds, setBounds(next: Rectangle) { this.bounds = next } }
+  return { bounds, visible: true, setBounds(next: Rectangle) { this.bounds = next }, setVisible(next: boolean) { this.visible = next } }
 }
 
 describe('window slot', () => {
@@ -49,7 +49,36 @@ describe('window slot', () => {
     expect(browser.views).toEqual([view])
   })
 
-  it('keeps a rectangle that arrived before the page was claimed', () => {
+  it('rests a tab off the panel hidden in the main window, and lets it out while the agent works there', () => {
+    const slot = new WindowSlot()
+    const main = fakeWindow()
+    const browser = fakeWindow()
+    const [first, second] = [page(), page()]
+    slot.attachWindow(main)
+    slot.setBounds(main, { x: 0, y: 0, width: 300, height: 200 })
+    slot.rest(first)
+    slot.rest(second)
+    expect(main.views).toEqual([first, second])
+    expect([first.visible, second.visible]).toEqual([false, false])
+    slot.show(main, 'first', first, null)
+    expect(first.visible).toBe(true)
+    slot.wake(second)
+    expect(main.views).toEqual([first])
+    slot.rest(second)
+    expect(main.views).toEqual([first, second])
+    expect(second.visible).toBe(false)
+    // Shown in the browser's own window, it leaves the main one, and comes back when let go.
+    slot.setBounds(browser, { x: 0, y: 0, width: 800, height: 600 })
+    slot.show(browser, 'first', first, null)
+    expect([main.views, browser.views]).toEqual([[second], [first]])
+    slot.show(browser, null, null, null)
+    expect([main.views, browser.views]).toEqual([[second, first], []])
+    expect(first.visible).toBe(false)
+    slot.release(second)
+    expect(main.views).toEqual([first])
+  })
+
+    it('keeps a rectangle that arrived before the page was claimed', () => {
     const slot = new WindowSlot()
     const browser = fakeWindow()
     const view = page()

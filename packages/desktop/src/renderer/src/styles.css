@@ -1130,8 +1130,20 @@ span.chat-translate .spinner { width: 12px; height: 12px; }
   gap: 4px;
 }
 .conversation-row:has(> .conversation-trailing) > .task-row-meta { grid-column: 2; grid-row: 2; }
+.conversation-context {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 4px;
+  border-radius: var(--radius-xs);
+  background: var(--fill);
+  color: var(--text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
 .conversation-trailing .chat-context { white-space: nowrap; }
-.conversation-trailing .chat-context svg { width: 12px; height: 12px; }
+.conversation-trailing .chat-context svg { display: none; }
+.conversation-trailing .chat-context[data-level='warning'] { color: var(--warning); }
 
 .task-row-meta {
   grid-column: 2;

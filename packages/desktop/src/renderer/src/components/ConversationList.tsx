@@ -327,7 +327,10 @@ export function ConversationList() {
             {panes?.includes(conversation.id)
               ? <span className="pane-chip" data-active={selected === conversation.id} aria-label={t('ConversationList.inPane', { value1: panes.indexOf(conversation.id) + 1 })}>{panes.indexOf(conversation.id) + 1}</span>
               : <span className="conversation-age" title={timeAgo(conversation.updatedAt, now)}>{timeAgo(conversation.updatedAt, now, 'compact')}</span>}
-            {density !== 'compact' && conversation.context && <ContextUsage context={conversation.context} showTokens />}
+            {density !== 'compact' && conversation.context && <span className="conversation-context">
+              <span aria-hidden="true">{t('ConversationList.context')}</span>
+              <ContextUsage context={conversation.context} showTokens />
+            </span>}
           </span>
           <span className="task-row-meta"><ConversationMeta conversation={conversation} heading={heading} /></span>
           {snippet && <span className="conversation-snippet"><Highlighted text={snippet} query={needle} /></span>}

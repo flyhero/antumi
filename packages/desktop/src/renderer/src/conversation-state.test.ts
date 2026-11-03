@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Conversation } from '@antumi/protocol'
 import { conversationGlyph, conversationState, timeAgo } from './conversation-state'
+import { setLocale } from './i18n'
 
 const base: Conversation = {
   id: '11111111-1111-4111-8111-111111111111', title: 't', titleLocked: false, agent: 'claude', workspacePath: '/w',
@@ -47,6 +48,25 @@ describe('conversationGlyph', () => {
 })
 
 describe('timeAgo', () => {
+  it('uses compact units in lists while keeping full relative wording elsewhere', () => {
+    const now = new Date(2026, 8, 29, 12, 0).getTime()
+    expect(timeAgo(now - 59_999, now, 'compact')).toBe('刚刚')
+    expect(timeAgo(now - 60_000, now, 'compact')).toBe('1m前')
+    expect(timeAgo(now - 59 * 60_000, now, 'compact')).toBe('59m前')
+    expect(timeAgo(now - 3_600_000, now, 'compact')).toBe('1h前')
+    expect(timeAgo(now - 23 * 3_600_000, now, 'compact')).toBe('23h前')
+    expect(timeAgo(now - 86_400_000, now, 'compact')).toBe('1d前')
+    expect(timeAgo(now - 6 * 86_400_000, now, 'compact')).toBe('6d前')
+    expect(timeAgo(now - 7 * 86_400_000, now, 'compact')).toBe('9月22日')
+    expect(timeAgo(now - 60_000, now)).toBe('1 分钟前')
+    setLocale('en')
+    try {
+      expect(timeAgo(now - 60_000, now, 'compact')).toBe('1m ago')
+      expect(timeAgo(now - 3_600_000, now, 'compact')).toBe('1h ago')
+      expect(timeAgo(now - 86_400_000, now, 'compact')).toBe('1d ago')
+    } finally { setLocale('zh-CN') }
+  })
+
   it('says how long ago in the list\'s short words, and the date past a week', () => {
     const now = new Date(2026, 8, 29, 12, 0).getTime()
     expect(timeAgo(now - 20_000, now)).toBe('刚刚')

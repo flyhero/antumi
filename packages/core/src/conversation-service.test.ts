@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { ConversationService, type ConversationEvent } from './conversation-service'
 import { ConversationStore } from './conversation-store'
@@ -78,6 +79,60 @@ describe('ConversationService', () => {
     store.close()
     tasks.close()
     rmSync(root, { recursive: true, force: true })
+  })
+
+  it('publishes context changes to the list without waiting for activity to change', async () => {
+    const events: ConversationEvent[] = []
+    service = serve((event) => events.push(event))
+    const conversation = await service.create('claude', [])
+    const sessionId = service.get(conversation.id).sessionId!
+    expect(service.get(conversation.id).context).toBeNull()
+    const usage = { type: 'assistant', message: { id: 'context', model: 'claude-sonnet-5', content: [], usage: { input_tokens: 100, cache_creation_input_tokens: 200, cache_read_input_tokens: 300 } } }
+    daemon.emit(sessionId, usage)
+    const context = service.get(conversation.id).context
+    expect(context).toMatchObject({ used: 600 })
+    expect(context?.window).toBeNull()
+    expect(events.filter((event) => event.type === 'changed').at(-1)).toMatchObject({ conversation: { id: conversation.id, context } })
+    const changes = events.filter((event) => event.type === 'changed').length
+    daemon.emit(sessionId, usage)
+    expect(events.filter((event) => event.type === 'changed')).toHaveLength(changes)
+
+    daemon.emit(sessionId, { type: 'result', subtype: 'success', is_error: false, result: '', duration_ms: 1, modelUsage: { 'claude-sonnet-5': { contextWindow: 200_000 } } })
+    expect(service.list()[0]?.context).toEqual({ used: 600, window: 200_000 })
+
+    daemon.emit(sessionId, { type: 'system', subtype: 'compact_boundary', compact_metadata: { post_tokens: 200 } })
+    expect(service.list()[0]?.context).toMatchObject({ used: 200 })
+    daemon.emit(sessionId, { type: 'system', subtype: 'compact_boundary' })
+    expect(service.list()[0]?.context).toBeNull()
+    expect(events.filter((event) => event.type === 'changed').at(-1)).toMatchObject({ conversation: { context: null } })
+  })
+
+  it('keeps context in stopped and restarted lists and confines it to the newest stage', async () => {
+    const conversation = await service.create('claude', [])
+    const sessionId = service.get(conversation.id).sessionId!
+    daemon.emit(sessionId, { type: 'assistant', message: { id: 'context', model: 'claude-sonnet-5', content: [], usage: { input_tokens: 42_000 } } })
+    await service.stop(conversation.id)
+    const saved = service.get(conversation.id).context
+    expect(saved).toMatchObject({ used: 42_000 })
+    service = serve()
+    expect(service.list()[0]?.context).toEqual(saved)
+    const previous = store.latestStage(conversation.id, 'claude')!
+
+    // A database upgraded from before summaries restores its last stage without opening the chat.
+    const database = new DatabaseSync(path.join(root, 'antumi.db'))
+    database.prepare('UPDATE conversation_stages SET context_usage = NULL WHERE id = ?').run(previous.id)
+    database.close()
+    expect(service.list()[0]?.context).toBeNull()
+    await service.reconcile([])
+    expect(service.list()[0]?.context).toEqual(saved)
+    expect(store.missingContextStages()).toEqual([])
+
+    const next = store.startStage(conversation.id, 'claude', null, 0)
+    expect(service.list()[0]?.context).toBeNull()
+    service.stageChatItems(conversation.id, previous.id)
+    expect(service.list()[0]?.context).toBeNull()
+    store.setStageContext(next.id, { used: 0, window: 200_000 })
+    expect(service.list()[0]?.context).toEqual({ used: 0, window: 200_000 })
   })
 
   it('reads live settings for a fresh conversation without starting or changing the source', async () => {

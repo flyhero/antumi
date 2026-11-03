@@ -16,14 +16,14 @@ export function conversationGlyph(conversation: Conversation, unseen: boolean): 
 }
 
 // How long ago, as the list says it: short, and a date past a week.
-export function timeAgo(at: number, now: number): string {
+export function timeAgo(at: number, now: number, format: 'relative' | 'compact' = 'relative'): string {
   const minutes = Math.floor((now - at) / 60_000)
   if (minutes < 1) return t('conversationState.justNow')
-  if (minutes < 60) return t('conversationState.minutesAgo', { minutes: minutes })
+  if (minutes < 60) return format === 'compact' ? t('conversationState.compactAgo', { value: `${minutes}m` }) : t('conversationState.minutesAgo', { minutes: minutes })
   const hours = Math.floor(minutes / 60)
-  if (hours < 24) return t('conversationState.hoursAgo', { hours: hours })
+  if (hours < 24) return format === 'compact' ? t('conversationState.compactAgo', { value: `${hours}h` }) : t('conversationState.hoursAgo', { hours: hours })
   const days = Math.floor(hours / 24)
-  if (days < 7) return t('conversationState.daysAgo', { days: days })
+  if (days < 7) return format === 'compact' ? t('conversationState.compactAgo', { value: `${days}d` }) : t('conversationState.daysAgo', { days: days })
   const date = new Date(at)
   return t('SourceInboxView.monthAndDay', { value1: date.getMonth() + 1, value2: date.getDate() })
 }

@@ -1098,6 +1098,41 @@ span.chat-translate .spinner { width: 12px; height: 12px; }
 .conversation-row .conversation-snippet { grid-column: 2 / span 2; }
 .conversation-age { grid-column: 3; padding-top: 1px; color: var(--text-3); font-size: 12px; white-space: nowrap; }
 
+.conversation-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.conversation-title :is(.task-row-title, .title-editor) { min-width: 0; }
+.conversation-title .title-editor { flex: 1; }
+/* Keep the saved identity visible in compact rows, leaving at least half the title for its topic. */
+.conversation-identity {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  min-width: 0;
+  max-width: min(50%, 116px);
+  padding: 0 4px;
+  border-radius: var(--radius-xs);
+  background: var(--accent-bg);
+  color: var(--accent);
+  font-size: 12px;
+  line-height: 20px;
+}
+.conversation-identity > svg { width: 12px; height: 12px; flex-shrink: 0; }
+.conversation-identity-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.conversation-trailing {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: space-between;
+  align-self: stretch;
+  gap: 4px;
+}
+.conversation-row:has(> .conversation-trailing) > .task-row-meta { grid-column: 2; grid-row: 2; }
+.conversation-trailing .chat-context { white-space: nowrap; }
+.conversation-trailing .chat-context svg { width: 12px; height: 12px; }
+
 .task-row-meta {
   grid-column: 2;
   overflow: hidden;
@@ -1114,6 +1149,7 @@ span.chat-translate .spinner { width: 12px; height: 12px; }
 /* Compact: a row is its status, title and age; the rest waits in the details on hover. */
 .conversation-list[data-density='compact'] .conversation-row { padding-block: 5px; }
 .conversation-list[data-density='compact'] .conversation-row .task-row-meta { display: none; }
+.conversation-list[data-density='compact'] .conversation-trailing { grid-row: 1; }
 
 /* A conversation's details beside its row (ConversationPeek): read, never reached for. */
 .conversation-peek {

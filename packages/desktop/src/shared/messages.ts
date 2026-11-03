@@ -3707,6 +3707,7 @@ export const MESSAGES = {
   "DiscussionPeek.chair": {"zh": "主持", "en": "Chair"},
   "ConversationPeek.agent": {"zh": "Agent", "en": "Agent"},
   "ConversationPeek.status": {"zh": "状态", "en": "Status"},
+  "ConversationPeek.context": {"zh": "上下文占用", "en": "Context usage"},
   "ConversationPeek.projects": {"zh": "项目", "en": "Projects"},
   "ConversationPeek.noProject": {"zh": "未选项目", "en": "No project"},
   "ConversationPeek.workspace": {"zh": "工作目录", "en": "Works in"},
@@ -10184,6 +10185,10 @@ export const MESSAGES = {
   "conversationState.minutesAgo": {
     "zh": "{minutes} 分钟前",
     "en": "{minutes} {minutes, plural, one {minute} other {minutes}} ago"
+  },
+  "conversationState.compactAgo": {
+    "zh": "{value}前",
+    "en": "{value} ago"
   },
   "conversationState.hoursAgo": {
     "zh": "{hours} 小时前",

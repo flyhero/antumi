@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { AgentProfile } from './agent-profile'
-import { ChatDecision, ChatTurnActivity } from './chat'
+import { ChatContextUse, ChatDecision, ChatTurnActivity } from './chat'
 import { ConversationRoute, ModelProviderId, ProviderRoute } from './model-provider'
 import { TaskSource } from './source'
 import { AgentKind } from './task'
@@ -41,6 +41,8 @@ export const Conversation = z.object({
   starting: z.boolean().optional(),
   createdAt: z.number(),
   updatedAt: z.number(),
+  // The newest stage's last reported context, kept after its process exits. Older cores omit it.
+  context: ChatContextUse.nullable().optional(),
   // How the agent last stopped: code is null when it was stopped rather than exiting on its own.
   // null before any run has ended. Older cores leave it out.
   lastExit: z.object({ code: z.number().int().nullable(), at: z.number() }).nullable().optional(),

@@ -232,6 +232,7 @@ export class ConversationService {
       items: (conversationId, items) => {
         this.rememberMode(conversationId, items)
         this.rememberCatalog(conversationId, items)
+        this.rememberContext(conversationId, items)
         this.settleAsks(items)
         this.emit({ type: 'chatItems', conversationId, items })
         this.answerUnattended(conversationId, items)
@@ -1425,6 +1426,17 @@ export class ConversationService {
     if (catalog && agent) this.catalogs.set(agent, Promise.resolve(catalog))
   }
 
+  // Lists read a small saved summary instead of replaying every conversation's chat log.
+  private rememberContext(conversationId: string, items: readonly ChatItem[]): void {
+    let changed = false
+    for (const item of items) {
+      if (item.kind === 'state' && this.store.setStageContext(item.stageId, item.context)) changed = true
+    }
+    if (!changed) return
+    const conversation = this.store.get(conversationId)
+    if (conversation) this.changed(conversation)
+  }
+
   // An idle chat agent goes after a while, so the ones open all day do not pile up; the next
   // message starts it again on the same session. Idle means the agent says so: a turn, a question
   // for the user or a command left running in the background keeps it.
@@ -1550,7 +1562,9 @@ export class ConversationService {
   stageChatItems(id: string, stageId: string): ChatItem[] {
     const conversation = this.store.get(id)
     const stage = conversation ? this.store.stages(id).find((each) => each.id === stageId) : undefined
-    return conversation && stage ? this.chats.items(this.chatStage(conversation, stage)) : []
+    const items = conversation && stage ? this.chats.items(this.chatStage(conversation, stage)) : []
+    this.rememberContext(id, items)
+    return items
   }
 
   // Who ran a chat stage, for what, and on which model as its state item last said; null once gone.
@@ -1756,6 +1770,7 @@ export class ConversationService {
     while (index > 0 && (pages.length === 0 || count < CHAT_PAGE_ITEMS)) {
       index--
       const items = this.chats.items(this.chatStage(conversation, stages[index]!))
+      this.rememberContext(id, items)
       pages.unshift(items)
       count += items.length
     }
@@ -1966,6 +1981,16 @@ export class ConversationService {
       }
     }
     await this.settleLaunches(sessions).catch((error: unknown) => console.error('[antumi-core] settling launch files failed', error))
+    // Upgrade old summaries once, yielding between logs so lists remain responsive.
+    for (const stage of this.store.missingContextStages()) {
+      try {
+        const items = this.stageChatItems(stage.conversationId, stage.id)
+        if (!items.some((item) => item.kind === 'state')) this.store.setStageContext(stage.id, null)
+      } catch (error) {
+        console.error(`[antumi-core] restoring context of stage ${stage.id} failed`, error)
+      }
+      await new Promise<void>((resolve) => setImmediate(resolve))
+    }
   }
 
   // A stage's launch files go with its process.

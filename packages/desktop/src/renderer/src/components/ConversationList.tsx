@@ -18,12 +18,13 @@ import { ConversationGroupActivity } from './ConversationGroupActivity'
 import { ConversationPeek, DiscussionPeek, useConversationPeek } from './ConversationPeek'
 import { conversationActivity } from '../work-activity'
 import { ContextMenu, MenuCheckboxItem, menuPoint, MenuRadioItem, MenuSubmenu, type MenuPoint } from './ContextMenu'
-import { AgentIcon, ChatIcon, ChevronDownIcon, CloseIcon, FolderIcon, GroupChatIcon, PinIcon, PlusIcon, SlidersIcon } from './icons'
+import { AgentIcon, ChatIcon, ChevronDownIcon, CloseIcon, FolderIcon, GroupChatIcon, PinIcon, PlusIcon, RobotIcon, SlidersIcon } from './icons'
 import { ProjectIcon } from './ProjectIcon'
 import { projectName, projectNames } from './ProjectPicker'
 import { SidebarCollapseButton } from './SidebarCollapseButton'
 import { SidebarSearchField, SidebarSearchToggle } from './SidebarSearch'
 import { TitleEditor } from './TitleEditor'
+import { ContextUsage } from './ContextUsage'
 
 type GroupBy = Preferences['conversationGroup']
 type SortBy = Preferences['conversationSort']
@@ -88,6 +89,14 @@ export function metaProjects(paths: readonly string[], underProject: boolean): s
   if (!underProject) return projectNames(paths)
   const others = paths.slice(1)
   return others.length > 0 ? `+${others.map(projectName).join('、')}` : null
+}
+
+function ConversationIdentity({ profile }: { profile: Conversation['profile'] }) {
+  if (!profile) return null
+  return <span className="conversation-identity" title={profile.name} aria-label={`${t('ConversationPeek.agent')}: ${profile.name}`}>
+    <RobotIcon />
+    <span className="conversation-identity-name">{profile.name}</span>
+  </span>
 }
 
 // The agent by its mark, which reads faster than its name and leaves room for the project; the name
@@ -289,7 +298,10 @@ export function ConversationList() {
       {renamingId === conversation.id
         ? <div className="task-row conversation-row" data-renaming>
           <ConversationStatus conversation={conversation} />
-          <TitleEditor title={conversation.title} label={t('ConversationList.conversationTitle')} onSave={(title) => void renameConversation(conversation.id, title)} onDone={() => setRenamingId(null)} />
+          <span className="conversation-title">
+            <ConversationIdentity profile={conversation.profile} />
+            <TitleEditor title={conversation.title} label={t('ConversationList.conversationTitle')} onSave={(title) => void renameConversation(conversation.id, title)} onDone={() => setRenamingId(null)} />
+          </span>
           <span className="task-row-meta"><ConversationMeta conversation={conversation} heading={heading} /></span>
         </div>
         : <button
@@ -307,10 +319,16 @@ export function ConversationList() {
           onContextMenu={openMenu(conversation.id)}
         >
           <ConversationStatus conversation={conversation} />
-          <span className="task-row-title">{conversation.title}</span>
-          {panes?.includes(conversation.id)
-            ? <span className="pane-chip" data-active={selected === conversation.id} aria-label={t('ConversationList.inPane', { value1: panes.indexOf(conversation.id) + 1 })}>{panes.indexOf(conversation.id) + 1}</span>
-            : <span className="conversation-age">{timeAgo(conversation.updatedAt, now)}</span>}
+          <span className="conversation-title">
+            <ConversationIdentity profile={conversation.profile} />
+            <span className="task-row-title">{conversation.title}</span>
+          </span>
+          <span className="conversation-trailing">
+            {panes?.includes(conversation.id)
+              ? <span className="pane-chip" data-active={selected === conversation.id} aria-label={t('ConversationList.inPane', { value1: panes.indexOf(conversation.id) + 1 })}>{panes.indexOf(conversation.id) + 1}</span>
+              : <span className="conversation-age" title={timeAgo(conversation.updatedAt, now)}>{timeAgo(conversation.updatedAt, now, 'compact')}</span>}
+            {density !== 'compact' && conversation.context && <ContextUsage context={conversation.context} showTokens />}
+          </span>
           <span className="task-row-meta"><ConversationMeta conversation={conversation} heading={heading} /></span>
           {snippet && <span className="conversation-snippet"><Highlighted text={snippet} query={needle} /></span>}
         </button>}
@@ -338,7 +356,7 @@ export function ConversationList() {
         >
           <DiscussionMark discussion={discussion} />
           <span className="task-row-title">{discussion.title}</span>
-          <span className="conversation-age">{timeAgo(discussion.updatedAt, now)}</span>
+          <span className="conversation-age" title={timeAgo(discussion.updatedAt, now)}>{timeAgo(discussion.updatedAt, now, 'compact')}</span>
           <span className="task-row-meta"><DiscussionMeta discussion={discussion} heading={heading} /></span>
         </button>}
     </li>

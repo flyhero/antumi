@@ -383,7 +383,8 @@ export const MIGRATIONS = [
   `ALTER TABLE discussions ADD COLUMN format TEXT NOT NULL DEFAULT 'roundtable';
    ALTER TABLE discussion_posts ADD COLUMN stage TEXT;
    ALTER TABLE discussion_posts ADD COLUMN version INTEGER;
-   ALTER TABLE discussion_posts ADD COLUMN verdict TEXT;`
+   ALTER TABLE discussion_posts ADD COLUMN verdict TEXT;`,
+  `ALTER TABLE conversation_stages ADD COLUMN context_usage TEXT;`
 ]
 
 

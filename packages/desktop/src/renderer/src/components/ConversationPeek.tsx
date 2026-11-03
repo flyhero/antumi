@@ -8,6 +8,7 @@ import { getLocale, t } from '../i18n'
 import { agentLabel } from '../labels'
 import { conversationActivity } from '../work-activity'
 import { AgentIcon } from './icons'
+import { ContextUsage } from './ContextUsage'
 
 const OPEN_DELAY_MS = 500
 const CLOSE_DELAY_MS = 100
@@ -117,6 +118,10 @@ export function ConversationPeek({ conversation, row }: { conversation: Conversa
         </dd>
         <dt>{t('ConversationPeek.status')}</dt>
         <dd className="conversation-live" data-state={activity?.state}>{state}</dd>
+        {conversation.context && <>
+          <dt>{t('ConversationPeek.context')}</dt>
+          <dd><ContextUsage context={conversation.context} showDetails /></dd>
+        </>}
         <dt>{t('ConversationPeek.projects')}</dt>
         <dd><ProjectPaths paths={conversation.projectPaths} /></dd>
         {worktree && <>

@@ -1,7 +1,8 @@
 import { getLocale, localized, t } from '../i18n'
-import { agentDescriptor, agentModeText, helperAllowsMode, isHelper, type AgentKind, type ChatContextUse, type ChatItem, type ChatModel, type ChatOption, type ChatPermissionMode, type Conversation } from '@antumi/protocol'
+import { agentDescriptor, agentModeText, helperAllowsMode, isHelper, type AgentKind, type ChatItem, type ChatModel, type ChatOption, type ChatPermissionMode, type Conversation } from '@antumi/protocol'
 import { perform } from '../core-store'
 import { ChatModelPicker, ChatPicker, type PickerOption } from './ChatPicker'
+import { ContextUsage } from './ContextUsage'
 
 type StateItem = Extract<ChatItem, { kind: 'state' }>
 
@@ -49,33 +50,6 @@ const EFFORT_LABEL: Record<string, string> = localized(() => ({
 
 export function effortLabel(effort: string): string {
   return EFFORT_LABEL[effort] ?? effort
-}
-
-function tokens(count: number): string {
-  if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M`
-  return count >= 1000 ? `${Math.round(count / 1000)}k` : String(count)
-}
-
-// How full the context window is; before the window is known, only the tokens.
-function ContextRing({ context }: { context: ChatContextUse }) {
-  const ratio = context.window ? Math.min(1, context.used / context.window) : null
-  const title = ratio === null
-    ? t('ChatOptionsBar.contextTokens', { value1: tokens(context.used) })
-    : t('ChatOptionsBar.context', { value1: Math.round(ratio * 100), value2: tokens(context.used), value3: tokens(context.window ?? 0) })
-  const radius = 7
-  const length = 2 * Math.PI * radius
-  const level = ratio === null ? 'normal' : ratio >= 0.85 ? 'critical' : ratio >= 0.6 ? 'warning' : 'normal'
-  return (
-    <span className="chat-context" role="img" aria-label={title} data-tooltip={title} data-tooltip-side="top-end" data-level={level}>
-      <svg viewBox="0 0 20 20" aria-hidden="true">
-        <circle cx="10" cy="10" r={radius} className="chat-context-track" />
-        {ratio !== null && (
-          <circle cx="10" cy="10" r={radius} className="chat-context-fill" strokeDasharray={`${ratio * length} ${length}`} transform="rotate(-90 10 10)" />
-        )}
-      </svg>
-      {ratio !== null && <span>{Math.round(ratio * 100)}%</span>}
-    </span>
-  )
 }
 
 // A choice the stage reports but does not list (a mode Antumi has no name for) still shows.
@@ -138,7 +112,7 @@ export function ChatOptionsBar({ conversation, state, compact = false }: { conve
           onEffort={(value) => set('effort', value)}
         />
       )}
-      {!compact && state.context && <ContextRing context={state.context} />}
+      {!compact && state.context && <ContextUsage context={state.context} />}
     </>
   )
 }

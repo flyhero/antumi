@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
-import { AgentKind, AgentProfile, Conversation, ConversationMessage, ConversationStage, ProviderRoute, TaskSource } from '@antumi/protocol'
+import { AgentKind, AgentProfile, ChatContextUse, Conversation, ConversationMessage, ConversationStage, ProviderRoute, TaskSource } from '@antumi/protocol'
 
 const lastEnded = (column: string) => `(SELECT ${column} FROM conversation_stages
   WHERE conversation_id = conversations.id AND ended_at IS NOT NULL ORDER BY started_at DESC, rowid DESC LIMIT 1)`
@@ -13,7 +13,8 @@ const SELECT = `SELECT id, title, title_locked AS titleLocked, agent, workspace_
   task_id AS taskId, pinned_at AS pinnedAt, archived_at AS archivedAt, routine_id AS routineId, forked_from_id AS forkedFromId,
   discussion_id AS discussionId, squad_run_id AS squadRunId, workspace_read_only AS workspaceReadOnly, helper_of AS helperOf, source,
   agent_profile AS profile, parent_conversation_id AS parentConversationId, agent_call_id AS agentCallId,
-  model_provider AS modelProvider
+  model_provider AS modelProvider,
+  (SELECT context_usage FROM conversation_stages WHERE conversation_id = conversations.id ORDER BY started_at DESC, rowid DESC LIMIT 1) AS context
   FROM conversations`
 const STAGE_SELECT = `SELECT id, conversation_id AS conversationId, agent, provider_session_id AS providerSessionId,
   session_id AS sessionId, received_sequence AS receivedSequence, started_at AS startedAt,
@@ -54,7 +55,7 @@ function parsedJson<T>(raw: unknown, schema: z.ZodType<T>): T | null {
 function conversation(row: Record<string, unknown>): Conversation {
   const { lastExitCode, lastExitAt, ...rest } = row
   const references: unknown = JSON.parse(String(row.referencePaths ?? '[]'))
-  return Conversation.parse({ ...rest, profile: parsedJson(row.profile, AgentProfile), source: source(row.source), projectPaths: JSON.parse(String(row.projectPaths)),
+  return Conversation.parse({ ...rest, context: parsedJson(row.context, ChatContextUse), profile: parsedJson(row.profile, AgentProfile), source: source(row.source), projectPaths: JSON.parse(String(row.projectPaths)),
     referencePaths: Array.isArray(references) && references.length ? references : undefined,
     titleLocked: Boolean(row.titleLocked), managedWorkspace: Boolean(row.managedWorkspace), planOnly: Boolean(row.planOnly), workspaceReadOnly: Boolean(row.workspaceReadOnly),
     lastExit: lastExitAt === null ? null : { code: lastExitCode, at: lastExitAt } })
@@ -302,6 +303,20 @@ export class ConversationStore {
 
   setChatOffset(id: string, offset: number): void {
     this.db.prepare('UPDATE conversation_stages SET chat_offset = MAX(chat_offset, ?) WHERE id = ?').run(offset, id)
+  }
+
+  setStageContext(id: string, context: ChatContextUse | null): boolean {
+    const value = JSON.stringify(context)
+    return this.db.prepare('UPDATE conversation_stages SET context_usage = ? WHERE id = ? AND context_usage IS NOT ?')
+      .run(value, id, value).changes > 0
+  }
+
+  // SQL NULL has not been rebuilt yet; JSON null has been read and has no reported usage.
+  missingContextStages(): ConversationStage[] {
+    return this.db.prepare(`${STAGE_SELECT} WHERE context_usage IS NULL AND id = (
+      SELECT latest.id FROM conversation_stages latest WHERE latest.conversation_id = conversation_stages.conversation_id
+      ORDER BY latest.started_at DESC, latest.rowid DESC LIMIT 1
+    )`).all().map(stage)
   }
 
   attachStage(id: string, sessionId: string): void {

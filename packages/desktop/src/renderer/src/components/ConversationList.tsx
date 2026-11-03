@@ -326,7 +326,7 @@ export function ConversationList() {
           <span className="conversation-trailing">
             {panes?.includes(conversation.id)
               ? <span className="pane-chip" data-active={selected === conversation.id} aria-label={t('ConversationList.inPane', { value1: panes.indexOf(conversation.id) + 1 })}>{panes.indexOf(conversation.id) + 1}</span>
-              : <span className="conversation-age" title={timeAgo(conversation.updatedAt, now)}>{timeAgo(conversation.updatedAt, now, 'compact')}</span>}
+              : <span className="conversation-age">{timeAgo(conversation.updatedAt, now)}</span>}
             {density !== 'compact' && conversation.context && <span className="conversation-context">
               <span aria-hidden="true">{t('ConversationList.context')}</span>
               <ContextUsage context={conversation.context} showTokens />
@@ -359,7 +359,7 @@ export function ConversationList() {
         >
           <DiscussionMark discussion={discussion} />
           <span className="task-row-title">{discussion.title}</span>
-          <span className="conversation-age" title={timeAgo(discussion.updatedAt, now)}>{timeAgo(discussion.updatedAt, now, 'compact')}</span>
+          <span className="conversation-age">{timeAgo(discussion.updatedAt, now)}</span>
           <span className="task-row-meta"><DiscussionMeta discussion={discussion} heading={heading} /></span>
         </button>}
     </li>

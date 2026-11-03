@@ -28,6 +28,12 @@ describe('model provider presets', () => {
   it('names Cursor in none, which runs only on its own account', () => {
     for (const preset of Object.values(MODEL_PROVIDER_PRESETS)) expect(preset.agents).not.toContain('cursor')
   })
+
+  it('reads a provider of a preset it does not know as a custom one, keeping its endpoints', () => {
+    const read = ModelProvider.parse({ ...provider(), preset: 'some-later-plan' })
+    expect(read).toMatchObject({ preset: 'custom', anthropic: provider().anthropic, openai: provider().openai })
+    expect(ModelProvider.parse(provider({ preset: 'kimi-code' })).preset).toBe('kimi-code')
+  })
 })
 
 describe('providerUrlProblem', () => {

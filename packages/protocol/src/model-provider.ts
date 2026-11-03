@@ -80,7 +80,9 @@ export type ProviderModel = z.infer<typeof ProviderModel>
 export const ModelProvider = z.object({
   id: ModelProviderId,
   name: z.string().trim().min(1).max(60),
-  preset: ModelProviderPreset,
+  // A preset a newer core knows reads as custom: its endpoints come resolved, and one unknown id
+  // must not fail the whole list.
+  preset: ModelProviderPreset.catch('custom'),
   anthropic: AnthropicEndpoint.nullable(),
   openai: OpenAiEndpoint.nullable(),
   models: z.array(ProviderModel).min(1).max(100),

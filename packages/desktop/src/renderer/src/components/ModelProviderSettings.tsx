@@ -156,8 +156,9 @@ function ProviderForm({ initial, onDone }: { initial: Draft; onDone: (saved: str
       <div className="settings-section-toolbar provider-form-heading">
         <div><button type="button" className="link-button" onClick={() => onDone(null)}><ArrowLeftIcon />{t('SettingsPage.backToProviders')}</button><h3>{draft.name || t('ModelProviderSettings.custom')}{presetId && <VerifiedBadge preset={presetId} />}</h3></div>
       </div>
+      {/* Both parts open at first: what a plan fills in is there to read before saving. */}
       {draft.id === null && (
-        <details className="settings-disclosure provider-plan-switcher">
+        <details open className="settings-disclosure provider-plan-switcher">
           <summary>{t('ModelProviderSettings.plan')}<span>{draft.preset === 'custom' ? t('ModelProviderSettings.custom') : presetName(draft.preset)}</span><ChevronDownIcon /></summary>
           <PresetGrid value={draft.preset} onPick={pick} />
           <span className="chat-command-hint">{t('ModelProviderSettings.unverifiedHint')}</span>
@@ -178,7 +179,7 @@ function ProviderForm({ initial, onDone }: { initial: Draft; onDone: (saved: str
       </label>
       {presetId && <p className="settings-note">{presetNotes(presetId)[0]}</p>}
       {preset && <p className="provider-ready-summary">{t('SettingsPage.providerPresetHint', { model: draft.defaultModel, agents: draft.agents.filter((agent) => servable.includes(agent)).map(agentLabel).join('、') })}</p>}
-      <details className="settings-disclosure provider-advanced" key={draft.preset} open={preset === null || undefined}>
+      <details open className="settings-disclosure provider-advanced">
         <summary>{preset ? t('SettingsPage.providerAdvanced') : t('SettingsPage.providerCustomSetup')}</summary>
         {preset && <p className="settings-note">{t('SettingsPage.providerPresetHint', { model: draft.defaultModel, agents: draft.agents.map(agentLabel).join('、') })}</p>}
       <label className="chat-command-field">

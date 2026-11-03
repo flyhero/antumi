@@ -1131,20 +1131,11 @@ span.chat-translate .spinner { width: 12px; height: 12px; }
   gap: 4px;
 }
 .conversation-row:has(> .conversation-trailing) > .task-row-meta { grid-column: 2; grid-row: 2; }
-.conversation-context {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 0 4px;
-  border-radius: var(--radius-xs);
-  background: var(--fill);
-  color: var(--text-muted);
-  font-size: 12px;
-  white-space: nowrap;
-}
 .conversation-trailing .chat-context { white-space: nowrap; }
-.conversation-trailing .chat-context svg { display: none; }
 .conversation-trailing .chat-context[data-level='warning'] { color: var(--warning); }
+/* How full the context is, as a small battery in the text's colour: amber, then red, as it fills. */
+.context-meter { position: relative; flex-shrink: 0; width: 16px; height: 7px; border-radius: 2px; box-shadow: inset 0 0 0 1px currentColor; }
+.context-meter > span { position: absolute; inset-block: 1.5px; left: 1.5px; border-radius: 1px; background: currentColor; }
 
 .task-row-meta {
   grid-column: 2;
@@ -1159,10 +1150,13 @@ span.chat-translate .spinner { width: 12px; height: 12px; }
 /* The agent's mark at the head of a conversation's line, the size of the text beside it. */
 .conversation-agent { display: inline-flex; vertical-align: -2px; margin-right: 6px; }
 .conversation-agent .agent-mark { width: 12px; height: 12px; }
-/* Compact: a row is its status, title and age; the rest waits in the details on hover. */
+/* Compact: a row is its status, title and age on one line, with the context only once it nears full
+   (the composer's warning level), where it is worth a glance; the rest waits in the details on
+   hover. */
 .conversation-list[data-density='compact'] .conversation-row { padding-block: 5px; }
 .conversation-list[data-density='compact'] .conversation-row .task-row-meta { display: none; }
-.conversation-list[data-density='compact'] .conversation-trailing { grid-row: 1; }
+.conversation-list[data-density='compact'] .conversation-trailing { grid-row: 1; flex-direction: row-reverse; align-items: center; justify-content: flex-start; gap: 8px; }
+.conversation-list[data-density='compact'] .conversation-trailing .chat-context[data-level='normal'] { display: none; }
 
 /* A conversation's details beside its row (ConversationPeek): read, never reached for. */
 .conversation-peek {

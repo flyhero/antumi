@@ -16,6 +16,18 @@ describe('ContextUsage', () => {
     expect(critical).toContain('data-level="critical"')
   })
 
+  it('draws the list a meter filled as far as the context is, with no ring and no meter for an unknown window', () => {
+    const meter = renderToStaticMarkup(createElement(ContextUsage, { context: { used: 84_000, window: 200_000 }, showTokens: true, shape: 'meter' }))
+    expect(meter).toContain('<span class="context-meter" aria-hidden="true"><span style="width:calc((100% - 3px) * 0.42)"></span></span><span>42%</span>')
+    expect(meter).toContain('上下文 42%（84k / 200k）')
+    expect(meter).not.toContain('<svg')
+    const capped = renderToStaticMarkup(createElement(ContextUsage, { context: { used: 210_000, window: 200_000 }, shape: 'meter' }))
+    expect(capped).toContain('* 1)')
+    const unknown = renderToStaticMarkup(createElement(ContextUsage, { context: { used: 42_000, window: null }, showTokens: true, shape: 'meter' }))
+    expect(unknown).not.toContain('context-meter')
+    expect(unknown).toContain('>42k</span>')
+  })
+
   it('shows a known zero, caps the ring, and never invents a percentage for an unknown window', () => {
     expect(renderToStaticMarkup(createElement(ContextUsage, { context: { used: 0, window: 200_000 } }))).toContain('>0%</span>')
     expect(renderToStaticMarkup(createElement(ContextUsage, { context: { used: 210_000, window: 200_000 } }))).toContain('>100%</span>')

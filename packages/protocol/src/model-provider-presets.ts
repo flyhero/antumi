@@ -1,8 +1,8 @@
 import type { AgentKind } from './agent'
 import type { AnthropicEndpoint, ModelProviderPresetId, OpenAiEndpoint, ProviderModel } from './model-provider'
 
-// Coding plans Antumi knows the endpoints of, as each vendor's own docs give them for Claude Code,
-// Codex and OpenCode. A saved preset provider takes its endpoints from here at each start, so a fix
+// Coding plans, and pay-as-you-go APIs people run coding agents on, that Antumi knows the endpoints
+// of, as each vendor's own docs give them for Claude Code, Codex and OpenCode. A saved preset provider takes its endpoints from here at each start, so a fix
 // in a release reaches every provider made from it. verified: run with a real key through Antumi,
 // with which CLI versions and when; none is yet, so each shows as unverified.
 
@@ -60,6 +60,14 @@ const TOKEN_PLAN_MODELS: readonly ProviderModel[] = ['auto', 'qwen3.8-max', 'qwe
 const TOKEN_PLAN_NOTES = [
   { zh: '个人版和团队版用同一个地址；团队版的 Key 在百炼控制台的团队成员页生成。', en: 'Personal and team plans share this address; a team plan\'s key is made on the team members page of the Model Studio console.' },
   { zh: '只用 token-plan 开头的地址：按量付费的地址不扣套餐额度，会另外计费。', en: 'Use the token-plan address only: the pay-as-you-go one is billed apart from the plan.' }
+]
+
+// DeepSeek's own platform, billed per token from the account's balance. Both models take 1M; its
+// Claude Code page sets compaction at 768K.
+const DEEPSEEK_MODELS: readonly ProviderModel[] = [model('deepseek-flash', 1_000_000), model('deepseek-v4-pro', 1_000_000)]
+const DEEPSEEK_NOTES = [
+  { zh: '按量计费，不是包月套餐：每次请求从账户余额扣费，余额和用量在控制台看。', en: 'Pay as you go, not a plan: each request is billed to the account balance, shown in the console.' },
+  { zh: 'deepseek-v4-pro 不处理图片；联网搜索另按搜索接口计费。', en: 'deepseek-v4-pro takes no images; web search is billed separately as search requests.' }
 ]
 
 export const MODEL_PROVIDER_PRESETS: Record<ModelProviderPresetId, ModelProviderPresetEntry> = {
@@ -191,5 +199,21 @@ export const MODEL_PROVIDER_PRESETS: Record<ModelProviderPresetId, ModelProvider
     checked: '2026-10-22',
     verified: null,
     notes: TOKEN_PLAN_NOTES
+  },
+  deepseek: {
+    name: 'DeepSeek（按量计费）',
+    translations: { en: { name: 'DeepSeek (pay as you go)' } },
+    anthropic: { baseUrl: 'https://api.deepseek.com/anthropic', auth: 'auth_token', env: { CLAUDE_CODE_AUTO_COMPACT_WINDOW: '786432' } },
+    openai: { chatUrl: 'https://api.deepseek.com', responsesUrl: 'https://api.deepseek.com' },
+    models: DEEPSEEK_MODELS,
+    defaultModel: 'deepseek-flash',
+    smallModel: 'deepseek-flash',
+    agents: ['claude', 'codex', 'opencode', 'pi', 'zcode'],
+    keyUrl: 'https://platform.deepseek.com/api_keys',
+    consoleUrl: 'https://platform.deepseek.com/usage',
+    docsUrl: 'https://api-docs.deepseek.com/quick_start/agent_integrations/claude_code',
+    checked: '2026-11-03',
+    verified: null,
+    notes: DEEPSEEK_NOTES
   }
 }

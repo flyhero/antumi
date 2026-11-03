@@ -229,6 +229,7 @@
   --vendor-kimi-ink: light-dark(#ffffff, #16191e);
   --vendor-minimax: #e8365d;
   --vendor-bailian: #ff6a00;
+  --vendor-deepseek: #4d6bfe;
 }
 
 /* Dark follows the system unless a theme is pinned in settings ([data-theme]). */
@@ -5279,6 +5280,7 @@ div.inspector-empty > p { margin: 0 0 8px; }
 .provider-mark[data-vendor='kimi'] { --vendor: var(--vendor-kimi); --vendor-ink: var(--vendor-kimi-ink); }
 .provider-mark[data-vendor='minimax'] { --vendor: var(--vendor-minimax); }
 .provider-mark[data-vendor='bailian'] { --vendor: var(--vendor-bailian); }
+.provider-mark[data-vendor='deepseek'] { --vendor: var(--vendor-deepseek); }
 .provider-mark[data-vendor='custom'] { --vendor: transparent; --vendor-ink: var(--text-muted); border: 1px dashed var(--border-2); font-size: 12px; font-weight: 400; }
 .provider-preset:hover { border-color: var(--border-2); }
 .provider-preset[aria-checked='true'] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }

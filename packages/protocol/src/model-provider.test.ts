@@ -32,7 +32,7 @@ describe('model provider presets', () => {
   it('reads a provider of a preset it does not know as a custom one, keeping its endpoints', () => {
     const read = ModelProvider.parse({ ...provider(), preset: 'some-later-plan' })
     expect(read).toMatchObject({ preset: 'custom', anthropic: provider().anthropic, openai: provider().openai })
-    expect(ModelProvider.parse(provider({ preset: 'kimi-code' })).preset).toBe('kimi-code')
+    expect(ModelProvider.parse(provider({ preset: 'deepseek' })).preset).toBe('deepseek')
   })
 })
 

@@ -14,7 +14,7 @@ export type ProviderWire = z.infer<typeof ProviderWire>
 export { ModelProviderId }
 
 export const MODEL_PROVIDER_PRESET_IDS = [
-  'volcengine-agent-plan', 'volcengine-coding-plan', 'zhipu-glm-coding', 'zai-glm-coding', 'kimi-code', 'minimax-cn', 'minimax', 'bailian-token-plan'
+  'volcengine-agent-plan', 'volcengine-coding-plan', 'zhipu-glm-coding', 'zai-glm-coding', 'kimi-code', 'minimax-cn', 'minimax', 'bailian-token-plan', 'deepseek'
 ] as const
 export const ModelProviderPresetId = z.enum(MODEL_PROVIDER_PRESET_IDS)
 export type ModelProviderPresetId = z.infer<typeof ModelProviderPresetId>

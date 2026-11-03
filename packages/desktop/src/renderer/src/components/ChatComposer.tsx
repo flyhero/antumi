@@ -5,6 +5,7 @@ import { HelperStartOptions } from './HelperModelPicker'
 import { useCallback, useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { chatReferencesIn, chatReferencesFor, type ChatReference, agentDescriptor, canReuseConversation, type ChatImage, type ChatItem, type ChatQueued, type Conversation } from '@antumi/protocol'
 import { perform, useChatImagesSupported, useChatOptionsSupported, useCore, useFileMentionsSupported, useScheduleImagesSupported, useSchedulesSupported } from '../core-store'
+import { useComposerFiles } from '../composer-files'
 import { agentEntries, antumiEntries } from '../chat-commands'
 import { composeMessage, parseQuotes, setQuotes, useQuotes, type ChatQuote } from '../chat-quotes'
 import { takeDraft } from '../chat-drafts'
@@ -311,6 +312,11 @@ export function ChatComposer({ conversation, state, compact = false }: { convers
   const queueable = optionsSupported && working
   const stopped = !running
   const starting = Boolean(conversation.starting) || (stopped && busy) || Boolean(initialMessage)
+  const mentionMenu = useChatMentionMenu({ conversationId: conversation.id, value, setText, setValue, roots: conversation.projectPaths, cwd: conversation.workspacePath, agent: conversation.agent })
+  const files = useComposerFiles({
+    cwd: conversation.workspacePath, input: mentionMenu.inputProps.input, setValue, addImages: attached.add,
+    images: imagesSupported, mentions: mentionsSupported, readOnly: starting
+  })
   const initialHint = initialMessage ? initialMessage.phase === 'failed' ? t('ChatComposer.retryTheFirstMessageAboveFirst') : initialMessage.phase === 'sending' ? t('ChatComposer.sendingFirstMessage') : t('ChatComposer.starting', { value1: agentLabel(conversation.agent) }) : null
   const canTake = (idle || queueable || stopped) && !busy && !starting && !surface.sendBlocker && !conversation.delegation?.writing && attached.uploading === 0
   const canSend = canTake && (text.trim() !== '' || attached.images.length > 0 || quotes.length > 0)
@@ -338,7 +344,6 @@ export function ChatComposer({ conversation, state, compact = false }: { convers
     setText,
     sendCommand: (command) => void send(false, command)
   })
-  const mentionMenu = useChatMentionMenu({ conversationId: conversation.id, value, setText, setValue, roots: conversation.projectPaths, cwd: conversation.workspacePath, agent: conversation.agent })
   // The input as the agent reads it, each mention written out.
   const writtenMessage = writeMentionedText(value, handingOff ?? conversation.agent)
   const written = writtenMessage.text
@@ -457,8 +462,8 @@ export function ChatComposer({ conversation, state, compact = false }: { convers
       className="chat-input-card"
       data-working={working || starting || undefined}
       data-awaiting={turn === 'awaiting' || undefined}
-      onDragOver={imagesSupported ? attached.handlers.onDragOver : undefined}
-      onDrop={imagesSupported ? attached.handlers.onDrop : undefined}
+      onDragOver={files.onDragOver}
+      onDropCapture={files.onDropCapture}
     >
       {commandMenu.menu}
       {mentionMenu.menu}

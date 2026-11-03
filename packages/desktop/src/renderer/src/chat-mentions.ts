@@ -23,6 +23,12 @@ export function fileTarget(match: ProjectFileMatch, cwd: string | null): Mention
   return { kind: match.kind, path: match.path, relative: match.root === cwd ? match.relative : null }
 }
 
+// A file or folder dropped on the input, by its path on disk.
+export function pathTarget(path: string, kind: 'file' | 'directory', cwd: string | null): MentionTarget {
+  const inside = cwd !== null && (path.startsWith(`${cwd}/`) || path.startsWith(`${cwd}\\`))
+  return { kind, path, relative: inside ? path.slice(cwd.length + 1) : null }
+}
+
 // Claude Code reads `@path` itself, attaching the file (a folder's listing); Codex has no file
 // mentions, so it gets the path to read. A project is only named, for either.
 export function mentionText(target: MentionTarget, agent: AgentKind): string {
@@ -92,6 +98,18 @@ export function placeMention(value: MentionedText, range: MentionRange, target: 
   const kept = spliceMentions(value.mentions, range.start, range.end, placed.text.length - value.text.length + (range.end - range.start))
   const mentions = [...kept, { start, end: start + label.length, target }].sort((a, b) => a.start - b.start)
   return { value: { text: placed.text, mentions }, caret: placed.caret }
+}
+
+// The input with picks put over [from, to), one after another as placeMention spaces them, and
+// where the caret goes: past the last.
+export function placeTargets(value: MentionedText, from: number, to: number, targets: readonly MentionTarget[]): { value: MentionedText; caret: number } {
+  let placed = { value, caret: from }
+  let range: MentionRange = { start: from, end: to, query: '' }
+  for (const target of targets) {
+    placed = placeMention(placed.value, range, target)
+    range = { start: placed.caret, end: placed.caret, query: '' }
+  }
+  return placed
 }
 
 // The message as the agent reads it: each name written out as mentionText has it, set apart from

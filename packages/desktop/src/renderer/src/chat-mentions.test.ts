@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { caretOutside, fileTarget, insertMention, markedRuns, matchConversations, matchProjects, mentionBeside, mentionLabel, mentionQuery, mentionText, placeMention, shiftMentions, writeMentions, writeMentionedText, messageReferences, readMentionedText, type Mention, type MentionTarget } from './chat-mentions'
+import { caretOutside, fileTarget, insertMention, markedRuns, matchConversations, matchProjects, mentionBeside, mentionLabel, mentionQuery, mentionText, pathTarget, placeMention, placeTargets, shiftMentions, writeMentions, writeMentionedText, messageReferences, readMentionedText, type Mention, type MentionTarget } from './chat-mentions'
 import { conversationReference, type Conversation } from '@antumi/protocol'
 
 describe('mentionQuery', () => {
@@ -211,5 +211,25 @@ describe('matchProjects', () => {
     expect(matchProjects(paths, 'ap')).toEqual(['/work/api', '/work/web-app', '/apps/legacy'])
     expect(matchProjects(paths, '')).toEqual(paths)
     expect(matchProjects(paths, 'zzz')).toEqual([])
+  })
+})
+
+describe('pathTarget', () => {
+  it('names a dropped path by its place in the working folder, and only there', () => {
+    expect(pathTarget('/work/app/src/a.ts', 'file', '/work/app')).toEqual({ kind: 'file', path: '/work/app/src/a.ts', relative: 'src/a.ts' })
+    expect(pathTarget('C:\\work\\app\\docs', 'directory', 'C:\\work\\app')).toEqual({ kind: 'directory', path: 'C:\\work\\app\\docs', relative: 'docs' })
+    expect(pathTarget('/work/app-old/a.ts', 'file', '/work/app')).toEqual({ kind: 'file', path: '/work/app-old/a.ts', relative: null })
+    expect(pathTarget('/tmp/a.log', 'file', null)).toEqual({ kind: 'file', path: '/tmp/a.log', relative: null })
+  })
+})
+
+describe('placeTargets', () => {
+  it('puts several picks in one after another, spaced, over the selection', () => {
+    const a: MentionTarget = { kind: 'file', path: '/work/a.ts', relative: 'a.ts' }
+    const b: MentionTarget = { kind: 'directory', path: '/work/docs', relative: 'docs' }
+    const placed = placeTargets({ text: '看看XX这些', mentions: [] }, 2, 4, [a, b])
+    expect(placed.value.text).toBe('看看 a.ts docs/ 这些')
+    expect(placed.value.mentions).toEqual([{ start: 3, end: 7, target: a }, { start: 8, end: 13, target: b }])
+    expect(placed.caret).toBe(14)
   })
 })

@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
+import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron'
 
 contextBridge.exposeInMainWorld('antumi', {
   platform: process.platform,
@@ -15,6 +15,8 @@ contextBridge.exposeInMainWorld('antumi', {
   setTheme: (theme: string): Promise<unknown> => ipcRenderer.invoke('antumi:set-theme', theme),
   revealFile: (candidates: string[]): Promise<unknown> => ipcRenderer.invoke('antumi:reveal-file', candidates),
   openFile: (path: string): Promise<unknown> => ipcRenderer.invoke('antumi:open-file', path),
+  // Where a file dropped on the window is on disk; empty for one that is not a file there.
+  pathForFile: (file: File): string => webUtils.getPathForFile(file),
   openWithApps: (): Promise<unknown> => ipcRenderer.invoke('antumi:open-with-apps'),
   openWith: (path: string, app: string): Promise<unknown> => ipcRenderer.invoke('antumi:open-with', path, app),
   notify: (notice: unknown): Promise<unknown> => ipcRenderer.invoke('antumi:notify', notice),

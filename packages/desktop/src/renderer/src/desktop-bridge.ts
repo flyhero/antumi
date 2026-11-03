@@ -23,6 +23,7 @@ declare global {
       // Absent from a main older than the renderer.
       revealFile?(candidates: string[]): Promise<unknown>
       openFile?(path: string): Promise<unknown>
+      pathForFile?(file: File): string
       openWithApps?(): Promise<unknown>
       openWith?(path: string, app: string): Promise<unknown>
       notify?(notice: unknown): Promise<unknown>
@@ -114,6 +115,12 @@ export function canRevealFile(): boolean {
 
 export function canOpenFile(): boolean {
   return window.antumi?.openFile !== undefined
+}
+
+// A dropped file's path on disk, or null in a plain browser, from a main older than the renderer,
+// or for something dragged from no file.
+export function pathForFile(file: File): string | null {
+  return window.antumi?.pathForFile?.(file) || null
 }
 
 export async function openFile(path: string): Promise<string | null> {

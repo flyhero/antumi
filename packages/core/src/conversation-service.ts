@@ -1606,6 +1606,10 @@ export class ConversationService {
   // Asks the user, in the running chat, whether the browser may open a site; the card stays
   // until they answer, the agent leaves, or the turn is interrupted.
   askHost(id: string, host: string, url: string): Promise<ChatDecision> {
+    // With no agent left in the conversation, what takes its tab elsewhere is the user or the page
+    // itself (a form's redirect), which the gate is not there to stop; and there is no chat to ask
+    // in, so asking would refuse it and leave the tab on a blank error page.
+    if (!this.store.get(id)?.sessionId && !this.launching.has(id)) return Promise.resolve('allow')
     const requestId = this.chats.ask(id, { kind: 'browser-host', host, url })
     return new Promise((resolve, reject) => this.asks.set(requestId, { resolve, reject }))
   }

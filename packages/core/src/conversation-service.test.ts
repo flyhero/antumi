@@ -104,6 +104,16 @@ describe('ConversationService', () => {
     expect(daemon.spawns).toHaveLength(spawns)
   })
 
+  it('lets the browser leave for a site once no agent is left to ask through', async () => {
+    const running = await service.create('claude', [])
+    await settle()
+    expect(service.get(running.id).sessionId).not.toBeNull()
+    const asked = service.askHost(running.id, 'mp.csdn.net', 'https://mp.csdn.net/')
+    expect(await Promise.race([asked, new Promise((resolve) => setTimeout(() => resolve('waiting'), 20))])).toBe('waiting')
+    await service.stop(running.id)
+    await expect(service.askHost(running.id, 'mp.csdn.net', 'https://mp.csdn.net/')).resolves.toBe('allow')
+  })
+
   it('copies stopped settings after a restart without reviving the previous model effort', async () => {
     const source = await service.create('claude', [])
     await service.stop(source.id)

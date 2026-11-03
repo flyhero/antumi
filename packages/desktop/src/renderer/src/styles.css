@@ -773,6 +773,7 @@ body.stacked-panel-resizing * {
 
 @media (prefers-reduced-motion: reduce) {
   .conversation-status[data-glyph='awaiting'],
+  .profile-mark[data-glyph='awaiting'],
   .discussion-mark[data-tone='awaiting'] { animation: none; }
 }
 /* The message a search matched, under the row's meta line. */
@@ -1117,7 +1118,6 @@ span.chat-translate .spinner { width: 12px; height: 12px; }
   font-size: 12px;
   line-height: 20px;
 }
-.conversation-identity > svg { width: 12px; height: 12px; flex-shrink: 0; }
 .conversation-identity-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .conversation-trailing {
@@ -10311,8 +10311,13 @@ button.island-compact:focus-visible { outline: 2px solid var(--focus); outline-o
 .discussion-dot[data-tone='done'] { background: var(--status-done); transform: scale(0.75); }
 .discussion-view .detail-header .discussion-dot { margin-top: 0; }
 /* A group chat's row in the list: its mark in the status column, coloured as the dot would be. */
-.discussion-mark { justify-self: center; display: grid; place-items: center; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; color: var(--text-muted); }
-.discussion-mark svg { width: 14px; height: 14px; }
+.discussion-mark, .profile-mark { justify-self: center; display: grid; place-items: center; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; color: var(--text-muted); }
+.discussion-mark svg, .profile-mark svg { width: 14px; height: 14px; }
+/* A chat with one of the user's agents: its robot in the status column, in the colours of the dot. */
+.profile-mark[data-glyph='running'] { color: var(--status-running); }
+.profile-mark[data-glyph='unseen'] { color: var(--accent); }
+.profile-mark[data-glyph='failed'] { color: var(--danger); }
+.profile-mark[data-glyph='awaiting'] { color: var(--warning); animation: status-pulse 1.6s ease-out infinite; }
 .discussion-mark[data-tone='working'] { color: var(--status-running); }
 .discussion-mark[data-tone='awaiting'] { color: var(--warning); animation: status-pulse 1.6s ease-out infinite; }
 .discussion-mark[data-tone='done'] { color: var(--status-done); }
@@ -10824,6 +10829,7 @@ button.squad-member-main { cursor: pointer; }
   .dashboard-refresh[data-loading] svg,
   .discussion-dot[data-tone='awaiting'],
   .discussion-mark[data-tone='awaiting'],
+  .profile-mark[data-glyph='awaiting'],
   .discussion-typing i
 ) { animation-play-state: paused; }
 /* A pseudo-element cannot stand inside :is(): the list is forgiving and drops what it cannot

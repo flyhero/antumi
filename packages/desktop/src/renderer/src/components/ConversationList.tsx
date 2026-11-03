@@ -13,12 +13,12 @@ import { conversationState, timeAgo } from '../conversation-state'
 import { agentLabel } from '../labels'
 import { CONVERSATION_DENSITIES, CONVERSATION_GROUPS, CONVERSATION_KINDS, CONVERSATION_SORTS, setPreference, usePreferences, type Preferences } from '../preferences'
 import { beginHandoff, ConversationContextMenu, newConversation, renameConversation } from './ConversationActions'
-import { ConversationStatus } from './ConversationStatus'
+import { ConversationMark } from './ConversationStatus'
 import { ConversationGroupActivity } from './ConversationGroupActivity'
 import { ConversationPeek, DiscussionPeek, useConversationPeek } from './ConversationPeek'
 import { conversationActivity } from '../work-activity'
 import { ContextMenu, MenuCheckboxItem, menuPoint, MenuRadioItem, MenuSubmenu, type MenuPoint } from './ContextMenu'
-import { AgentIcon, ChatIcon, ChevronDownIcon, CloseIcon, FolderIcon, GroupChatIcon, PinIcon, PlusIcon, RobotIcon, SlidersIcon } from './icons'
+import { AgentIcon, ChatIcon, ChevronDownIcon, CloseIcon, FolderIcon, GroupChatIcon, PinIcon, PlusIcon, SlidersIcon } from './icons'
 import { ProjectIcon } from './ProjectIcon'
 import { projectName, projectNames } from './ProjectPicker'
 import { SidebarCollapseButton } from './SidebarCollapseButton'
@@ -91,10 +91,11 @@ export function metaProjects(paths: readonly string[], underProject: boolean): s
   return others.length > 0 ? `+${others.map(projectName).join('、')}` : null
 }
 
+// The agent's name before the title; that it is one of the user's agents, the robot in the status
+// column says (ConversationMark).
 function ConversationIdentity({ profile }: { profile: Conversation['profile'] }) {
   if (!profile) return null
   return <span className="conversation-identity" title={profile.name} aria-label={`${t('ConversationPeek.agent')}: ${profile.name}`}>
-    <RobotIcon />
     <span className="conversation-identity-name">{profile.name}</span>
   </span>
 }
@@ -297,7 +298,7 @@ export function ConversationList() {
     return <li key={conversation.id}>
       {renamingId === conversation.id
         ? <div className="task-row conversation-row" data-renaming>
-          <ConversationStatus conversation={conversation} />
+          <ConversationMark conversation={conversation} />
           <span className="conversation-row-title">
             <ConversationIdentity profile={conversation.profile} />
             <TitleEditor title={conversation.title} label={t('ConversationList.conversationTitle')} onSave={(title) => void renameConversation(conversation.id, title)} onDone={() => setRenamingId(null)} />
@@ -318,7 +319,7 @@ export function ConversationList() {
           onClick={(event) => (hasPrimaryModifier(event) && splitWith(conversation) ? openBeside(conversation.id) : selectConversation(conversation.id))}
           onContextMenu={openMenu(conversation.id)}
         >
-          <ConversationStatus conversation={conversation} />
+          <ConversationMark conversation={conversation} />
           <span className="conversation-row-title">
             <ConversationIdentity profile={conversation.profile} />
             <span className="task-row-title">{conversation.title}</span>

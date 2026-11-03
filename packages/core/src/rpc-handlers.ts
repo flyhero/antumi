@@ -459,7 +459,7 @@ export function createRpcHandlers(
     'conversations.commitPush': async ({ id, project, message }) => { const result = await git.execute({ kind: 'conversation', id, project }, { kind: 'commit', message, push: true }); return { commit: result.commit ?? '', branch: result.branch ?? '', upstream: result.upstream ?? '' } },
     'conversations.commit': async ({ id, project, message }) => { const result = await git.execute({ kind: 'conversation', id, project }, { kind: 'commit', message, push: false }); return { commit: result.commit ?? '', branch: result.branch ?? '' } },
     'conversations.push': async ({ id, project }) => { const result = await git.execute({ kind: 'conversation', id, project }, { kind: 'push' }); return { branch: result.branch ?? '', upstream: result.upstream ?? '' } },
-    'conversations.search': ({ query }) => conversations.search(query),
+    'conversations.search': ({ query, includeTasks }) => conversations.search(query, includeTasks),
     'conversations.changes': ({ id }) => conversations.changes(id),
     'conversations.diff': ({ id, project, file }) => conversations.diff(id, project, file),
     // The agent's side: its MCP server is launched for one conversation and names it here. The

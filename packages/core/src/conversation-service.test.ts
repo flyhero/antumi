@@ -618,7 +618,7 @@ describe('ConversationService', () => {
     expect(projects.recent()).toEqual([project])
   })
 
-  it('pins and unpins a conversation without counting it as activity, but not a task\'s', () => {
+  it('pins and unpins a conversation without counting it as activity, a task\'s too', () => {
     const events: ConversationEvent[] = []
     service = serve((event) => events.push(event))
     const created = store.create('claude', root, [root])
@@ -631,7 +631,7 @@ describe('ConversationService', () => {
     expect(service.setPinned(created.id, false).pinnedAt).toBeNull()
 
     const task = store.create('claude', root, [root], randomUUID(), {}, { id: randomUUID(), title: 'Task' })
-    expect(() => service.setPinned(task.id, true)).toThrow(expect.objectContaining({ reason: 'task-conversation' }))
+    expect(service.setPinned(task.id, true).pinnedAt).toEqual(expect.any(Number))
   })
 
   it('archives an idle conversation read-only, letting its agent go, and takes it out to go on', async () => {
@@ -733,7 +733,7 @@ describe('ConversationService', () => {
     expect(service.search('nothing like it')).toEqual([])
   })
 
-  it('keeps a task\'s conversation out of the free list and their search', async () => {
+  it('keeps a task\'s conversation out of the free list and their search unless asked for', async () => {
     const free = await service.create('claude', [root])
     const owner = tasks.create('Chat me')
     const own = store.create('claude', root, [root], undefined, {}, { id: owner.id, title: owner.title })
@@ -744,6 +744,7 @@ describe('ConversationService', () => {
     expect(service.list(false).map((conversation) => conversation.id)).toEqual([free.id])
     expect(service.list(true).map((conversation) => conversation.id).sort()).toEqual([free.id, own.id].sort())
     expect(service.search('login').map((hit) => hit.conversationId)).toEqual([free.id])
+    expect(service.search('login', true).map((hit) => hit.conversationId).sort()).toEqual([free.id, own.id].sort())
     expect(service.get(own.id).taskId).toBe(owner.id)
   })
 

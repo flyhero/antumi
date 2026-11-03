@@ -343,12 +343,12 @@ export class ConversationStore {
 
   // The latest matching message per conversation: SQLite takes the bare text column from the
   // row holding MAX(sequence). lower() folds only ASCII, which CJK text does not need.
-  // Free conversations only, as list() is.
-  searchMessages(query: string): Array<{ conversationId: string; text: string }> {
+  // Free conversations only, as list() is, and tasks' chats when asked for.
+  searchMessages(query: string, includeTasks = false): Array<{ conversationId: string; text: string }> {
     return this.db.prepare(`SELECT conversation_id AS conversationId, text, MAX(sequence) AS sequence
       FROM conversation_messages WHERE instr(lower(text), lower(?)) > 0
-      AND conversation_id IN (SELECT id FROM conversations WHERE task_id IS NULL AND discussion_id IS NULL AND squad_run_id IS NULL AND helper_of IS NULL AND parent_conversation_id IS NULL) GROUP BY conversation_id`)
-      .all(query).map((row) => ({ conversationId: String(row.conversationId), text: String(row.text) }))
+      AND conversation_id IN (SELECT id FROM conversations WHERE (task_id IS NULL OR ?) AND discussion_id IS NULL AND squad_run_id IS NULL AND helper_of IS NULL AND parent_conversation_id IS NULL) GROUP BY conversation_id`)
+      .all(query, includeTasks ? 1 : 0).map((row) => ({ conversationId: String(row.conversationId), text: String(row.text) }))
   }
 
   hasProviderMessages(conversationId: string, providerSessionId: string): boolean {

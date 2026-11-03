@@ -524,8 +524,9 @@ export class ConversationService {
     if (!this.get(id).projectPaths.includes(project)) throw new Rejection('repo-not-found', `${project} is not one of the conversation's projects`)
     return folderDiff(project, file)
   }
-  search(query: string): ConversationSearchHit[] {
-    return this.store.searchMessages(query).map(({ conversationId, text }) => ({ conversationId, snippet: searchSnippet(text, query) }))
+  // Tasks' chats are opt-in, as in list(): older clients have no row to show a hit on.
+  search(query: string, includeTasks = false): ConversationSearchHit[] {
+    return this.store.searchMessages(query, includeTasks).map(({ conversationId, text }) => ({ conversationId, snippet: searchSnippet(text, query) }))
   }
 
   // Read the stage in core so a conversation need not be open in the requesting client.
@@ -779,9 +780,9 @@ export class ConversationService {
     for (const conversation of this.store.clearRoutine(routineId)) this.changed(conversation)
   }
 
-  // A task's conversation is listed under its task, so only a free one is pinned.
+  // A task's chat sits in the list with the free conversations, so it is pinned like one.
   setPinned(id: string, pinned: boolean): Conversation {
-    const current = this.free(id)
+    const current = this.get(id)
     if ((current.pinnedAt != null) === pinned) return current
     return this.changed(this.store.setPinned(id, pinned))
   }

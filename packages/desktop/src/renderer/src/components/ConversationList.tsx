@@ -298,7 +298,7 @@ export function ConversationList() {
       {renamingId === conversation.id
         ? <div className="task-row conversation-row" data-renaming>
           <ConversationStatus conversation={conversation} />
-          <span className="conversation-title">
+          <span className="conversation-row-title">
             <ConversationIdentity profile={conversation.profile} />
             <TitleEditor title={conversation.title} label={t('ConversationList.conversationTitle')} onSave={(title) => void renameConversation(conversation.id, title)} onDone={() => setRenamingId(null)} />
           </span>
@@ -319,7 +319,7 @@ export function ConversationList() {
           onContextMenu={openMenu(conversation.id)}
         >
           <ConversationStatus conversation={conversation} />
-          <span className="conversation-title">
+          <span className="conversation-row-title">
             <ConversationIdentity profile={conversation.profile} />
             <span className="task-row-title">{conversation.title}</span>
           </span>

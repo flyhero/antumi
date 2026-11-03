@@ -1098,9 +1098,10 @@ span.chat-translate .spinner { width: 12px; height: 12px; }
 .conversation-row .conversation-snippet { grid-column: 2 / span 2; }
 .conversation-age { grid-column: 3; padding-top: 1px; color: var(--text-3); font-size: 12px; white-space: nowrap; }
 
-.conversation-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.conversation-title :is(.task-row-title, .title-editor) { min-width: 0; }
-.conversation-title .title-editor { flex: 1; }
+/* Its own name: .conversation-title is the header's, bold and renamed by a click. */
+.conversation-row-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.conversation-row-title :is(.task-row-title, .title-editor) { min-width: 0; }
+.conversation-row-title .title-editor { flex: 1; }
 /* Keep the saved identity visible in compact rows, leaving at least half the title for its topic. */
 .conversation-identity {
   display: inline-flex;

@@ -1254,6 +1254,11 @@ export function useFileMentionsSupported(): boolean {
   return useCore((s) => s.rpc?.features.includes('file-mentions') ?? false)
 }
 
+// A core that keeps a long paste as a file the conversation's agent reads (attachments.commitText).
+export function usePastedTextSupported(): boolean {
+  return useCore((s) => s.rpc?.features.includes('pasted-text') ?? false)
+}
+
 // The task board stands where a task would: the tasks section with none open and no page over it.
 export function useTaskBoardOpen(): boolean {
   return useCore((s) => s.section === 'tasks' && s.selectedId === null && !s.inboxOpen && !s.gitOpen && !s.worktreesOpen

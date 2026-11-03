@@ -2133,6 +2133,14 @@ export const MESSAGES = {
     "zh": "添加图片",
     "en": "Add images"
   },
+  "chatMentions.pastedText": {
+    "zh": "粘贴的文本 · {lines} 行",
+    "en": "Pasted text · {lines} {lines, plural, one {line} other {lines}}"
+  },
+  "composerFiles.pasteKeptAsText": {
+    "zh": "长文本没能存成文件，已作为文字放进输入框",
+    "en": "The long paste could not be kept as a file, so it went into the message as text"
+  },
   "ChatImages.youCanAlsoPasteOrDragThemInto": {
     "zh": "也可以直接粘贴或拖进输入框",
     "en": "You can also paste or drag them into the composer"

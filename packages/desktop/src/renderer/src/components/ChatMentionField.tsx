@@ -7,7 +7,7 @@ import { invertedEffects } from '@codemirror/commands'
 import { ChatReference, validChatReferences } from '@antumi/protocol'
 import { LinkMark, ReferenceMark, useOpenReference } from './ChatReference'
 import { textLinks } from '../text-links'
-import { shiftMentions, type Mention, type MentionedText, type MentionTarget } from '../chat-mentions'
+import { CLIPBOARD_TYPE, shiftMentions, type Mention, type MentionedText, type MentionTarget } from '../chat-mentions'
 
 const EMPTY: MentionedText = { text: '', mentions: [] }
 // How many of the texts the input held are kept with their mentions, for undo to find again.
@@ -44,7 +44,6 @@ export function useMentionedText(initial: MentionedText = EMPTY): { value: Menti
 
 const setMentions = StateEffect.define<readonly Mention[]>()
 const external = Annotation.define<boolean>()
-const CLIPBOARD_TYPE = 'application/x-antumi-references'
 
 function mapMentions(mentions: readonly Mention[], changes: ChangeDesc): Mention[] {
   return mentions.flatMap((mention) => {

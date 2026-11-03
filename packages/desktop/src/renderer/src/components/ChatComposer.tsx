@@ -4,7 +4,7 @@ import { getLocale, t, tr } from '../i18n'
 import { HelperStartOptions } from './HelperModelPicker'
 import { useCallback, useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { chatReferencesIn, chatReferencesFor, type ChatReference, agentDescriptor, canReuseConversation, type ChatImage, type ChatItem, type ChatQueued, type Conversation } from '@antumi/protocol'
-import { perform, useChatImagesSupported, useChatOptionsSupported, useCore, useFileMentionsSupported, useScheduleImagesSupported, useSchedulesSupported } from '../core-store'
+import { perform, useChatImagesSupported, useChatOptionsSupported, useCore, useFileMentionsSupported, usePastedTextSupported, useScheduleImagesSupported, useSchedulesSupported } from '../core-store'
 import { useComposerFiles } from '../composer-files'
 import { agentEntries, antumiEntries } from '../chat-commands'
 import { composeMessage, parseQuotes, setQuotes, useQuotes, type ChatQuote } from '../chat-quotes'
@@ -282,6 +282,7 @@ export function ChatComposer({ conversation, state, compact = false }: { convers
   const schedulesSupported = useSchedulesSupported()
   const scheduleImagesSupported = useScheduleImagesSupported()
   const mentionsSupported = useFileMentionsSupported()
+  const pastedTextSupported = usePastedTextSupported()
   const attached = useComposerImages(draft.images)
   useComposerInsertions(id, (insertion) => {
     setText((current) => [current, insertion.text].filter(Boolean).join('\n\n'))
@@ -314,11 +315,11 @@ export function ChatComposer({ conversation, state, compact = false }: { convers
   const starting = Boolean(conversation.starting) || (stopped && busy) || Boolean(initialMessage)
   const mentionMenu = useChatMentionMenu({ conversationId: conversation.id, value, setText, setValue, roots: conversation.projectPaths, cwd: conversation.workspacePath, agent: conversation.agent })
   const files = useComposerFiles({
-    cwd: conversation.workspacePath, input: mentionMenu.inputProps.input, setValue, addImages: attached.add,
-    images: imagesSupported, mentions: mentionsSupported, readOnly: starting
+    conversationId: id, cwd: conversation.workspacePath, input: mentionMenu.inputProps.input, setValue, addImages: attached.add,
+    images: imagesSupported, mentions: mentionsSupported, pastes: pastedTextSupported, readOnly: starting
   })
   const initialHint = initialMessage ? initialMessage.phase === 'failed' ? t('ChatComposer.retryTheFirstMessageAboveFirst') : initialMessage.phase === 'sending' ? t('ChatComposer.sendingFirstMessage') : t('ChatComposer.starting', { value1: agentLabel(conversation.agent) }) : null
-  const canTake = (idle || queueable || stopped) && !busy && !starting && !surface.sendBlocker && !conversation.delegation?.writing && attached.uploading === 0
+  const canTake = (idle || queueable || stopped) && !busy && !starting && !surface.sendBlocker && !conversation.delegation?.writing && attached.uploading === 0 && files.pasting === 0
   const canSend = canTake && (text.trim() !== '' || attached.images.length > 0 || quotes.length > 0)
   // What the agent guesses comes next, as Claude Code shows it: grey in the empty input, Tab or →
   // takes it, typing anything else puts it away for good.
@@ -331,7 +332,7 @@ export function ChatComposer({ conversation, state, compact = false }: { convers
   const canSteer = !handingOff && queueable && steerable && canSend
   // Not held by this conversation's turn: the new one runs beside it.
   const reusable = useReuseConversationSupported() && canReuseConversation(conversation) && !compact
-  const canSendNew = reusable && !handingOff && !busy && !starting && attached.uploading === 0 && (text.trim() !== '' || attached.images.length > 0 || quotes.length > 0)
+  const canSendNew = reusable && !handingOff && !busy && !starting && attached.uploading === 0 && files.pasting === 0 && (text.trim() !== '' || attached.images.length > 0 || quotes.length > 0)
   const chatCommands = useCore((s) => s.chatCommands)
   const commandEntries = useMemo(
     () => [...antumiEntries(chatCommands, conversation.projectPaths), ...agentEntries(state?.commands ?? [])],
@@ -485,7 +486,10 @@ export function ChatComposer({ conversation, state, compact = false }: { convers
           if (suggestion && next.text) setDismissed(suggestion)
           setValue(next)
         }}
-        onPasteCapture={imagesSupported ? attached.handlers.onPaste : undefined}
+        onPasteCapture={(event) => {
+          if (imagesSupported) attached.handlers.onPaste(event)
+          files.onPasteCapture(event)
+        }}
         onKeyDownCapture={(event) => {
           if (recordingShortcut() || event.defaultPrevented || commandMenu.onKeyDown(event) || mentionMenu.onKeyDown(event)) return
           if (handingOff && (steersMessage(event) || sendsMessage(event))) {

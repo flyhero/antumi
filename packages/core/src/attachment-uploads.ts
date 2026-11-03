@@ -52,12 +52,21 @@ export class AttachmentUploads {
   }
 
   async commit(owner: UploadOwner, uploadId: string): Promise<AttachmentInfo> {
+    return this.store.put(this.take(owner, uploadId))
+  }
+
+  // The upload as a long paste for the conversation's agent: the path it reads it at.
+  async commitText(owner: UploadOwner, uploadId: string, conversationId: string): Promise<string> {
+    return this.store.putText(conversationId, this.take(owner, uploadId))
+  }
+
+  private take(owner: UploadOwner, uploadId: string): Buffer {
     const upload = this.owned(owner, uploadId)
     this.drop(uploadId)
     if (upload.received !== upload.size) {
       throw new Rejection('attachment-incomplete', `got ${upload.received} of ${upload.size} bytes`)
     }
-    return this.store.put(Buffer.concat(upload.chunks))
+    return Buffer.concat(upload.chunks)
   }
 
   private owned(owner: UploadOwner, uploadId: string): Upload {

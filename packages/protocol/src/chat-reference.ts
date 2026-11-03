@@ -1,7 +1,8 @@
 import { z } from 'zod'
 
 export const ChatReferenceTarget = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('file'), path: z.string(), relative: z.string().nullable() }),
+  // pasted: a long paste core keeps as this file, shown by its size rather than its name.
+  z.object({ kind: z.literal('file'), path: z.string(), relative: z.string().nullable(), pasted: z.object({ lines: z.number().int().positive() }).optional() }),
   z.object({ kind: z.literal('directory'), path: z.string(), relative: z.string().nullable() }),
   z.object({ kind: z.literal('project'), path: z.string(), relative: z.string().nullable() }),
   z.object({ kind: z.literal('conversation'), id: z.string().uuid(), title: z.string() }),

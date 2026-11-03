@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -53,6 +53,21 @@ describe('AttachmentStore', () => {
       await expect(store.read(id, 0, 1)).rejects.toMatchObject({ reason: 'attachment-not-found' })
       await expect(store.info(id)).rejects.toMatchObject({ reason: 'attachment-not-found' })
     }
+  })
+
+  it('keeps a long paste once per conversation, in that conversation\'s own folder', async () => {
+    const conversation = '0b5c3a1e-7f2d-4c8e-9a61-2d4f8e7c1b30'
+    const text = Buffer.from('第一行\nsecond line\n')
+    const [first, second] = await Promise.all([store.putText(conversation, text), store.putText(conversation, text)])
+    expect(first).toBe(second)
+    expect(path.dirname(first)).toBe(store.pastedTextDir(conversation))
+    expect(path.basename(first)).toMatch(/^pasted-[0-9a-f]{64}\.txt$/)
+    expect(readFileSync(first, 'utf8')).toBe('第一行\nsecond line\n')
+    if (process.platform !== 'win32') {
+      expect(statSync(first).mode & 0o777).toBe(0o600)
+    }
+    await expect(store.putText(conversation, Uint8Array.from([0xff, 0xfe, 0x00]))).rejects.toMatchObject({ reason: 'attachment-not-text' })
+    await expect(store.putText('../antumi.db', text)).rejects.toMatchObject({ reason: 'conversation-not-found' })
   })
 
   it('does not follow a symlink planted under an image name', async () => {

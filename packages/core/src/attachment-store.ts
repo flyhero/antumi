@@ -1,10 +1,12 @@
 import { createHash, randomBytes } from 'node:crypto'
 import { chmodSync, existsSync, lstatSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
-import { chmod, lstat, open, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { chmod, lstat, mkdir, open, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { ATTACHMENT_ID_PATTERN, MAX_ATTACHMENT_BYTES, type AttachmentInfo } from '@antumi/protocol'
 import { IMAGE_MIME, ImageError, inspectImage, type ImageFacts } from './image-file'
 import { Rejection } from './rejection'
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 // A stored image as an agent takes it: by path, or by its bytes read when asked for.
 export type AttachmentFile = { id: string; mime: AttachmentInfo['mime']; path: string; read(): Uint8Array }
@@ -72,6 +74,41 @@ export class AttachmentStore {
     }
     this.infos.set(id, info)
     return info
+  }
+
+  // A long paste, kept as a text file only the conversation's agent is let read without asking:
+  // each conversation's under a folder of its own, by the hash of the text.
+  async putText(conversationId: string, input: Uint8Array): Promise<string> {
+    if (input.byteLength > MAX_ATTACHMENT_BYTES) {
+      throw new Rejection('attachment-too-large', `pasted text is limited to ${MAX_ATTACHMENT_BYTES} bytes`)
+    }
+    try {
+      new TextDecoder('utf-8', { fatal: true }).decode(input)
+    } catch {
+      throw new Rejection('attachment-not-text', 'pasted text is not UTF-8')
+    }
+    const dir = this.pastedTextDir(conversationId)
+    await mkdir(dir, { recursive: true, mode: 0o700 })
+    const file = path.join(dir, `pasted-${createHash('sha256').update(input).digest('hex')}.txt`)
+    if (!(await this.isFile(file))) {
+      const tmp = `${file}.${randomBytes(4).toString('hex')}.tmp`
+      try {
+        await writeFile(tmp, input, { mode: 0o600 })
+        await chmod(tmp, 0o600)
+        await rename(tmp, file)
+      } catch (error) {
+        await rm(tmp, { force: true })
+        throw error
+      }
+    }
+    return file
+  }
+
+  pastedTextDir(conversationId: string): string {
+    if (!UUID.test(conversationId)) {
+      throw new Rejection('conversation-not-found', `not a conversation id: ${conversationId}`)
+    }
+    return path.join(this.dir, 'pasted', conversationId)
   }
 
   async info(id: string): Promise<AttachmentInfo | null> {

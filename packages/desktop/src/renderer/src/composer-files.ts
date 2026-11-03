@@ -1,22 +1,54 @@
-import { useLayoutEffect, useRef, type DragEvent, type RefObject } from 'react'
+import { useLayoutEffect, useRef, useState, type ClipboardEvent, type DragEvent, type RefObject } from 'react'
 import type { EditorView } from '@codemirror/view'
-import { IMAGE_MIME_TYPES } from '@antumi/protocol'
-import { pathTarget, placeTargets, type MentionedText, type MentionTarget } from './chat-mentions'
+import { ATTACHMENT_CHUNK_BYTES, IMAGE_MIME_TYPES, MAX_ATTACHMENT_BYTES } from '@antumi/protocol'
+import { bytesToBase64 } from './base64'
+import { CLIPBOARD_TYPE, pathTarget, placeTargets, type MentionedText, type MentionTarget } from './chat-mentions'
+import { useCore } from './core-store'
 import { pathForFile } from './desktop-bridge'
+import { t } from './i18n'
+
+// Past this many characters a paste goes to the agent as a file it reads rather than in the
+// message: an agent takes only so much in one message, and the input stays readable.
+export const PASTE_AS_FILE_CHARS = 4000
+
+export function pastedLines(text: string): number {
+  return text.replace(/\r?\n$/, '').split(/\r\n|\r|\n/).length
+}
+
+// The text kept by core as a file of the conversation's, as the input shows it; null where it was not.
+async function keepPastedText(conversationId: string, text: string): Promise<MentionTarget | null> {
+  const bytes = new TextEncoder().encode(text)
+  const { rpc } = useCore.getState()
+  if (!rpc || bytes.byteLength > MAX_ATTACHMENT_BYTES) return null
+  try {
+    const { uploadId } = await rpc.call('attachments.begin', { size: bytes.byteLength })
+    for (let offset = 0; offset < bytes.byteLength; offset += ATTACHMENT_CHUNK_BYTES) {
+      await rpc.call('attachments.append', { uploadId, offset, data: bytesToBase64(bytes.subarray(offset, offset + ATTACHMENT_CHUNK_BYTES)) })
+    }
+    const { path } = await rpc.call('attachments.commitText', { uploadId, conversationId })
+    return { kind: 'file', path, relative: null, pasted: { lines: pastedLines(text) } }
+  } catch {
+    return null
+  }
+}
 
 const isImage = (file: File) => IMAGE_MIME_TYPES.some((type) => type === file.type)
 
-// Files dropped on the composer. Images go to `addImages` where the agent takes them; any other
-// file or folder becomes a mention of its path, where the drop landed.
-export function useComposerFiles({ cwd, input, setValue, addImages, images, mentions, readOnly }: {
+// Files dropped on the composer and long pastes. Images go to `addImages` where the agent takes
+// them; any other file or folder becomes a mention of its path, where the drop landed. A long paste
+// becomes a mention of the file core keeps it in; the message waits for it (`pasting`).
+export function useComposerFiles({ conversationId, cwd, input, setValue, addImages, images, mentions, pastes, readOnly }: {
+  conversationId: string
   cwd: string | null
   input: RefObject<EditorView | null>
   setValue: (change: (current: MentionedText) => MentionedText) => void
   addImages: (files: File[]) => void
   images: boolean
   mentions: boolean
+  pastes: boolean
   readOnly: boolean
 }) {
+  const [pasting, setPasting] = useState(0)
   const caret = useRef<number | null>(null)
   useLayoutEffect(() => {
     if (caret.current === null || !input.current) return
@@ -34,6 +66,25 @@ export function useComposerFiles({ cwd, input, setValue, addImages, images, ment
       return placed.value
     })
     input.current?.focus()
+  }
+
+  const onPasteCapture = (event: ClipboardEvent) => {
+    const data = event.clipboardData
+    if (!pastes || readOnly || event.defaultPrevented || data.types.includes(CLIPBOARD_TYPE)) return
+    const text = data.getData('text/plain')
+    if (text.length <= PASTE_AS_FILE_CHARS) return
+    event.preventDefault()
+    setPasting((count) => count + 1)
+    void keepPastedText(conversationId, text).then((target) => {
+      setPasting((count) => count - 1)
+      if (target) return place([target], null)
+      // Nothing pasted is lost: it goes in as the text it was.
+      useCore.setState({ error: t('composerFiles.pasteKeptAsText') })
+      const view = input.current
+      if (!view) return
+      const { from, to } = view.state.selection.main
+      view.dispatch({ changes: { from, to, insert: text }, selection: { anchor: from + text.length }, userEvent: 'input.paste' })
+    })
   }
 
   const onDragOver = (event: DragEvent) => {
@@ -59,5 +110,5 @@ export function useComposerFiles({ cwd, input, setValue, addImages, images, ment
     if (targets.length > 0) place(targets, input.current?.posAtCoords({ x: event.clientX, y: event.clientY }, false) ?? null)
   }
 
-  return { onDragOver, onDropCapture }
+  return { pasting, onPasteCapture, onDragOver, onDropCapture }
 }

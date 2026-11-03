@@ -526,6 +526,10 @@ export function createRpcHandlers(
       return OK
     },
     'attachments.commit': ({ uploadId }, connection) => attachments.uploads.commit(connection, uploadId),
+    'attachments.commitText': async ({ uploadId, conversationId }, connection) => {
+      conversations.get(conversationId)
+      return { path: await attachments.uploads.commitText(connection, uploadId, conversationId) }
+    },
     'attachments.stat': async ({ id }) => {
       const info = await attachments.store.info(id)
       if (!info) {

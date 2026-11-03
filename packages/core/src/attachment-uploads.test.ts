@@ -32,6 +32,16 @@ describe('AttachmentUploads', () => {
     await expect(uploads.commit(owner, id)).rejects.toMatchObject({ reason: 'attachment-upload-not-found' })
   })
 
+  it('commits an upload as a conversation\'s pasted text', async () => {
+    const owner = fakeConnection()
+    const text = Buffer.from('x'.repeat(5000))
+    const id = uploads.begin(owner, text.byteLength)
+    uploads.append(owner, id, 0, b64(text))
+    const file = await uploads.commitText(owner, id, '0b5c3a1e-7f2d-4c8e-9a61-2d4f8e7c1b30')
+    expect(file.startsWith(path.join(dir, 'pasted', '0b5c3a1e-7f2d-4c8e-9a61-2d4f8e7c1b30'))).toBe(true)
+    await expect(uploads.commitText(owner, id, '0b5c3a1e-7f2d-4c8e-9a61-2d4f8e7c1b30')).rejects.toMatchObject({ reason: 'attachment-upload-not-found' })
+  })
+
   it('keeps an upload to its own connection, and to what it declared', async () => {
     const owner = fakeConnection()
     const id = uploads.begin(owner, 10)

@@ -593,7 +593,10 @@ describe('TaskService', () => {
     const [first] = daemon.written(sessionOf(task.id)).filter((frame) => userText(frame).length > 0)
     expect(JSON.stringify(first).match(/"type":"image"/g)).toHaveLength(1)
     const args = daemon.spawns.at(-1)?.args ?? []
-    expect(args[args.indexOf('--allowedTools') + 1]).toBe(`Read(/${path.join(dir, mine.id)}),Read(/${path.join(dir, theirs.id)})`)
+    const [mineRule, theirsRule, pastedRule] = args[args.indexOf('--allowedTools') + 1]?.split(',') ?? []
+    expect([mineRule, theirsRule]).toEqual([`Read(/${path.join(dir, mine.id)})`, `Read(/${path.join(dir, theirs.id)})`])
+    // And what the user pastes into the conversation as files, in its own folder.
+    expect(pastedRule).toMatch(/\/pasted\/[0-9a-f-]{36}\/\*\*\)$/)
   })
 
   it('puts the issue key of an imported task into its branch, where Jira looks for it', async () => {

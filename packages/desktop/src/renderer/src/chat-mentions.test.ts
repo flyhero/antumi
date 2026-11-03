@@ -233,3 +233,14 @@ describe('placeTargets', () => {
     expect(placed.caret).toBe(14)
   })
 })
+
+describe('a long paste kept as a file', () => {
+  const pasted: MentionTarget = { kind: 'file', path: '/home/me/.antumi/attachments/pasted/c/pasted-1.txt', relative: null, pasted: { lines: 120 } }
+
+  it('shows its size, and goes to every agent as a bare path it reads when it needs to', () => {
+    expect(mentionLabel(pasted)).toBe('粘贴的文本 · 120 行')
+    expect(mentionText(pasted, 'claude')).toBe(pasted.path)
+    expect(mentionText(pasted, 'codex')).toBe(pasted.path)
+    expect(mentionText({ ...pasted, path: '/Users/Jo Doe/p.txt' }, 'claude')).toBe('`/Users/Jo Doe/p.txt`')
+  })
+})

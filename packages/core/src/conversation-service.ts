@@ -1165,7 +1165,8 @@ export class ConversationService {
       allowBypass: options.allowBypass,
       planOnly: options.planOnly ? { dirs: [options.cwd, ...options.extraDirs] } : undefined,
       readOnly: options.readOnly ? { dirs: [options.cwd, ...options.extraDirs] } : undefined,
-      readable,
+      // What the user pasted as files into this conversation, which the agent reads without asking.
+      readable: [...readable, `${this.attachments.pastedTextDir(id)}/**`],
       ...(current.referencePaths?.length ? { references: current.referencePaths } : {}),
       forkAt,
       // As its adapter starts it, for an agent that takes it on its command (OpenCode's config).

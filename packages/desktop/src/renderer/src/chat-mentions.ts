@@ -1,6 +1,9 @@
+import { t } from './i18n'
 import { agentDescriptor, chatReferencesFor, conversationReference, type ChatReference, type ChatReferenceTarget, type AgentKind, type Conversation, type ProjectFileMatch } from '@antumi/protocol'
 
 const MAX_PROJECTS = 8
+// What a copy out of the input carries beside its text: the mentions in it.
+export const CLIPBOARD_TYPE = 'application/x-antumi-references'
 
 // The @word the caret is in: an @ not right after a letter or digit of a word (an address like
 // me@host is no mention, but Chinese runs straight into one: 看看@README), what follows it up to the
@@ -30,14 +33,15 @@ export function pathTarget(path: string, kind: 'file' | 'directory', cwd: string
 }
 
 // Claude Code reads `@path` itself, attaching the file (a folder's listing); Codex has no file
-// mentions, so it gets the path to read. A project is only named, for either.
+// mentions, so it gets the path to read. A project is only named, for either. A long paste is a
+// path for every agent: attached whole, it would be the long message it was taken out of.
 export function mentionText(target: MentionTarget, agent: AgentKind): string {
   if (target.kind === 'conversation') return conversationReference(target.id, target.title)
   if (target.kind === 'agent') return `@${target.name}`
   const shown = target.relative ?? target.path
   const written = target.kind === 'directory' ? `${shown}/` : shown
   const spaced = /\s/.test(written)
-  if (agentDescriptor(agent).capabilities.pathMentions && target.kind !== 'project') return spaced ? `@"${written}"` : `@${written}`
+  if (agentDescriptor(agent).capabilities.pathMentions && target.kind !== 'project' && !(target.kind === 'file' && target.pasted)) return spaced ? `@"${written}"` : `@${written}`
   return spaced ? `\`${written}\`` : written
 }
 
@@ -62,6 +66,7 @@ export type MentionedText = { text: string; mentions: readonly Mention[] }
 export function mentionLabel(target: MentionTarget): string {
   if (target.kind === 'agent') return target.name
   if (target.kind === 'conversation') return target.title.replace(/\s+/g, ' ').trim() || target.id
+  if (target.kind === 'file' && target.pasted) return t('chatMentions.pastedText', { lines: target.pasted.lines })
   const name = target.path.split(/[\\/]/).filter(Boolean).at(-1) ?? target.path
   return target.kind === 'directory' ? `${name}/` : name
 }

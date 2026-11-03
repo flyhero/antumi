@@ -372,6 +372,9 @@ export function ChatComposer({ conversation, state, compact = false }: { convers
       setText('')
       attached.setImages([])
       if (quoting) setQuotes(id, [])
+      // In storage too: getting the agent ready takes a while, and a composer left for another
+      // page by then clears nothing, so the sent message came back as a draft.
+      saveComposerDraft(id, EMPTY_DRAFT)
     } else relay?.cancel()
   }
   // The view moves to the new conversation as it opens, so the input is cleared in storage too.
@@ -404,6 +407,7 @@ export function ChatComposer({ conversation, state, compact = false }: { convers
     if (went) {
       setText('')
       if (quoting) setQuotes(id, [])
+      saveComposerDraft(id, { ...EMPTY_DRAFT, images: attached.images })
     }
   }
   // Picking an agent to hand to, here or from elsewhere, leads to the input that sends it.

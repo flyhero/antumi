@@ -1,15 +1,20 @@
 import { localized, t, tr } from '../i18n'
 import { useCallback, useEffect, useRef, useState, type MouseEvent } from 'react'
-import type { Conversation, Discussion } from '@antumi/protocol'
-import { openBeside, selectConversation, selectDiscussion, useCore, useDiscussionsSupported, useSplitPanes } from '../core-store'
-import { arrangeItems, conversationItem, discussionItem, GROUP_LIMIT, itemArchived, itemMatches, itemShown, shownRows, sortItems, type ItemGroup, type ListItem } from '../conversation-list-items'
+import type { Conversation, Discussion, Task } from '@antumi/protocol'
+import { openBeside, selectConversation, selectDiscussion, selectTask, useCore, useDiscussionsSupported, useSplitPanes, useTaskRowsSupported } from '../core-store'
+import { arrangeItems, conversationItem, discussionItem, GROUP_LIMIT, itemArchived, itemConversation, itemMatches, itemShown, shownRows, sortItems, taskItem, type ItemGroup, type ListItem } from '../conversation-list-items'
 import { isListedConversation } from '../search-palette'
+import { attentionSummaryMode } from '../attention-summaries'
+import { saveTaskText } from '../unsaved-edits'
+import { STATUS_LABEL } from '../labels'
+import { StatusIcon } from './StatusIcon'
+import { TaskContextMenu } from './TaskActions'
 import { discussionProgress, renameDiscussion } from '../discussions'
 import { DiscussionContextMenu, DiscussionMark, DiscussionMarks } from './DiscussionActions'
 import { canSplit } from '../conversation-split'
 import { endConversationDrag, startConversationDrag } from '../conversation-drag'
 import { hasPrimaryModifier } from '../shortcut-keys'
-import { conversationState, timeAgo } from '../conversation-state'
+import { conversationGlyph, conversationState, timeAgo } from '../conversation-state'
 import { agentLabel } from '../labels'
 import { CONVERSATION_DENSITIES, CONVERSATION_GROUPS, CONVERSATION_KINDS, CONVERSATION_SORTS, setPreference, usePreferences, type Preferences } from '../preferences'
 import { beginHandoff, ConversationContextMenu, newConversation, renameConversation } from './ConversationActions'
@@ -18,7 +23,7 @@ import { ConversationGroupActivity } from './ConversationGroupActivity'
 import { ConversationPeek, DiscussionPeek, useConversationPeek } from './ConversationPeek'
 import { conversationActivity } from '../work-activity'
 import { ContextMenu, MenuCheckboxItem, menuPoint, MenuRadioItem, MenuSubmenu, type MenuPoint } from './ContextMenu'
-import { AgentIcon, ChatIcon, ChevronDownIcon, CloseIcon, FolderIcon, GroupChatIcon, PinIcon, PlusIcon, SlidersIcon } from './icons'
+import { AgentIcon, BoardIcon, ChatIcon, ChevronDownIcon, CloseIcon, FolderIcon, GroupChatIcon, PinIcon, PlusIcon, SlidersIcon } from './icons'
 import { ProjectIcon } from './ProjectIcon'
 import { projectName, projectNames } from './ProjectPicker'
 import { SidebarCollapseButton } from './SidebarCollapseButton'
@@ -34,7 +39,7 @@ type Kinds = Preferences['conversationKinds']
 const GROUP_LABEL: Record<GroupBy, string> = localized(() => ({ none: t('ConversationList.noGrouping'), project: t('ChatMentionMenu.project'), agent: t('ConversationList.agent'), status: t('ConversationList.runStatus') }))
 const SORT_LABEL: Record<SortBy, string> = localized(() => ({ recent: t('ConversationList.recentActivity'), created: t('ConversationList.created'), title: t('ConversationList.title') }))
 const DENSITY_LABEL: Record<Density, string> = localized(() => ({ comfortable: t('ConversationList.comfortable'), compact: t('ConversationList.compact') }))
-const KINDS_LABEL: Record<Kinds, string> = localized(() => ({ all: t('ConversationList.kindsAll'), conversations: t('ConversationList.kindsConversations'), discussions: t('ConversationList.kindsDiscussions') }))
+const KINDS_LABEL: Record<Kinds, string> = localized(() => ({ all: t('ConversationList.kindsAll'), conversations: t('ConversationList.kindsConversations'), discussions: t('ConversationList.kindsDiscussions'), tasks: t('ConversationList.kindsTasks') }))
 
 // Project folders, pins, agent marks and the group chat mark head their groups; status groups keep a chevron.
 function groupMark(group: ItemGroup, by: GroupBy) {
@@ -53,7 +58,7 @@ type MessageHits = { query: string; snippets: Map<string, string> }
 
 // Asks core once typing pauses. An older core without the method answers with no hits,
 // which leaves title and project matches.
-function useMessageHits(query: string): MessageHits {
+function useMessageHits(query: string, includeTasks: boolean): MessageHits {
   const rpc = useCore((s) => s.rpc)
   const [hits, setHits] = useState<MessageHits>({ query: '', snippets: new Map() })
   useEffect(() => {
@@ -64,7 +69,7 @@ function useMessageHits(query: string): MessageHits {
     }
     let current = true
     const timer = setTimeout(() => {
-      void rpc.call('conversations.search', { query: query.slice(0, 200) })
+      void rpc.call('conversations.search', { query: query.slice(0, 200), ...(includeTasks ? { includeTasks } : {}) })
         .catch(() => [])
         .then((found) => {
           if (current) setHits({ query, snippets: new Map(found.map((hit) => [hit.conversationId, hit.snippet])) })
@@ -74,7 +79,7 @@ function useMessageHits(query: string): MessageHits {
       current = false
       clearTimeout(timer)
     }
-  }, [rpc, query])
+  }, [rpc, query, includeTasks])
   return hits
 }
 
@@ -119,6 +124,39 @@ function ConversationMeta({ conversation, heading = 'none' }: { conversation: Co
   )
 }
 
+// A task's row carries the task mark in the status column, the board's icon as the sidebar's 任务
+// entry has it, coloured as a conversation's dot would be: amber when its chat waits on the user,
+// red when it failed, the accent when a turn finished unseen. The task's status sits small at the
+// mark's bottom right, in the shape the board gives it.
+function TaskMark({ task, conversation }: { task: Task; conversation: Conversation }) {
+  const unseen = useCore((s) => Boolean(s.unseen[conversation.id]))
+  const glyph = conversationGlyph(conversation, unseen)
+  const state = conversationState(conversation)
+  const label = glyph === 'unseen' ? t('ConversationStatus.newActivity') : state.label
+  return (
+    <span className="task-mark" data-glyph={glyph} role="img" aria-label={`${t('sidebar.tasks')} · ${STATUS_LABEL[task.status]} · ${label}`} title={`${STATUS_LABEL[task.status]} · ${state.detail ?? label}`}>
+      <BoardIcon />
+      <span className="task-mark-status"><StatusIcon status={task.status} decorative /></span>
+    </span>
+  )
+}
+
+// As a conversation's, with the task's status between the projects and how its chat stands.
+function TaskMeta({ task, conversation, heading = 'none' }: { task: Task; conversation: Conversation; heading?: GroupBy }) {
+  const agent = agentLabel(conversation.agent)
+  const activity = conversationActivity(conversation, conversation.agent)
+  const state = activity?.detail ?? conversationState(conversation).label
+  const projects = metaProjects(task.repos.map((repo) => repo.path), heading === 'project')
+  return (
+    <>
+      {heading !== 'agent' && <span className="conversation-agent" role="img" aria-label={agent} title={agent}><AgentIcon agent={conversation.agent} /></span>}
+      {projects !== null && <>{projects}{' · '}</>}
+      <span className="status-pill conversation-task-status" data-status={task.status}>{STATUS_LABEL[task.status]}</span>{' · '}
+      <span className="conversation-live" data-state={activity?.state}>{state}</span>
+    </>
+  )
+}
+
 // Its members' marks and where it stands; that it is a group chat, its status mark says.
 function DiscussionMeta({ discussion, heading = 'none' }: { discussion: Discussion; heading?: GroupBy }) {
   const projects = metaProjects(discussion.projectPaths, heading === 'project')
@@ -141,7 +179,8 @@ function useMinute(): number {
   return now
 }
 
-function ViewMenu({ at, trigger, archived, kinds, onClose }: { at: MenuPoint; trigger: HTMLElement | null; archived: number; kinds: boolean; onClose: () => void }) {
+// kinds: what the list can be kept to, beyond all; the submenu goes when there is only one kind.
+function ViewMenu({ at, trigger, archived, kinds, onClose }: { at: MenuPoint; trigger: HTMLElement | null; archived: number; kinds: readonly Kinds[]; onClose: () => void }) {
   const shownKinds = usePreferences((p) => p.conversationKinds)
   const groupBy = usePreferences((p) => p.conversationGroup)
   const sortBy = usePreferences((p) => p.conversationSort)
@@ -151,9 +190,9 @@ function ViewMenu({ at, trigger, archived, kinds, onClose }: { at: MenuPoint; tr
   const closeSubmenu = () => setOpen(null)
   return (
     <ContextMenu at={at} align="end" trigger={trigger} label={t('ConversationList.groupAndSortConversations')} onClose={onClose}>
-      {kinds && (
+      {kinds.length > 2 && (
         <MenuSubmenu label={t('ConversationList.show')} value={KINDS_LABEL[shownKinds]} open={open === 'kinds'} onOpen={() => setOpen('kinds')} onClose={closeSubmenu}>
-          {CONVERSATION_KINDS.map((value) => (
+          {kinds.map((value) => (
             <MenuRadioItem
               key={value}
               label={KINDS_LABEL[value]}
@@ -220,8 +259,10 @@ export function ConversationList() {
   const [collapsed, setCollapsed] = useState(false)
   const conversations = useCore((s) => s.conversations)
   const discussions = useCore((s) => s.discussions)
+  const tasks = useCore((s) => s.tasks)
   const selected = useCore((s) => s.selectedConversationId)
   const selectedDiscussion = useCore((s) => s.selectedDiscussionId)
+  const selectedTask = useCore((s) => s.selectedId)
   const panes = useSplitPanes()
   // Opening beside the conversation in front: there has to be one, and another to put next to it.
   const splitWith = (conversation: Conversation): 'right' | 'other' | null => {
@@ -232,16 +273,25 @@ export function ConversationList() {
   const section = useCore((s) => s.section)
   const groupBy = usePreferences((p) => p.conversationGroup)
   const sortBy = usePreferences((p) => p.conversationSort)
-  // Group chats are listed beside conversations where core runs them; the view menu can keep to one kind.
+  // Group chats are listed beside conversations where core runs them, and started tasks where core
+  // sends their chats; the view menu can keep to one kind.
   const discussionsSupported = useDiscussionsSupported()
+  const tasksListed = useCore((s) => (s.rpc ? attentionSummaryMode(s.rpc) === 'complete' : false))
+  const taskRowsSupported = useTaskRowsSupported()
+  const kindChoices: readonly Kinds[] = CONVERSATION_KINDS.filter((kind) => (kind !== 'discussions' || discussionsSupported) && (kind !== 'tasks' || tasksListed))
   const savedKinds = usePreferences((p) => p.conversationKinds)
-  const kinds = discussionsSupported ? savedKinds : 'all'
-  // A task's conversation is reached from its task; a routine's from the routine's history; a group
-  // chat member's from the group chat.
+  const kinds = kindChoices.includes(savedKinds) ? savedKinds : 'all'
+  // A task's chat is listed as the task's row; a routine's conversation is reached from the
+  // routine's history; a group chat member's from the group chat.
   const free = [
     ...Object.values(conversations).filter(isListedConversation).map(conversationItem),
-    ...(discussionsSupported ? Object.values(discussions).map(discussionItem) : [])
+    ...(discussionsSupported ? Object.values(discussions).map(discussionItem) : []),
+    ...(tasksListed ? Object.values(tasks).flatMap((task) => {
+      const conversation = task.conversationId ? conversations[task.conversationId] : undefined
+      return conversation ? [taskItem(task, conversation)] : []
+    }) : [])
   ].filter((item) => itemShown(item, kinds))
+  const byId = new Map(free.map((item) => [item.id, item]))
   // Archived ones are out of the list unless asked for in the view menu, then in a group of their
   // own at the end; a search finds them either way.
   const all = free.filter((item) => !itemArchived(item))
@@ -252,15 +302,17 @@ export function ConversationList() {
   const [query, setQuery] = useState<string | null>(null)
   const needle = query?.trim() ?? ''
   const searching = needle !== ''
-  const messageHits = useMessageHits(needle)
-  // Null until core has answered this query. Only conversations are searched by what was said.
+  const messageHits = useMessageHits(needle, tasksListed && taskRowsSupported)
+  // Null until core has answered this query. Only conversations and tasks' chats are searched by
+  // what was said; a hit names the chat, which a task's row holds.
   const snippets = messageHits.query === needle ? messageHits.snippets : null
-  const found = (item: ListItem) => itemMatches(item, needle) || Boolean(snippets?.has(item.id))
+  const snippetOf = (item: ListItem) => snippets?.get(itemConversation(item)?.id ?? '')
+  const found = (item: ListItem) => itemMatches(item, needle) || snippetOf(item) !== undefined
   const visible = searching ? all.filter(found) : all
   const groups = arrangeItems(visible, groupBy, sortBy)
   const archived = searching ? archivedAll.filter(found) : showArchived ? archivedAll : []
-  // The open one, a conversation or a group chat, stays in sight in its group.
-  const current = section === 'conversations' ? selected : section === 'discussions' ? selectedDiscussion : null
+  // The open one, a conversation, a group chat or a task, stays in sight in its group.
+  const current = section === 'conversations' ? selected : section === 'discussions' ? selectedDiscussion : section === 'tasks' ? selectedTask : null
   // A search opens every group, so nothing it found is folded away.
   const folded = usePreferences((p) => p.foldedConversationGroups)
   const foldKey = (key: string) => `${groupBy}:${key}`
@@ -280,13 +332,14 @@ export function ConversationList() {
   const closeView = useCallback(() => setViewAt(null), [])
   const viewButton = useRef<HTMLButtonElement>(null)
   const [renamingId, setRenamingId] = useState<string | null>(null)
-  const menuConversation = menu ? conversations[menu.id] : undefined
-  const menuDiscussion = menu ? discussions[menu.id] : undefined
+  const menuItem = menu ? byId.get(menu.id) : undefined
   const density = usePreferences((p) => p.conversationDensity)
   const { peek, rowProps } = useConversationPeek()
   const peekable = peek && !menu && !renamingId ? peek : null
-  const peeked = peekable ? conversations[peekable.id] : undefined
-  const peekedDiscussion = peekable ? discussions[peekable.id] : undefined
+  const peekedItem = peekable ? byId.get(peekable.id) : undefined
+  // A task's row peeks at its chat, which is what the row's activity is about.
+  const peeked = peekedItem && peekedItem.kind !== 'discussion' ? peekedItem.conversation : undefined
+  const peekedDiscussion = peekedItem?.kind === 'discussion' ? peekedItem.discussion : undefined
   const openMenu = (id: string) => (event: MouseEvent<HTMLElement>) => {
     event.preventDefault()
     setMenu({ id, at: menuPoint(event) })
@@ -363,7 +416,50 @@ export function ConversationList() {
     </li>
   )
 
-  const row = (item: ListItem, heading: GroupBy = 'none') => item.kind === 'conversation' ? conversationRow(item.conversation, heading) : discussionRow(item.discussion, heading)
+  // A task's row opens the task on its chat, where the task's own header and toolbar are; it is not
+  // dragged into a split, as its chat cannot stand beside a conversation.
+  const taskRow = (task: Task, conversation: Conversation, heading: GroupBy) => {
+    const snippet = searching ? snippets?.get(conversation.id) : undefined
+    return <li key={task.id}>
+      {renamingId === task.id
+        ? <div className="task-row conversation-row" data-renaming>
+          <TaskMark task={task} conversation={conversation} />
+          <span className="conversation-row-title">
+            <TitleEditor title={task.title} label={t('NewTaskDialog.taskTitle')} onSave={(title) => saveTaskText(task.id, 'title', title)} onDone={() => setRenamingId(null)} />
+          </span>
+          <span className="task-row-meta"><TaskMeta task={task} conversation={conversation} heading={heading} /></span>
+        </div>
+        : <button
+          type="button"
+          className="task-row conversation-row"
+          data-task-id={task.id}
+          data-menu-open={menu?.id === task.id || undefined}
+          aria-current={section === 'tasks' && selectedTask === task.id}
+          {...rowProps(task.id)}
+          onClick={() => selectTask(task.id, 'chat')}
+          onContextMenu={openMenu(task.id)}
+        >
+          <TaskMark task={task} conversation={conversation} />
+          <span className="conversation-row-title">
+            <span className="task-row-title">{task.title}</span>
+          </span>
+          <span className="conversation-trailing">
+            <span className="conversation-age">{timeAgo(Math.max(task.updatedAt, conversation.updatedAt), now)}</span>
+            {conversation.context && <ContextUsage context={conversation.context} showTokens shape="meter" />}
+          </span>
+          <span className="task-row-meta"><TaskMeta task={task} conversation={conversation} heading={heading} /></span>
+          {snippet && <span className="conversation-snippet"><Highlighted text={snippet} query={needle} /></span>}
+        </button>}
+    </li>
+  }
+
+  const row = (item: ListItem, heading: GroupBy = 'none') => {
+    switch (item.kind) {
+      case 'conversation': return conversationRow(item.conversation, heading)
+      case 'discussion': return discussionRow(item.discussion, heading)
+      case 'task': return taskRow(item.task, item.conversation, heading)
+    }
+  }
 
   return (
     <nav className="conversation-list" data-collapsed={collapsed} data-density={density} aria-label={t('ConversationList.conversations')}>
@@ -404,7 +500,7 @@ export function ConversationList() {
         </p>
       )}
       <div id="sidebar-conversations" className="sidebar-section-content" hidden={collapsed}>
-      {free.length === 0 ? <p className="task-list-empty">{kinds === 'discussions' ? t('ConversationList.noGroupChatsYet') : t('ConversationList.noConversationsYetClickAtTheTopRight')}</p> :
+      {free.length === 0 ? <p className="task-list-empty">{kinds === 'discussions' ? t('ConversationList.noGroupChatsYet') : kinds === 'tasks' ? t('ConversationList.noStartedTasksYet') : t('ConversationList.noConversationsYetClickAtTheTopRight')}</p> :
         visible.length === 0 && archived.length === 0 ? snippets && <p className="task-list-empty">{tr('ConversationList.noConversationsMatch', { needle: needle })}</p> :
         groups.map((group) => {
           if (group.label === null) return <ul key={group.key}>{group.items.map((item) => row(item))}</ul>
@@ -466,19 +562,22 @@ export function ConversationList() {
       </div>
       {peekable && peeked && <ConversationPeek conversation={peeked} row={peekable.row} />}
       {peekable && peekedDiscussion && <DiscussionPeek discussion={peekedDiscussion} row={peekable.row} />}
-      {viewAt && <ViewMenu at={viewAt} trigger={viewButton.current} archived={archivedAll.length} kinds={discussionsSupported} onClose={closeView} />}
-      {menu && menuConversation && (
+      {viewAt && <ViewMenu at={viewAt} trigger={viewButton.current} archived={archivedAll.length} kinds={kindChoices} onClose={closeView} />}
+      {menu && menuItem?.kind === 'conversation' && (
         <ConversationContextMenu
-          conversation={menuConversation}
+          conversation={menuItem.conversation}
           at={menu.at}
           onClose={closeMenu}
-          onRename={() => setRenamingId(menuConversation.id)}
-          onHandoff={() => beginHandoff(menuConversation)}
-          split={splitWith(menuConversation)}
+          onRename={() => setRenamingId(menuItem.id)}
+          onHandoff={() => beginHandoff(menuItem.conversation)}
+          split={splitWith(menuItem.conversation)}
         />
       )}
-      {menu && menuDiscussion && (
-        <DiscussionContextMenu discussion={menuDiscussion} at={menu.at} onClose={closeMenu} onRename={() => setRenamingId(menuDiscussion.id)} />
+      {menu && menuItem?.kind === 'discussion' && (
+        <DiscussionContextMenu discussion={menuItem.discussion} at={menu.at} onClose={closeMenu} onRename={() => setRenamingId(menuItem.id)} />
+      )}
+      {menu && menuItem?.kind === 'task' && (
+        <TaskContextMenu task={menuItem.task} chat={menuItem.conversation} at={menu.at} onClose={closeMenu} onRename={() => setRenamingId(menuItem.id)} />
       )}
     </nav>
   )

@@ -1,4 +1,4 @@
-import { AGENT_KINDS, type AgentKind, type Conversation, type Discussion } from '@antumi/protocol'
+import { AGENT_KINDS, type AgentKind, type Conversation, type Discussion, type Task } from '@antumi/protocol'
 import { getLocale, t } from './i18n'
 import { agentLabel } from './labels'
 import { conversationState } from './conversation-state'
@@ -9,11 +9,13 @@ type GroupBy = Preferences['conversationGroup']
 type SortBy = Preferences['conversationSort']
 export type ConversationKinds = Preferences['conversationKinds']
 
-// What the sidebar's conversation list holds: conversations and group chats side by side. Each keeps
-// its own kind, so what is done to a row goes to the right one.
+// What the sidebar's conversation list holds: conversations, group chats and started tasks side by
+// side. Each keeps its own kind, so what is done to a row goes to the right one. A task's row is
+// the task (its id, title and projects) with the chat it runs in, where its activity shows.
 export type ListItem =
   | { kind: 'conversation'; id: string; conversation: Conversation }
   | { kind: 'discussion'; id: string; discussion: Discussion }
+  | { kind: 'task'; id: string; task: Task; conversation: Conversation }
 
 export function conversationItem(conversation: Conversation): ListItem {
   return { kind: 'conversation', id: conversation.id, conversation }
@@ -23,7 +25,27 @@ export function discussionItem(discussion: Discussion): ListItem {
   return { kind: 'discussion', id: discussion.id, discussion }
 }
 
+export function taskItem(task: Task, conversation: Conversation): ListItem {
+  return { kind: 'task', id: task.id, task, conversation }
+}
+
+// The chat a row's activity, unread mark and search hits come from; a group chat has none of its own.
+export function itemConversation(item: ListItem): Conversation | null {
+  return item.kind === 'discussion' ? null : item.conversation
+}
+
+// A task's chat is never put away by itself: the task is, once accepted or cancelled, and its row
+// goes to the archived group with the conversations put away.
+export function taskArchived(task: Pick<Task, 'status'>): boolean {
+  return task.status === 'done' || task.status === 'abandoned'
+}
+
 function fields(item: ListItem): Pick<Conversation, 'title' | 'projectPaths' | 'createdAt' | 'updatedAt'> & { pinnedAt: number | null; archivedAt: number | null } {
+  if (item.kind === 'task') {
+    const { task, conversation } = item
+    // Recent means the task or its chat moved, whichever was later.
+    return { title: task.title, projectPaths: task.repos.map((repo) => repo.path), createdAt: task.createdAt, updatedAt: Math.max(task.updatedAt, conversation.updatedAt), pinnedAt: conversation.pinnedAt ?? null, archivedAt: taskArchived(task) ? task.updatedAt : null }
+  }
   const value = item.kind === 'conversation' ? item.conversation : item.discussion
   return { title: value.title, projectPaths: value.projectPaths, createdAt: value.createdAt, updatedAt: value.updatedAt, pinnedAt: value.pinnedAt ?? null, archivedAt: value.archivedAt ?? null }
 }
@@ -31,15 +53,18 @@ function fields(item: ListItem): Pick<Conversation, 'title' | 'projectPaths' | '
 export const itemTitle = (item: ListItem) => fields(item).title
 export const itemArchived = (item: ListItem) => fields(item).archivedAt !== null
 
-// A group chat is going while a round is out or a member is at it; a conversation, while its agent runs.
+// A group chat is going while a round is out or a member is at it; a conversation or a task, while
+// its agent runs.
 export function itemRunning(item: ListItem): boolean {
-  if (item.kind === 'conversation') return Boolean(item.conversation.sessionId)
+  if (item.kind !== 'discussion') return Boolean(item.conversation.sessionId)
   const { state, members } = item.discussion
   return state === 'running' || state === 'pausing' || members.some((member) => member.status !== 'idle')
 }
 
+const KIND_SHOWN: Record<Exclude<ConversationKinds, 'all'>, ListItem['kind']> = { conversations: 'conversation', discussions: 'discussion', tasks: 'task' }
+
 export function itemShown(item: ListItem, kinds: ConversationKinds): boolean {
-  return kinds === 'all' || (kinds === 'conversations') === (item.kind === 'conversation')
+  return kinds === 'all' || KIND_SHOWN[kinds] === item.kind
 }
 
 export type GroupActivity = { awaiting: number; failed: number; unseen: number; running: number }
@@ -61,7 +86,7 @@ export function groupActivity(items: readonly ListItem[], unseen: Readonly<Recor
     if (awaiting) counts.awaiting++
     else if (state.failed) counts.failed++
     else if (state.running) counts.running++
-    if (unseen[item.id]) counts.unseen++
+    if (unseen[conversation.id]) counts.unseen++
   }
   return counts
 }
@@ -86,7 +111,7 @@ export function groupOf(item: ListItem, by: Exclude<GroupBy, 'none'>): { label: 
       return { label: primaryProjectName(projectPaths), rank: projectPaths.length > 0 ? 0 : 1 }
     }
     case 'agent':
-      return item.kind === 'conversation'
+      return item.kind !== 'discussion'
         ? { label: agentLabel(item.conversation.agent), rank: AGENT_KINDS.indexOf(item.conversation.agent) }
         : { label: t('DiscussionView.groupChat_910'), rank: AGENT_KINDS.length }
     case 'status':
@@ -109,7 +134,7 @@ export function arrangeItems(items: readonly ListItem[], by: GroupBy, sort: Sort
   for (const item of rest) {
     const { label, rank } = groupOf(item, by)
     const project = by === 'project' ? fields(item).projectPaths[0] : undefined
-    const mark = by === 'agent' ? (item.kind === 'conversation' ? { agent: item.conversation.agent } : { discussions: true as const }) : {}
+    const mark = by === 'agent' ? (item.kind !== 'discussion' ? { agent: item.conversation.agent } : { discussions: true as const }) : {}
     const group = groups.get(label) ?? { key: `group:${label}`, label, rank, items: [], ...(project ? { project } : {}), ...mark }
     group.items.push(item)
     groups.set(label, group)

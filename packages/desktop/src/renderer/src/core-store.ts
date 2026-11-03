@@ -351,13 +351,15 @@ useCore.subscribe((next, previous) => {
 
 // A started task opens on its chat until it is closed: that is where the work happens. One under
 // review opens with the inspector showing what the agent changed.
-export function selectTask(id: string | null): void {
+export function selectTask(id: string | null, view?: TaskView): void {
   useCore.setState((s) => {
     const task = id ? s.tasks[id] : undefined
     const review = task?.status === 'review'
-    const chat = task?.conversationId && task.status !== 'done' && task.status !== 'abandoned'
+    const chat = view ? view === 'chat' && Boolean(task?.conversationId) : task?.conversationId && task.status !== 'done' && task.status !== 'abandoned'
     return {
       selectedId: id,
+      // Opening its chat is looking at the reply its row marked as new.
+      ...(chat && task?.conversationId ? { unseen: withoutUnseen(s.unseen, task.conversationId) } : {}),
       taskMemberConversationId: null,
       inspectorFile: s.section === 'tasks' && s.selectedId === id ? s.inspectorFile : null,
       section: 'tasks',
@@ -813,8 +815,9 @@ export function markRoutineRunSeen(conversationId: string): void {
 function finishedUnseen(s: CoreState, previous: Conversation | undefined, next: Conversation): boolean {
   if (next.delegation?.open || isHelper(next) || next.routineId || next.discussionId || next.squadRunId || next.parentConversationId) return false
   const working = previous?.chat?.turn === 'running' || previous?.chat?.turn === 'awaiting'
-  // Both columns of a split are in view: neither one finishing is news.
+  // Both columns of a split are in view: neither one finishing is news. Nor is a task's chat open.
   const looking = s.section === 'conversations' && (s.selectedConversationId === next.id || Boolean(visiblePanes(s)?.includes(next.id)))
+    || s.section === 'tasks' && s.view === 'chat' && s.selectedId !== null && s.tasks[s.selectedId]?.conversationId === next.id
   return working && next.chat?.turn !== 'running' && next.chat?.turn !== 'awaiting' && !looking
 }
 
@@ -953,7 +956,15 @@ export function setInboxTab(key: string): void {
 }
 
 export function showView(view: TaskView): void {
-  useCore.setState({ view })
+  useCore.setState((s) => {
+    const conversationId = view === 'chat' && s.selectedId ? s.tasks[s.selectedId]?.conversationId : null
+    return { view, ...(conversationId ? { unseen: withoutUnseen(s.unseen, conversationId) } : {}) }
+  })
+}
+
+function withoutUnseen(unseen: CoreState['unseen'], id: string): CoreState['unseen'] {
+  const { [id]: _seen, ...rest } = unseen
+  return rest
 }
 
 export function setTaskStarting(id: string, starting: boolean): void {
@@ -1282,6 +1293,11 @@ export function useStartBranchSupported(): boolean {
 // Whether core keeps conversations pinned to the top of the list.
 export function useConversationPinSupported(): boolean {
   return useCore((s) => s.rpc?.features.includes('conversation-pin') ?? false)
+}
+
+// A core that pins a task's chat and searches it: what its row in the list needs beyond the summary.
+export function useTaskRowsSupported(): boolean {
+  return useCore((s) => s.rpc?.features.includes('task-conversation-rows') ?? false)
 }
 
 export function useWorktreesSupported(): boolean {

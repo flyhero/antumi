@@ -3,6 +3,7 @@ import { useHelper, useHelperSupported } from '../helper-conversations'
 import { useAgentCalls, useAgentCallsSupported } from '../agent-calls'
 import { useCallback, useState, type ReactElement } from 'react'
 import {
+  type Conversation,
   agentDescriptor,
   checkCancel,
   checkMove,
@@ -19,7 +20,7 @@ import {
   type Task,
   type TaskStatus
 } from '@antumi/protocol'
-import { openChatWhileStarting, perform, selectTask, setInspectorOpen, setSchedulesOpen, showTaskChanges, showView, updateTask, useChatOptionsSupported, useCore, useSchedulesSupported, useTaskCancelSupported, useTaskLaunchSupported, useTaskRedoInPlace, useWireLogShown, useWorktreesSupported, type TaskView } from '../core-store'
+import { openChatWhileStarting, perform, selectTask, setInspectorOpen, setSchedulesOpen, showTaskChanges, showView, updateTask, useChatOptionsSupported, useCore, useSchedulesSupported, useTaskCancelSupported, useTaskLaunchSupported, useTaskRedoInPlace, useTaskRowsSupported, useWireLogShown, useWorktreesSupported, type TaskView } from '../core-store'
 import { resolveModel, useAgentCatalog } from '../agent-models'
 import { reasonText, STATUS_HINT, STATUS_LABEL } from '../labels'
 import { waitingOn } from '../task-waiting'
@@ -31,7 +32,9 @@ import { OtherProjectsHint } from './OtherProjectsHint'
 import { PickerItem } from './ChatPicker'
 import { effortLabel, modeLabel, modeOptions } from './ChatOptionsBar'
 import { ContextMenu, MenuItem, type MenuPoint } from './ContextMenu'
-import { ChatIcon, CheckIcon, ChevronDownIcon, ClockIcon, CloseIcon, CopyIcon, DocumentIcon, FolderRemoveIcon, InspectorIcon, MoreIcon, PencilIcon, PlayIcon, ReopenIcon, SubmitIcon, TrashIcon } from './icons'
+import { ChatIcon, CheckIcon, ChevronDownIcon, ClockIcon, CloseIcon, CopyIcon, DocumentIcon, FolderRemoveIcon, InspectorIcon, MoreIcon, PencilIcon, PinIcon, PlayIcon, ReopenIcon, SubmitIcon, TrashIcon } from './icons'
+import { pinConversation } from './ConversationActions'
+import { taskArchived } from '../conversation-list-items'
 import { Popover } from './Popover'
 import { cleanWithConfirm } from './WorktreeManager'
 import { TaskExecutorPicker } from './TaskExecutorPicker'
@@ -744,11 +747,14 @@ export function TaskStatusMenu({ task }: { task: Task }) {
 }
 
 // The row's right-click menu: the toolbar's one-step actions, under the same rules.
-export function TaskContextMenu({ task, at, onClose, onRename }: {
+// `chat`: the task's conversation, when the menu is opened on the task's row in the conversation
+// list, where the row can be pinned like a conversation's.
+export function TaskContextMenu({ task, at, onClose, onRename, chat = null }: {
   task: Task
   at: MenuPoint
   onClose: () => void
   onRename: () => void
+  chat?: Conversation | null
 }) {
   const tasks = useCore((s) => s.tasks)
   const dependencies = task.dependsOn.map((id) => tasks[id]).filter((dependency) => dependency !== undefined)
@@ -762,6 +768,8 @@ export function TaskContextMenu({ task, at, onClose, onRename }: {
   const startBlocker = task.status === 'pending' ? checkStart(task, dependencies) : null
   const clean = useWorktreeCleaning(task)
   const cancelling = useCancelling(task)
+  const pinnable = useTaskRowsSupported() && chat !== null && !taskArchived(task)
+  const pinned = chat?.pinnedAt != null
   const actions: ReactElement[] = []
   if (task.status === 'pending' && startBlocker !== 'planning') {
     const plan = startKind(dependencies) === 'plan'
@@ -801,6 +809,7 @@ export function TaskContextMenu({ task, at, onClose, onRename }: {
     <ContextMenu at={at} label={t('TaskActions.actionsForTask', { value1: task.title })} onClose={onClose}>
       {actions}
       {actions.length > 0 && <div className="menu-separator" role="separator" />}
+      {pinnable && chat && <MenuItem label={pinned ? t('ConversationActions.unpin') : t('ConversationActions.pin')} icon={<PinIcon />} onSelect={pick(() => void pinConversation(chat.id, !pinned))} />}
       <MenuItem label={t('ConversationActions.rename')} icon={<PencilIcon />} onSelect={pick(onRename)} />
       <MenuItem label={t('TaskActions.copyTaskId_2008')} icon={<CopyIcon />} hint={`${shortTaskId(task.id)}…`} onSelect={pick(() => copyTaskId(task.id))} />
       {clean && <MenuItem label={t('TaskActions.cleanWorktree_2009')} icon={<FolderRemoveIcon />} hint={t('TaskActions.branchKept')} onSelect={pick(clean)} />}

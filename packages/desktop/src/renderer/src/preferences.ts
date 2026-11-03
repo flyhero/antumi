@@ -16,7 +16,7 @@ export const DEFAULT_FILE_TREE_WIDTH = 220
 export const CONVERSATION_GROUPS = ['none', 'project', 'agent', 'status'] as const
 export const CONVERSATION_SORTS = ['recent', 'created', 'title'] as const
 export const CONVERSATION_DENSITIES = ['comfortable', 'compact'] as const
-export const CONVERSATION_KINDS = ['all', 'conversations', 'discussions'] as const
+export const CONVERSATION_KINDS = ['all', 'conversations', 'discussions', 'tasks'] as const
 export const TASK_SORTS = ['recent', 'created', 'title'] as const
 
 const IslandPreference = z.enum(['off', 'requests', 'always'])
@@ -132,7 +132,7 @@ const Preferences = z.object({
   conversationSort: z.enum(CONVERSATION_SORTS).catch('recent'),
   // Compact, a conversation's row is its title alone; the rest is in the details its row shows on hover.
   conversationDensity: z.enum(CONVERSATION_DENSITIES).catch('comfortable'),
-  // Which the conversation list shows: conversations and group chats, or one kind of them.
+  // Which the conversation list shows: conversations, group chats and started tasks, or one kind of them.
   conversationKinds: z.enum(CONVERSATION_KINDS).catch('all'),
   // Off, archived conversations and group chats stay out of the sidebar, found only by a search.
   showArchivedConversations: z.boolean().catch(false),

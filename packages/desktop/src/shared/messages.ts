@@ -3712,6 +3712,8 @@ export const MESSAGES = {
   "ConversationList.kindsAll": {"zh": "全部", "en": "All"},
   "ConversationList.kindsConversations": {"zh": "仅会话", "en": "Conversations only"},
   "ConversationList.kindsDiscussions": {"zh": "仅群聊", "en": "Group chats only"},
+  "ConversationList.kindsTasks": {"zh": "仅任务", "en": "Tasks only"},
+  "ConversationList.noStartedTasksYet": {"zh": "还没有开始的任务。任务一开始，它的聊天就会列在这里。", "en": "No started tasks yet. A task's chat is listed here as soon as it starts."},
   "ConversationList.showAllKinds": {"zh": "显示全部", "en": "Show all"},
   "ConversationList.noGroupChatsYet": {"zh": "还没有群聊。点右上角的 ＋，在新建页切到「群聊讨论」。", "en": "No group chats yet. Click ＋ at the top right and switch to Group chat."},
   "ConversationPeek.details": {"zh": "会话详情", "en": "Conversation details"},

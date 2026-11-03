@@ -83,6 +83,8 @@ await mkdir(paths.sessions, { recursive: true, mode: 0o700 })
 await mkdir(paths.browser, { recursive: true, mode: 0o700 })
 await mkdir(paths.skills, { recursive: true, mode: 0o700 })
 
+// Before anything opens it: no database yet means this home has never run Antumi.
+const freshInstall = (await stat(paths.database).catch(() => null)) === null
 // TaskStore first: its migrations create every table the other stores read.
 const store = new TaskStore(paths.database)
 const projects = new ProjectRegistry(paths.database)
@@ -468,7 +470,7 @@ conversations.setSkillsProvider(async (agent, selected) => {
   const bundle = await (selected == null ? skills.bundleForAgent(agent) : skills.bundleFor(selected))
   return bundle ? { dir: bundle.dir } : null
 })
-const initialChatSettings = await chatSettings.load()
+const initialChatSettings = await chatSettings.load(freshInstall)
 conversations.setPromptSuggestions(initialChatSettings.promptSuggestions)
 conversations.setTitleNaming(initialChatSettings.titleNaming)
 conversations.setUserBrowser(initialChatSettings.userBrowser)

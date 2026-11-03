@@ -4,7 +4,8 @@ import { readJsonIfExists, writePrivateJson } from '@antumi/protocol/node'
 
 // Suggestions on, as in Claude Code itself; a title summed up after the first turn, since the first
 // message is rarely a good one; scheduled runs let edits through but still ask for
-// anything else; an agent that can drives the user's own browser; agents may read the user's
+// anything else, for whoever had Antumi before a new install's default became allowing everything
+// (FRESH_INSTALL); an agent that can drives the user's own browser; agents may read the user's
 // history in Antumi; no knowledge base until the user picks one; nothing archived on its own; the
 // resets services announce for everyone shown with the usage; every agent on until the desktop says
 // otherwise. Each field falls back on its own, so one bad value resets nothing else.
@@ -25,6 +26,9 @@ const DEFAULTS = {
   resetAnnouncements: true,
   disabledAgents: []
 } satisfies Required<ChatSettings>
+// A run nobody watches is meant to go on without them: a new install lets it. Written at once, so
+// it is what that install keeps; one from before keeps what it had, even with no file yet.
+const FRESH_INSTALL = { unattendedMode: 'bypass' } satisfies Partial<ChatSettings>
 const Saved = z.object({
   promptSuggestions: z.boolean().catch(DEFAULTS.promptSuggestions),
   titleNaming: TitleNaming.catch(DEFAULTS.titleNaming),
@@ -51,8 +55,9 @@ export class ChatSettingsStore {
     private readonly changed: (settings: ChatSettings) => void
   ) {}
 
-  // A file it cannot read leaves the defaults rather than keeping core from starting.
-  async load(): Promise<Required<ChatSettings>> {
+  // A file it cannot read leaves the defaults rather than keeping core from starting. fresh: this
+  // home has never run Antumi before.
+  async load(fresh = false): Promise<Required<ChatSettings>> {
     let saved: unknown
     try {
       saved = await readJsonIfExists(this.file)
@@ -61,6 +66,10 @@ export class ChatSettingsStore {
     }
     this.settings = Saved.parse(saved ?? {})
     this.settings.agentConcurrency = { ...DEFAULTS.agentConcurrency, ...this.settings.agentConcurrency }
+    if (fresh && saved === undefined) {
+      this.settings = { ...this.settings, ...FRESH_INSTALL }
+      await writePrivateJson(this.file, { version: 1, ...this.settings }).catch((error: unknown) => console.error('[antumi-core] cannot save chat settings', error))
+    }
     return this.settings
   }
 

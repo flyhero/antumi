@@ -7517,8 +7517,12 @@ export const MESSAGES = {
     "en": "Scheduled run permissions"
   },
   "SettingsPage.scheduledTasksAndConversationsStartUnattendedInThis": {
-    "zh": "预约的任务和会话到点后以此模式无人值守地开始。「自动接受编辑」遇到其他确认会停下；「全部放行」什么都不问、不受沙箱限制，只用于信任的任务。",
-    "en": "Scheduled tasks and conversations start unattended in this mode. “Accept edits automatically” pauses for other approvals. “Allow everything” asks nothing and bypasses the sandbox; use for trusted tasks only."
+    "zh": "预约的任务、会话和例程到点后以此模式无人值守地运行。推荐「全部放行」：什么都不问、不受沙箱限制，能一口气做完；「自动接受编辑」更谨慎，其他需要确认的操作会被自动拒绝。",
+    "en": "Scheduled tasks, conversations and routines run unattended in this mode. “Allow everything” is recommended: it asks nothing and bypasses the sandbox, so a run can finish on its own. “Accept edits automatically” is more cautious: other actions that need approval are refused."
+  },
+  "SettingsPage.confirmUnattendedBypass": {
+    "zh": "让无人值守的运行全部放行？到点后 Agent 什么都不问、不受沙箱限制，可以运行任何命令、修改项目之外的文件。只在你信任这些预约和例程时开启。",
+    "en": "Let unattended runs allow everything? Once a run starts, agents ask nothing and bypass the sandbox: they can run any command and change files outside the project. Turn this on only for scheduled runs and routines you trust."
   },
   "SettingsPage.suggestNextStepsAfterEachTurn": {
     "zh": "回合结束后建议下一步",

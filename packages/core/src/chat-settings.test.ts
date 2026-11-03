@@ -35,6 +35,16 @@ describe('ChatSettingsStore', () => {
     expect(await reopened.load()).toEqual({ promptSuggestions: false, titleNaming: 'first', titleModels: {}, unattendedMode: 'bypass', maxConcurrentAgents: 20, agentConcurrency: defaultConcurrency, wireLog: false, userBrowser: true, readHistory: true, userTodos: true, knowledgeBase: null, autoArchiveDays: null, resetAnnouncements: true, disabledAgents: [] })
   })
 
+  it('lets a new install\'s scheduled runs allow everything, and keeps what an older one had, file or not', async () => {
+    expect((await new ChatSettingsStore(file, () => {}).load(true)).unattendedMode).toBe('bypass')
+    // Saved at once: a later start, no longer fresh, keeps it.
+    expect((await new ChatSettingsStore(file, () => {}).load()).unattendedMode).toBe('bypass')
+    rmSync(file)
+    expect((await new ChatSettingsStore(file, () => {}).load()).unattendedMode).toBe('acceptEdits')
+    writeFileSync(file, JSON.stringify({ version: 1, unattendedMode: 'acceptEdits' }))
+    expect((await new ChatSettingsStore(file, () => {}).load(true)).unattendedMode).toBe('acceptEdits')
+  })
+
   it('falls back to the default for a file it cannot read', async () => {
     writeFileSync(file, '{"promptSuggestions": "nope", "unattendedMode": "yolo"}')
     expect(await new ChatSettingsStore(file, () => {}).load()).toEqual({ promptSuggestions: true, titleNaming: 'first', titleModels: {}, unattendedMode: 'acceptEdits', maxConcurrentAgents: 20, agentConcurrency: defaultConcurrency, wireLog: false, userBrowser: true, readHistory: true, userTodos: true, knowledgeBase: null, autoArchiveDays: null, resetAnnouncements: true, disabledAgents: [] })

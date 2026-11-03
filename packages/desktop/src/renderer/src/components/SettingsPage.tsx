@@ -2,13 +2,14 @@ import { UsageSettings } from './UsageSettings'
 import { localized, messageSearchText, t, tr, useLocale } from '../i18n'
 import type { BrowserStatus, WireUsage } from '@antumi/protocol'
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
-import { AGENT_KINDS, agentDescriptor, LANGUAGE_NAMES, PROTOCOL_VERSION, quickModel, TRANSLATE_LANGUAGES, UNATTENDED_MODES, type AgentKind, type SourceDescriptor } from '@antumi/protocol'
+import { AGENT_KINDS, agentDescriptor, LANGUAGE_NAMES, PROTOCOL_VERSION, quickModel, TRANSLATE_LANGUAGES, UNATTENDED_MODES, type AgentKind, type SourceDescriptor, type UnattendedMode } from '@antumi/protocol'
 import packageJson from '../../../../package.json'
 import { perform, setAwakeMode, setChatSettings, setSettingsOpen, useAwakeSupported, useCore, useBrowserSupported, useChatCommandsSupported, useKnowledgeBaseSupported, useMcpServersSupported, useModelProvidersSupported, useSessionImportSupported, useAccountsSupported, useProjectConfigEditSupported, useSkillsSupported, useTranslateSupported, useWireLogSupported } from '../core-store'
 import { setPreference, usePreferences, type Preferences } from '../preferences'
 import { ProjectColorPicker } from './ProjectColorPicker'
 import { ProjectIcon } from './ProjectIcon'
 import { UNATTENDED_LABEL } from '../schedules'
+import { askConfirm } from '../confirm-dialog'
 import { detectedAgents, useInstalledAgents } from '../installed-agents'
 import { useAgentCatalog } from '../agent-models'
 import { ChatPicker } from './ChatPicker'
@@ -279,6 +280,12 @@ function RunSettings() {
   )
 }
 
+// Allowing everything is said out loud once more before it takes effect.
+async function chooseUnattendedMode(unattendedMode: UnattendedMode): Promise<void> {
+  if (unattendedMode === 'bypass' && !await askConfirm({ message: t('SettingsPage.confirmUnattendedBypass'), confirm: t('ChatPlan.allowEverything') })) return
+  await setChatSettings({ unattendedMode })
+}
+
 // What an agent may do while nobody answers it, and what of the user's it may reach.
 function PermissionSettings() {
   const chatSettings = useCore((s) => s.chatSettings)
@@ -292,7 +299,7 @@ function PermissionSettings() {
             <Segmented
               labelId={labelId}
               value={chatSettings.unattendedMode ?? 'acceptEdits'}
-              onChange={(unattendedMode) => void setChatSettings({ unattendedMode })}
+              onChange={(unattendedMode) => void chooseUnattendedMode(unattendedMode)}
               options={UNATTENDED_MODES.map((value) => ({ value, label: UNATTENDED_LABEL[value] }))}
             />
           )}

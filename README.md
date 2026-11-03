@@ -6,7 +6,7 @@
 
 issue 直接开工 · 多 Agent 协作 · 自己验证 · 额度不断档
 
-[![Version](https://img.shields.io/badge/version-0.21.2-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.21.4--beta.1-blue)](CHANGELOG.md)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%C2%B7%20Windows%20%C2%B7%20Linux-lightgrey)
 ![Agents](https://img.shields.io/badge/agents-10%20supported-8A2BE2)
 
@@ -37,9 +37,11 @@ Antumi 驱动的就是你装好、登录好的 Agent CLI，配置和登录都不
 
 下面四件事串起从任务到成果的整条流程，其余的见[更多功能](#更多功能)。
 
-### 任务和 bug 直接进 AI 流程
+### 从 issue 开工，分支和计划都备好
 
-终端里接一个 bug，要先把 issue 原文复制给 Agent，再建分支、讲清楚要做什么。在 Antumi 里，GitHub、Jira、Linear、禅道的 issue 同步进侧栏「收件箱」，一键导入成任务：开始后自动建好独立 worktree 和带 issue 编号的分支，Agent 先读代码、拿出计划，你批准后才改代码。原因还不清楚的 bug 可以先「会话排查」，查清根因再动手；群聊的结论也能一键新建任务，任务之间可设前置依赖，前一个验收通过才解锁下一个。
+终端里接一个 bug，要先把 issue 原文复制给 Agent，再建分支、讲清楚要做什么。在 Antumi 里，GitHub、Jira、Linear、禅道的 issue 同步进侧栏「收件箱」，一键导入成任务：开始后自动建好独立 worktree 和带 issue 编号的分支，Agent 先读代码、拿出计划，你批准后才改代码。
+
+原因还不清楚的 bug 可以先「会话排查」，查清根因再动手；群聊的结论也能一键新建任务。任务之间可设前置依赖，前一个验收通过才解锁下一个。
 
 [接入 issue 来源 →](docs/GETTING-STARTED.md#任务来源) · [任务怎么流转 →](docs/ARCHITECTURE.md#2-任务模型)
 
@@ -49,7 +51,8 @@ Antumi 驱动的就是你装好、登录好的 Agent CLI，配置和登录都不
 
 终端里开五个窗口跑五个 Agent，谁在等你批准、谁已经做完，只能挨个切过去看；想让另一个 Agent 帮忙审一遍，只能在窗口间复制粘贴。在 Antumi 里：
 
-- **委派**：把常用角色存成智能体，如代码审查员、测试验证专员，各配外部智能体、模型、技能与 MCP，也可从模板开始；会话里打 @ 点名，主 Agent 也会按需自己调用。被委派的智能体在独立子会话里工作，结果自动回到主会话；只读分析可并行，改代码的委派依次执行。
+- **委派**：会话里打 @ 就能把活交给本机的另一个外部智能体（如 Codex），菜单里显示它剩余的额度；也可以把常用角色存成智能体，如代码审查员、测试验证专员，各配外部智能体、模型、技能与 MCP，或从模板开始。主 Agent 也会按需自己委派，并按活的难易选对方的模型。
+- **委派结果自动回来**：被委派的智能体在独立子会话里工作，结果自动回到主会话；只读分析和在独立 worktree 里的开发可以几个同时进行，在主会话目录里改代码的依次执行。
 - **[团队](#团队)与[群聊](#群聊)**：把一项任务交给队长带开发和评审一起做，或者让几个 Agent 先讨论方案再动手。
 - **移交**：点输入框左下角的 Agent 名称，换另一个 Agent 带着聊天记录在同一个目录接着做。
 - **并行不打架**：每个任务一个独立 worktree，代码互不干扰；等你批准、回答、验收的事集中在总览里，Agent 做完或在等你时会发系统通知。
@@ -109,7 +112,7 @@ Antumi 驱动的就是你装好、登录好的 Agent CLI，配置和登录都不
 
 ### 群聊
 
-让 2–5 个 Agent 在同一条对话里先独立作答，再互相回应，讨论方案的取舍。你可以随时插话或 @ 成员追问，用「继续」「立即总结」掌握节奏，最后由主持人汇总共识与分歧；讨论只读、不改代码。
+让 2–5 个 Agent 在同一条对话里讨论，按你的问题自动选讨论方式，也可以自己定：「圆桌讨论」先独立作答、再互相回应，最后由主持人汇总共识与分歧；「分工调研」由主持人拆题、成员分头查证后汇总报告；「起草评审」一人起草、其他人评审修订到都通过。你可以随时插话或 @ 成员追问，用「继续」「立即总结」掌握节奏；讨论只读、不改代码。
 
 [详细 →](docs/ARCHITECTURE.md#群聊)
 
@@ -125,7 +128,9 @@ Antumi 驱动的就是你装好、登录好的 Agent CLI，配置和登录都不
 
 ### 定时与预约
 
-在侧栏「定时」里让 Claude Code、Codex、OpenCode、Pi、DeepSeek Harness、ZCode、Kimi Code 或 Gemini CLI 按每天、工作日或每周执行工作；输入框旁的时钟按钮能把这条消息预约到指定时间或额度恢复后，任务和计划批准也能预约。定时任务可自动选择有额度的 Agent；无人值守时 Agent 问的事由 Antumi 按模式代答，不会停下来等你。电脑需保持唤醒，Cursor 与 Antigravity 暂不支持。
+在侧栏「定时」里让 Claude Code、Codex、OpenCode、Pi、DeepSeek Harness、ZCode、Kimi Code 或 Gemini CLI 按每天、工作日或每周执行工作；输入框旁的时钟按钮能把这条消息预约到指定时间或额度恢复后，任务和计划批准也能预约。
+
+定时任务可自动选择有额度的 Agent；无人值守时 Agent 问的事由 Antumi 按模式代答，不会停下来等你。电脑需保持唤醒，Cursor 与 Antigravity 暂不支持。
 
 [详细 →](docs/GETTING-STARTED.md#预约额度恢复后或到点再发)
 
@@ -146,12 +151,13 @@ Agent 在回复里提到要你之后处理的事（上线前要做的、要你�
 
 - **总览**：把等你批准、回答和验收的工作汇在一处，在跑和接下来要做的也一眼看清。
 - **任务看板**：支持独立 worktree、多项目任务和前置依赖，验收通过后才解锁后续任务。
-- **验收与 Git**：检查整条任务分支的 diff，运行项目检查，支持从远端更新与变基合并；独立的「Git」页按项目和 worktree 管理分支与标签。
-- **文件、终端与浏览器**：在工作台里编辑文件、管理开发服务，让 Agent 验证页面，你也可以接管；内置浏览器带控制台、网络面板和下载管理，页面截图与选中内容可直接加入会话。
-- **服务商与多账号**：支持第三方编程套餐与自定义模型接口；Claude Code 与 Codex 支持多账号及额度耗尽自动切号。
+- **验收与 Git**：检查整条任务分支的 diff，运行项目检查，支持从远端更新与变基合并；独立的「Git」页按项目和 worktree 管理分支与标签，可 Cherry-Pick、Revert、修改上一次提交，失败或冲突时一键交给智能体处理。
+- **文件、终端与浏览器**：在工作台里编辑文件、管理开发服务，让 Agent 验证页面，你也可以接管；内置浏览器带控制台、网络面板、下载管理和浏览历史，页面截图与选中内容可直接加入会话。三个面板都能打开成独立窗口，拖到另一块屏幕。
+- **服务商与多账号**：支持第三方编程套餐、DeepSeek 按量计费预设与自定义模型接口；Claude Code 与 Codex 支持多账号及额度耗尽自动切号。
 - **用量分析与预测**：深度账本统计 7/30/90 天用量与额度耗尽预测，定时预热与智能用卡自动化。
 - **引用与知识库**：输入框打 @ 引用文件、项目或以前的会话，不用贴路径和片段；Agent 直接把笔记写进你的 Markdown 或 Obsidian 知识库。
-- **来源与扩展**：接入 Jira、GitHub、Agent Skills 与终端会话导入；MCP 服务器一处配好，勾选交给哪些 Agent。
+- **来源与扩展**：接入 Jira、GitHub、Agent Skills；导入 Claude Code、Codex、Cursor、OpenCode、Pi、Kimi Code、Gemini CLI、DeepSeek Harness 和 Antigravity 在终端里的会话，恢复或接着聊；MCP 服务器一处配好，勾选交给哪些 Agent。
+- **阅读与通知**：聊天、计划和 Markdown 预览有六款内置主题，支持自定义 CSS 与社区主题；macOS 上等你回答的请求从刘海长出灵动岛。
 - **本地优先**：记录保存在本机，Agent 由后台进程托管，关窗口不中断工作。
 
 </details>
@@ -179,7 +185,7 @@ Antumi 驱动的是你已经装好、登录好的 Agent CLI。
 
 **三步做完第一个任务：**
 
-1. **装好**：到 [Releases](https://github.com/flyhero/antumi/releases) 下载安装包（macOS Apple Silicon · Windows x64 · Linux x64），再准备至少一个 Agent：Claude Code、Codex、Cursor、OpenCode、Pi、DeepSeek Harness、Kimi Code、Gemini CLI 装好 CLI 并登录，ZCode 装桌面版或 `zcode-app-cli`，Antigravity 在 设置 → 外部智能体 里一键下载。第一次打开 Antumi 会帮你检查 Agent 装没装、能不能用。
+1. **装好**：到 [Releases](https://github.com/flyhero/antumi/releases) 下载安装包（macOS Apple Silicon · Windows x64 · Linux x64），再准备至少一个 Agent：装好 CLI 并登录即可，ZCode 装桌面版或 `zcode-app-cli`，Antigravity 在 设置 → 外部智能体 里一键下载。第一次打开 Antumi 会帮你检查 Agent 装没装、能不能用。
 2. **交一个小任务**：侧栏「任务」点 +，选项目和 Agent，写一句要改什么，点「开始执行」。Antumi 建好独立 worktree，Agent 先读代码拿出计划，你批准后它才动手改。
 3. **验收**：做完会有系统通知。在右侧检查器看整条分支的 diff，跑项目检查，让 Agent 在内置浏览器里打开页面看看效果，满意了再合并。
 
@@ -212,7 +218,9 @@ xattr -dr com.apple.quarantine /Applications/Antumi.app
 
 **在 Windows 上安装**：安装包没有签名，SmartScreen 会拦一下，点「更多信息 → 仍要运行」。
 
-**在 Linux 上安装**：Debian、Ubuntu 用 `sudo apt install ./Antumi-<版本>-linux-amd64.deb`。其他发行版用 AppImage：`chmod +x` 后直接运行，Ubuntu 22.04 及以上要先 `sudo apt install libfuse2`；Ubuntu 23.10 及以上若启动时报 sandbox 错误，改用 deb，或加 `--no-sandbox` 启动。AppImage 会像 macOS、Windows 一样在后台自动更新；deb 只提示新版本，需要重新下载安装。
+**在 Linux 上安装**：Debian、Ubuntu 用 `sudo apt install ./Antumi-<版本>-linux-amd64.deb`。其他发行版用 AppImage：`chmod +x` 后直接运行，Ubuntu 22.04 及以上要先 `sudo apt install libfuse2`。
+
+Ubuntu 23.10 及以上若启动时报 sandbox 错误，改用 deb，或加 `--no-sandbox` 启动。AppImage 会像 macOS、Windows 一样在后台自动更新；deb 只提示新版本，需要重新下载安装。
 
 </details>
 
@@ -252,10 +260,6 @@ pnpm dist:linux   # 产物在 packages/desktop/dist/Antumi-<版本>-linux-x86_64
 
 </details>
 
-<p align="center">
-  <img src="docs/assets/agents.png" alt="设置 → 外部智能体：Claude Code、Codex、Cursor 都已安装并登录" width="720" />
-</p>
-
 <details>
 <summary><b>常用快捷键</b></summary>
 
@@ -293,7 +297,7 @@ pnpm dist:linux   # 产物在 packages/desktop/dist/Antumi-<版本>-linux-x86_64
 
 | | |
 |---|---|
-| **使用** | [使用指南](docs/GETTING-STARTED.md)：装 Agent、接服务商、配账号、导入 issue、常用功能 · [用量账本](docs/USAGE-ANALYTICS.md) · 各 Agent 的说明：[Antigravity](docs/ANTIGRAVITY.md)、[DeepSeek Harness](docs/DEEPSEEK.md)、[ZCode](docs/ZCODE.md)、[Kimi Code](docs/KIMI.md)、[Gemini CLI](docs/GEMINI.md) |
+| **使用** | [使用指南](docs/GETTING-STARTED.md)：装 Agent、接服务商、配账号、导入 issue、常用功能 · [用量账本](docs/USAGE-ANALYTICS.md) · [Markdown 主题](docs/MARKDOWN-THEMES.md) · 各 Agent 的说明：[Antigravity](docs/ANTIGRAVITY.md)、[DeepSeek Harness](docs/DEEPSEEK.md)、[ZCode](docs/ZCODE.md)、[Kimi Code](docs/KIMI.md)、[Gemini CLI](docs/GEMINI.md) |
 | **扩展** | [任务来源插件](docs/PLUGINS.md)：接入 GitHub、Jira、Linear、禅道，或自己写一个 |
 | **开发** | [技术架构](docs/ARCHITECTURE.md)：进程边界、任务模型、Agent 接入、内置浏览器、打包与安装 · [AGENTS.md](AGENTS.md) · [DESIGN.md](DESIGN.md) |
 | **发布** | [发版与打包](docs/RELEASING.md) · [更新日志](CHANGELOG.md) |

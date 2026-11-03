@@ -6,7 +6,7 @@
 
 Issues straight to work · Agents working together · Self-verification · No quota stalls
 
-[![Version](https://img.shields.io/badge/version-0.21.2-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.21.4--beta.1-blue)](CHANGELOG.md)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%C2%B7%20Windows%20%C2%B7%20Linux-lightgrey)
 ![Agents](https://img.shields.io/badge/agents-10%20supported-8A2BE2)
 
@@ -39,9 +39,11 @@ Antumi runs the agent CLIs you have already installed and signed in to, so there
 
 The four sections below follow the whole path from a task to finished work; the rest is under [More features](#more-features).
 
-### Tasks and bugs go straight into the AI workflow
+### Start from the issue, branch and plan ready
 
-In a terminal, taking on a bug means copying the issue text to an agent, creating a branch and explaining what to do. In Antumi, issues from GitHub, Jira, Linear and ZenTao sync into the sidebar **Inbox** and become tasks in one click. When a task starts, it gets its own worktree and a branch named after the issue; the agent reads the code and proposes a plan, and only changes code once you approve it. A bug whose cause is unclear can be investigated in a conversation first, until the root cause is found. A group chat's conclusion becomes a task in one click too, and tasks can depend on each other, so the next one unlocks only once the previous one passes review.
+In a terminal, taking on a bug means copying the issue text to an agent, creating a branch and explaining what to do. In Antumi, issues from GitHub, Jira, Linear and ZenTao sync into the sidebar **Inbox** and become tasks in one click. When a task starts, it gets its own worktree and a branch named after the issue; the agent reads the code and proposes a plan, and only changes code once you approve it.
+
+A bug whose cause is unclear can be investigated in a conversation first, until the root cause is found; a group chat's conclusion becomes a task in one click too. Tasks can depend on each other, so the next one unlocks only once the previous one passes review.
 
 [Connect an issue source →](docs/GETTING-STARTED.en.md#task-sources) · [How tasks flow →](docs/ARCHITECTURE.md#2-任务模型)
 
@@ -51,7 +53,8 @@ In a terminal, taking on a bug means copying the issue text to an agent, creatin
 
 Five agents in five terminal windows means switching between them to find out which one is waiting for approval and which one is done, and getting a second agent to review the work means copying between windows. In Antumi:
 
-- **Delegation**: save the roles you call on often as agents, such as a code reviewer or a test verifier, each with its own external agent, model, skills and MCP servers, or start from a template; type @ to name one, and the main agent also calls one on its own when it needs to. A delegated agent works in its own sub-conversation and its result comes back to the main conversation; read-only analysis runs in parallel, delegations that change code run one at a time.
+- **Delegation**: type @ in a chat to hand work to another agent on this machine, such as Codex, with its remaining quota shown in the menu; or save the roles you call on often as agents, such as a code reviewer or a test verifier, each with its own external agent, model, skills and MCP servers, or start from a template. The main agent also delegates on its own when it needs to, picking the other agent's model to match the job.
+- **Results come back on their own**: a delegated agent works in its own sub-conversation and its result comes back to the main conversation; read-only analysis and development in a worktree of its own can run several at a time, while delegations that change code in the main conversation's folder run one at a time.
 - **[Teams](#teams) and [group chat](#group-chat)**: hand a task to a lead who brings in developers and reviewers, or let several agents discuss an approach before anyone writes code.
 - **Handoff**: click the agent name at the bottom left of the composer, and another agent carries on in the same folder with the chat history.
 - **In parallel, without collisions**: each task gets its own worktree; whatever waits for your approval, answer or review is gathered in the overview, and you get a notification when an agent finishes or needs you.
@@ -113,7 +116,7 @@ Click **Translate** under a reply to read it in your language, and click again f
 
 ### Group chat
 
-Bring 2–5 agents into one conversation to answer independently, then respond to each other's ideas. Jump in or @ a member at any time, steer the pace with **Continue** and **Summarize now**, and let the chair summarize agreements and disagreements; discussions are read-only and do not change code.
+Bring 2–5 agents into one conversation. The format is picked from your question, or choose it yourself: in a **round table** they answer independently, respond to each other, and the chair sums up agreements and disagreements; in **split research** the chair divides the question, members look into their parts and the findings are compiled; in **draft and review** one drafts and the others review and revise until everyone passes it. Jump in or @ a member at any time and steer the pace with **Continue** and **Summarize now**; discussions are read-only and do not change code.
 
 [Docs →](docs/ARCHITECTURE.md#群聊)
 
@@ -129,7 +132,9 @@ Assign external agents, models, and responsibilities to a team lead, developers,
 
 ### Routines and scheduling
 
-Under **Routines** in the sidebar, schedule Claude Code, Codex, OpenCode, Pi, DeepSeek Harness, ZCode, Kimi Code, or Gemini CLI to work daily, on weekdays, or weekly; the clock beside the composer reserves a message for a set time or for when quota resets, and tasks and plan approvals can be reserved too. Routines can choose an agent with available quota; unattended runs answer prompts automatically based on permission modes. The computer must stay awake; Cursor and Antigravity are not supported for routines.
+Under **Routines** in the sidebar, schedule Claude Code, Codex, OpenCode, Pi, DeepSeek Harness, ZCode, Kimi Code, or Gemini CLI to work daily, on weekdays, or weekly; the clock beside the composer reserves a message for a set time or for when quota resets, and tasks and plan approvals can be reserved too.
+
+Routines can choose an agent with available quota; unattended runs answer prompts automatically based on permission modes. The computer must stay awake; Cursor and Antigravity are not supported for routines.
 
 [Docs →](docs/GETTING-STARTED.en.md#scheduling-send-when-quota-resets-or-at-a-set-time)
 
@@ -150,12 +155,13 @@ When an agent's reply mentions things for you to do later (before release, to ve
 
 - **Overview**: bring approvals, questions, and reviews together, with what is running and what comes next in view.
 - **Task board**: isolated worktrees, multi-project tasks, and dependencies that unlock after acceptance.
-- **Review and Git**: inspect the entire task branch, run project checks, and update from remote with fast-forward/rebase; a separate Git page manages branches and tags per project and worktree.
-- **Files, terminals, and browser**: edit files, manage development servers, and let agents verify pages you can take over; the built-in browser has console, network and download panels, and sends screenshots or selections straight into a chat.
-- **Model providers & multi-account**: connect third-party coding plans or custom endpoints; Claude Code and Codex support multi-account auto-switching on quota limits.
+- **Review and Git**: inspect the entire task branch, run project checks, and update from remote with fast-forward/rebase; a separate Git page manages branches and tags per project and worktree, with cherry-pick, revert and amend, and hands a failure or conflict to an agent in one click.
+- **Files, terminals, and browser**: edit files, manage development servers, and let agents verify pages you can take over; the built-in browser has console, network and download panels and a history, and sends screenshots or selections straight into a chat. Each of the three panels can open as a window of its own, to drag to another screen.
+- **Model providers & multi-account**: connect third-party coding plans, the DeepSeek pay-as-you-go preset or custom endpoints; Claude Code and Codex support multi-account auto-switching on quota limits.
 - **Usage analytics**: 7/30/90-day ledgers by model, account, and source, with countdowns to quota exhaustion.
 - **References and knowledge base**: type @ in the composer to reference a file, a project or an earlier conversation instead of pasting paths and snippets; agents write notes straight into your Markdown or Obsidian knowledge base.
-- **Sources and extensions**: connect Jira, GitHub, Agent Skills, and import CLI sessions; set up MCP servers once and pick which agents get them.
+- **Sources and extensions**: connect Jira, GitHub and Agent Skills; import sessions from Claude Code, Codex, Cursor, OpenCode, Pi, Kimi Code, Gemini CLI, DeepSeek Harness and Antigravity in the terminal, to resume or carry on; set up MCP servers once and pick which agents get them.
+- **Reading and notifications**: chat, plans and Markdown previews come with six built-in themes, custom CSS and community themes; on macOS, a request waiting for you grows out of the notch as a dynamic island.
 - **Local-first**: records stay on your machine, and background agents keep working when the window closes.
 
 </details>
@@ -183,7 +189,7 @@ Antumi drives the agent CLIs you already have installed and signed in to.
 
 **Your first task in three steps:**
 
-1. **Install**: grab the installer from [Releases](https://github.com/flyhero/antumi/releases) (macOS Apple Silicon · Windows x64 · Linux x64), and have at least one agent ready: install and sign in to the CLI for Claude Code, Codex, Cursor, OpenCode, Pi, DeepSeek Harness, Kimi Code or Gemini CLI; the ZCode desktop app or `zcode-app-cli` for ZCode; Antigravity downloads in one click under Settings → Agents. On first launch, Antumi checks which agents are installed and usable.
+1. **Install**: grab the installer from [Releases](https://github.com/flyhero/antumi/releases) (macOS Apple Silicon · Windows x64 · Linux x64), and have at least one agent ready: install its CLI and sign in; ZCode needs the desktop app or `zcode-app-cli`, and Antigravity downloads in one click under Settings → Agents. On first launch, Antumi checks which agents are installed and usable.
 2. **Hand over a small task**: click + beside **Tasks** in the sidebar, pick a project and an agent, write one line about what to change, and click **Start execution**. Antumi sets up a worktree of its own, the agent reads the code and proposes a plan, and only changes code once you approve it.
 3. **Review**: you get a notification when it's done. Inspect the whole branch's diff in the inspector on the right, run the project checks, have the agent open the page in the built-in browser, and merge when you're satisfied.
 
@@ -200,7 +206,13 @@ xattr -dr com.apple.quarantine /Applications/Antumi.app
 
 <br/>
 
-The builds are unsigned: on another Mac, right-click → Open the first time; on Windows, SmartScreen stops it once, so choose More info → Run anyway. On Debian or Ubuntu, install the deb with `sudo apt install ./Antumi-<version>-linux-amd64.deb`; elsewhere, `chmod +x` the AppImage and run it (Ubuntu 22.04 and later need `sudo apt install libfuse2` first). If Ubuntu 23.10 or later reports a sandbox error, use the deb or start it with `--no-sandbox`. The AppImage updates itself in the background, as on macOS and Windows; the deb only tells you of a new version to download.
+**On macOS**: the builds are unsigned, so on another Mac right-click → Open the first time.
+
+**On Windows**: SmartScreen stops the installer once; choose More info → Run anyway.
+
+**On Linux**: on Debian or Ubuntu, install the deb with `sudo apt install ./Antumi-<version>-linux-amd64.deb`. Elsewhere, `chmod +x` the AppImage and run it; Ubuntu 22.04 and later need `sudo apt install libfuse2` first.
+
+If Ubuntu 23.10 or later reports a sandbox error, use the deb or start it with `--no-sandbox`. The AppImage updates itself in the background, as on macOS and Windows; the deb only tells you of a new version to download.
 
 </details>
 
@@ -240,10 +252,6 @@ A machine with the app installed needs neither Node nor pnpm.
 
 </details>
 
-<p align="center">
-  <img src="docs/assets/agents.png" alt="Settings → Agents: Claude Code, Codex and Cursor installed and signed in" width="720" />
-</p>
-
 <details>
 <summary><b>Keyboard shortcuts</b></summary>
 
@@ -280,7 +288,7 @@ Apart from the user guide, the documentation is in Chinese for now.
 
 | | |
 |---|---|
-| **Using** | [User guide](docs/GETTING-STARTED.en.md): installing agents, providers, accounts, importing issues, everyday features · [Usage ledger](docs/USAGE-ANALYTICS.md) · Per-agent notes: [Antigravity](docs/ANTIGRAVITY.md), [DeepSeek Harness](docs/DEEPSEEK.md), [ZCode](docs/ZCODE.md), [Kimi Code](docs/KIMI.md), [Gemini CLI](docs/GEMINI.md) |
+| **Using** | [User guide](docs/GETTING-STARTED.en.md): installing agents, providers, accounts, importing issues, everyday features · [Usage ledger](docs/USAGE-ANALYTICS.md) · [Markdown themes](docs/MARKDOWN-THEMES.md) (Chinese) · Per-agent notes: [Antigravity](docs/ANTIGRAVITY.md), [DeepSeek Harness](docs/DEEPSEEK.md), [ZCode](docs/ZCODE.md), [Kimi Code](docs/KIMI.md), [Gemini CLI](docs/GEMINI.md) |
 | **Extending** | [Task source plugins](docs/PLUGINS.md): connect GitHub, Jira, Linear or ZenTao, or write your own |
 | **Developing** | [Architecture](docs/ARCHITECTURE.md): process boundaries, task model, agent integration, built-in browser, packaging · [AGENTS.md](AGENTS.md) · [DESIGN.md](DESIGN.md) |
 | **Releasing** | [Releasing and packaging](docs/RELEASING.md) · [Changelog](CHANGELOG.md) |

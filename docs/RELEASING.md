@@ -87,10 +87,10 @@ node -e 'const fs=require("fs");for(const d of [".","packages/core","packages/da
 node -e 'for (const d of [".","packages/core","packages/daemon","packages/desktop","packages/protocol"]) console.log(d, require("./"+d+"/package.json").version)'
 ```
 
-两份 README 顶部的版本徽章是静态的（shields.io 读 GitHub 的动态徽章时常返回 520，图会裂），也要改成新版本：
+两份 README 顶部的版本徽章是静态的（shields.io 读 GitHub 的动态徽章时常返回 520，图会裂），也要改成新版本（预发布版本号里的连字符要写成两个，如 `0.21.4--beta.1`，shields.io 把单个连字符当分隔符）：
 
 ```bash
-sed -i '' 's#badge/version-[^-]*-blue#badge/version-X.Y.Z-blue#' README.md README.en.md
+sed -i '' 's#badge/version-.*-blue#badge/version-X.Y.Z-blue#' README.md README.en.md
 ```
 
 ### 3. 改 `CHANGELOG.md`

@@ -2,10 +2,10 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextOccurrence, type AgentKind, type AgentUsage, type Routine, type RoutineFields, type UnattendedMode } from '@antumi/protocol'
 import { UNATTENDED_NOTE } from './agent-prompt'
-import { UNATTENDED_DENIAL } from './unattended-answer'
+import { UNATTENDED_DENIAL, UNATTENDED_QUESTION } from './unattended-answer'
 import { AttachmentStore } from './attachment-store'
 import { ConversationService } from './conversation-service'
 import { ConversationStore } from './conversation-store'
@@ -246,6 +246,45 @@ describe('RoutineService', () => {
     expect(run).toMatchObject({ status: 'started', outcome: null, finishedAt: null })
     expect(conversations.chatPage(run!.id).items.find((item) => item.kind === 'approval')).toMatchObject({ resolution: 'denied' })
     expect(JSON.stringify(daemon.written(conversations.get(run!.id).sessionId!))).toContain(UNATTENDED_DENIAL)
+  })
+
+  it('holds what the agent asks the user for them a while, then has it assume and go on', async () => {
+    conversations.questionWaitMs = 20
+    daemon.reply = (id) => daemon.emit(id, {
+      type: 'control_request', request_id: 'ask-1',
+      request: { subtype: 'can_use_tool', tool_name: 'AskUserQuestion', input: { questions: [{ question: 'Which database?', header: 'DB', options: [{ label: 'Postgres' }, { label: 'SQLite' }] }] }, tool_use_id: 'toolu_ask-1' }
+    })
+    const { routine, dueAt } = dailySoon()
+    clock = dueAt
+    await tick()
+    const [run] = runs(routine.id)
+    const question = () => conversations.chatPage(run!.id).items.find((item) => item.kind === 'question')
+    // Waiting, and so shown as something to look at, as any question is.
+    expect(question()).toMatchObject({ resolution: null })
+    expect(runs(routine.id)[0]).toMatchObject({ outcome: 'awaiting' })
+    await vi.waitFor(() => expect(question()).toMatchObject({ resolution: 'cancelled' }))
+    expect(JSON.stringify(daemon.written(conversations.get(run!.id).sessionId!))).toContain(UNATTENDED_QUESTION)
+  })
+
+  it('keeps a run unattended when the user answers the question it held for them', async () => {
+    daemon.reply = (id) => daemon.emit(id, {
+      type: 'control_request', request_id: 'ask-1',
+      request: { subtype: 'can_use_tool', tool_name: 'AskUserQuestion', input: { questions: [{ question: 'Which database?', header: 'DB', options: [{ label: 'Postgres' }, { label: 'SQLite' }] }] }, tool_use_id: 'toolu_ask-1' }
+    })
+    const { routine, dueAt } = dailySoon()
+    clock = dueAt
+    await tick()
+    const [run] = runs(routine.id)
+    // As the client's answer arrives (conversations.respond).
+    conversations.userAnswers(run!.id, 'ask-1')
+    await conversations.respond(run!.id, 'ask-1', { decision: 'allow', answers: { 'Which database?': ['SQLite'] } })
+    expect(conversations.chatPage(run!.id).items.find((item) => item.kind === 'question')).toMatchObject({ resolution: 'answered' })
+    // Its next approval is still answered for the user.
+    daemon.emit(conversations.get(run!.id).sessionId!, {
+      type: 'control_request', request_id: 'ask-2',
+      request: { subtype: 'can_use_tool', tool_name: 'Bash', input: { command: 'rm -rf build' }, tool_use_id: 'toolu_ask-2' }
+    })
+    await vi.waitFor(() => expect(conversations.chatPage(run!.id).items.find((item) => item.kind === 'approval')).toMatchObject({ resolution: 'denied' }))
   })
 
   it('settles a run as awaiting when the agent asks after the user took it over, and lets the next occurrence go ahead', async () => {

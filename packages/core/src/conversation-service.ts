@@ -24,7 +24,7 @@ import { foldersInUse, launchDir, launchLeftovers, launchRoot, removeLaunch, typ
 import { searchSnippet } from './conversation-search'
 import { buildHandoff } from './conversation-handoff'
 import { SCHEDULED_GO_TEXT, UNATTENDED_NOTE } from './agent-prompt'
-import { unattendedAnswer } from './unattended-answer'
+import { UNATTENDED_QUESTION_WAIT_MS, unattendedAnswer } from './unattended-answer'
 import { branchHolders, createProjectBranch, projectBranches, switchProjectBranch } from './project-branches'
 import { resolveStart } from './task-start'
 import { commitAll, commitAndPush, pushBranch } from './project-commit'
@@ -210,6 +210,11 @@ export class ConversationService {
   private readonly unattended = new Map<string, UnattendedMode>()
   // Requests already answered that way, which the next items may still show as open.
   private readonly autoAnswered = new Set<string>()
+  // Questions such a run's agent asked, waiting a while for the user before Antumi answers them
+  // (UNATTENDED_QUESTION_WAIT_MS), by conversation and request id.
+  private readonly heldQuestions = new Map<string, NodeJS.Timeout>()
+  // How long such a question waits; a test may shorten it.
+  questionWaitMs = UNATTENDED_QUESTION_WAIT_MS
 
   constructor(
     private readonly store: ConversationStore,
@@ -1655,10 +1660,23 @@ export class ConversationService {
   // The user acting in the conversation: what its agent asks from now on waits for them.
   attend(id: string): void {
     this.unattended.delete(id)
+    for (const [key, timer] of this.heldQuestions) {
+      if (!key.startsWith(`${id}:`)) continue
+      clearTimeout(timer)
+      this.heldQuestions.delete(key)
+    }
+  }
+
+  // The user answering a request: they are here (attend), unless it is a question a run nobody
+  // watches held for them, which is no sign they stay, so the run goes on unattended.
+  userAnswers(id: string, requestId: string): void {
+    if (!this.heldQuestions.has(`${id}:${requestId}`)) this.attend(id)
   }
 
   // Answered before ChatHost works out whether the stage waits on the user, so a run nobody
-  // watches never shows, or notifies, as waiting: respond applies its answer at once.
+  // watches never shows, or notifies, as waiting: respond applies its answer at once. A question
+  // is the exception: only the user can settle what the agent cannot tell, so it waits and
+  // notifies as any would, and is answered for them only once nobody has.
   private answerUnattended(conversationId: string, items: readonly ChatItem[]): void {
     const mode = this.unattended.get(conversationId)
     if (!mode) return
@@ -1668,13 +1686,28 @@ export class ConversationService {
       const key = `${conversationId}:${item.requestId}`
       if (!answer || this.autoAnswered.has(key)) continue
       this.autoAnswered.add(key)
-      void this.respond(conversationId, item.requestId, answer).catch((error: unknown) => {
-        this.wire?.record(conversationId, item.stageId, [{ dir: 'note', text: JSON.stringify({ event: 'unattended-answer-failed', requestId: item.requestId, error: error instanceof Error ? error.message : String(error) }) }])
-      })
+      if (item.kind === 'question') {
+        const timer = setTimeout(() => {
+          this.heldQuestions.delete(key)
+          this.answerFor(conversationId, item.stageId, item.requestId, answer)
+        }, this.questionWaitMs)
+        timer.unref()
+        this.heldQuestions.set(key, timer)
+        continue
+      }
+      this.answerFor(conversationId, item.stageId, item.requestId, answer)
     }
   }
 
+  private answerFor(conversationId: string, stageId: string, requestId: string, answer: ChatAnswer): void {
+    void this.respond(conversationId, requestId, answer).catch((error: unknown) => {
+      this.wire?.record(conversationId, stageId, [{ dir: 'note', text: JSON.stringify({ event: 'unattended-answer-failed', requestId, error: error instanceof Error ? error.message : String(error) }) }])
+    })
+  }
+
   async respond(id: string, requestId: string, answer: ChatAnswer): Promise<void> {
+    clearTimeout(this.heldQuestions.get(`${id}:${requestId}`))
+    this.heldQuestions.delete(`${id}:${requestId}`)
     const conversation = this.get(id)
     if (isHelper(conversation)) {
       const stage = this.store.activeStage(id)

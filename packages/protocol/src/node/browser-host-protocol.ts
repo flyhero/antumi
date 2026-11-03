@@ -87,7 +87,10 @@ export const BrowserHostEvent = z.discriminatedUnion('event', [
   // Every tab the host has, after any change to one of them.
   z.object({ event: z.literal('tabs'), tabs: z.array(HostTab) }),
   // A top-level navigation to a host outside local development ones; held until host.resolve.
-  z.object({ event: z.literal('hostCheck'), checkId: z.string(), tabId: BrowserTabId, conversationId: z.string().nullable(), host: z.string(), url: z.string() })
+  z.object({ event: z.literal('hostCheck'), checkId: z.string(), tabId: BrowserTabId, conversationId: z.string().nullable(), host: z.string(), url: z.string() }),
+  // The user clicked or typed in a tab's page themselves, so they have it for a while: a core that
+  // does not know the event drops it.
+  z.object({ event: z.literal('userInput'), tabId: BrowserTabId })
 ])
 export type BrowserHostEvent = z.infer<typeof BrowserHostEvent>
 

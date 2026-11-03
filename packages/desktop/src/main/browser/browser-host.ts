@@ -22,6 +22,9 @@ const PARTITION = 'persist:antumi-browser'
 // Longer than the gate's wait, so a navigation held for the user is not a timeout.
 const NAVIGATION_TIMEOUT_MS = 35_000
 const READY: BrowserStatus = { state: 'ready', running: true }
+const USER_INPUT = new Set(['mouseDown', 'rawKeyDown', 'keyDown', 'gestureTap'])
+// Often enough to keep a tab the user is working in theirs, which core holds for a few seconds.
+const USER_INPUT_EVERY_MS = 1_000
 
 type Navigation = BrowserHostResult<'navigate'>
 
@@ -52,6 +55,9 @@ export async function startBrowserHost(slot: WindowSlot, hostFile: string, confi
   }
   tabSession.on('will-download', onDownload)
   const gate = new HostGate(registry, (check) => server?.emit({ event: 'hostCheck', ...check }))
+  // Tabs an agent's action is at work in: its clicks and keys reach the page as the user's do,
+  // and are not to be told to core as the user taking the tab.
+  const agentActing = new Set<string>()
 
   const forget = (tab: Tab) => {
     views.delete(tab.id)
@@ -141,6 +147,16 @@ export async function startBrowserHost(slot: WindowSlot, hostFile: string, confi
     // by Electron without a word unless this answers; the dialog Playwright is told of is gone by
     // the time it replies. Back, reload and the page's own links then all did nothing. The user is
     // asked, as Chrome asks.
+    // The user clicking or typing in the page takes the tab, as navigating it from the panel does:
+    // where it goes then is theirs to say, and the agent waits. Scrolling to read does not.
+    let toldAt = 0
+    contents.on('input-event', (_event, input) => {
+      if (agentActing.has(tab.id) || !USER_INPUT.has(input.type)) return
+      const now = Date.now()
+      if (now - toldAt < USER_INPUT_EVERY_MS) return
+      toldAt = now
+      server?.emit({ event: 'userInput', tabId: tab.id })
+    })
     contents.on('will-prevent-unload', (event) => {
       if (confirmLeave()) event.preventDefault()
     })
@@ -172,8 +188,13 @@ export async function startBrowserHost(slot: WindowSlot, hostFile: string, confi
   const act = async (tabId: string, run: (tab: Tab) => Promise<void>): Promise<BrowserHostResult<'click'>> => {
     const tab = registry.get(tabId)
     registry.touch(tab)
-    await run(tab)
-    await actions.settle(tab.page)
+    agentActing.add(tabId)
+    try {
+      await run(tab)
+      await actions.settle(tab.page)
+    } finally {
+      agentActing.delete(tabId)
+    }
     await registry.refreshTitle(tab)
     return { tab: registry.describe(tab), snapshot: await actions.snapshot(tab.page) }
   }

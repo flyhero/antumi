@@ -176,6 +176,9 @@ export class BrowserService {
         return
       case 'hostCheck':
         void this.hostCheck(link, event)
+        return
+      case 'userInput':
+        if (this.tabs.has(event.tabId) && !this.acting.has(event.tabId)) this.markDriving(event.tabId)
     }
   }
 

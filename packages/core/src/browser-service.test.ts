@@ -126,6 +126,20 @@ describe('BrowserService', () => {
     await expect(service.userViewport(stranger, opened.tab.id, null)).rejects.toMatchObject({ reason: 'browser-not-watching' })
   })
 
+  it('gives the user a tab they click in, so a page it opens there needs no allowance', async () => {
+    const opened = await service.open(CONV_A, 'http://localhost:5173/')
+    host.emit({ event: 'userInput', tabId: opened.tab.id })
+    expect(service.tabOf(opened.tab.id)?.userDriving).toBe(true)
+    await expect(service.click(CONV_A, opened.tab.id, { ref: 'e1' })).rejects.toMatchObject({ reason: 'browser-user-driving' })
+    // The form the user sent goes on to another site, as a publish button's redirect does.
+    host.emit({ event: 'hostCheck', checkId: 'publish', tabId: opened.tab.id, conversationId: CONV_A, host: 'mp.csdn.net', url: 'https://mp.csdn.net/success' })
+    await until(() => host.calls.some((call) => call.method === 'host.resolve'))
+    expect(host.calls.find((call) => call.method === 'host.resolve')?.params).toEqual({ checkId: 'publish', allow: true })
+    expect(asks).toEqual([])
+    now += 6_000
+    expect(service.tabOf(opened.tab.id)?.userDriving).toBe(false)
+  })
+
   it('stores a screenshot as an attachment and names it for the chat', async () => {
     const opened = await service.open(CONV_A, 'http://localhost:5173/')
     const shot = await service.screenshot(CONV_A, opened.tab.id, {})

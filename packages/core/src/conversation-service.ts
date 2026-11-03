@@ -3,7 +3,7 @@ import { agentCliAccess } from './agent-cli-access'
 import { randomUUID } from 'node:crypto'
 import { mkdir, realpath, rm, rmdir, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import { chatReferencesFor, canHaveHelper, helperAllowsMode, isHelper, agentDescriptor, modelPrice, providerEndpoint, type CostBaseline, checkEditAdditionalProjects, checkSwitchBranch, handoffMessage, isPlanApproval, parseHandoffMessage, MAX_TASK_REPOS, type AgentKind, type ChatCatalog, type ChatImage, type ChatItem, type ChatModel, type ChatOption, type ChatSettings, type CommitPushResult, type CommitResult, type PushResult, type Conversation, type ConversationMessage, type ConversationSearchHit, type ConversationStage, type FileDiff, type FolderChanges, type ProjectBranches, type ProjectHead, type ChatDecision, type KnowledgeBase, type TaskSource, type UnattendedMode, isAntumiRequest , PROCESS_OWNER_ENV, processOwner, parseProcessOwner } from '@antumi/protocol'
+import { chatReferencesFor, canHaveHelper, helperAllowsMode, isHelper, agentDescriptor, modelPrice, providerEndpoint, type CostBaseline, checkEditAdditionalProjects, checkSwitchBranch, handoffMessage, isPlanApproval, parseHandoffMessage, MAX_TASK_REPOS, type AgentKind, type ChatCatalog, type ChatImage, type ChatItem, type ChatModel, type ChatOption, type ChatSettings, type CommitPushResult, type CommitResult, type PushResult, type Conversation, type ConversationMessage, type ConversationSearchHit, type ConversationStage, type FileDiff, type FolderChanges, type ProjectBranches, type ProjectHead, type ChatDecision, type KnowledgeBase, type TaskSource, type UnattendedMode, type ChatPermissionMode, startModes, unattendedPermission, isAntumiRequest , PROCESS_OWNER_ENV, processOwner, parseProcessOwner } from '@antumi/protocol'
 import type { DaemonEvent, SessionInfo } from '@antumi/protocol/node'
 import { canReuseConversation, DEFAULT_ACCOUNT, type ConversationConfiguration, type TaskLaunchOptions } from '@antumi/protocol'
 import type { RunMeasure } from './agent-run-store'
@@ -207,7 +207,9 @@ export class ConversationService {
   // Conversations a scheduled run is carrying out, by the mode it runs in: nobody is there, so
   // what their agents ask is answered as the mode says (unattendedAnswer) until the user acts in
   // them. Kept in memory: after a restart, a request waits for the user, as it always did.
-  private readonly unattended = new Map<string, UnattendedMode>()
+  // permission: the agent's own mode the run works in (unattendedPermission), which an approved
+  // plan returns to.
+  private readonly unattended = new Map<string, { mode: UnattendedMode; permission: ChatPermissionMode }>()
   // Requests already answered that way, which the next items may still show as open.
   private readonly autoAnswered = new Set<string>()
   // Questions such a run's agent asked, waiting a while for the user before Antumi answers them
@@ -1274,6 +1276,12 @@ export class ConversationService {
     if (fallbackMode && (!permissionMode || !permissionModes.includes(permissionMode))) permissionMode = fallbackMode
     const onProvider = stage.route ? providerModels?.(stage.route) ?? [] : undefined
     const remembered = this.rememberedOnProvider(chosen[stage.agent], onProvider)
+    // Auto only where the model on this route takes it (a run nobody watches chose it by the
+    // agent's own catalog, not knowing the route): the next mode such a run would take instead.
+    if (permissionMode === 'auto' && onProvider) {
+      const offered = startModes(stage.agent, onProvider.find((each) => remembered.preferred.model ? each.id === remembered.preferred.model : each.isDefault))
+      if (!offered.includes('auto')) permissionMode = unattendedPermission(stage.agent, 'acceptEdits', offered) ?? fallbackMode ?? 'ask'
+    }
     return {
       conversationId: conversation.id,
       stageId: stage.id,
@@ -1515,12 +1523,14 @@ export class ConversationService {
     const conversation = this.get(id)
     if (isHelper(conversation)) throw new Rejection('chat-option-invalid', '小助手不能无人值守执行')
     checkUnattended(conversation.agent)
-    this.markUnattended(id, mode)
+    const permission = await this.unattendedChatMode(conversation, mode)
+    this.markUnattended(id, mode, permission)
     const plan = this.waitingPlan(conversation)
     if (plan) {
       await this.chats.respond(id, plan.requestId, { decision: 'allowForSession' })
-      // Edits are what approving lets through; bypass only where the stage was started allowing it.
-      if (mode === 'bypass') await this.chats.setOption(id, 'permissionMode', mode).catch(() => {})
+      // Carried out in the run's mode, not the one approving leaves it in; bypass only where the
+      // stage was started allowing it.
+      await this.chats.setOption(id, 'permissionMode', permission).catch(() => {})
       if (text || images.length) {
         const message = `${UNATTENDED_NOTE}\n\n${text}`.trim()
         await this.send(id, message, images, true, false, ref, chatReferencesFor(text, message, references))
@@ -1528,11 +1538,16 @@ export class ConversationService {
       return
     }
     const live = this.chats.activity(id) !== null
-    const switched = live && await this.chats.setOption(id, 'permissionMode', mode).then(() => true, () => false)
-    // A stage started without bypass allowed cannot switch to it: an idle one starts again, allowing it.
-    if (live && !switched && mode === 'bypass' && this.chats.idle(id) && !conversation.planOnly) await this.stop(id)
+    const switched = live && await this.chats.setOption(id, 'permissionMode', permission).then(() => true, () => false)
+    // A stage that cannot switch (one started without bypass allowed, say) never works on in the
+    // mode it had, which may allow more than the run: an idle one starts again in the run's, a busy
+    // one is tried again later. A planning stage changes nothing whatever its mode.
+    if (live && !switched && !conversation.planOnly) {
+      if (!this.chats.idle(id)) throw new Rejection('chat-busy', `the chat cannot switch to ${permission} while its agent works`)
+      await this.stop(id)
+    }
     if (this.chats.activity(id) === null) {
-      this.store.setChatOptions(id, { permissionMode: mode, ...(mode === 'bypass' ? { allowBypass: true } : {}) })
+      this.store.setChatOptions(id, { permissionMode: permission, ...(mode === 'bypass' ? { allowBypass: true } : {}) })
       await ready()
     }
     const message = `${UNATTENDED_NOTE}\n\n${text || (images.length ? '' : SCHEDULED_GO_TEXT)}`.trim()
@@ -1653,8 +1668,26 @@ export class ConversationService {
   }
 
   // A run nobody watches starting here, or going on (see unattended).
-  markUnattended(id: string, mode: UnattendedMode): void {
-    this.unattended.set(id, mode)
+  markUnattended(id: string, mode: UnattendedMode, permission: ChatPermissionMode): void {
+    this.unattended.set(id, { mode, permission })
+  }
+
+  // The mode a run nobody watches starts a new chat of `agent` in, by what its model takes there.
+  async unattendedStartMode(agent: AgentKind, mode: UnattendedMode, model?: string | null, providerId?: string): Promise<ChatPermissionMode> {
+    if (mode === 'bypass') return 'bypass'
+    const models = (await this.chatCatalog(agent, providerId))?.models ?? []
+    const permission = unattendedPermission(agent, mode, startModes(agent, models.find((each) => model ? each.id === model : each.isDefault)))
+    if (!permission) throw new Rejection('chat-option-invalid', `${agent} has no mode a careful unattended run can work in`)
+    return permission
+  }
+
+  // The same for a conversation's chat: of the modes its stage offers, else as it would start.
+  private async unattendedChatMode(conversation: Conversation, mode: UnattendedMode): Promise<ChatPermissionMode> {
+    if (mode === 'bypass') return 'bypass'
+    const stage = this.store.stages(conversation.id).at(-1)
+    const state = stage?.agent === conversation.agent ? this.chats.items(this.chatStage(conversation, stage)).findLast((item) => item.kind === 'state') : undefined
+    const offered = state?.kind === 'state' ? unattendedPermission(conversation.agent, mode, state.permissionModes) : null
+    return offered ?? this.unattendedStartMode(conversation.agent, mode, this.store.chatOptions(conversation.id)[conversation.agent]?.model, this.catalogProvider(conversation, conversation.agent))
   }
 
   // The user acting in the conversation: what its agent asks from now on waits for them.
@@ -1678,11 +1711,11 @@ export class ConversationService {
   // is the exception: only the user can settle what the agent cannot tell, so it waits and
   // notifies as any would, and is answered for them only once nobody has.
   private answerUnattended(conversationId: string, items: readonly ChatItem[]): void {
-    const mode = this.unattended.get(conversationId)
-    if (!mode) return
+    const run = this.unattended.get(conversationId)
+    if (!run) return
     for (const item of items) {
       if (item.kind !== 'approval' && item.kind !== 'question') continue
-      const answer = unattendedAnswer(item, mode)
+      const answer = unattendedAnswer(item, run.mode)
       const key = `${conversationId}:${item.requestId}`
       if (!answer || this.autoAnswered.has(key)) continue
       this.autoAnswered.add(key)
@@ -1695,12 +1728,14 @@ export class ConversationService {
         this.heldQuestions.set(key, timer)
         continue
       }
-      this.answerFor(conversationId, item.stageId, item.requestId, answer)
+      // An approved plan is carried out in the run's mode, not the one approving leaves it in.
+      const after = item.kind === 'approval' && isPlanApproval(item) ? () => this.chats.setOption(conversationId, 'permissionMode', run.permission) : undefined
+      this.answerFor(conversationId, item.stageId, item.requestId, answer, after)
     }
   }
 
-  private answerFor(conversationId: string, stageId: string, requestId: string, answer: ChatAnswer): void {
-    void this.respond(conversationId, requestId, answer).catch((error: unknown) => {
+  private answerFor(conversationId: string, stageId: string, requestId: string, answer: ChatAnswer, after?: () => Promise<unknown>): void {
+    void this.respond(conversationId, requestId, answer).then(after).catch((error: unknown) => {
       this.wire?.record(conversationId, stageId, [{ dir: 'note', text: JSON.stringify({ event: 'unattended-answer-failed', requestId, error: error instanceof Error ? error.message : String(error) }) }])
     })
   }

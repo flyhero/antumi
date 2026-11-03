@@ -248,6 +248,30 @@ describe('RoutineService', () => {
     expect(JSON.stringify(daemon.written(conversations.get(run!.id).sessionId!))).toContain(UNATTENDED_DENIAL)
   })
 
+  it('runs a careful routine in the agent\'s own mode for it: Claude\'s auto where the model takes it', async () => {
+    const modeOf = () => daemon.spawns.map((spawn) => spawn.args).filter((args) => args.includes('stream-json')).map((args) => args[args.indexOf('--permission-mode') + 1]).at(-1)
+    const catalog = (autoMode: boolean) => [
+      { value: 'default', resolvedModel: 'claude-sonnet-5', displayName: 'Default' },
+      { value: 'sonnet', resolvedModel: 'claude-sonnet-5', displayName: 'Sonnet', supportsAutoMode: autoMode }
+    ]
+    // The catalog a chat of Claude's last listed is what the routine's start goes by.
+    daemon.models = catalog(true)
+    await conversations.create('claude', [])
+    await settle()
+    const first = dailySoon()
+    clock = first.dueAt
+    await tick()
+    expect(runs(first.routine.id)[0]).toMatchObject({ status: 'started' })
+    expect(modeOf()).toBe('auto')
+
+    daemon.models = catalog(false)
+    await conversations.create('claude', [])
+    await settle()
+    clock = first.dueAt + DAY
+    await tick()
+    expect(modeOf()).toBe('acceptEdits')
+  })
+
   it('holds what the agent asks the user for them a while, then has it assume and go on', async () => {
     conversations.questionWaitMs = 20
     daemon.reply = (id) => daemon.emit(id, {

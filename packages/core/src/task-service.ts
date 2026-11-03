@@ -66,7 +66,7 @@ export type BranchNamer = (agent: AgentKind, title: string, modelProvider: strin
 const SLUG_WAIT_MS = 10_000
 
 // What a task needs of its chat.
-export type TaskConversations = Pick<ConversationService, 'startForTask' | 'send' | 'markUnattended' | 'savePlan' | 'stopForTask' | 'deleteForTask' | 'get' | 'runUsage' | 'capacityAvailable' | 'validateStartOptions'>
+export type TaskConversations = Pick<ConversationService, 'startForTask' | 'send' | 'markUnattended' | 'savePlan' | 'stopForTask' | 'deleteForTask' | 'get' | 'runUsage' | 'capacityAvailable' | 'validateStartOptions' | 'unattendedStartMode'>
 
 export type TaskSquads = {
   preparing(id: string): boolean
@@ -489,7 +489,8 @@ export class TaskService {
     if (!chats.capacityAvailable(agent, task.conversationId)) throw new Rejection('agent-capacity')
     return this.launchChat(task, async () => {
       const launch = { ...task.launch, ...options, ...(profile?.modelProvider ? { modelProvider: profile.modelProvider } : {}) }
-      const permissionMode = unattended ?? launch.permissionMode ?? 'plan'
+      // Unattended: the agent's own mode for how far the run may go, as its model takes it.
+      const permissionMode = unattended ? await chats.unattendedStartMode(agent, unattended, launch.model, this.providerOf(task, launch)) : launch.permissionMode ?? 'plan'
       const modeBlocker = checkStartMode(dependencies, permissionMode)
       if (modeBlocker) throw new Rejection(modeBlocker)
       if (permissionMode === 'bypass' && !allowBypass && unattended !== 'bypass') throw new Rejection('chat-option-invalid', '全部放行需要先在设置中开启')
@@ -525,7 +526,7 @@ export class TaskService {
         // A leader going on from its planning reads its brief first, in a handoff if it moved.
         ...(coordinator && resume ? { opening: { text: leaderStartPrompt(task, workspace, dependencies, this.previousAttempt(task), images.prompt, task.plan, coordinator), imageIds } } : {})
       })
-      if (unattended) chats.markUnattended(conversation.id, unattended)
+      if (unattended) chats.markUnattended(conversation.id, unattended, permissionMode)
       // The planning agent stopped for the new stage, so nothing reads there any more.
       await removePlanningCheckouts(task.id, this.worktreesRoot)
       // The agent waits for setup, so its first message finds the worktrees ready; the task shows

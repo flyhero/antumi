@@ -12,8 +12,9 @@ import { ModelMetering, SmallModelCost } from './model-cost'
 export const ChatTurnActivity = z.enum(['idle', 'running', 'awaiting'])
 export type ChatTurnActivity = z.infer<typeof ChatTurnActivity>
 
-// The permission mode a scheduled run starts in, with nobody there to answer: edits go through
-// (other calls may still ask), or nothing is asked and nothing sandboxed.
+// How far a scheduled run may go, with nobody there to answer: carefully, in each agent's own mode
+// for that (its descriptor's unattendedModes; the value keeps the name it had when that meant
+// accepting edits), or with nothing asked and nothing sandboxed.
 export const UNATTENDED_MODES = ['acceptEdits', 'bypass'] as const
 export const UnattendedMode = z.enum(UNATTENDED_MODES)
 export type UnattendedMode = z.infer<typeof UnattendedMode>

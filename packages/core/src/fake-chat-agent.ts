@@ -28,8 +28,9 @@ export function fakeChatDaemon() {
     killed,
     released,
     deliver: (_event: DaemonEvent) => {},
-    // Whether a new session answers the initialize request by itself.
+    // Whether a new session answers the initialize request by itself, and with which models.
     answerInit: true,
+    models: FAKE_MODELS as readonly Record<string, unknown>[],
     // A stubborn process lets stop-sequence tests observe escalation before ending it explicitly.
     exitOnKill: true,
     // What a session prints for each user message; by default a reply and a finished turn.
@@ -85,7 +86,7 @@ export function fakeChatDaemon() {
         writes.push({ sessionId, frame })
         const text = JSON.stringify(frame)
         if (text.includes('"subtype":"initialize"') && fake.answerInit) {
-          queueMicrotask(() => fake.emit(sessionId, { type: 'control_response', response: { subtype: 'success', request_id: 'antumi-init', response: { models: FAKE_MODELS } } }))
+          queueMicrotask(() => fake.emit(sessionId, { type: 'control_response', response: { subtype: 'success', request_id: 'antumi-init', response: { models: fake.models } } }))
         }
         // A mode switch is taken as Claude takes it: acknowledged, then reported.
         const switched = /"request_id":"(antumi-option-\d+)","request":\{"subtype":"set_permission_mode","mode":"(\w+)"/.exec(text)

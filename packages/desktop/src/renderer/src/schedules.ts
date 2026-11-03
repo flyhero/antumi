@@ -4,7 +4,8 @@ import type { Notice } from './attention'
 import { perform } from './core-store'
 import { dayAndTime, reasonText } from './labels'
 
-export const UNATTENDED_LABEL: Record<UnattendedMode, string> = localized(() => ({ acceptEdits: t('ChatPlan.acceptEditsAutomatically'), bypass: t('ChatPlan.allowEverything') }))
+// How far a run nobody watches may go; careful is each agent's own mode for it (unattendedModes).
+export const UNATTENDED_LABEL: Record<UnattendedMode, string> = localized(() => ({ acceptEdits: t('Schedules.careful'), bypass: t('ChatPlan.allowEverything') }))
 
 // The hour a night run defaults to: late enough that the day's work is over.
 const NIGHT_HOUR = 1

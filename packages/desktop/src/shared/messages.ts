@@ -2355,6 +2355,10 @@ export const MESSAGES = {
     "zh": "改文件、跑命令前都问",
     "en": "Ask before editing files or running commands"
   },
+  "Schedules.careful": {
+    "zh": "稳妥",
+    "en": "Careful"
+  },
   "ChatPlan.allowEverything": {
     "zh": "全部放行",
     "en": "Allow everything"
@@ -7517,8 +7521,16 @@ export const MESSAGES = {
     "en": "Scheduled run permissions"
   },
   "SettingsPage.scheduledTasksAndConversationsStartUnattendedInThis": {
-    "zh": "预约的任务、会话和例程到点后以此模式无人值守地运行。推荐「全部放行」：什么都不问、不受沙箱限制，能一口气做完；「自动接受编辑」更谨慎，其他需要确认的操作会被自动拒绝。Agent 向你提问时会先提醒你，10 分钟没人回答就按合理的假设继续。",
-    "en": "Scheduled tasks, conversations and routines run unattended in this mode. “Allow everything” is recommended: it asks nothing and bypasses the sandbox, so a run can finish on its own. “Accept edits automatically” is more cautious: other actions that need approval are refused. When an agent asks you something, you are notified first; with no answer in 10 minutes it goes on with its best assumption."
+    "zh": "预约的任务、会话和例程到点后以此模式无人值守地运行。推荐「全部放行」：什么都不问、不受沙箱限制，能一口气做完；「稳妥」用各 Agent 自己较谨慎的模式{value1}，其他需要确认的操作会被自动拒绝。Agent 向你提问时会先提醒你，10 分钟没人回答就按合理的假设继续。",
+    "en": "Scheduled tasks, conversations and routines run unattended in this mode. “Allow everything” is recommended: it asks nothing and bypasses the sandbox, so a run can finish on its own. “Careful” uses each agent’s own more cautious mode{value1}, and other actions that need approval are refused. When an agent asks you something, you are notified first; with no answer in 10 minutes it goes on with its best assumption."
+  },
+  "SettingsPage.carefulModes": {
+    "zh": "（{value1}）",
+    "en": " ({value1})"
+  },
+  "SettingsPage.carefulModeOf": {
+    "zh": "{value1}用「{value2}」",
+    "en": "{value1} in “{value2}”"
   },
   "SettingsPage.confirmUnattendedBypass": {
     "zh": "让无人值守的运行全部放行？到点后 Agent 什么都不问、不受沙箱限制，可以运行任何命令、修改项目之外的文件。只在你信任这些预约和例程时开启；Agent 向你提问时仍会先提醒你。",

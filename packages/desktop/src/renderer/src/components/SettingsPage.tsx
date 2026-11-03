@@ -1,5 +1,5 @@
 import { UsageSettings } from './UsageSettings'
-import { localized, messageSearchText, t, tr, useLocale } from '../i18n'
+import { getLocale, localized, messageSearchText, t, tr, useLocale } from '../i18n'
 import type { BrowserStatus, WireUsage } from '@antumi/protocol'
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { AGENT_KINDS, agentDescriptor, LANGUAGE_NAMES, PROTOCOL_VERSION, quickModel, TRANSLATE_LANGUAGES, UNATTENDED_MODES, type AgentKind, type SourceDescriptor, type UnattendedMode } from '@antumi/protocol'
@@ -10,6 +10,7 @@ import { ProjectColorPicker } from './ProjectColorPicker'
 import { ProjectIcon } from './ProjectIcon'
 import { UNATTENDED_LABEL } from '../schedules'
 import { askConfirm } from '../confirm-dialog'
+import { modeLabel } from './ChatOptionsBar'
 import { detectedAgents, useInstalledAgents } from '../installed-agents'
 import { useAgentCatalog } from '../agent-models'
 import { ChatPicker } from './ChatPicker'
@@ -289,12 +290,15 @@ async function chooseUnattendedMode(unattendedMode: UnattendedMode): Promise<voi
 // What an agent may do while nobody answers it, and what of the user's it may reach.
 function PermissionSettings() {
   const chatSettings = useCore((s) => s.chatSettings)
+  // The mode careful means for each agent here, as it is when the model allows it.
+  const careful = useInstalledAgents().filter((agent) => agentDescriptor(agent).capabilities.unattended)
+    .map((agent) => t('SettingsPage.carefulModeOf', { value1: agentLabel(agent), value2: modeLabel(agent, agentDescriptor(agent).unattendedModes?.[0] ?? 'acceptEdits') }))
   return (
     <>
       {chatSettings?.unattendedMode && (
         <SettingsRow
           label={t('SettingsPage.scheduledRunPermissions')}
-          description={t('SettingsPage.scheduledTasksAndConversationsStartUnattendedInThis')}
+          description={t('SettingsPage.scheduledTasksAndConversationsStartUnattendedInThis', { value1: careful.length ? t('SettingsPage.carefulModes', { value1: new Intl.ListFormat(getLocale(), { type: 'conjunction' }).format(careful) }) : '' })}
           control={(labelId) => (
             <Segmented
               labelId={labelId}

@@ -30,6 +30,7 @@ export const kimi: AgentDescriptor = {
   defaultStartMode: 'ask',
   discussionMode: 'plan',
   readOnlyMode: 'plan',
+  unattendedModes: ['auto'],
   capabilities: { unattended: true, bypass: true, autoMode: true, pathMentions: false, optionsWhileBusy: false, skills: false, userMcp: true, modelProviders: [], accounts: false },
   environment: {
     role: '聊天界面以 `kimi acp` 运行它，需要 Node.js 版 Kimi Code CLI。',

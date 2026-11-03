@@ -31,6 +31,7 @@ export const zcode: AgentDescriptor = {
   defaultStartMode: 'ask',
   discussionMode: 'readOnly',
   readOnlyMode: 'readOnly',
+  unattendedModes: ['auto', 'acceptEdits'],
   // skills: it loads skills from its own settings file, which Antumi leaves alone.
   capabilities: { unattended: true, bypass: true, autoMode: true, pathMentions: false, optionsWhileBusy: true, skills: false, userMcp: true, modelProviders: ['anthropic', 'openai-chat', 'openai-responses'], accounts: false },
   environment: {

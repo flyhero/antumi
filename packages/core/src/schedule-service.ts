@@ -94,7 +94,7 @@ export type ScheduleDeps = {
     autoRuns?(): Task[]
     disableAutoRun?(id: string): void
   }
-  conversations: Pick<ConversationService, 'get' | 'create' | 'continue' | 'send' | 'runScheduled' | 'sentRef' | 'capacityAvailable'> & Partial<Pick<ConversationService, 'waitingPlanRequest'>> & Partial<Pick<ConversationService, 'leaveSpentAccount'>>
+  conversations: Pick<ConversationService, 'get' | 'create' | 'continue' | 'send' | 'runScheduled' | 'sentRef' | 'capacityAvailable' | 'unattendedStartMode'> & Partial<Pick<ConversationService, 'waitingPlanRequest'>> & Partial<Pick<ConversationService, 'leaveSpentAccount'>>
   usage: { list(): AgentUsage[]; refresh(): Promise<AgentUsage[]> }
   beforeQuotaWait?(agent: AgentKind): Promise<void>
   // The mode runs start in, as the user last set it.
@@ -631,8 +631,9 @@ export class ScheduleService {
     const { target } = routine
     const existing = this.conversation(run.id)
     if (!existing) {
+      const permissionMode = await this.deps.conversations.unattendedStartMode(run.agent, mode, target.model)
       await this.deps.conversations.create(run.agent, target.projectPaths, bypass,
-        { permissionMode: mode, model: target.model, effort: target.effort }, { id: routine.id, title: routineRunTitle(routine.title, this.now()) }, run.id)
+        { permissionMode, model: target.model, effort: target.effort }, { id: routine.id, title: routineRunTitle(routine.title, this.now()) }, run.id)
     }
     if (run.conversationId !== run.id) this.settle(run, { conversation_id: run.id })
     const ready = () => this.deps.conversations.continue(run.id, bypass)

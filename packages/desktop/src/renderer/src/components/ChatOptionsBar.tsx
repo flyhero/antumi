@@ -30,12 +30,8 @@ export function defaultStartMode(agent: AgentKind, offered: readonly ChatPermiss
   return offered.includes(preferred) ? preferred : startModes[0]!
 }
 
-// What a new conversation can start in, with auto where the model takes it (as the agent's catalog
-// says) and bypass where the agent has it, in the order a running chat lists them.
-export function startModes(agent: AgentKind, model: ChatModel | undefined): ChatPermissionMode[] {
-  const { startModes, capabilities } = agentDescriptor(agent)
-  return [...startModes, ...(model?.autoMode && capabilities.autoMode ? ['auto' as const] : []), ...(capabilities.bypass ? ['bypass' as const] : [])]
-}
+// Shared with core, which starts runs nobody watches in them (unattendedPermission).
+export { startModes } from '@antumi/protocol'
 
 const EFFORT_LABEL: Record<string, string> = localized(() => ({
   none: t('ChatOptionsBar.none'),

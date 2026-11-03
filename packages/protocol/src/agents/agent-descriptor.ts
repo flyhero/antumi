@@ -25,6 +25,10 @@ export type AgentDescriptor = {
   // What it works in as a squad's leader or read-only member: its folders stay read-only whatever
   // the mode, so not a planning mode, in which it would propose a plan rather than do the work.
   readOnlyMode: ChatPermissionMode
+  // What a careful run nobody watches works in (UnattendedMode 'acceptEdits'): the first of these
+  // the stage offers, its own mode that lets ordinary work through and refuses the rest. Left out,
+  // accepting edits.
+  unattendedModes?: readonly ChatPermissionMode[]
   capabilities: {
     // False when a stage required to keep its workspace read-only cannot start. Unset means supported.
     readOnly?: boolean

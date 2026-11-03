@@ -12,9 +12,35 @@
 .keyboard-shortcut-settings .settings-row { flex-wrap: wrap; gap: 12px; }
 .keyboard-shortcut-settings .settings-row-text { flex: 1 1 200px; }
 .keyboard-shortcut-controls { flex-wrap: wrap; }
-.keyboard-shortcut-binding { min-width: 120px; }
-.keyboard-shortcut-binding[aria-pressed='true'] { outline: 2px solid var(--focus); outline-offset: 2px; }
-.keyboard-shortcut-binding kbd { font-family: var(--mono); }
+.keyboard-shortcut-binding { min-width: 110px; padding: 0 14px; font-size: 13px; }
+.keyboard-shortcut-binding[aria-pressed='true'] { outline: 2px solid var(--focus); outline-offset: 2px; border-color: var(--focus); color: var(--accent); }
+.keyboard-shortcut-binding[data-unbound] { color: var(--text-muted); }
+/* Use interface font, normal letter contrast and readable size so ⌘, ⌥, ⇧ and punctuation are crisp instead of mono's tiny glyphs. */
+.button.keyboard-shortcut-binding kbd {
+  font-family: var(--font);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1;
+  opacity: 1;
+  color: var(--text);
+  letter-spacing: 0.05em;
+}
 .keyboard-shortcut-recording { justify-content: space-between; flex-wrap: wrap; margin-top: 16px; }
-.keyboard-shortcut-reference { font-family: var(--mono); color: var(--text-muted); }
+.keyboard-shortcut-reference {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: 0.04em;
+}
 .keyboard-shortcut-settings[data-shortcut-recording] .keyboard-shortcut-recording { position: sticky; bottom: 0; padding: 12px 0; background: var(--bg); border-top: 1px solid var(--border); }

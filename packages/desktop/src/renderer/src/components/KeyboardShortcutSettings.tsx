@@ -86,6 +86,7 @@ export function KeyboardShortcutSettings() {
           description={`${t(SHORTCUT_SCOPE_LABELS[SHORTCUTS[action].scope])} · ${t('KeyboardShortcuts.default', { keys: SHORTCUTS[action].defaults(SHORTCUT_PLATFORM).map((binding) => formatShortcut(binding, SHORTCUT_PLATFORM).replace(/Escape$/, 'Esc')).join(' / ') })}`}
           control={(labelId) => <div className="keyboard-shortcut-controls" role="group" aria-labelledby={labelId}>
             <button type="button" className="button keyboard-shortcut-binding" aria-label={t('KeyboardShortcuts.modify', { action: label(action) })} aria-pressed={recording === action}
+              data-unbound={!keys && recording !== action ? true : undefined}
               onClick={() => { setRecording(recording === action ? null : action); setError('') }}>
               {recording === action ? t('KeyboardShortcuts.recording') : keys ? <kbd>{keys}</kbd> : t('KeyboardShortcuts.disabled')}
             </button>

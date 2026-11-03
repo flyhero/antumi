@@ -8,6 +8,7 @@ import type { ResetCredit, ResetCredits, UsageWindow } from '@antumi/protocol'
 import { planLaunch } from '@antumi/protocol/node'
 import { fetchUsageJson, parseJson, type UsageReading, type UsageReport } from '../../usage-source'
 import { claudeDefaultHome, claudeKeychainService } from './claude-account'
+import { claudeAuthStatus } from './claude-sign-in'
 
 // The same endpoint Claude Code's /usage reads; it only accepts the OAuth token of a Claude subscription.
 // `cedar_ember` is Claude Code's name for the usage-limit resets promotion; asking adds its state.
@@ -268,15 +269,20 @@ async function claudeCliVersion(): Promise<string> {
   return version
 }
 
-// Whether Claude Code has an account here, without asking the service anything.
-export async function hasClaudeCredentials(home?: string): Promise<boolean> {
-  return Credentials.safeParse(parseJson(await readCredentials(home))).success
+// Whether Claude Code can run here, without asking the service anything; null when it cannot tell.
+// A subscription's credentials answer at once, any other sign-in only the CLI can judge.
+export async function claudeSignedIn(home?: string): Promise<boolean | null> {
+  if (Credentials.safeParse(parseJson(await readCredentials(home))).success) return true
+  return claudeAuthStatus(home)
 }
 
 export async function readClaudeUsage(home?: string): Promise<UsageReading> {
   const credentials = Credentials.safeParse(parseJson(await readCredentials(home)))
   if (!credentials.success) {
-    return { signedIn: false }
+    // Signed in by a key rather than a subscription: no quota to read, which is not signed out.
+    const signedIn = await claudeAuthStatus(home)
+    if (signedIn === null) throw new Error('could not tell whether Claude Code is signed in')
+    return signedIn ? { signedIn: true, windows: [], plan: null } : { signedIn: false }
   }
   const { accessToken, subscriptionType } = credentials.data.claudeAiOauth
   // Sent as the installed Claude Code CLI, the client this endpoint serves.

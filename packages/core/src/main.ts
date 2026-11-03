@@ -253,7 +253,7 @@ await pets.load()
 
 const usageSources: Partial<Record<AgentKind, UsageSource>> = {}
 const resetCreditUses: Partial<Record<AgentKind, ResetCreditUse>> = {}
-const signedIn: Partial<Record<AgentKind, () => Promise<boolean>>> = {}
+const signedIn: Partial<Record<AgentKind, () => Promise<boolean | null>>> = {}
 for (const kind of AGENT_KINDS) {
   const adapter = adapterOf(kind)
   const source = adapter.usage

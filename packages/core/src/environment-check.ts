@@ -44,7 +44,7 @@ type Options = {
   pathEnv: string
   platform: NodeJS.Platform
   // Whether the tool has an account to run with; left out for one that has none to have.
-  signedIn: Partial<Record<EnvironmentTool, () => Promise<boolean>>>
+  signedIn: Partial<Record<EnvironmentTool, () => Promise<boolean | null>>>
   applicationDirs?: string[]
   now?: () => number
   changed?: (environment: Environment) => void

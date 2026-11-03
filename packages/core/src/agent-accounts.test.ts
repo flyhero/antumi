@@ -22,6 +22,7 @@ describe('AgentAccountStore', () => {
   let changes: AgentAccounts[]
   let touched: Array<[string, string, boolean]>
   let ids: string[]
+  let bin: string
   const saved = { claude: process.env.CLAUDE_CONFIG_DIR, codex: process.env.CODEX_HOME }
 
   const store = () => new AgentAccountStore(path.join(root, 'agent-accounts.json'), path.join(root, 'agent-accounts'), {
@@ -42,6 +43,10 @@ describe('AgentAccountStore', () => {
     mkdirSync(own, { recursive: true })
     process.env.CLAUDE_CONFIG_DIR = own
     process.env.CODEX_HOME = path.join(root, 'own-codex')
+    // No CLI of the machine's own speaks for an account here.
+    bin = path.join(root, 'bin')
+    mkdirSync(bin)
+    vi.stubEnv('PATH', bin)
     signIns = []
     exits = []
     changes = []
@@ -54,6 +59,7 @@ describe('AgentAccountStore', () => {
       if (value === undefined) delete process.env[name]
       else process.env[name] = value
     }
+    vi.unstubAllEnvs()
     rmSync(root, { recursive: true, force: true })
   })
 
@@ -109,6 +115,23 @@ describe('AgentAccountStore', () => {
     exits.shift()?.()
     await vi.waitFor(() => expect(touched).toEqual([['claude', 'work', false]]))
     expect(accounts.list().accounts.find((each) => each.id === 'work')).toMatchObject({ signedIn: true, email: 'me@work.com' })
+  })
+
+  it('keeps a sign-in it cannot check, and drops one Claude Code says is gone', async () => {
+    const accounts = store()
+    await accounts.load()
+    await accounts.add('claude', 'Work')
+    const home = path.join(root, 'agent-accounts', 'claude', 'work')
+    writeFileSync(path.join(home, '.credentials.json'), JSON.stringify({ claudeAiOauth: { accessToken: 't' } }))
+    exits.shift()?.()
+    await vi.waitFor(() => expect(touched).toEqual([['claude', 'work', false]]))
+    const signedIn = () => accounts.list().accounts.find((each) => each.id === 'work')?.signedIn
+    rmSync(path.join(home, '.credentials.json'))
+    await accounts.refreshIdentity('claude', 'work')
+    expect(signedIn()).toBe(true)
+    writeFileSync(path.join(bin, 'claude'), `#!${process.execPath}\nprocess.stdout.write('{"loggedIn":false}'); process.exit(1)`, { mode: 0o755 })
+    await accounts.refreshIdentity('claude', 'work')
+    expect(signedIn()).toBe(false)
   })
 
   it('starts the agent in the active account’s folder, and keeps the pick across a restart', async () => {

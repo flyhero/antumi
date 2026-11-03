@@ -260,7 +260,9 @@ export class AgentAccountStore {
   private async checkIdentity(agent: AgentKind, id: string): Promise<void> {
     const adapter = adapterOf(agent)
     const home = this.home(agent, id)
-    const signedIn = await adapter.signedIn?.(home).catch(() => false) ?? false
+    // Unknown keeps what was last known: a failed check is no sign-out.
+    const known = this.signedIn.get(key(agent, id)) ?? false
+    const signedIn = adapter.signedIn ? await adapter.signedIn(home).catch(() => null) ?? known : false
     const { email } = await adapter.accounts?.identity(home).catch(() => ({ email: null })) ?? { email: null }
     const current = this.find(agent, id)
     const changed = this.signedIn.get(key(agent, id)) !== signedIn

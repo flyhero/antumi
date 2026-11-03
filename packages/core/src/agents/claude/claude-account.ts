@@ -65,14 +65,19 @@ export function mergedGlobalConfig(own: z.infer<typeof GlobalConfig> | null, acc
 }
 
 // settings.json is copied rather than linked: Claude Code saves it by renaming a new file over it,
-// which would leave a link a file of the account's own. CLAUDE.md imports the user's, which a copy
-// would load twice in a project under their home.
+// which would leave a link a file of the account's own. Never creates the folder, so an account
+// being removed stays gone.
+export async function copyClaudeSettings(home: string): Promise<void> {
+  await copyFile(path.join(claudeDefaultHome(), 'settings.json'), path.join(home, 'settings.json')).catch(async (error: NodeJS.ErrnoException) => {
+    if (error.code === 'ENOENT') await rm(path.join(home, 'settings.json'), { force: true })
+  })
+}
+
+// CLAUDE.md imports the user's, which a copy would load twice in a project under their home.
 async function prepare(home: string): Promise<void> {
   const own = claudeDefaultHome()
   await linkShared(home, own, SHARED)
-  await copyFile(path.join(own, 'settings.json'), path.join(home, 'settings.json')).catch(async (error: NodeJS.ErrnoException) => {
-    if (error.code === 'ENOENT') await rm(path.join(home, 'settings.json'), { force: true })
-  })
+  await copyClaudeSettings(home)
   const memory = path.join(home, 'CLAUDE.md')
   const imported = `@${path.join(own, 'CLAUDE.md')}\n`
   if ((await readFile(memory, 'utf8').catch(() => null)) !== imported) await writeFile(memory, imported, { mode: 0o600 })

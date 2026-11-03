@@ -116,7 +116,8 @@ export interface AgentAdapter {
   catalog?(cwd: string): Promise<ChatCatalog | null>
   // How the environment check finds it; without it, its kind on PATH, asked for --version.
   detect?(pathEnv: string, platform: NodeJS.Platform): Promise<AgentDetection>
-  signedIn?(home?: string): Promise<boolean>
+  // null: it could not tell.
+  signedIn?(home?: string): Promise<boolean | null>
   readonly usage?: UsageSource
   readonly accounts?: AccountSupport
   // Spends one of the usage resets its reading reports, without the agent's own app.

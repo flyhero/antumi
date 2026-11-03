@@ -3,10 +3,12 @@ import { useContext, useEffect, useState, type ReactNode } from 'react'
 import { RpcError, type ChangedFile, type Commit, type FileDiff } from '@antumi/protocol'
 import { revealChatEdit, useCore } from '../core-store'
 import type { ChatEdit } from '../inspector-file'
+import { changedFileTree, type ChangedFileNode } from '../changed-file-tree'
+import { setPreference, usePreferences } from '../preferences'
 import type { BranchTarget } from './BranchStatus'
 import { CommentableDiff, DiffCommentConversation } from './DiffComments'
 import { DiffLines } from './DiffLines'
-import { ArrowLeftIcon, ChevronRightIcon, CloseIcon, RefreshIcon } from './icons'
+import { ArrowLeftIcon, ChevronRightIcon, CloseIcon, ListIcon, RefreshIcon, TreeIcon } from './icons'
 import { PanelSeparator } from './PanelSeparator'
 
 // The pieces both inspectors are built from: a task's, beside its terminal, and a conversation's.
@@ -149,6 +151,7 @@ export function CommitList({ commits, label }: { commits: readonly Commit[]; lab
 // The files changed, open under a row with how many and how much, which folds them away; `empty`
 // reads when there are none.
 export function ChangedFiles({ label, files, empty, onOpen }: { label: string; files: readonly ChangedFile[]; empty: string; onOpen: (file: string) => void }) {
+  const view = usePreferences((p) => p.changedFilesView)
   if (files.length === 0) {
     return (
       <>
@@ -157,6 +160,7 @@ export function ChangedFiles({ label, files, empty, onOpen }: { label: string; f
       </>
     )
   }
+  const toggle = view === 'tree' ? t('Inspector.showAsList') : t('Inspector.showAsTree')
   return (
     <details className="inspector-fold" open>
       <summary className="inspector-row">
@@ -164,8 +168,21 @@ export function ChangedFiles({ label, files, empty, onOpen }: { label: string; f
         <span className="inspector-row-label">{label}</span>
         <span className="inspector-pill">{tr('Inspector.files', { value1: files.length })}</span>
         <LineCounts className="inspector-row-counts" {...changeLineTotals(files)} />
+        <button
+          type="button"
+          className="tool-button inspector-row-action"
+          aria-label={toggle}
+          data-tooltip={toggle}
+          onClick={(event) => {
+            // Inside the summary: switch the view without folding the list.
+            event.preventDefault()
+            setPreference('changedFilesView', view === 'tree' ? 'list' : 'tree')
+          }}
+        >
+          {view === 'tree' ? <ListIcon /> : <TreeIcon />}
+        </button>
       </summary>
-      <FileList files={files} onOpen={onOpen} />
+      {view === 'tree' ? <FileTree nodes={changedFileTree(files)} onOpen={onOpen} /> : <FileList files={files} onOpen={onOpen} />}
     </details>
   )
 }
@@ -188,30 +205,51 @@ export function changeLineTotals(files: readonly ChangedFile[]): { added: number
 export function FileList({ files, onOpen }: { files: readonly ChangedFile[]; onOpen: (file: string) => void }) {
   return (
     <ul className="changed-files">
-      {files.map((file) => {
-        const slash = file.path.lastIndexOf('/')
-        return (
-          <li key={file.path}>
-            <button
-              type="button"
-              className="changed-file"
-              data-kind={file.kind}
-              title={file.oldPath ? `${file.oldPath} → ${file.path}` : file.path}
-              onClick={() => onOpen(file.path)}
-            >
-              <span className="change-kind" data-kind={file.kind} aria-label={KIND[file.kind].text}>{KIND[file.kind].mark}</span>
-              <span className="changed-file-name">
-                {file.path.slice(slash + 1)}
-                {slash > 0 && <span className="muted"> {file.path.slice(0, slash)}</span>}
-              </span>
-              {file.additions === null || file.deletions === null
-                ? <span className="changed-file-counts mono">{file.kind === 'untracked' ? t('Inspector.newFile') : t('Inspector.binary')}</span>
-                : <LineCounts className="changed-file-counts" added={file.additions} removed={file.deletions} />}
-            </button>
-          </li>
-        )
-      })}
+      {files.map((file) => <li key={file.path}><FileRow file={file} withFolder onOpen={onOpen} /></li>)}
     </ul>
+  )
+}
+
+// The files under folders that fold, each named alone since its folder is above it.
+function FileTree({ nodes, onOpen }: { nodes: readonly ChangedFileNode[]; onOpen: (file: string) => void }) {
+  return (
+    <ul className="changed-files">
+      {nodes.map((node) => node.kind === 'file'
+        ? <li key={node.file.path}><FileRow file={node.file} withFolder={false} onOpen={onOpen} /></li>
+        : (
+          <li key={node.path}>
+            <details className="changed-folder" open>
+              <summary title={node.path}>
+                <span className="chat-tool-chevron" aria-hidden="true"><ChevronRightIcon /></span>
+                <span className="changed-folder-name">{node.name}</span>
+              </summary>
+              <FileTree nodes={node.children} onOpen={onOpen} />
+            </details>
+          </li>
+        ))}
+    </ul>
+  )
+}
+
+function FileRow({ file, withFolder, onOpen }: { file: ChangedFile; withFolder: boolean; onOpen: (file: string) => void }) {
+  const slash = file.path.lastIndexOf('/')
+  return (
+    <button
+      type="button"
+      className="changed-file"
+      data-kind={file.kind}
+      title={file.oldPath ? `${file.oldPath} → ${file.path}` : file.path}
+      onClick={() => onOpen(file.path)}
+    >
+      <span className="change-kind" data-kind={file.kind} aria-label={KIND[file.kind].text}>{KIND[file.kind].mark}</span>
+      <span className="changed-file-name">
+        {file.path.slice(slash + 1)}
+        {withFolder && slash > 0 && <span className="muted"> {file.path.slice(0, slash)}</span>}
+      </span>
+      {file.additions === null || file.deletions === null
+        ? <span className="changed-file-counts mono">{file.kind === 'untracked' ? t('Inspector.newFile') : t('Inspector.binary')}</span>
+        : <LineCounts className="changed-file-counts" added={file.additions} removed={file.deletions} />}
+    </button>
   )
 }
 

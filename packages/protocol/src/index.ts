@@ -1,5 +1,6 @@
 export * from './task'
 export * from './handoff'
+export * from './branch-switch'
 export * from './worktree'
 export * from './changes'
 export * from './git'

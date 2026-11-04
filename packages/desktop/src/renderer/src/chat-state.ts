@@ -5,7 +5,7 @@ import { isCompaction } from './chat-notices'
 import { diffCounts, isSubagent } from './chat-tools'
 import { isBackgroundCommand, keepsInView } from './background-work'
 import { browserOperation } from './browser-activity'
-import { parseHandoffMessage, type AgentCall, type AgentKind, type ChatDiff, type ChatItem, type ChatQuestion, type ChatTodo, type ConversationStage, browserToolKind, isPlanApproval, isPreviewTool, previewRequest, toolImagePath, CODEX_IMAGE_GENERATION, terminalToolKind, todoToolKind } from '@antumi/protocol'
+import { parseHandoffMessage, withoutBranchSwitchNote, type AgentCall, type AgentKind, type ChatDiff, type ChatItem, type ChatQuestion, type ChatTodo, type ConversationStage, browserToolKind, isPlanApproval, isPreviewTool, previewRequest, toolImagePath, CODEX_IMAGE_GENERATION, terminalToolKind, todoToolKind } from '@antumi/protocol'
 
 // A conversation's chat items as this window holds them, in the order core first saw them;
 // `before` pages further back, null when nothing older is left.
@@ -152,9 +152,9 @@ export function dropChat(conversationId: string): void {
 }
 
 // What the user said in a message: of the one that starts a handoff, only their note, as Antumi's
-// instruction to read the handoff file is its own.
+// instruction to read the handoff file is its own, and past a note that a branch was switched.
 export function saidText(text: string): string {
-  return parseHandoffMessage(text)?.note ?? text
+  return parseHandoffMessage(text)?.note ?? withoutBranchSwitchNote(text)
 }
 
 // Who answers in a turn: the agent, and the model (by its label where the agent gives one) and

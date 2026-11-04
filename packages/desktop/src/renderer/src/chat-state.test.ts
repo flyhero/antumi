@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { ChatItem, handoffMessage, type ConversationStage } from '@antumi/protocol'
+import { branchSwitchMessage, ChatItem, handoffMessage, type ConversationStage } from '@antumi/protocol'
 import {
   appendText,
   chatBlocks,
@@ -105,6 +105,11 @@ describe('saidText', () => {
     expect(saidText(handoffMessage('/k/sessions/c/handoffs/h.md', '先跑测试'))).toBe('先跑测试')
     expect(saidText(handoffMessage('/k/sessions/c/handoffs/h.md'))).toBe('')
     expect(saidText('请先阅读 README')).toBe('请先阅读 README')
+  })
+
+  it('drops the note of a branch switch, so the quotes after it still open the message', () => {
+    const said = '<!-- quote 1 from item:s/r1 -->\n> 原话\n\n为什么？'
+    expect(saidText(branchSwitchMessage(['app 现在在分支 main'], said))).toBe(said)
   })
 })
 

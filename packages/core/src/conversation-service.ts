@@ -3,7 +3,7 @@ import { agentCliAccess } from './agent-cli-access'
 import { randomUUID } from 'node:crypto'
 import { mkdir, realpath, rm, rmdir, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import { chatReferencesFor, canHaveHelper, helperAllowsMode, isHelper, agentDescriptor, modelPrice, providerEndpoint, type CostBaseline, checkEditAdditionalProjects, checkSwitchBranch, handoffMessage, isPlanApproval, parseHandoffMessage, MAX_TASK_REPOS, type AgentKind, type ChatCatalog, type ChatImage, type ChatItem, type ChatModel, type ChatOption, type ChatSettings, type CommitPushResult, type CommitResult, type PushResult, type Conversation, type ConversationMessage, type ConversationSearchHit, type ConversationStage, type FileDiff, type FolderChanges, type ProjectBranches, type ProjectHead, type ChatDecision, type KnowledgeBase, type TaskSource, type UnattendedMode, type ChatPermissionMode, startModes, unattendedPermission, isAntumiRequest , PROCESS_OWNER_ENV, processOwner, parseProcessOwner } from '@antumi/protocol'
+import { branchSwitchMessage, withoutBranchSwitchNote, chatReferencesFor, canHaveHelper, helperAllowsMode, isHelper, agentDescriptor, modelPrice, providerEndpoint, type CostBaseline, checkEditAdditionalProjects, checkSwitchBranch, handoffMessage, isPlanApproval, parseHandoffMessage, MAX_TASK_REPOS, type AgentKind, type ChatCatalog, type ChatImage, type ChatItem, type ChatModel, type ChatOption, type ChatSettings, type CommitPushResult, type CommitResult, type PushResult, type Conversation, type ConversationMessage, type ConversationSearchHit, type ConversationStage, type FileDiff, type FolderChanges, type ProjectBranches, type ProjectHead, type ChatDecision, type KnowledgeBase, type TaskSource, type UnattendedMode, type ChatPermissionMode, startModes, unattendedPermission, isAntumiRequest , PROCESS_OWNER_ENV, processOwner, parseProcessOwner } from '@antumi/protocol'
 import type { DaemonEvent, SessionInfo } from '@antumi/protocol/node'
 import { canReuseConversation, DEFAULT_ACCOUNT, type ConversationConfiguration, type TaskLaunchOptions } from '@antumi/protocol'
 import type { RunMeasure } from './agent-run-store'
@@ -115,9 +115,6 @@ function settles(promise: Promise<void>, ms: number): Promise<boolean> {
     })
   })
 }
-
-// How the note of a branch switch begins, which Antumi puts before the user's next message.
-const SWITCH_NOTE = '（我切换了分支：'
 
 // Each an existing directory, by its real path and as picked; `taken` are real paths already in use.
 async function resolveProjects(projectPaths: readonly string[], taken: readonly string[] = []): Promise<{ projects: string[]; picked: string[] }> {
@@ -516,11 +513,10 @@ export class ConversationService {
   }
 
   // What the user switched since the agent last heard, said before their next message.
-  private switchNote(id: string): string | null {
+  private switchNote(id: string): string[] | null {
     const switched = Object.entries(this.store.switchedBranches(id))
     if (switched.length === 0) return null
-    const lines = switched.map(([project, branch]) => `${path.basename(project)} 现在在分支 ${branch}`)
-    return `${SWITCH_NOTE}${lines.join('；')}。文件已经变了，需要时请重新读。）`
+    return switched.map(([project, branch]) => `${path.basename(project)} 现在在分支 ${branch}`)
   }
 
   changes(id: string): Promise<FolderChanges[]> {
@@ -1496,7 +1492,7 @@ export class ConversationService {
       await this.gitGuard?.(this.get(id).projectPaths)
       if (ref && this.sentRef(id, ref, 0)) return
       const note = this.switchNote(id)
-      const message = note ? `${note}\n\n${text}` : text
+      const message = note ? branchSwitchMessage(note, text) : text
       await this.chats.send(id, message, await this.chatImages(imageIds), queue, steer, ref, chatReferencesFor(text, message, references))
       if (note) this.store.setSwitchedBranches(id, {})
     } finally { const pending = (this.gitSending.get(id) ?? 1) - 1; if (pending) this.gitSending.set(id, pending); else this.gitSending.delete(id) }
@@ -1964,7 +1960,7 @@ export class ConversationService {
     if (message.role === 'assistant' && message.complete) this.store.completePendingUsers(stage.id)
     if (message.role === 'user' && !conversation.titleLocked && conversation.title === '新会话') {
       // The user's own words name it, not Antumi's note of a branch switch before them.
-      const first = text.split(/\r?\n/).map((line) => line.trim().replace(/\s+/g, ' ')).find((line) => line && !line.startsWith(SWITCH_NOTE))
+      const first = withoutBranchSwitchNote(text).split(/\r?\n/).map((line) => line.trim().replace(/\s+/g, ' ')).find(Boolean)
       if (first) {
         this.changed(this.store.update(conversation.id, { title: [...first].slice(0, 40).join('') }))
         return

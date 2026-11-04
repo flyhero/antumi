@@ -729,8 +729,8 @@ body.stacked-panel-resizing * {
   left: 19px;
   width: 1px;
   background:
-    linear-gradient(var(--border), var(--border)) top / 1px calc(var(--row-pad) + 2px) no-repeat,
-    linear-gradient(var(--border), var(--border)) bottom / 1px calc(100% - var(--row-pad) - 20px) no-repeat;
+    linear-gradient(var(--border), var(--border)) top / 1px max(0px, calc(var(--row-pad) + 2px - var(--mark-clearance, 0px))) no-repeat,
+    linear-gradient(var(--border), var(--border)) bottom / 1px max(0px, calc(100% - var(--row-pad) - 20px - var(--mark-clearance, 0px))) no-repeat;
 }
 /* The row in view floats above the guide, so its card covers it. */
 .conversation-group[data-tree] .conversation-row[aria-current='true']::before { display: none; }
@@ -774,7 +774,6 @@ body.stacked-panel-resizing * {
 @media (prefers-reduced-motion: reduce) {
   .conversation-status[data-glyph='awaiting'],
   .task-mark[data-glyph='awaiting'],
-  .agent-status-mark[data-glyph='awaiting'] .agent-status-badge,
   .discussion-mark[data-tone='awaiting'] { animation: none; }
 }
 /* The message a search matched, under the row's meta line. */
@@ -10346,20 +10345,21 @@ button.island-compact:focus-visible { outline: 2px solid var(--focus); outline-o
 .task-row:hover .task-mark-status { background: var(--surface-muted); box-shadow: 0 0 0 1.5px var(--surface-muted); }
 .task-mark-status .status-icon { width: 9px; height: 9px; }
 
-/* A chat's agent logo in the status column, its own colours kept; how the chat stands is the badge
-   at the bottom right, cut out of the logo by a ring of the row's background like a task's status. */
+/* Rings extend beyond the icon column, keeping titles aligned with the group heading. */
 .agent-status-mark { position: relative; justify-self: center; display: grid; place-items: center; width: 16px; height: 16px; margin-top: 2px; }
 .agent-status-mark > .agent-mark { width: 14px; height: 14px; }
 .agent-status-mark > .agent-avatar { width: 16px; height: 16px; }
 /* A saved agent's face (AgentAvatar); each place it stands in sets its size. */
 .agent-avatar { display: block; flex-shrink: 0; }
-.agent-status-badge { position: absolute; right: -4px; bottom: -3px; display: grid; place-items: center; width: 9px; height: 9px; border-radius: 50%; background: var(--surface); box-shadow: 0 0 0 1.5px var(--surface); }
-.task-row:hover .agent-status-badge { box-shadow: 0 0 0 1.5px var(--surface-muted); }
-/* At this size the usual grey track vanishes on a dark row: the whole ring takes the running colour. */
-.agent-status-mark[data-glyph='running'] .agent-status-badge .chat-spinner { width: 9px; height: 9px; border-width: 1.5px; border-color: color-mix(in srgb, var(--status-running) 35%, transparent); border-top-color: var(--status-running); }
-.agent-status-mark[data-glyph='unseen'] .agent-status-badge { background: var(--accent); }
-.agent-status-mark[data-glyph='failed'] .agent-status-badge { background: var(--danger); }
-.agent-status-mark[data-glyph='awaiting'] .agent-status-badge { background: var(--warning); animation: status-pulse 1.6s ease-out infinite; }
+.agent-status-ring { position: absolute; inset: -4px; border: 2px solid; border-radius: 50%; pointer-events: none; }
+.agent-status-mark[data-glyph='running'] .agent-status-ring { border-color: color-mix(in srgb, var(--status-running) 30%, transparent); border-top-color: var(--status-running); border-right-color: var(--status-running); animation: spin 1s linear infinite; }
+.agent-status-mark[data-glyph='unseen'] .agent-status-ring { border-color: var(--accent); border-style: dotted; }
+.agent-status-mark[data-glyph='failed'] .agent-status-ring { border-color: var(--danger); }
+.agent-status-mark[data-glyph='awaiting'] .agent-status-ring { border-color: var(--warning); }
+.conversation-row:has(> .agent-status-mark:not([data-glyph='idle'])) { --mark-clearance: 4px; }
+@media (prefers-reduced-motion: reduce) {
+  .agent-status-mark[data-glyph='running'] .agent-status-ring { animation: none; }
+}
 /* The task's status in the row's meta line: a word in the status's colour, no heavier than the rest. */
 .conversation-task-status { font-weight: 500; }
 
@@ -10872,7 +10872,7 @@ button.squad-member-main { cursor: pointer; }
   .discussion-dot[data-tone='awaiting'],
   .discussion-mark[data-tone='awaiting'],
   .task-mark[data-glyph='awaiting'],
-  .agent-status-mark[data-glyph='awaiting'] .agent-status-badge,
+  .agent-status-mark[data-glyph='running'] .agent-status-ring,
   .discussion-typing i
 ) { animation-play-state: paused; }
 /* A pseudo-element cannot stand inside :is(): the list is forgiving and drops what it cannot

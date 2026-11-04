@@ -27,9 +27,7 @@ export function ConversationStatus({ conversation }: { conversation: Conversatio
   )
 }
 
-// In a list, a chat holds its agent's logo in the status column, or, with an agent the user saved,
-// that agent's face; either keeps its own colours, so how it stands sits small at its bottom right,
-// as a task's status sits on its mark; nothing when nothing is going on.
+// Keep the agent's own colours inside the status ring; idle chats need no ring.
 export function ConversationMark({ conversation }: { conversation: Conversation }) {
   const { glyph, label, detail } = useStatus(conversation)
   const { profile } = conversation
@@ -37,7 +35,7 @@ export function ConversationMark({ conversation }: { conversation: Conversation 
   return (
     <span className="agent-status-mark" data-glyph={glyph} role="img" aria-label={`${profile?.name ?? agentLabel(conversation.agent)} · ${label}`} title={detail ?? label}>
       {profile && saved ? <AgentAvatar id={profile.id} /> : <AgentIcon agent={conversation.agent} />}
-      {glyph !== 'idle' && <span className="agent-status-badge">{glyph === 'running' && <Spinner />}</span>}
+      {glyph !== 'idle' && <span className="agent-status-ring" aria-hidden="true" />}
     </span>
   )
 }

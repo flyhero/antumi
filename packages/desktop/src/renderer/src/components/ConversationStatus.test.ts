@@ -16,12 +16,19 @@ describe('the status column in the list', () => {
     expect(mark({ profile })).toMatch(/aria-label="审查员 · [^"]+"[^>]*><svg class="agent-mark agent-mark-claude"/)
   })
 
-  it('holds any other chat\'s agent logo, with how it stands as a badge only when something is going on', () => {
+  it('keeps the agent logo inside a status ring only when something is going on', () => {
     const idle = mark({})
     expect(idle).toMatch(/^<span class="agent-status-mark" data-glyph="idle" role="img" aria-label="Claude Code · [^"]+"[^>]*><svg class="agent-mark agent-mark-claude"/)
-    expect(idle).not.toContain('agent-status-badge')
-    expect(mark({ lastExit: { code: 1, at: 1 } })).toMatch(/data-glyph="failed".*<span class="agent-status-badge"><\/span>/)
-    expect(mark({ sessionId: 's', chat: { turn: 'running' } })).toMatch(/data-glyph="running".*<span class="agent-status-badge"><span class="chat-spinner"/)
+    expect(idle).not.toContain('agent-status-ring')
+    for (const [glyph, patch] of [
+      ['failed', { lastExit: { code: 1, at: 1 } }],
+      ['running', { sessionId: 's', chat: { turn: 'running' } }],
+      ['awaiting', { sessionId: 's', chat: { turn: 'awaiting' } }]
+    ] as const) {
+      const active = mark(patch)
+      expect(active).toContain(`data-glyph="${glyph}"`)
+      expect(active).toContain('<span class="agent-status-ring" aria-hidden="true"></span>')
+    }
   })
 
   it('keeps the dot in the conversation\'s own header', () => {

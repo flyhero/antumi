@@ -1,10 +1,11 @@
 import { localized, t, tr } from '../i18n'
-import { useContext, useEffect, useState, type ReactNode } from 'react'
+import { useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { RpcError, type ChangedFile, type Commit, type FileDiff } from '@antumi/protocol'
 import { revealChatEdit, useCore } from '../core-store'
 import type { ChatEdit } from '../inspector-file'
 import { changedFileTree, type ChangedFileNode } from '../changed-file-tree'
-import { setPreference, usePreferences } from '../preferences'
+import { setPreference, usePreferences, type Preferences } from '../preferences'
+import { useSplitDiff } from '../diff-layout'
 import type { BranchTarget } from './BranchStatus'
 import { CommentableDiff, DiffCommentConversation } from './DiffComments'
 import { DiffLines } from './DiffLines'
@@ -253,6 +254,9 @@ function FileRow({ file, withFolder, onOpen }: { file: ChangedFile; withFolder: 
   )
 }
 
+const DIFF_LAYOUTS: readonly Preferences['diffLayout'][] = ['auto', 'unified', 'split']
+const DIFF_LAYOUT_LABEL: Record<Preferences['diffLayout'], string> = localized(() => ({ auto: t('Inspector.diffLayoutAuto'), unified: t('Inspector.diffLayoutUnified'), split: t('Inspector.diffLayoutSplit') }))
+
 // `load` is asked again whenever `loadKey` changes; a stale answer never replaces a newer one.
 // commentKey names the diff for comments on its lines, where the inspector has a chat to send them
 // to; it outlasts a reload, as loadKey does not.
@@ -278,13 +282,23 @@ export function FileDiffView({ file, loadKey, commentKey, load, onBack, edit }: 
     }
   }, [loadKey])
   const shown = result?.key === loadKey ? result : null
+  const box = useRef<HTMLDivElement>(null)
+  const split = useSplitDiff(box)
+  const layout = usePreferences((p) => p.diffLayout)
   return (
-    <div className="file-diff">
+    <div className="file-diff" ref={box}>
       <div className="file-diff-header">
         <button type="button" className="tool-button" aria-label={t('Inspector.backToFileList')} data-tooltip={t('Inspector.backToFileList')} onClick={onBack}>
           <ArrowLeftIcon />
         </button>
         <span className="mono file-diff-path" title={file}>{file}</span>
+        <div className="segmented diff-layout-toggle" role="radiogroup" aria-label={t('Inspector.diffLayout')}>
+          {DIFF_LAYOUTS.map((value) => (
+            <button key={value} type="button" role="radio" aria-checked={layout === value} title={value === 'auto' ? t('Inspector.diffLayoutAutoHint') : undefined} onClick={() => setPreference('diffLayout', value)}>
+              {DIFF_LAYOUT_LABEL[value]}
+            </button>
+          ))}
+        </div>
       </div>
       {!shown ? (
         <p className="inspector-empty muted">{t('Inspector.loadingDiff')}</p>
@@ -296,8 +310,8 @@ export function FileDiffView({ file, loadKey, commentKey, load, onBack, edit }: 
       ) : (
         <>
           {conversationId && commentKey
-            ? <CommentableDiff patch={shown.diff.diff} path={file} conversationId={conversationId} diffKey={commentKey} />
-            : <DiffLines patch={shown.diff.diff} path={file} />}
+            ? <CommentableDiff patch={shown.diff.diff} path={file} conversationId={conversationId} diffKey={commentKey} split={split} />
+            : <DiffLines patch={shown.diff.diff} path={file} split={split} />}
           {shown.diff.truncated && <p className="inspector-empty muted">{t('Inspector.diffTruncatedToTheFirst256kb')}</p>}
         </>
       )}

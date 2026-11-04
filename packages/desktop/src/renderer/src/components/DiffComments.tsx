@@ -2,7 +2,8 @@ import { getLocale, t, tr } from '../i18n'
 import { createContext, Fragment, useEffect, useMemo, useState } from 'react'
 import { addQuote, removeQuote, useQuotes, type ChatQuote } from '../chat-quotes'
 import { diffQuoteText, diffRowId } from '../unified-diff'
-import { useDiffHighlight } from '../diff-highlight'
+import { useDiffHighlight, type HighlightedDiffRow } from '../diff-highlight'
+import { splitRows, type SplitCell } from '../split-diff'
 import { DiffCode } from './DiffCode'
 import { CloseIcon } from './icons'
 
@@ -16,11 +17,13 @@ type LinePick = { hunk: number; origin: number; reach: number }
 // A diff whose lines take comments: a line's number picks it, Shift picks on to another in its hunk,
 // and what the user says joins the chat's quotes, to go with their next message. diffKey names the
 // diff across reloads, so the lines a waiting comment is on stay marked.
-export function CommentableDiff({ patch, path, conversationId, diffKey }: {
+// split: side by side (splitRows), the old file's numbers on the left and the new file's on the right.
+export function CommentableDiff({ patch, path, conversationId, diffKey, split = false }: {
   patch: string
   path: string
   conversationId: string
   diffKey: string
+  split?: boolean
 }) {
   const rows = useDiffHighlight(patch, path)
   const ids = useMemo(() => rows.map(diffRowId), [rows, getLocale()])
@@ -59,69 +62,95 @@ export function CommentableDiff({ patch, path, conversationId, diffKey }: {
     setPick(null)
   }
 
+  // A line's number, which picks the line to comment on; line is the number its side shows.
+  const lineNumber = (index: number, row: HighlightedDiffRow, line: number | null) => (ids[index] ?? null) !== null && line !== null && (
+    <button
+      type="button"
+      className="diff-line-number"
+      data-old={row.newLine === null || undefined}
+      aria-label={t('DiffComments.commentOnLine', { line: line })}
+      title={t('DiffComments.commentOnThisLineShiftClickAnotherLine')}
+      // Shift would otherwise also stretch the page's text selection.
+      onMouseDown={(event) => event.shiftKey && event.preventDefault()}
+      onClick={(event) => choose(index, event.shiftKey)}
+    >
+      {line}
+    </button>
+  )
+  const marks = (index: number) => {
+    const id = ids[index] ?? null
+    return { 'data-picked': (index >= from && index <= to) || undefined, 'data-commented': (id !== null && commented.has(id)) || undefined }
+  }
+  // What follows a line: its comments, then the box for a new one where the pick ends.
+  const after = (indexes: readonly number[]) => (
+    <>
+      {[...new Set(indexes)].flatMap((index) => below.get(index) ?? []).map((quote) => (
+        <div key={quote.id} className="diff-comment">
+          <span className={quote.note ? 'diff-comment-note' : 'diff-comment-note muted'}>{quote.note || t('DiffComments.quoteOnlyThisCode')}</span>
+          <button type="button" className="tool-button" aria-label={t('DiffComments.removeComment')} data-tooltip={t('ChatQuoteCards.remove')} onClick={() => removeQuote(conversationId, quote.id)}>
+            <CloseIcon />
+          </button>
+        </div>
+      ))}
+      {pick && indexes.includes(to) && (
+        <div className="diff-comment diff-comment-draft">
+          <input
+            autoFocus
+            value={note}
+            placeholder={from === to ? t('DiffComments.commentOnLine_794', { line: rows[to]?.newLine ?? rows[to]?.oldLine }) : t('DiffComments.commentOnTheseLines')}
+            aria-label={t('DiffComments.comments')}
+            onChange={(event) => setNote(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.nativeEvent.isComposing) return
+              if (event.key === 'Enter') {
+                event.preventDefault()
+                submit()
+              } else if (event.key === 'Escape') {
+                event.preventDefault()
+                event.stopPropagation()
+                setPick(null)
+              }
+            }}
+          />
+          <button type="button" className="link-button" onClick={() => setPick(null)}>{t('ChatCommandSettings.cancel')}</button>
+          <button type="button" className="link-button" onClick={submit}>{t('DiffComments.comments')}</button>
+        </div>
+      )}
+    </>
+  )
+  const side = (cell: SplitCell<HighlightedDiffRow> | null, old: boolean) => cell
+    ? <div className={`diff-split-cell ${cell.row.kind}`} {...marks(cell.index)}>
+      <span className="diff-gutter">{lineNumber(cell.index, cell.row, old ? cell.row.oldLine : cell.row.newLine)}</span>
+      <span className="diff-split-code"><DiffCode row={cell.row} bare /></span>
+    </div>
+    : <div className="diff-split-cell diff-split-empty" />
+
   return (
     <>
-      <pre className="diff-view diff-view-commentable">
-        {rows.map((row, index) => {
-          const id = ids[index] ?? null
-          const line = row.newLine ?? row.oldLine
-          return (
+      {split ? (
+        <div className="diff-view diff-view-commentable diff-view-split">
+          {splitRows(rows).map((line, at) => line.kind === 'full' ? (
+            <div key={at} className={`diff-split-full ${line.cell.row.kind}`}><DiffCode row={line.cell.row} /></div>
+          ) : (
+            <Fragment key={at}>
+              <div className="diff-split-pair">{side(line.left, true)}{side(line.right, false)}</div>
+              {after([line.left?.index, line.right?.index].filter((index) => index !== undefined))}
+            </Fragment>
+          ))}
+        </div>
+      ) : (
+        <pre className="diff-view diff-view-commentable">
+          {rows.map((row, index) => (
             <Fragment key={index}>
-              <div className={row.kind} data-picked={(index >= from && index <= to) || undefined} data-commented={(id !== null && commented.has(id)) || undefined}>
-                <span className="diff-gutter">
-                  {id !== null && (
-                    <button
-                      type="button"
-                      className="diff-line-number"
-                      data-old={row.newLine === null || undefined}
-                      aria-label={t('DiffComments.commentOnLine', { line: line })}
-                      title={t('DiffComments.commentOnThisLineShiftClickAnotherLine')}
-                      // Shift would otherwise also stretch the page's text selection.
-                      onMouseDown={(event) => event.shiftKey && event.preventDefault()}
-                      onClick={(event) => choose(index, event.shiftKey)}
-                    >
-                      {line}
-                    </button>
-                  )}
-                </span>
+              <div className={row.kind} {...marks(index)}>
+                <span className="diff-gutter">{lineNumber(index, row, row.newLine ?? row.oldLine)}</span>
                 <DiffCode row={row} />
               </div>
-              {below.get(index)?.map((quote) => (
-                <div key={quote.id} className="diff-comment">
-                  <span className={quote.note ? 'diff-comment-note' : 'diff-comment-note muted'}>{quote.note || t('DiffComments.quoteOnlyThisCode')}</span>
-                  <button type="button" className="tool-button" aria-label={t('DiffComments.removeComment')} data-tooltip={t('ChatQuoteCards.remove')} onClick={() => removeQuote(conversationId, quote.id)}>
-                    <CloseIcon />
-                  </button>
-                </div>
-              ))}
-              {pick && index === to && (
-                <div className="diff-comment diff-comment-draft">
-                  <input
-                    autoFocus
-                    value={note}
-                    placeholder={from === to ? t('DiffComments.commentOnLine_794', { line: line }) : t('DiffComments.commentOnTheseLines')}
-                    aria-label={t('DiffComments.comments')}
-                    onChange={(event) => setNote(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.nativeEvent.isComposing) return
-                      if (event.key === 'Enter') {
-                        event.preventDefault()
-                        submit()
-                      } else if (event.key === 'Escape') {
-                        event.preventDefault()
-                        event.stopPropagation()
-                        setPick(null)
-                      }
-                    }}
-                  />
-                  <button type="button" className="link-button" onClick={() => setPick(null)}>{t('ChatCommandSettings.cancel')}</button>
-                  <button type="button" className="link-button" onClick={submit}>{t('DiffComments.comments')}</button>
-                </div>
-              )}
+              {after([index])}
             </Fragment>
-          )
-        })}
-      </pre>
+          ))}
+        </pre>
+      )}
       {comments.length > 0 && <p className="inspector-empty muted">{tr('DiffComments.commentsInTheComposerWillBeSentWith', { value1: comments.length })}</p>}
     </>
   )

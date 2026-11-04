@@ -3685,6 +3685,26 @@ div.inspector-empty > p { margin: 0 0 8px; }
 
 .diff-comment-draft input::placeholder { color: var(--text-3); }
 
+/* Side by side: the old file on the left, the new on the right, each line wrapping in its half so
+   the two stay level; a side with nothing to face is left blank. */
+.diff-view-split { overflow-x: visible; }
+.diff-view-split > div { padding: 0; white-space: normal; }
+.diff-view-split > .diff-split-full { padding: 0 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.diff-split-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.diff-split-cell { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; min-width: 0; }
+.diff-split-cell + .diff-split-cell { border-left: 1px solid var(--border); }
+.diff-split-code { padding-right: 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.diff-split-empty { background: var(--fill); }
+.diff-line-label { display: inline-block; width: 100%; padding: 0 4px; color: var(--text-3); }
+.diff-split-cell:hover .diff-line-number { background: var(--accent-bg); color: var(--accent); opacity: 1; }
+.diff-split-cell[data-commented] .diff-line-number { color: var(--accent); opacity: 1; }
+.diff-split-cell[data-picked] { box-shadow: inset 2px 0 var(--accent); background-color: var(--accent-bg); }
+.diff-split-cell[data-commented]:not([data-picked]) { box-shadow: inset 2px 0 var(--accent); }
+
+/* Unified, split, or left to the inspector's width, at the end of the file's header. */
+.segmented.diff-layout-toggle { flex-shrink: 0; margin-left: auto; }
+.segmented.diff-layout-toggle button { height: 22px; padding: 0 8px; font-size: 12px; }
+
 .terminal-frame {
   flex: 1;
   display: flex;

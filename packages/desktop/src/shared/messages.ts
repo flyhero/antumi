@@ -5624,6 +5624,26 @@ export const MESSAGES = {
     "zh": "二进制",
     "en": "Binary"
   },
+  "Inspector.diffLayout": {
+    "zh": "差异布局",
+    "en": "Diff layout"
+  },
+  "Inspector.diffLayoutAuto": {
+    "zh": "自动",
+    "en": "Auto"
+  },
+  "Inspector.diffLayoutAutoHint": {
+    "zh": "检查器够宽时并排显示，窄时合在一起",
+    "en": "Side by side when the inspector is wide enough, unified when narrow"
+  },
+  "Inspector.diffLayoutUnified": {
+    "zh": "统一",
+    "en": "Unified"
+  },
+  "Inspector.diffLayoutSplit": {
+    "zh": "并排",
+    "en": "Split"
+  },
   "Inspector.backToFileList": {
     "zh": "返回文件列表",
     "en": "Back to file list"

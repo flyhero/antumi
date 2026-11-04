@@ -122,6 +122,8 @@ const Preferences = z.object({
   gitGroupByDirectory: z.boolean().catch(true),
   // How the inspector's changes list its files: flat, each with its folder, or as a folder tree.
   changedFilesView: z.enum(['list', 'tree']).catch('list'),
+  // A file's diff in the inspector: side by side once it is wide enough (auto), or always one way.
+  diffLayout: z.enum(['auto', 'unified', 'split']).catch('auto'),
   gitShowRecent: z.boolean().catch(true),
   gitShowTags: z.boolean().catch(true),
   gitFoldedGroups: z.record(z.string(), z.array(z.string())).catch({}),

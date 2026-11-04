@@ -23,7 +23,7 @@ Task-first multi-agent manager. See docs/ARCHITECTURE.md for the architecture di
 - core binds to 127.0.0.1 only and requires the token from `core.json`: any web page can open a localhost WebSocket.
 - Agent commands are argv arrays with `--` before the prompt. Never go through a shell.
 - Only a refused connection proves a daemon socket is stale. A timeout or EPERM proves nothing.
-- Worktrees are never deleted automatically: they may hold the only copy of an agent's work. A worktree goes only when the user cleans it, or when it provably holds nothing: a planning checkout once its task runs. Either way it is removed without force, and never one with changes or a commit no ref contains.
+- Worktrees may hold the only copy of an agent's work. A worktree goes only when the user cleans it, or when it provably holds nothing: a planning checkout once its task runs, or one whose conversation was archived or whose task or conversation was deleted, once idle as long as the user allows, with no ignored file setup or a build would not make again. Either way it is removed without force, its branch kept, and never one with changes or a commit no ref contains.
 
 ## Style
 

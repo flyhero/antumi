@@ -174,6 +174,52 @@ describe('WorktreeService', () => {
     expect(existsSync(held)).toBe(true)
   })
 
+  it('cleans an archived conversation\'s worktree, recording where it stood and what it had out', async () => {
+    const archived = worktree('c')
+    git(archived, 'commit', '-q', '--allow-empty', '-m', 'work')
+    const head = git(archived, 'rev-parse', 'HEAD')
+    const real = realpathSync(archived)
+    const cleaned: unknown[] = []
+    const conversations = [{ id: id('c'), projectPaths: [real], archivedAt: 5, updatedAt: 5 }]
+    const worktrees = new WorktreeService(root, hooks, () => {}, { list: () => conversations, worktreeCleaned: (each) => { cleaned.push(each) } })
+    expect((await worktrees.list())[0]).toMatchObject({ conversationId: id('c'), conversationArchived: true })
+    writeFileSync(path.join(archived, 'draft.txt'), 'x')
+    expect(await worktrees.clean([archived])).toEqual([{ path: archived, removed: false, reason: 'worktree-dirty' }])
+    rmSync(path.join(archived, 'draft.txt'))
+    expect(await worktrees.clean([archived])).toEqual([{ path: archived, removed: true, reason: null }])
+    expect(cleaned).toEqual([{ dir: real, repo: realpathSync(app), branch: 'antumi/c', head }])
+    expect(git(app, 'rev-parse', 'antumi/c')).toBe(head)
+  })
+
+  it('finds what to clean on its own: archived long enough, or left behind, holding nothing at all', async () => {
+    const old = worktree('o')
+    const recent = worktree('r')
+    const open = worktree('a')
+    const orphan = worktree('e')
+    const kept = worktree('k')
+    writeFileSync(path.join(app, '.gitignore'), 'node_modules/\nnotes.md\n')
+    git(app, 'add', '.gitignore')
+    git(app, 'commit', '-q', '-m', 'ignore')
+    for (const each of [old, orphan, kept]) git(each, 'merge', '-q', '--ff-only', 'main')
+    // Installed packages come back with setup; a note the user left does not.
+    execFileSync('mkdir', ['-p', path.join(orphan, 'node_modules', 'x')])
+    writeFileSync(path.join(kept, 'notes.md'), 'mine')
+    const conversations = [
+      { id: id('o'), projectPaths: [realpathSync(old)], archivedAt: 100, updatedAt: 100 },
+      { id: id('r'), projectPaths: [realpathSync(recent)], archivedAt: 900, updatedAt: 900 },
+      { id: id('a'), projectPaths: [realpathSync(open)], archivedAt: null, updatedAt: 1 }
+    ]
+    // A group chat member the list leaves out still works in the one left behind by its own name.
+    let memberArchivedAt: number | null = null
+    const all = () => [...conversations, { projectPaths: [realpathSync(kept)], archivedAt: memberArchivedAt }]
+    const worktrees = new WorktreeService(root, hooks, () => {}, { list: () => conversations, all })
+    expect(await worktrees.idle(500)).toEqual([old])
+    expect((await worktrees.idle(Date.now() + 60_000)).sort()).toEqual([old, orphan, recent].sort())
+    // Kept for the note even once that member is put away.
+    memberArchivedAt = 1
+    expect(await worktrees.idle(Date.now() + 60_000)).not.toContain(kept)
+  })
+
   it('keeps a delegated member\'s worktree while its call is open, then lets it go and tells the call only once it is gone', async () => {
     const member = worktree('m')
     let open = true

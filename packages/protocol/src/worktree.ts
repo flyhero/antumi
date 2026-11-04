@@ -2,7 +2,8 @@ import { z } from 'zod'
 import type { Task } from './task'
 
 // A git worktree Antumi laid out under its worktrees folder: a task's, a planning checkout, a
-// conversation's, or one whose task or conversation was deleted. Antumi never removes one of its own accord; the user cleans them up.
+// conversation's, or one whose task or conversation was deleted. The user cleans them up; Antumi
+// removes one of its own accord only once it provably holds nothing (ChatSettings.worktreeCleanDays).
 export const ManagedWorktree = z.object({
   path: z.string(),
   // The project it belongs to: the repo's main working tree; null when git cannot say.
@@ -13,6 +14,9 @@ export const ManagedWorktree = z.object({
   taskId: z.string().nullable(),
   // The conversation it was laid out for, while that conversation is still there. Older cores leave it out.
   conversationId: z.string().nullable().optional(),
+  // That conversation is archived: its worktree can go, and is laid out again from its branch when
+  // the conversation is taken out (feature archived-worktrees). Older cores leave it out.
+  conversationArchived: z.boolean().optional(),
   // The delegation it was laid out for (feature delegation-worktree): open while the member works.
   // Its parent conversation may be gone by now.
   agentCall: z.object({ id: z.string(), parentId: z.string(), open: z.boolean() }).nullable().optional(),
@@ -39,16 +43,16 @@ export type WorktreeCleanResult = z.infer<typeof WorktreeCleanResult>
 export type WorktreeCleanBlocker = 'task-active' | 'conversation-open' | 'delegation-open' | 'worktree-in-use' | 'worktree-locked' | 'worktree-unreadable' | 'worktree-dirty' | 'worktree-alone'
 
 // Cleaning a worktree loses nothing when it holds nothing uncommitted: its commits stay on its
-// branch, from which continuing the task lays it out again. A task still under way keeps its own,
-// and a conversation keeps its own while it is there, since nothing would lay it out again. A
+// branch, from which continuing the task, or taking an archived conversation out, lays it out
+// again. A task still under way keeps its own, and so does a conversation not archived. A
 // delegation's goes once the call ends: its branch is what the caller merges, not the folder.
 export function checkCleanWorktree(
-  worktree: Pick<ManagedWorktree, 'changes' | 'locked' | 'alone' | 'inUse' | 'conversationId' | 'agentCall'>,
+  worktree: Pick<ManagedWorktree, 'changes' | 'locked' | 'alone' | 'inUse' | 'conversationId' | 'conversationArchived' | 'agentCall'>,
   task: Pick<Task, 'status'> | null
 ): WorktreeCleanBlocker | null {
   if (task && task.status !== 'done' && task.status !== 'abandoned') return 'task-active'
   if (worktree.agentCall?.open) return 'delegation-open'
-  if (worktree.conversationId && !worktree.agentCall) return 'conversation-open'
+  if (worktree.conversationId && !worktree.agentCall && !worktree.conversationArchived) return 'conversation-open'
   if (worktree.inUse) return 'worktree-in-use'
   if (worktree.locked) return 'worktree-locked'
   if (worktree.changes === null) return 'worktree-unreadable'

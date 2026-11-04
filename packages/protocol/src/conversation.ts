@@ -183,7 +183,9 @@ export const BranchHolder = z.object({
   kind: z.enum(['main', 'conversation', 'other']),
   conversationId: z.string().optional(),
   title: z.string().optional(),
-  archived: z.boolean().optional()
+  archived: z.boolean().optional(),
+  // The folder is a worktree Antumi laid out, which it can clean (feature archived-worktrees).
+  managed: z.boolean().optional()
 })
 export type BranchHolder = z.infer<typeof BranchHolder>
 

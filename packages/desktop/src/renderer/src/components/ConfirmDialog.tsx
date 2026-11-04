@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { t } from '../i18n'
 import { useOccludesBrowser } from '../browser-occlusion'
 import { confirmParts, useConfirmDialog } from '../confirm-dialog'
@@ -15,6 +15,7 @@ function ConfirmForm() {
   const dialog = useRef<HTMLDialogElement>(null)
   const submit = useRef<HTMLButtonElement>(null)
   const asking = useConfirmDialog((state) => state.asking)
+  const [ticked, setTicked] = useState(asking?.option?.checked ?? false)
   // Enter takes the action only when it loses nothing; otherwise focus stays on Cancel, first.
   useEffect(() => {
     dialog.current?.showModal()
@@ -22,14 +23,15 @@ function ConfirmForm() {
     return () => dialog.current?.close()
   }, [])
   if (!asking) return null
-  const { message, confirm, cancel, danger, answer } = asking
+  const { message, confirm, cancel, danger, option, answer } = asking
   const { title, body } = confirmParts(message)
   return <dialog ref={dialog} className="modal confirm-dialog" data-danger={danger || undefined} aria-labelledby="confirm-dialog-title" aria-describedby={body ? 'confirm-dialog-body' : undefined} onCancel={(event) => { event.preventDefault(); answer(false) }}>
-    <form className="confirm-dialog-body" onSubmit={(event) => { event.preventDefault(); answer(true) }}>
+    <form className="confirm-dialog-body" onSubmit={(event) => { event.preventDefault(); answer(true, ticked) }}>
       {danger && <span className="confirm-dialog-icon" aria-hidden="true"><WarningIcon /></span>}
       <div className="confirm-dialog-text">
         <h2 id="confirm-dialog-title">{title}</h2>
         {body && <p id="confirm-dialog-body">{body}</p>}
+        {option && <label className="confirm-dialog-option"><input type="checkbox" checked={ticked} onChange={(event) => setTicked(event.target.checked)} />{option.label}</label>}
       </div>
       <footer className="confirm-dialog-footer">
         <button type="button" className="button" onClick={() => answer(false)}>{cancel ?? t('ChatCommandSettings.cancel')}</button>

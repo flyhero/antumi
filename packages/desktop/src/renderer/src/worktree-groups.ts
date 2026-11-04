@@ -3,9 +3,9 @@ import { checkCleanWorktree, type Conversation, type ManagedWorktree, type Task,
 
 export type WorktreeRow = { worktree: ManagedWorktree; task: Task | null; conversation: Conversation | null; blocker: WorktreeCleanBlocker | null }
 
-// Cleanable: a finished task's, safe to go. Orphaned: its task or conversation was deleted, the
-// easiest to forget. Attention: holds something only the user can decide on. Active: its task is
-// under way, or its conversation is still there.
+// Cleanable: a finished task's or an archived conversation's, safe to go. Orphaned: its task or
+// conversation was deleted, the easiest to forget. Attention: holds something only the user can
+// decide on. Active: its task is under way, or its conversation is in use.
 export type WorktreeGroupId = 'cleanable' | 'orphaned' | 'attention' | 'active'
 export type WorktreeGroup = { id: WorktreeGroupId; rows: WorktreeRow[] }
 
@@ -26,7 +26,7 @@ export function worktreeRows(
 function groupOf(row: WorktreeRow): WorktreeGroupId {
   if (row.blocker === 'conversation-open' || row.blocker === 'delegation-open') return 'active'
   // A delegation's worktree is its call's, cleanable once that ended, whether or not the caller is still there.
-  if (!row.task && !row.worktree.agentCall) return 'orphaned'
+  if (!row.task && !row.worktree.agentCall && !row.worktree.conversationArchived) return 'orphaned'
   if (row.blocker === 'task-active') return 'active'
   return row.blocker ? 'attention' : 'cleanable'
 }

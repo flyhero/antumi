@@ -79,7 +79,7 @@ function SwitchList({ option, onPick, onLeave }: { option: ProjectBranches; onPi
         })}
       </ul>
       {refs.length === 0 && <p className="branch-action-note">{t('ConversationBranches.noMatchingBranches')}</p>}
-      {held && option.elsewhere[held] && <HeldBranchNote branch={shortRef(held)} folder={option.elsewhere[held]} holder={option.holders?.[held]} onLeave={onLeave} />}
+      {held && option.elsewhere[held] && <HeldBranchNote branch={shortRef(held)} folder={option.elsewhere[held]} holder={option.holders?.[held]} onLeave={onLeave} onFreed={() => onPick(held)} />}
     </div>
   )
 }

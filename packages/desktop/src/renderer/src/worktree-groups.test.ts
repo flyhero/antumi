@@ -50,4 +50,15 @@ describe('worktree groups', () => {
     expect(groupWorktrees(held).map((group) => group.id)).toEqual(['active'])
     expect(worktreeSummary(held).cleanable).toBe(0)
   })
+
+  it('counts an archived conversation\'s clean worktree as one to clean, not as left behind', () => {
+    const archived = worktreeRows([
+      worktree('done', { conversationId: 'a', conversationArchived: true }),
+      worktree('dirty', { conversationId: 'b', conversationArchived: true, changes: 1 })
+    ], {})
+    expect(groupWorktrees(archived).map((group) => [group.id, group.rows.map((row) => row.worktree.branch)])).toEqual([
+      ['cleanable', ['antumi/done']],
+      ['attention', ['antumi/dirty']]
+    ])
+  })
 })

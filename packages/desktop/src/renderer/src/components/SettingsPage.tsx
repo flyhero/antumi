@@ -18,6 +18,7 @@ import { PluginSettings } from './PluginSettings'
 import { InstalledAgentsSettings } from './InstalledAgentsSettings'
 import { TitleNamingSettings } from './TitleNamingSettings'
 import { AutoArchiveSettings } from './AutoArchiveSettings'
+import { WorktreeCleanSettings } from './WorktreeCleanSettings'
 import { agentLabel } from '../labels'
 import { appVersion, canNotify, canShowIsland, canShowRequestPopup } from '../desktop-bridge'
 import { formatBytes } from '../wire-entries'
@@ -356,6 +357,7 @@ function ConversationSettings() {
       )}
       <TitleNamingSettings />
       <AutoArchiveSettings />
+      <WorktreeCleanSettings />
       <SettingsRow
         label={t('SettingsPage.modelForQuickTasks_1609')}
         description={t('SettingsPage.useThisAgentSModelForTranslationCommit')}

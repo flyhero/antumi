@@ -7,22 +7,34 @@ export type ConfirmRequest = {
   cancel?: string
   // Losing something the user cannot get back.
   danger?: boolean
+  // Something more to do along with it, ticked or not to begin with; askConfirmWithOption reads it back.
+  option?: { label: string; checked: boolean }
 }
 
-type Asking = ConfirmRequest & { answer(confirmed: boolean): void }
+type Asking = ConfirmRequest & { answer(confirmed: boolean, option?: boolean): void }
 
 export const useConfirmDialog = create<{ asking: Asking | null }>()(() => ({ asking: null }))
 
 // Stands in for window.confirm, whose native box ignores the app's look. A second question while
 // one is open declines the first.
 export function askConfirm(request: ConfirmRequest): Promise<boolean> {
+  return ask(request).then(({ confirmed }) => confirmed)
+}
+
+// The same, with its option: whether it was ticked, or null when the user declined.
+export async function askConfirmWithOption(request: ConfirmRequest & { option: NonNullable<ConfirmRequest['option']> }): Promise<{ option: boolean } | null> {
+  const { confirmed, option } = await ask(request)
+  return confirmed ? { option } : null
+}
+
+function ask(request: ConfirmRequest): Promise<{ confirmed: boolean; option: boolean }> {
   useConfirmDialog.getState().asking?.answer(false)
   return new Promise((resolve) => {
     const asking: Asking = {
       ...request,
-      answer: (confirmed) => {
+      answer: (confirmed, option = request.option?.checked ?? false) => {
         if (useConfirmDialog.getState().asking === asking) useConfirmDialog.setState({ asking: null })
-        resolve(confirmed)
+        resolve({ confirmed, option })
       }
     }
     useConfirmDialog.setState({ asking })

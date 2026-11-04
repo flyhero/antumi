@@ -29,14 +29,16 @@ async function checkedOutElsewhere(dir: string, topLevel: string): Promise<{ els
 
 // Who holds each branch checked out in another folder: the repo's own folder, a conversation
 // working there (see worktreeOwner; its folder is named <id>/<repo>), or something else. An
-// archived one holds it only when no other works there: their worktrees stay.
-export function branchHolders(elsewhere: Record<string, string>, main: string | null, conversations: readonly Conversation[]): Record<string, BranchHolder> {
+// archived one holds it only when no other works there: their worktrees stay. `roots`: where Antumi
+// lays its worktrees out, as given and as its real path, since git may list a folder by either.
+export function branchHolders(elsewhere: Record<string, string>, main: string | null, conversations: readonly Conversation[], roots: readonly string[] = []): Record<string, BranchHolder> {
   const same = (a: string, b: string) => path.resolve(a) === path.resolve(b)
+  const managed = (folder: string) => roots.some((root) => path.resolve(folder).startsWith(path.resolve(root) + path.sep))
   return Object.fromEntries(Object.entries(elsewhere).map(([ref, folder]): [string, BranchHolder] => {
     if (main && same(folder, main)) return [ref, { kind: 'main' }]
     const users = conversations.filter((conversation) => same(conversation.workspacePath, folder) || conversation.projectPaths.some((project) => same(project, folder)))
     const owner = worktreeOwner(users, path.basename(path.dirname(folder)))
-    return [ref, owner ? { kind: 'conversation', conversationId: owner.id, title: owner.title, archived: owner.archivedAt != null } : { kind: 'other' }]
+    return [ref, owner ? { kind: 'conversation', conversationId: owner.id, title: owner.title, archived: owner.archivedAt != null, managed: managed(folder) } : { kind: 'other' }]
   }))
 }
 

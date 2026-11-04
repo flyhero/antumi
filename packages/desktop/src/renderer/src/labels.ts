@@ -89,7 +89,7 @@ const REASON_TEXT: Record<string, string> = localized(() => ({
   'worktree-exists': t('labels.thisProjectAlreadyHasAWorktree'),
   'repo-reference': t('labels.aReferenceProjectHasNoStartingPoint'),
   'task-active': t('labels.taskIsNotCompletedOrCancelled'),
-  'conversation-open': t('labels.conversationStillExistsDeleteItBeforeCleaningIts'),
+  'conversation-open': t('labels.conversationInUseArchiveOrDeleteBeforeCleaning'),
   'delegation-open': t('labels.delegationOpen'),
   'delegation-dirty': t('labels.delegationDirty'),
   'delegation-worktree-unavailable': t('labels.delegationWorktreeUnavailable'),

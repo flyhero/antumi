@@ -1,12 +1,13 @@
 import { z } from 'zod'
-import { AGENT_KINDS, ChatSettings, KnowledgeBase, TitleNaming, UnattendedMode } from '@antumi/protocol'
+import { AGENT_KINDS, ChatSettings, DEFAULT_WORKTREE_CLEAN_DAYS, KnowledgeBase, TitleNaming, UnattendedMode } from '@antumi/protocol'
 import { readJsonIfExists, writePrivateJson } from '@antumi/protocol/node'
 
 // Suggestions on, as in Claude Code itself; a title summed up after the first turn, since the first
 // message is rarely a good one; scheduled runs let edits through but still ask for
 // anything else, for whoever had Antumi before a new install's default became allowing everything
 // (FRESH_INSTALL); an agent that can drives the user's own browser; agents may read the user's
-// history in Antumi; no knowledge base until the user picks one; nothing archived on its own; the
+// history in Antumi; no knowledge base until the user picks one; nothing archived on its own, while
+// worktrees that provably hold nothing go a week after their conversation was put away; the
 // resets services announce for everyone shown with the usage; every agent on until the desktop says
 // otherwise. Each field falls back on its own, so one bad value resets nothing else.
 export const DEFAULT_AGENT_CONCURRENCY = 6
@@ -23,6 +24,7 @@ const DEFAULTS = {
   userTodos: true,
   knowledgeBase: null,
   autoArchiveDays: null,
+  worktreeCleanDays: DEFAULT_WORKTREE_CLEAN_DAYS,
   resetAnnouncements: true,
   disabledAgents: []
 } satisfies Required<ChatSettings>
@@ -42,6 +44,7 @@ const Saved = z.object({
   userTodos: z.boolean().catch(DEFAULTS.userTodos),
   knowledgeBase: KnowledgeBase.nullable().catch(DEFAULTS.knowledgeBase),
   autoArchiveDays: ChatSettings.shape.autoArchiveDays.unwrap().catch(DEFAULTS.autoArchiveDays),
+  worktreeCleanDays: ChatSettings.shape.worktreeCleanDays.unwrap().catch(DEFAULTS.worktreeCleanDays),
   resetAnnouncements: z.boolean().catch(DEFAULTS.resetAnnouncements),
   disabledAgents: ChatSettings.shape.disabledAgents.unwrap().catch(DEFAULTS.disabledAgents)
 }).catch(DEFAULTS)
@@ -96,6 +99,7 @@ export class ChatSettingsStore {
       userTodos: patch.userTodos ?? this.settings.userTodos,
       knowledgeBase,
       autoArchiveDays: patch.autoArchiveDays === undefined ? this.settings.autoArchiveDays : patch.autoArchiveDays,
+      worktreeCleanDays: patch.worktreeCleanDays === undefined ? this.settings.worktreeCleanDays : patch.worktreeCleanDays,
       resetAnnouncements: patch.resetAnnouncements ?? this.settings.resetAnnouncements,
       disabledAgents: patch.disabledAgents ?? this.settings.disabledAgents
     }

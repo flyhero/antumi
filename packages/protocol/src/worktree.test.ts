@@ -22,6 +22,8 @@ describe('checkCleanWorktree', () => {
   it('keeps a conversation\'s own while the conversation is there', () => {
     expect(checkCleanWorktree({ ...clean, conversationId: 'c' }, null)).toBe('conversation-open')
     expect(checkCleanWorktree({ ...clean, conversationId: null }, null)).toBeNull()
+    expect(checkCleanWorktree({ ...clean, conversationId: 'c', conversationArchived: true }, null)).toBeNull()
+    expect(checkCleanWorktree({ ...clean, conversationId: 'c', conversationArchived: true, changes: 1 }, null)).toBe('worktree-dirty')
   })
 
   it('keeps a delegation\'s own only while the call is open, then by what it holds', () => {

@@ -266,6 +266,17 @@ export async function prepareWorkspace(
   }
 }
 
+// Lays out again a worktree cleaned while its conversation was archived, where it stood: on its
+// branch while git still has that branch free, else detached at the commit it had out. False when
+// neither can be, as when the repo or the commit is gone.
+export async function restoreWorktree(repo: string, dir: string, branch: string | null, head: string): Promise<boolean> {
+  if (branch && await branchExists(repo, branch)) {
+    const onBranch = await addWorktree(repo, dir, ['--quiet', dir, branch]).then(() => true, () => false)
+    if (onBranch) return true
+  }
+  return addWorktree(repo, dir, ['--quiet', '--detach', dir, head]).then(() => true, () => false)
+}
+
 // A conversation started in worktrees: each project's repo gets one under the conversation's
 // directory, on a branch of its own from what the project has checked out. Uncommitted changes
 // stay behind in the project. A start tried again with the same id finds what it laid out.

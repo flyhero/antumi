@@ -13,7 +13,9 @@ import { EMPTY_DRAFT, saveComposerDraft } from '../composer-drafts'
 import { keepInitialMessage, sendInitialMessage } from '../initial-messages'
 import { PRIMARY_KEY_LABEL } from '../shortcut-keys'
 import { currentInstalledAgents, otherInstalledAgent, useInstalledAgents } from '../installed-agents'
-import { askConfirm } from '../confirm-dialog'
+import { askConfirm, askConfirmWithOption } from '../confirm-dialog'
+import { cleanAway, worktreesToOffer } from '../conversation-worktrees'
+import { refreshWorktrees } from '../worktree-store'
 
 // Every way into a handoff ends in the conversation's composer, with the agent picked there (by
 // default the other one here), to be sent from it with whatever the user adds.
@@ -129,13 +131,36 @@ export function pinConversation(id: string, pinned: boolean) {
   return perform((rpc) => rpc.call('conversations.setPinned', { id, pinned }))
 }
 
-export function archiveConversation(id: string, archived: boolean) {
-  return perform((rpc) => rpc.call('conversations.setArchived', { id, archived }))
+// Archiving one with a worktree of its own asks first, offering to clean that worktree as well:
+// archived, the work is done, and taking it out lays the worktree out again from its branch.
+export async function archiveConversation(id: string, archived: boolean) {
+  const worktrees = archived ? await worktreesToOffer(id) : []
+  let clean = false
+  if (worktrees.length > 0) {
+    const answer = await askConfirmWithOption({ message: t('ConversationActions.archiveThisConversationWithItsWorktree'), confirm: t('ConversationActions.archive'), option: { label: t('ConversationActions.alsoCleanItsWorktree'), checked: true } })
+    if (!answer) return null
+    clean = answer.option
+  }
+  const result = await perform((rpc) => rpc.call('conversations.setArchived', { id, archived }))
+  if (result && clean) await cleanAway(worktrees)
+  // Taking it out may have laid its worktrees out again.
+  else if (result && !archived) refreshWorktrees(0)
+  return result
 }
 
 export async function deleteConversation(conversation: Conversation): Promise<boolean> {
-  if (!await askConfirm({ message: t('ConversationActions.deleteThisConversationAndItsChatHistoryProject'), confirm: t('ChatCommandSettings.delete'), danger: true })) return false
-  return (await perform((rpc) => rpc.call('conversations.delete', { id: conversation.id }))) !== null
+  const worktrees = await worktreesToOffer(conversation.id)
+  let clean = false
+  if (worktrees.length > 0) {
+    const answer = await askConfirmWithOption({ message: t('ConversationActions.deleteThisConversationWithItsWorktree'), confirm: t('ChatCommandSettings.delete'), danger: true, option: { label: t('ConversationActions.alsoCleanItsWorktree'), checked: true } })
+    if (!answer) return false
+    clean = answer.option
+  } else if (!await askConfirm({ message: t('ConversationActions.deleteThisConversationAndItsChatHistoryProject'), confirm: t('ChatCommandSettings.delete'), danger: true })) {
+    return false
+  }
+  const deleted = (await perform((rpc) => rpc.call('conversations.delete', { id: conversation.id }))) !== null
+  if (deleted && clean) await cleanAway(worktrees)
+  return deleted
 }
 
 // The row's right-click menu: the header's actions, and the one place a conversation is deleted.

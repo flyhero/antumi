@@ -62,6 +62,7 @@ import { WorktreeService } from './worktree-service'
 import { AwakeConfigStore } from './awake-config'
 import { ComputerAwakeService } from './computer-awake-service'
 import { ChatSettingsStore } from './chat-settings'
+import { WorktreeAutoClean } from './worktree-auto-clean'
 import { ConversationAutoArchive } from './conversation-auto-archive'
 import { ResetAnnouncements } from './reset-announcements'
 import { SkillsLibrary } from './skills-library'
@@ -427,7 +428,14 @@ const worktrees = new WorktreeService(paths.worktrees, service, () => server?.br
   list: () => conversations.list(false, false, true),
   callWorktrees: () => profiles.worktreeCalls(),
   confirmCallClosed: (callId) => profiles.confirmCallClosed(callId),
-  worktreeRemoved: (callId) => profiles.worktreeRemoved(callId)
+  worktreeRemoved: (callId) => profiles.worktreeRemoved(callId),
+  all: () => conversations.listAll(),
+  // Kept by each archived conversation that worked there, so whichever is taken out lays it out again.
+  worktreeCleaned: (worktree) => {
+    for (const conversation of conversations.listAll()) {
+      if (conversation.archivedAt != null && conversation.projectPaths.includes(worktree.dir)) conversationsStore.addCleanedWorktree(conversation.id, worktree)
+    }
+  }
 })
 awake = new ComputerAwakeService(daemon, new AwakeConfigStore(paths.awakeConfig), (status) =>
   server?.broadcast('system.awakeChanged', { status })
@@ -441,6 +449,7 @@ const chatSettings = new ChatSettingsStore(paths.chatSettings, (settings) => {
   conversations.setCapacity(settings, () => { void schedules.tick(); squads.tick(); profiles.tick() })
   wire.setEnabled(settings.wireLog ?? false)
   void autoArchive.sweep()
+  void worktreeAutoClean.sweep()
   announcements.settingsChanged()
   server?.broadcast('system.chatSettingsChanged', { settings })
 })
@@ -453,6 +462,11 @@ const autoArchive = new ConversationAutoArchive(
   () => chatSettings.current().autoArchiveDays,
   (before) => conversationsStore.idleSince(before),
   (id) => conversations.setArchived(id, true)
+)
+const worktreeAutoClean = new WorktreeAutoClean(
+  () => chatSettings.current().worktreeCleanDays,
+  (before) => worktrees.idle(before),
+  (paths) => worktrees.clean(paths)
 )
 // Before the daemon connects: a chat stage it still runs is taken back with these settings.
 const skills = new SkillsLibrary(paths.skills, (repos) => server?.broadcast('skills.changed', { repos: [...repos] }), { legacySkills: () => knowledgeBaseSkills(chatSettings.current().knowledgeBase ?? null) })
@@ -539,6 +553,7 @@ announcements.start()
 routines.start()
 schedules.start()
 autoArchive.start()
+worktreeAutoClean.start()
 environment.start()
 refreshAwake()
 // Stages that ended before turns were kept, counted once in the background.
@@ -566,6 +581,7 @@ async function shutdown(): Promise<void> {
   await analytics.close()
   routines.stop()
   autoArchive.stop()
+  worktreeAutoClean.stop()
   await profiles.close()
   await squads.close()
   discussions.close()

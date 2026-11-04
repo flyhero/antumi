@@ -6,6 +6,8 @@ import { Rejection } from './rejection'
 import { originDefault } from './task-start'
 import { execFileAsync } from './hidden-exec'
 import { worktreeOwner } from './worktree-owner'
+import { keptLeftovers } from './worktree-leftovers'
+import type { CleanedWorktree } from './conversation-store'
 
 
 // Sizes are counted again once this old: a worktree grows as its task builds and installs.
@@ -34,6 +36,10 @@ export type WorktreeConversations = {
   confirmCallClosed?(callId: string): Promise<void>
   // Told once the folder is actually gone, never before.
   worktreeRemoved?(callId: string): Promise<void>
+  // Every conversation, group members and squads' included, by the folders it works in.
+  all?(): Pick<Conversation, 'projectPaths' | 'archivedAt'>[]
+  // An archived conversation's worktree is gone; taking a conversation that worked there out lays it out again.
+  worktreeCleaned?(worktree: CleanedWorktree): void
 }
 
 type Folder = { dir: string; shortId: string; planning: boolean }
@@ -139,11 +145,13 @@ export class WorktreeService {
   // Each is looked at again as it stands, so nothing that changed since the list was read goes.
   async clean(paths: readonly string[]): Promise<WorktreeCleanResult[]> {
     const current = new Map((await this.inspectAll()).map((worktree) => [worktree.path, worktree]))
+    // A folder as git lists it may go by its real path, through a link in the worktrees root's.
+    const byReal = new Map(await Promise.all([...current.values()].map(async (worktree) => [await realpath(worktree.path).catch(() => worktree.path), worktree] as const)))
     const tasks = new Map(this.tasks.list().map((task) => [task.id, task]))
     const results: WorktreeCleanResult[] = []
     for (const requested of paths) {
       // Only a worktree Antumi laid out, as the list found it, is ever removed.
-      const worktree = current.get(path.normalize(requested))
+      const worktree = current.get(path.normalize(requested)) ?? byReal.get(await realpath(requested).catch(() => path.normalize(requested)))
       if (!worktree) {
         results.push({ path: requested, removed: false, reason: 'worktree-not-found' })
         continue
@@ -167,6 +175,9 @@ export class WorktreeService {
   }
 
   private async remove(worktree: ManagedWorktree, task: Task | null): Promise<WorktreeCleanResult> {
+    // Where an archived conversation's worktree stood and what it had out, read before it goes.
+    const kept = worktree.conversationArchived && worktree.conversationId && !worktree.agentCall && worktree.repo
+      ? await this.cleanedRecord(worktree, worktree.repo) : null
     try {
       if (task) await this.tasks.releaseAgent(task.id)
       // Without force: git refuses, again, a worktree that holds changes after all.
@@ -177,12 +188,39 @@ export class WorktreeService {
     }
     if (task) this.tasks.forgetWorktree(task.id, worktree.path)
     if (worktree.agentCall) await this.conversations.worktreeRemoved?.(worktree.agentCall.id).catch(() => {})
+    if (kept) this.conversations.worktreeCleaned?.(kept)
     this.sizes.delete(worktree.path)
     // Folders Antumi made for it go when nothing else is left in them.
     for (let dir = path.dirname(worktree.path); dir.startsWith(this.root + path.sep); dir = path.dirname(dir)) {
       if (await rmdir(dir).then(() => false, () => true)) break
     }
     return { path: worktree.path, removed: true, reason: null }
+  }
+
+  // By the real path, as the conversation keeps its projects.
+  private async cleanedRecord(worktree: ManagedWorktree, repo: string): Promise<CleanedWorktree | null> {
+    const head = await gitOrNull(worktree.path, ['rev-parse', 'HEAD'])
+    return head ? { dir: await realpath(worktree.path).catch(() => worktree.path), repo, branch: worktree.branch, head } : null
+  }
+
+  // The worktrees to clean of Antumi's own accord: no task's, planning checkout's or delegation's, but
+  // an archived conversation's put away before `before`, or one left by a deleted task or
+  // conversation untouched since then; and only if it provably holds nothing, ignored files included.
+  async idle(before: number): Promise<string[]> {
+    const archivedAt = new Map(this.conversations.list().map((conversation) => [conversation.id, conversation.archivedAt]))
+    const all = this.conversations.all?.() ?? this.conversations.list()
+    const idle: string[] = []
+    for (const worktree of await this.inspectAll()) {
+      if (worktree.taskId || worktree.planning || worktree.agentCall) continue
+      const since = worktree.conversationId ? (worktree.conversationArchived ? archivedAt.get(worktree.conversationId) : null) : worktree.touchedAt
+      if (since == null || since > before || checkCleanWorktree(worktree, null)) continue
+      // Nor one a conversation the list leaves out still works in.
+      const real = await realpath(worktree.path).catch(() => worktree.path)
+      if (all.some((conversation) => conversation.archivedAt == null && conversation.projectPaths.includes(real))) continue
+      if ((await keptLeftovers(worktree.path, worktree.repo))?.length !== 0) continue
+      idle.push(worktree.path)
+    }
+    return idle
   }
 
   private async inspectAll(): Promise<ManagedWorktree[]> {
@@ -201,7 +239,8 @@ export class WorktreeService {
       const agentCall = call ? { id: call.id, parentId: call.parentId, open: call.open } : null
       // A member's worktree is in use for as long as its call is open: its setup may be running there.
       const inUse = taskId !== null ? busy.has(taskId) : agentCall ? agentCall.open : conversation?.chat?.turn === 'running'
-      return { ...(await this.inspect(folder, taskId)), conversationId: conversation?.id ?? call?.conversationId ?? null, agentCall, inUse }
+      const conversationArchived = !agentCall && conversation?.archivedAt != null
+      return { ...(await this.inspect(folder, taskId)), conversationId: conversation?.id ?? call?.conversationId ?? null, conversationArchived, agentCall, inUse }
     }))
   }
 

@@ -73,7 +73,7 @@ function Row({ row, now, checked, onToggle, cleaning, failure, locked }: { row: 
       <span className="worktree-main">
         <span className="worktree-title" title={worktree.path}>{title}</span>
         <span className="worktree-meta">
-          {[task && STATUS_LABEL[task.status], worktree.agentCall ? t('WorktreeManager.delegation') : worktree.conversationId && t('BrowserPanel.conversation'), timeAgo(worktree.touchedAt, now), project, worktree.planning && t('WorktreeManager.planningCheckout')].filter(Boolean).join(' · ')}
+          {[task && STATUS_LABEL[task.status], worktree.agentCall ? t('WorktreeManager.delegation') : worktree.conversationId && t('BrowserPanel.conversation'), worktree.conversationArchived && t('ConversationList.archived'), timeAgo(worktree.touchedAt, now), project, worktree.planning && t('WorktreeManager.planningCheckout')].filter(Boolean).join(' · ')}
         </span>
       </span>
       <span className="worktree-branch mono" title={worktree.path}>{worktree.branch ?? t('WorktreeManager.noBranch')}</span>

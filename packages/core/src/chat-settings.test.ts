@@ -22,17 +22,17 @@ describe('ChatSettingsStore', () => {
 
   it('suggests the next message and lets scheduled runs edit, unless the user changed that, and keeps it', async () => {
     const store = new ChatSettingsStore(file, (settings) => changes.push(settings))
-    expect(await store.load()).toEqual({ promptSuggestions: true, titleNaming: 'first', titleModels: {}, unattendedMode: 'acceptEdits', maxConcurrentAgents: 20, agentConcurrency: defaultConcurrency, wireLog: false, userBrowser: true, readHistory: true, userTodos: true, knowledgeBase: null, autoArchiveDays: null, resetAnnouncements: true, disabledAgents: [] })
+    expect(await store.load()).toEqual({ promptSuggestions: true, titleNaming: 'first', titleModels: {}, unattendedMode: 'acceptEdits', maxConcurrentAgents: 20, agentConcurrency: defaultConcurrency, wireLog: false, userBrowser: true, readHistory: true, userTodos: true, knowledgeBase: null, autoArchiveDays: null, worktreeCleanDays: 7, resetAnnouncements: true, disabledAgents: [] })
 
     await store.update({ promptSuggestions: false })
     await store.update({ unattendedMode: 'bypass' })
     expect(changes).toEqual([
-      { promptSuggestions: false, titleNaming: 'first', titleModels: {}, unattendedMode: 'acceptEdits', maxConcurrentAgents: 20, agentConcurrency: defaultConcurrency, wireLog: false, userBrowser: true, readHistory: true, userTodos: true, knowledgeBase: null, autoArchiveDays: null, resetAnnouncements: true, disabledAgents: [] },
-      { promptSuggestions: false, titleNaming: 'first', titleModels: {}, unattendedMode: 'bypass', maxConcurrentAgents: 20, agentConcurrency: defaultConcurrency, wireLog: false, userBrowser: true, readHistory: true, userTodos: true, knowledgeBase: null, autoArchiveDays: null, resetAnnouncements: true, disabledAgents: [] }
+      { promptSuggestions: false, titleNaming: 'first', titleModels: {}, unattendedMode: 'acceptEdits', maxConcurrentAgents: 20, agentConcurrency: defaultConcurrency, wireLog: false, userBrowser: true, readHistory: true, userTodos: true, knowledgeBase: null, autoArchiveDays: null, worktreeCleanDays: 7, resetAnnouncements: true, disabledAgents: [] },
+      { promptSuggestions: false, titleNaming: 'first', titleModels: {}, unattendedMode: 'bypass', maxConcurrentAgents: 20, agentConcurrency: defaultConcurrency, wireLog: false, userBrowser: true, readHistory: true, userTodos: true, knowledgeBase: null, autoArchiveDays: null, worktreeCleanDays: 7, resetAnnouncements: true, disabledAgents: [] }
     ])
 
     const reopened = new ChatSettingsStore(file, () => {})
-    expect(await reopened.load()).toEqual({ promptSuggestions: false, titleNaming: 'first', titleModels: {}, unattendedMode: 'bypass', maxConcurrentAgents: 20, agentConcurrency: defaultConcurrency, wireLog: false, userBrowser: true, readHistory: true, userTodos: true, knowledgeBase: null, autoArchiveDays: null, resetAnnouncements: true, disabledAgents: [] })
+    expect(await reopened.load()).toEqual({ promptSuggestions: false, titleNaming: 'first', titleModels: {}, unattendedMode: 'bypass', maxConcurrentAgents: 20, agentConcurrency: defaultConcurrency, wireLog: false, userBrowser: true, readHistory: true, userTodos: true, knowledgeBase: null, autoArchiveDays: null, worktreeCleanDays: 7, resetAnnouncements: true, disabledAgents: [] })
   })
 
   it('lets a new install\'s scheduled runs allow everything, and keeps what an older one had, file or not', async () => {
@@ -47,9 +47,9 @@ describe('ChatSettingsStore', () => {
 
   it('falls back to the default for a file it cannot read', async () => {
     writeFileSync(file, '{"promptSuggestions": "nope", "unattendedMode": "yolo"}')
-    expect(await new ChatSettingsStore(file, () => {}).load()).toEqual({ promptSuggestions: true, titleNaming: 'first', titleModels: {}, unattendedMode: 'acceptEdits', maxConcurrentAgents: 20, agentConcurrency: defaultConcurrency, wireLog: false, userBrowser: true, readHistory: true, userTodos: true, knowledgeBase: null, autoArchiveDays: null, resetAnnouncements: true, disabledAgents: [] })
+    expect(await new ChatSettingsStore(file, () => {}).load()).toEqual({ promptSuggestions: true, titleNaming: 'first', titleModels: {}, unattendedMode: 'acceptEdits', maxConcurrentAgents: 20, agentConcurrency: defaultConcurrency, wireLog: false, userBrowser: true, readHistory: true, userTodos: true, knowledgeBase: null, autoArchiveDays: null, worktreeCleanDays: 7, resetAnnouncements: true, disabledAgents: [] })
     writeFileSync(file, 'not json')
-    expect(await new ChatSettingsStore(file, () => {}).load()).toEqual({ promptSuggestions: true, titleNaming: 'first', titleModels: {}, unattendedMode: 'acceptEdits', maxConcurrentAgents: 20, agentConcurrency: defaultConcurrency, wireLog: false, userBrowser: true, readHistory: true, userTodos: true, knowledgeBase: null, autoArchiveDays: null, resetAnnouncements: true, disabledAgents: [] })
+    expect(await new ChatSettingsStore(file, () => {}).load()).toEqual({ promptSuggestions: true, titleNaming: 'first', titleModels: {}, unattendedMode: 'acceptEdits', maxConcurrentAgents: 20, agentConcurrency: defaultConcurrency, wireLog: false, userBrowser: true, readHistory: true, userTodos: true, knowledgeBase: null, autoArchiveDays: null, worktreeCleanDays: 7, resetAnnouncements: true, disabledAgents: [] })
   })
 
   it('keeps per-agent limits when another agent changes, and rejects invalid limits', async () => {
@@ -71,6 +71,16 @@ describe('ChatSettingsStore', () => {
     await store.update({ autoArchiveDays: null })
     expect(store.current().autoArchiveDays).toBeNull()
     expect(() => ChatSettings.parse({ promptSuggestions: true, autoArchiveDays: 0 })).toThrow()
+  })
+
+  it('cleans idle worktrees after a week until the user picks another span or turns it off', async () => {
+    const store = new ChatSettingsStore(file, () => {})
+    expect((await store.load()).worktreeCleanDays).toBe(7)
+    await store.update({ worktreeCleanDays: 1 })
+    await store.update({ promptSuggestions: false })
+    expect((await new ChatSettingsStore(file, () => {}).load()).worktreeCleanDays).toBe(1)
+    await store.update({ worktreeCleanDays: null })
+    expect((await new ChatSettingsStore(file, () => {}).load()).worktreeCleanDays).toBeNull()
   })
 
   it('lets an agent drive the user\'s own browser until the user turns it off', async () => {

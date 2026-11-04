@@ -569,6 +569,35 @@ describe('ConversationService', () => {
     expect(readdirSync(path.join(root, 'worktrees'))).toEqual([shortId])
   })
 
+  it('lays an archived conversation\'s cleaned worktrees out again when taken out: on their branch, else at their commit', async () => {
+    const repo = (name: string) => {
+      const dir = path.join(root, name)
+      execFileSync('git', ['init', '-q', '-b', 'main', dir])
+      execFileSync('git', ['-C', dir, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '--allow-empty', '-m', 'init'])
+      return realpathSync(dir)
+    }
+    const git = (cwd: string, ...args: string[]) => execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8' }).trim()
+    const app = repo('app')
+    const lib = repo('lib')
+    const created = await service.create('claude', [app, lib], undefined, { worktree: true, deferStart: true })
+    const [appDir, libDir] = created.projectPaths
+    const branch = `antumi/${created.id.slice(0, 8)}`
+    await service.setArchived(created.id, true)
+    // As cleaning leaves it: the folders gone, the branches kept, and where they stood recorded.
+    for (const [dir, from] of [[appDir!, app], [libDir!, lib]] as const) {
+      store.addCleanedWorktree(created.id, { dir, repo: from, branch, head: git(dir, 'rev-parse', 'HEAD') })
+      git(from, 'worktree', 'remove', dir)
+    }
+    // Another checkout took lib's branch meanwhile, so lib comes back at its commit instead.
+    git(lib, 'switch', '-q', branch)
+
+    await service.setArchived(created.id, false)
+    expect(git(appDir!, 'branch', '--show-current')).toBe(branch)
+    expect(git(libDir!, 'branch', '--show-current')).toBe('')
+    expect(git(libDir!, 'rev-parse', 'HEAD')).toBe(git(lib, 'rev-parse', 'HEAD'))
+    expect(store.cleanedWorktrees(created.id)).toEqual([])
+  })
+
   it('starts on the branch picked: a worktree from it, or the project switched to it', async () => {
     const app = path.join(root, 'app')
     const git = (...args: string[]) => execFileSync('git', ['-C', app, '-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { encoding: 'utf8' }).trim()

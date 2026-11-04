@@ -384,7 +384,9 @@ export const MIGRATIONS = [
    ALTER TABLE discussion_posts ADD COLUMN stage TEXT;
    ALTER TABLE discussion_posts ADD COLUMN version INTEGER;
    ALTER TABLE discussion_posts ADD COLUMN verdict TEXT;`,
-  `ALTER TABLE conversation_stages ADD COLUMN context_usage TEXT;`
+  `ALTER TABLE conversation_stages ADD COLUMN context_usage TEXT;`,
+  // The worktrees cleaned while a conversation was archived, laid out again when it is taken out.
+  `ALTER TABLE conversations ADD COLUMN cleaned_worktrees TEXT NOT NULL DEFAULT '[]';`
 ]
 
 

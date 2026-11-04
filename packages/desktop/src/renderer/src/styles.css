@@ -10827,6 +10827,8 @@ button.squad-member-main { cursor: pointer; }
 .confirm-dialog-text { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding-top: 1px; }
 .confirm-dialog-text h2 { margin: 0; font-size: 15px; font-weight: 600; line-height: 1.45; overflow-wrap: anywhere; }
 .confirm-dialog-text p { margin: 0; font-size: 13px; line-height: 1.6; color: var(--text-muted); white-space: pre-line; overflow-wrap: anywhere; }
+.confirm-dialog-option { display: flex; align-items: flex-start; gap: 8px; margin-top: 4px; font-size: 13px; line-height: 1.5; }
+.confirm-dialog-option input { margin: 3px 0 0; flex: none; accent-color: var(--accent); }
 .confirm-dialog-footer { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 8px; }
 .confirm-dialog-footer .button { min-width: 76px; }
 .button.danger {

@@ -31,6 +31,11 @@ const ChatOptions = z.object({
 }).and(z.partialRecord(AgentKind, AgentChoice)).catch({})
 export type ChatOptions = z.infer<typeof ChatOptions>
 
+// A worktree cleaned while its conversation was archived: where it was, the repo it is laid out
+// from again, and what it had checked out, its branch or else the commit.
+const CleanedWorktree = z.object({ dir: z.string(), repo: z.string(), branch: z.string().nullable(), head: z.string() })
+export type CleanedWorktree = z.infer<typeof CleanedWorktree>
+
 // A session an agent ran outside Antumi, as it was imported: through its record of this time, from
 // its file as it stood at the other.
 const SessionImport = z.object({ agent: AgentKind, sessionId: z.string(), conversationId: z.string(), importedThrough: z.number(), sourceModifiedAt: z.number() })
@@ -190,6 +195,20 @@ export class ConversationStore {
 
   setSwitchedBranches(id: string, branches: Record<string, string>): void {
     this.db.prepare('UPDATE conversations SET switched_branches = ? WHERE id = ?').run(JSON.stringify(branches), id)
+  }
+
+  cleanedWorktrees(id: string): CleanedWorktree[] {
+    const row = this.db.prepare('SELECT cleaned_worktrees AS value FROM conversations WHERE id = ?').get(id)
+    return parsedJson(row?.value, z.array(CleanedWorktree).catch([])) ?? []
+  }
+
+  // One cleaned again replaces what was recorded for its folder.
+  addCleanedWorktree(id: string, worktree: CleanedWorktree): void {
+    this.setCleanedWorktrees(id, [...this.cleanedWorktrees(id).filter((each) => each.dir !== worktree.dir), worktree])
+  }
+
+  setCleanedWorktrees(id: string, worktrees: readonly CleanedWorktree[]): void {
+    this.db.prepare('UPDATE conversations SET cleaned_worktrees = ? WHERE id = ?').run(JSON.stringify(worktrees), id)
   }
 
   private stringMap(id: string, column: 'project_starts' | 'switched_branches'): Record<string, string> {

@@ -3,6 +3,7 @@ import { t } from '../i18n'
 import { selectConversation, useCore } from '../core-store'
 import { revealFile } from '../desktop-bridge'
 import { FILE_MANAGER } from '../file-actions'
+import { archivedWorktreesSupported, cleanAway } from '../conversation-worktrees'
 
 export function folderName(folder: string): string {
   return folder.split(/[\\/]/).filter(Boolean).at(-1) ?? folder
@@ -17,13 +18,17 @@ export function holderLabel(folder: string, holder: BranchHolder | undefined): s
 }
 
 export function heldBranchText(branch: string, folder: string, holder: BranchHolder | undefined): string {
-  if (holder?.kind === 'conversation') return t(holder.archived ? 'BranchHolder.heldByArchivedConversation' : 'BranchHolder.heldByConversation', { branch, title: holder.title ?? folderName(folder) })
+  if (holder?.kind === 'conversation') {
+    const archived = holder.archived ? (archivedWorktreesSupported() ? 'BranchHolder.heldByArchivedConversationCleanable' : 'BranchHolder.heldByArchivedConversation') : 'BranchHolder.heldByConversation'
+    return t(archived, { branch, title: holder.title ?? folderName(folder) })
+  }
   return holder?.kind === 'main' ? t('BranchHolder.heldByMainFolder', { branch }) : t('BranchHolder.heldElsewhere', { branch, folder })
 }
 
 // Why a branch cannot be switched to, said when it is picked, and what frees it: git checks a
-// branch out in one folder at a time. `onLeave` closes what showed it before going elsewhere.
-export function HeldBranchNote({ branch, folder, holder, onLeave }: { branch: string; folder: string; holder: BranchHolder | undefined; onLeave: () => void }) {
+// branch out in one folder at a time. `onLeave` closes what showed it before going elsewhere; an
+// archived conversation's worktree can be cleaned on the spot, then `onFreed` switches.
+export function HeldBranchNote({ branch, folder, holder, onLeave, onFreed }: { branch: string; folder: string; holder: BranchHolder | undefined; onLeave: () => void; onFreed?: () => void }) {
   const known = useCore((s) => (holder?.conversationId ? Boolean(s.conversations[holder.conversationId]) : false))
   const reveal = <button type="button" className="link-button" onClick={() => void revealFile([folder])}>{t('FileMenu.showIn', { FILE_MANAGER: FILE_MANAGER() })}</button>
   if (holder?.kind === 'conversation' && holder.conversationId) {
@@ -32,6 +37,7 @@ export function HeldBranchNote({ branch, folder, holder, onLeave }: { branch: st
       <div className="branch-held-note" role="status">
         <p>{heldBranchText(branch, folder, holder)}</p>
         <div className="branch-held-actions">
+          {holder.archived && holder.managed && onFreed && archivedWorktreesSupported() && <button type="button" className="link-button" onClick={() => void cleanAway([folder]).then((freed) => { if (freed) onFreed() })}>{t('BranchHolder.cleanAndSwitch')}</button>}
           {known && <button type="button" className="link-button" onClick={() => { onLeave(); selectConversation(id) }}>{t('WorktreeManager.openConversation')}</button>}
           {reveal}
         </div>

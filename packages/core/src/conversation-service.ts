@@ -31,7 +31,7 @@ import { commitAll, commitAndPush, pushBranch } from './project-commit'
 import type { ProjectRegistry } from './project-registry'
 import { Rejection } from './rejection'
 import type { UsageReport } from './usage-source'
-import { normalizeRepoPath, prepareConversationWorktrees, projectHead } from './workspace'
+import { normalizeRepoPath, prepareConversationWorktrees, projectHead, restoreWorktree } from './workspace'
 import type { NewWorktree, WorktreeSetup } from './worktree-setup'
 import { DEFAULT_AGENT_CONCURRENCY } from './chat-settings'
 import { WireLog } from './wire-log'
@@ -455,11 +455,12 @@ export class ConversationService {
   private async projectBranchesFor(project: string, id: string | null): Promise<ProjectBranches> {
     const { main, ...branches } = await projectBranches(project)
     const all = this.store.list()
+    const roots = this.worktreesRoot ? [this.worktreesRoot, await realpath(this.worktreesRoot).catch(() => this.worktreesRoot ?? '')] : []
     const live = all.filter((other) => other.id !== id && other.sessionId !== null)
     return {
       path: project,
       ...branches,
-      holders: branchHolders(branches.elsewhere, main, all),
+      holders: branchHolders(branches.elsewhere, main, all, roots),
       sharedWith: live.filter((other) => other.projectPaths.includes(project)).map((other) => other.title)
     }
   }
@@ -809,7 +810,34 @@ export class ConversationService {
         return this.changed(this.store.setArchived(id, archived))
       } finally { this.retiring.delete(id) }
     }
+    await this.restoreWorktrees(id)
     return this.changed(this.store.setArchived(id, archived))
+  }
+
+  // Lays out again, where they stood, the worktrees cleaned while it was archived; one another
+  // conversation took out first is already there. Setup runs in them as in new ones, in the
+  // background: a long install would hold up taking it out. One that cannot be laid out stays
+  // recorded, for the next time it is taken out.
+  private async restoreWorktrees(id: string): Promise<void> {
+    const cleaned = this.store.cleanedWorktrees(id)
+    if (cleaned.length === 0) return
+    const made: NewWorktree[] = []
+    const failed: typeof cleaned = []
+    const restore = async () => {
+      for (const worktree of cleaned) {
+        if (await stat(worktree.dir).then((info) => info.isDirectory(), () => false)) continue
+        if (await restoreWorktree(worktree.repo, worktree.dir, worktree.branch, worktree.head)) made.push({ topLevel: worktree.repo, dir: worktree.dir })
+        else failed.push(worktree)
+      }
+    }
+    const repos = cleaned.map((worktree) => worktree.repo)
+    await (this.gitPreparation ? this.gitPreparation(repos, restore) : restore())
+    this.store.setCleanedWorktrees(id, failed)
+    const setup = this.worktreeSetup
+    if (made.length === 0 || !setup) return
+    void setup.requireTrusted(made.map((worktree) => worktree.topLevel))
+      .then((setups) => (setups.length ? setup.setUp(id, made, setups) : []))
+      .catch((error: unknown) => console.error('[antumi-core] setup in a restored worktree failed', error))
   }
 
   // An archived conversation takes no message until it is taken out again.

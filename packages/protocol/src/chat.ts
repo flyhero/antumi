@@ -53,6 +53,10 @@ export const ChatSettings = z.object({
   // Free conversations idle this many days are archived; null is off, the default. Nullable so a
   // client can turn it off through a partial update. Older cores omit it.
   autoArchiveDays: z.number().int().min(1).max(365).nullable().optional(),
+  // The worktrees of archived and deleted conversations, and of deleted tasks, are cleaned this many
+  // days on when they provably hold nothing: no change, no commit only they hold, no ignored file
+  // setup would not make again. Branches stay. null is off. Older cores omit it.
+  worktreeCleanDays: z.number().int().min(1).max(365).nullable().optional(),
   // Whether core asks limitreset.net, hourly, about the resets agents' services announce for
   // everyone (AgentUsage.globalResets). Older cores omit it.
   resetAnnouncements: z.boolean().optional(),
@@ -65,6 +69,8 @@ export type ChatSettings = z.infer<typeof ChatSettings>
 // The idle spans a client offers for auto-archiving, and the one it starts on.
 export const AUTO_ARCHIVE_DAYS = [7, 14, 30, 60, 90] as const
 export const DEFAULT_AUTO_ARCHIVE_DAYS = 30
+export const WORKTREE_CLEAN_DAYS = [1, 7, 14, 30] as const
+export const DEFAULT_WORKTREE_CLEAN_DAYS = 7
 
 // interrupted: the user stopped the turn while the call ran.
 export const ChatToolStatus = z.enum(['running', 'done', 'failed', 'denied', 'interrupted'])

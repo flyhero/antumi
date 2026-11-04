@@ -107,14 +107,18 @@ describe('project branches', () => {
       'refs/heads/fix': shared,
       'refs/heads/left': left,
       'refs/heads/release': '/home/u/menu-service/.claude/worktrees/resolve'
-    }, '/home/u/menu-service', conversations)).toEqual({
+    }, '/home/u/menu-service', conversations, ['/home/u/.antumi/worktrees'])).toEqual({
       'refs/heads/main': { kind: 'main' },
-      'refs/heads/heic': { kind: 'conversation', conversationId: conversations[0]!.id, title: 'conversation c24f', archived: true },
+      'refs/heads/heic': { kind: 'conversation', conversationId: conversations[0]!.id, title: 'conversation c24f', archived: true, managed: true },
       // The one that made the worktree, though another sharing it was active since.
-      'refs/heads/fix': { kind: 'conversation', conversationId: conversations[2]!.id, title: 'conversation c847', archived: false },
+      'refs/heads/fix': { kind: 'conversation', conversationId: conversations[2]!.id, title: 'conversation c847', archived: false, managed: true },
       // Archived, so the one last active of those still working there.
-      'refs/heads/left': { kind: 'conversation', conversationId: conversations[4]!.id, title: 'conversation 2a7b', archived: false },
+      'refs/heads/left': { kind: 'conversation', conversationId: conversations[4]!.id, title: 'conversation 2a7b', archived: false, managed: true },
       'refs/heads/release': { kind: 'other' }
     })
+    // A conversation working in a checkout of the user's own: not one Antumi would clean.
+    const own = '/home/u/menu-service-2'
+    expect(branchHolders({ 'refs/heads/x': own }, '/home/u/menu-service', [at('aa000000-0000-4000-8000-000000000000', own, 1)], ['/home/u/.antumi/worktrees'])['refs/heads/x'])
+      .toMatchObject({ kind: 'conversation', managed: false })
   })
 })

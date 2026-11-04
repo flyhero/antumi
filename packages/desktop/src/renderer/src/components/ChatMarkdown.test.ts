@@ -27,6 +27,22 @@ afterEach(() => usePreferences.setState(originalPreferences))
 const render = (text: string) => renderToStaticMarkup(createElement(ChatMarkdown, { text, highlight: false }))
 const url = 'https://example.com/design'
 
+describe('inline visualization replies', () => {
+  const text = '\uE200visualize\uE202{"path":"/work/status-preview.html"}\uE201'
+  it('leaves the marker as text outside an opted-in assistant reply', () => {
+    expect(render(text)).toContain('visualize')
+    expect(render(text)).not.toContain('chat-visualization')
+  })
+  it('renders opted-in references as independent blocks while code examples stay code', () => {
+    const html = renderToStaticMarkup(createElement(ChatMarkdown, { text: `Before\n\n${text}\n\nAfter\n\n\`\`\`text\n${text}\n\`\`\``, visualization: { conversationId: 'chat', stageId: 'stage' } }))
+    expect(html).toContain('chat-visualization')
+    expect(html).toContain('<p>Before</p>')
+    expect(html).toContain('<p>After</p>')
+    expect(html).toContain('code__pre')
+    expect(html.match(/visualize/g)?.length).toBe(1)
+  })
+})
+
 describe('Markdown themes in conversations and plans', () => {
   it.each(MARKDOWN_THEMES)('applies %s to chat replies while keeping GFM, code actions and safe links', (theme) => {
     usePreferences.setState({ markdownTheme: theme })

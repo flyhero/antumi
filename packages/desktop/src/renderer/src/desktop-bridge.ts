@@ -14,6 +14,8 @@ declare global {
       getCoreEndpoint(): Promise<unknown>
       // Absent from a main older than the renderer.
       appVersion?(): Promise<unknown>
+      visualizationCreate?(document: string): Promise<unknown>
+      visualizationRemove?(url: string): Promise<unknown>
       pickPlugin?(kind: 'directory' | 'zip'): Promise<unknown>
       // title: the dialog's, where it is not a code repository being picked; a main older than the
       // renderer ignores it.

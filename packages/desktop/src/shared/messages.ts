@@ -1,5 +1,14 @@
 // Application-owned text. Values and external content are passed separately.
 export const MESSAGES = {
+  "ChatVisualization.title": {"zh": "交互预览", "en": "Interactive preview"},
+  "ChatVisualization.adjust": {"zh": "调整", "en": "Adjust"},
+  "ChatVisualization.expand": {"zh": "展开", "en": "Expand"},
+  "ChatVisualization.collapse": {"zh": "收起", "en": "Collapse"},
+  "ChatVisualization.unavailable": {"zh": "无法加载预览：文件不存在、超出会话目录或无法读取。", "en": "Preview unavailable: the file is missing, outside this conversation's folders, or unreadable."},
+  "ChatVisualization.timeout": {"zh": "预览加载超时，可以重新加载。", "en": "The preview took too long to load. Try reloading."},
+  "ChatVisualization.runtimeError": {"zh": "预览运行时出错，可以重新加载。", "en": "The preview encountered an error. Try reloading."},
+  "ChatVisualization.upgrade": {"zh": "当前 core 不支持交互预览，请更新后重试。", "en": "This core does not support interactive previews. Update it and try again."},
+  "ChatVisualization.sendPrompt": {"zh": "将预览中的这条消息发送给 Agent？", "en": "Send this message from the preview to the Agent?"},
   "ProjectColor.label": {"zh": "项目颜色", "en": "Project color"},
   "ProjectColor.default": {"zh": "默认颜色", "en": "Default color"},
   "ProjectColor.blue": {"zh": "蓝色", "en": "Blue"},

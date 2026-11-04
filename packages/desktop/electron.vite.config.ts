@@ -20,7 +20,7 @@ const CSP = [
   // Copying an attachment fetches its in-memory object URL before writing a PNG to the clipboard.
   'connect-src ws://127.0.0.1:* blob:',
   // The preview frames in the chat: files the agent asked to show, served by main (antumi-preview:).
-  'frame-src antumi-preview:'
+  'frame-src antumi-preview: antumi-visualization:'
 ].join('; ')
 
 // Build-only: the dev server injects an inline React Refresh preamble a strict CSP would block.

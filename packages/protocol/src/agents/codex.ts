@@ -16,6 +16,7 @@ export const codex: AgentDescriptor = {
     usageWhere: 'Use in Codex usage settings'
   } },
   label: 'Codex',
+  inlineVisualizations: 'codex',
   cli: 'codex',
   setup: 'account',
   modes: {

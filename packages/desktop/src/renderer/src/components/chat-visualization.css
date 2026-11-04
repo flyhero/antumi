@@ -1,0 +1,12 @@
+.chat-visualization { margin-block: 12px; min-width: 0; border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; background: var(--surface); }
+.chat-visualization-frame { display: block; width: 100%; border: 0; background: var(--surface); }
+.chat-visualization[data-wide], .chat-visualization[data-expanded] { width: max(100%, min(var(--page-wide), calc(100cqw - 64px))); margin-inline: calc((100% - max(100%, min(var(--page-wide), calc(100cqw - 64px)))) / 2); }
+.chat-visualization-controls { display: flex; flex-wrap: wrap; gap: 16px; padding: 12px; border-top: 1px solid var(--border); }
+.chat-visualization-controls fieldset { flex: 1 1 220px; min-width: 0; border: 0; padding: 0; margin: 0; }
+.chat-visualization-controls legend { margin-bottom: 8px; color: var(--text-muted); font-size: var(--chat-font-small); }
+.chat-visualization-controls label { display: grid; grid-template-columns: minmax(0, 1fr) minmax(80px, 1fr); gap: 8px; align-items: center; margin-block: 8px; font-size: var(--chat-font-small); }
+.chat-visualization-controls label > span { display: flex; flex-wrap: wrap; gap: 8px; }
+.chat-visualization-control-value { color: var(--text-muted); }
+.chat-visualization-controls input[type='range'] { min-width: 0; width: 100%; accent-color: var(--accent); }
+.chat-visualization-controls input[type='checkbox'] { justify-self: start; accent-color: var(--accent); }
+.chat-visualization-controls select { min-width: 0; width: 100%; }

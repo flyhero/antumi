@@ -16,10 +16,11 @@ import { FILE_MANAGER, showChatFile, useFilePreviewSupported } from '../file-act
 import { useChatFiles } from './ChatContextMenu'
 import { ImageViewer, type ViewerImage } from './ImageViewer'
 import { ExternalIcon } from './icons'
-import { conversationReferenceId } from '@antumi/protocol'
+import { codexVisualizations, conversationReferenceId } from '@antumi/protocol'
 import { ConversationReferenceLink } from './ConversationReferenceLink'
 import { usePreferences } from '../preferences'
 import { MarkdownSurface } from './MarkdownSurface'
+import { ChatVisualization, type VisualizationScope } from './ChatVisualization'
 
 // The folders a conversation works in, the primary first: where a file a reply names is looked for.
 export const ChatRoots = createContext<readonly string[]>([])
@@ -235,16 +236,16 @@ function SettledDiagram({ source, code }: { source: string; code: ReactNode }) {
 
 // A reply still streaming is left uncoloured: it would be highlighted again at every delta.
 // runnable: its shell blocks may be run in the conversation's terminal (see ChatRunScope).
-export function ChatMarkdown({ text, highlight = true, runnable = false }: { text: string; highlight?: boolean; runnable?: boolean }) {
+export function ChatMarkdown({ text, highlight = true, runnable = false, visualization }: { text: string; highlight?: boolean; runnable?: boolean; visualization?: VisualizationScope }) {
   const theme = usePreferences((state) => state.markdownTheme)
   const packs = usePreferences((state) => state.markdownThemePacks)
   return (
     <MarkdownSurface theme={theme} packs={packs}>
       <ChatRunnable.Provider value={runnable}>
         <ChatSettled.Provider value={highlight}>
-          <Markdown remarkPlugins={chatRemarkPlugins} rehypePlugins={highlight ? rehypePlugins : []} components={components} urlTransform={urlTransform}>
-            {text}
-          </Markdown>
+          {(visualization ? codexVisualizations(text, !highlight) : [{ kind: 'markdown' as const, text }]).map((part, index) => part.kind === 'visualization' && visualization
+            ? <ChatVisualization key={`${index}:${part.reference.path}`} scope={visualization} reference={part.reference} />
+            : part.kind === 'markdown' ? <Markdown key={index} remarkPlugins={chatRemarkPlugins} rehypePlugins={highlight ? rehypePlugins : []} components={components} urlTransform={urlTransform}>{part.text}</Markdown> : null)}
         </ChatSettled.Provider>
       </ChatRunnable.Provider>
     </MarkdownSurface>

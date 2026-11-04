@@ -3,7 +3,7 @@ import { HelperTurnCost } from './HelperTurnCost'
 import { addQuote } from '../chat-quotes'
 import { focusChatInput } from '../helper-conversations'
 import { Fragment, createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { CODEX_IMAGE_GENERATION, cursorProviderError, isBrowserTool, isPlanApproval, isPreviewTool, chatReferencesIn, parseHandoffMessage, toolImagePath, type AgentKind, type ChatItem, type Conversation, type ConversationStage } from '@antumi/protocol'
+import { agentDescriptor, CODEX_IMAGE_GENERATION, cursorProviderError, isBrowserTool, isPlanApproval, isPreviewTool, chatReferencesIn, parseHandoffMessage, toolImagePath, type AgentKind, type ChatItem, type Conversation, type ConversationStage } from '@antumi/protocol'
 import { ChatBrowserTabs, firstBrowserCall, shouldOpenBrowser, useWatchBrowserTabs } from '../browser-state'
 import { ChatBrowserCard, ChatBrowserRun, ChatShotCard } from './ChatBrowserCard'
 import { chatBlocks, finalReplies, foldsOfTools, itemKey, pathShortener, prependChatPage, previousTodos, saidText, stageAgents, thoughtDurations, timeline, useChat, type ChatBlock, type TimelineEntry, type TurnAgent, type TurnFile } from '../chat-state'
@@ -329,6 +329,9 @@ function AssistantReply({ conversationId, item, completedAt, ending, blockKey }:
   blockKey: string
 }) {
   const compact = useContext(ChatVariant) === 'compact'
+  const { byStage, current } = useContext(ChatAgent)
+  const replyAgent = byStage.get(item.stageId)?.agent ?? current.agent
+  const visualization = agentDescriptor(replyAgent).inlineVisualizations === 'codex' ? { conversationId, stageId: item.stageId } : undefined
   const foldedTurns = useContext(FoldedTurns)
   // A stored reply can still end in Cursor's raw transport error. Say what happened instead.
   const failure = item.streaming ? null : cursorProviderError(item.text, getLocale())
@@ -341,7 +344,7 @@ function AssistantReply({ conversationId, item, completedAt, ending, blockKey }:
   const { shown } = translated
   return (
     <div ref={box} className="chat-assistant" data-streaming={item.streaming || undefined} data-translated={shown !== text || undefined}>
-      {shown && <ChatMarkdown text={shown} highlight={!item.streaming} runnable={!item.streaming} />}
+      {shown && <ChatMarkdown text={shown} highlight={!item.streaming} runnable={!item.streaming} visualization={visualization} />}
       {failure && <div className="chat-notice" data-level="warning">{failure.detail}</div>}
       {(completedAt !== undefined || (parentId && !item.streaming)) && text && (
         <div className="chat-message-actions">

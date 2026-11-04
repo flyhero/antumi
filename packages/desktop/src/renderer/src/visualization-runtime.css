@@ -1,0 +1,36 @@
+:root { font-family: var(--font-family, system-ui); font-size: var(--font-size-base, 14px); color: var(--foreground); color-scheme: light dark; }
+* { box-sizing: border-box; }
+body { margin: 0; background: transparent; overflow-wrap: anywhere; }
+button, input, select, textarea { font: inherit; }
+button, .cursor-interaction { cursor: pointer; }
+[hidden] { display: none !important; }
+button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+a { color: var(--blue); }
+svg.lucide { width: 16px; height: 16px; vertical-align: middle; }
+h1, h2, h3 { font-weight: 500; line-height: 1.4; margin: 0 0 12px; }
+h1 { font-size: 1.4rem; } h2 { font-size: 1.2rem; } h3 { font-size: 1rem; }
+.text-small { font-size: .857rem; } .text-muted { color: var(--muted-foreground); } .text-destructive { color: var(--destructive); }
+.text-end { text-align: end; } .text-center { text-align: center; } .text-nowrap { white-space: nowrap; }
+.tabular-nums { font-variant-numeric: tabular-nums; }
+.card { padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); color: var(--card-foreground); }
+.viz-row, .viz-controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.viz-controls { margin-block: 12px; } .viz-controls > .form-label { flex: 1 1 220px; }
+.viz-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(220px,100%),1fr)); gap: 12px; }
+.viz-stat-value { font-size: 1.7rem; font-weight: 500; } .viz-badge { border-radius: 999px; padding: 2px 8px; background: var(--accent); color: var(--accent-foreground); }
+.btn, .nav-link { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--card-foreground); text-decoration: none; }
+.btn-primary, .btn[aria-pressed="true"], .btn[aria-selected="true"], .btn.is-selected { background: var(--primary); color: var(--primary-foreground); border-color: transparent; }
+.btn-ghost { border-color: transparent; background: transparent; } .btn-block { display: flex; width: 100%; }
+.btn:hover, .nav-link:hover { filter: brightness(.95); } button:disabled { opacity: .5; cursor: default; }
+.form-label { display: grid; gap: 8px; } .form-control, .form-select { padding: 8px 12px; min-width: 0; width: 100%; background: var(--card); color: var(--card-foreground); border: 1px solid var(--input); border-radius: 8px; }
+.form-range { width: 100%; accent-color: var(--blue); } .form-check { display: inline-flex; align-items: center; gap: 8px; } .form-check-input { accent-color: var(--blue); }
+.nav { display: flex; flex-wrap: wrap; gap: 4px; margin-block: 8px; } .nav-link { border-color: transparent; background: transparent; } .nav-link.active { background: var(--secondary); color: var(--secondary-foreground); } .nav-justified > .nav-link { flex: 1; }
+.progress { display: flex; height: 8px; background: var(--muted); border-radius: 999px; overflow: hidden; } .progress-bar { background: var(--viz-series-1); }
+.table { width: 100%; border-collapse: collapse; text-align: start; } .table th, .table td { padding: 8px 12px; border-bottom: 1px solid var(--border); } .table th { font-weight: 500; } .table-sm th, .table-sm td { padding: 4px 8px; } .table-responsive { overflow-x: auto; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+.viz-dotted-background { background-image: radial-gradient(circle, color-mix(in srgb,var(--foreground) 15%,transparent) 1px, transparent 1px); background-size: 16px 16px; }
+.viz-carousel { position: relative; padding-bottom: 52px; }
+.viz-carousel-controls { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 36px; padding: 8px; }
+.viz-carousel-controls button, .viz-carousel-controls select { padding: 4px 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--card-foreground); font: inherit; max-width: 60%; }
+.viz-carousel-count { white-space: nowrap; color: var(--muted-foreground); font-size: .857rem; }
+.viz-tooltip { position: absolute; z-index: 100; max-width: min(280px,90%); padding: 8px; border-radius: 6px; background: var(--foreground); color: var(--background); pointer-events: none; font-size: .857rem; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; transition: none !important; } }

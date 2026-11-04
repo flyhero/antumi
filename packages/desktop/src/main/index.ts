@@ -22,6 +22,8 @@ import { installedApps, openWith, type InstalledApp } from './open-with'
 import { AppUpdater, InstallBlocked } from './app-update'
 import { bundleOf, leftovers, stageFromDmg, swapBlocked, swapInto } from './app-bundle-swap'
 import { appImageBlocked, replaceAppImage } from './app-image-swap'
+import { VisualizationPages } from './visualization-pages'
+import { VISUALIZATION_SCHEME } from '../shared/visualization-policy'
 
 // The built-in browser: its tabs live here, in main, so a window closing or its renderer going
 // never touches a page an agent is on. The slot puts the one on show into the window that asked.
@@ -35,7 +37,11 @@ const PRELOAD = join(__dirname, '../preload/index.js')
 // Files an agent wrote, served to the preview frames in the chat: antumi-preview://file/<path>.
 // Registered before the app is ready, as a standard scheme so relative links inside a page resolve.
 const PREVIEW_SCHEME = 'antumi-preview'
-protocol.registerSchemesAsPrivileged([{ scheme: PREVIEW_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } }])
+protocol.registerSchemesAsPrivileged([
+  { scheme: PREVIEW_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
+  { scheme: VISUALIZATION_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true } }
+])
+const visualizationPages = new VisualizationPages()
 
 const PREVIEW_TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8', '.htm': 'text/html; charset=utf-8', '.svg': 'image/svg+xml', '.css': 'text/css; charset=utf-8',
@@ -123,6 +129,13 @@ function createWindow(): void {
 }
 
 function loadRenderer(win: BrowserWindow, hash?: string): void {
+  const owner = win.webContents.id
+  // A visualization may run scripts, but cannot replace its sandbox with a remote page.
+  win.webContents.on('will-frame-navigate', (event) => {
+    if (!event.isMainFrame && (event.frame?.url.startsWith(`${VISUALIZATION_SCHEME}:`) || !event.url.startsWith(`${PREVIEW_SCHEME}:`) && !event.url.startsWith(`${VISUALIZATION_SCHEME}:`) && event.url !== 'about:blank')) event.preventDefault()
+  })
+  win.webContents.on('destroyed', () => visualizationPages.remove(owner))
+  win.webContents.on('did-start-navigation', (_event, _url, _inPlace, isMainFrame) => { if (isMainFrame) visualizationPages.remove(owner) })
   // A file dropped outside a drop target would otherwise replace the app with that file.
   win.webContents.on('will-navigate', (event, url) => {
     if (url !== win.webContents.getURL()) {
@@ -304,6 +317,13 @@ ipcMain.on('antumi:panel-shortcut', (event, payload: unknown) => {
 
 // The version that runs, which a build may set apart from the source's package.json (a beta).
 ipcMain.handle('antumi:app-version', () => app.getVersion())
+ipcMain.handle('antumi:visualization-create', (event, document: unknown) => {
+  if (event.senderFrame !== event.sender.mainFrame) throw new Error('Invalid visualization owner')
+  return visualizationPages.create(event.sender.id, document)
+})
+ipcMain.handle('antumi:visualization-remove', (event, url: unknown) => {
+  if (event.senderFrame === event.sender.mainFrame && typeof url === 'string') visualizationPages.remove(event.sender.id, url)
+})
 
 // Re-read on every call: core rewrites the file with a new port/token on restart.
 ipcMain.handle('antumi:core-endpoint', () => readCoreEndpoint())
@@ -610,6 +630,7 @@ app.on('second-instance', () => {
 void app.whenReady().then(async () => {
   if (!primary) return
   protocol.handle(PREVIEW_SCHEME, servePreview)
+  protocol.handle(VISUALIZATION_SCHEME, (request) => visualizationPages.serve(request))
   // Windows names a notification's sender by this id, the installer's shortcut carries the same.
   if (process.platform === 'win32') app.setAppUserModelId('dev.antumi.desktop')
   uiLocale = resolveUiLocale('system', app.getPreferredSystemLanguages())

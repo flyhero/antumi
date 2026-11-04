@@ -52,6 +52,7 @@
     "electron-vite": "5.0.0",
     "esbuild": "0.25.12",
     "lowlight": "3.3.0",
+    "lucide": "1.17.0",
     "material-icon-theme": "5.39.0",
     "mermaid": "12.1.0",
     "react": "19.3.0",

@@ -14,6 +14,7 @@ import type { BrowserService } from './browser-service'
 import type { SessionHost } from './daemon-client'
 import { findFiles, searchFiles } from './file-search'
 import { ConversationFiles, fileScope } from './conversation-files'
+import { readCodexVisualization } from './agents/codex/codex-visualizations'
 import type { ProjectRegistry } from './project-registry'
 import { Rejection } from './rejection'
 import type { PluginService } from './plugin-service'
@@ -279,6 +280,17 @@ export function createRpcHandlers(
     'system.hello': () => ({ protocolVersion: PROTOCOL_VERSION, serverVersion: packageJson.version, features: CORE_FEATURES.filter((feature) => (feature !== 'agent-profiles' || Boolean(profiles)) && (feature !== 'project-star' || Boolean(projectStar)) && (feature !== 'bookmarks' || Boolean(bookmarks)) && (feature !== 'browser-history' || Boolean(browserHistory)) && (feature !== 'pets' || Boolean(pets)) && (feature !== 'squads' || Boolean(squads)) && (!['plugins', 'plugin-recommendations'].includes(feature) || Boolean(plugins)) && (!['skills-library', 'skills-search', 'skills-activation'].includes(feature) || Boolean(skills)) && (feature !== 'mcp-servers' || Boolean(mcpServers)) && (feature !== 'small-model-stats' || Boolean(smallModels)) && (feature !== 'model-providers' || Boolean(modelProviders)) && (feature !== 'agent-accounts' || Boolean(accounts))) }),
     'files.resolve': ({ conversationId, roots, path }) => files.resolve(fileScope(conversationId, roots), path),
     'files.read': ({ conversationId, roots, path }) => files.read(fileScope(conversationId, roots), path),
+    'visualizations.read': ({ conversationId, stageId, path }) => {
+      const conversation = conversations.get(conversationId)
+      const stage = conversations.stages(conversationId).find((each) => each.id === stageId)
+      if (!stage || agentDescriptor(stage.agent).inlineVisualizations !== 'codex') throw new Rejection('visualization-unsupported')
+      return readCodexVisualization({
+        roots: [...new Set([conversation.workspacePath, ...conversation.projectPaths, ...conversation.referencePaths ?? []])],
+        threadId: stage.providerSessionId,
+        startedAt: stage.startedAt,
+        home: stage.account ? accounts?.home(stage.agent, stage.account) : undefined
+      }, path)
+    },
     'files.list': ({ conversationId, roots, path }) => files.list(fileScope(conversationId, roots), path),
     'files.write': ({ conversationId, roots, path, text, expectedMtimeMs }) => files.write(fileScope(conversationId, roots), path, text, expectedMtimeMs),
     'system.awakeStatus': () => awake.status(),

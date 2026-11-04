@@ -1,4 +1,4 @@
-import { editAgentProfile } from './AgentProfiles'
+import { editAgentProfile, openAgentProfile } from './AgentProfiles'
 import { t } from '../i18n'
 import { canReuseConversation, ChatPermissionMode, type AgentKind, type ChatReference, type ChatImage, type ChatItem, type Conversation } from '@antumi/protocol'
 import { openBeside, openConversationDraft, perform, selectConversation, selectTask, showView, useConversationArchiveSupported, useConversationPinSupported, useCore } from '../core-store'
@@ -160,6 +160,7 @@ export function ConversationContextMenu({ conversation, at, onClose, onRename, o
   const archived = conversation.archivedAt != null
   const busy = conversation.chat?.turn === 'running' || conversation.chat?.turn === 'awaiting'
   const profilesSupported = useCore((state) => state.rpc?.features.includes('agent-profiles') ?? false)
+  const savedProfile = useCore((state) => conversation.profile && state.agentProfiles[conversation.profile.id] ? conversation.profile.id : null)
   const reusable = useReuseConversationSupported() && canReuseConversation(conversation)
   const handoff = other && !archived
   return (
@@ -167,7 +168,10 @@ export function ConversationContextMenu({ conversation, at, onClose, onRename, o
       {split && <MenuItem label={split === 'right' ? t('ConversationActions.openInRightSplitPane') : t('ConversationActions.openInOtherPane')} icon={<SplitIcon />} hint={t('ConversationActions.click', { PRIMARY_KEY_LABEL: PRIMARY_KEY_LABEL })} onSelect={pick(() => openBeside(conversation.id))} />}
       {pinnable && !archived && <MenuItem label={pinned ? t('ConversationActions.unpin') : t('ConversationActions.pin')} icon={<PinIcon />} onSelect={pick(() => void pinConversation(conversation.id, !pinned))} />}
       <MenuItem label={t('ConversationActions.rename')} icon={<PencilIcon />} onSelect={pick(onRename)} />
-      {profilesSupported && canReuseConversation(conversation) && <MenuItem label={t('AgentProfiles.saveFromConversation')} icon={<SquadIcon />} onSelect={pick(() => editAgentProfile({ name: conversation.title.slice(0, 60), agent: conversation.agent, model: conversation.chatOptions?.model ?? null, effort: conversation.chatOptions?.effort ?? null, modelProvider: conversation.modelProvider ?? null, capability: conversation.workspaceReadOnly || conversation.planOnly ? 'readOnly' : 'develop', instructions: conversation.profile?.instructions ?? '' }))} />}
+      {/* A chat with an agent the user saved leads to that agent; saving it again would only copy it
+          without its skills or servers. A direct call's stand-in profile is saved nowhere: it may be. */}
+      {profilesSupported && savedProfile && <MenuItem label={t('AgentProfiles.editAgent')} icon={<SquadIcon />} onSelect={pick(() => openAgentProfile(savedProfile))} />}
+      {profilesSupported && !savedProfile && canReuseConversation(conversation) && <MenuItem label={t('AgentProfiles.saveFromConversation')} icon={<SquadIcon />} onSelect={pick(() => editAgentProfile({ name: conversation.title.slice(0, 60), agent: conversation.agent, model: conversation.chatOptions?.model ?? null, effort: conversation.chatOptions?.effort ?? null, modelProvider: conversation.modelProvider ?? null, capability: conversation.workspaceReadOnly || conversation.planOnly ? 'readOnly' : 'develop', instructions: conversation.profile?.instructions ?? '' }))} />}
       {(reusable || handoff || conversation.sessionId) && <>
         <div className="menu-separator" role="separator" />
         {reusable && <MenuItem label={t('ConversationActions.newWithSameConfiguration')} icon={<CopyIcon />} onSelect={pick(() => void newConversationFrom(conversation))} />}

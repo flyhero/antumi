@@ -400,6 +400,7 @@ export const MESSAGES = {
   "AgentProfiles.customMember": {"zh": "单独配置成员", "en": "Configure this member"},
   "AgentProfiles.noRole": {"zh": "直接使用外部智能体", "en": "Use an external agent directly"},
   "AgentProfiles.saveFromConversation": {"zh": "保存为智能体", "en": "Save as agent"},
+  "AgentProfiles.editAgent": {"zh": "编辑智能体", "en": "Edit agent"},
   "AgentProfiles.calls": {"zh": "委派", "en": "Delegation"},
   "AgentProfiles.delegate": {"zh": "委派子任务", "en": "Delegate work"},
   "AgentProfiles.instruction": {"zh": "目标、必要背景、文件范围和交付要求", "en": "Goal, context, file scope and expected output"},

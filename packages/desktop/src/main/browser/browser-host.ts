@@ -16,15 +16,13 @@ import type { WindowSlot } from './window-slot'
 import { bindBrowserShortcuts } from './browser-shortcuts'
 import { BrowserCapture } from './browser-capture'
 import { BrowserDownloads } from './browser-downloads'
+import { UserInputs } from './user-input'
 
 // One session for every tab: cookies and logins outlive the app, apart from its own UI's.
 const PARTITION = 'persist:antumi-browser'
 // Longer than the gate's wait, so a navigation held for the user is not a timeout.
 const NAVIGATION_TIMEOUT_MS = 35_000
 const READY: BrowserStatus = { state: 'ready', running: true }
-const USER_INPUT = new Set(['mouseDown', 'rawKeyDown', 'keyDown', 'gestureTap'])
-// Often enough to keep a tab the user is working in theirs, which core holds for a few seconds.
-const USER_INPUT_EVERY_MS = 1_000
 
 type Navigation = BrowserHostResult<'navigate'>
 
@@ -58,6 +56,7 @@ export async function startBrowserHost(slot: WindowSlot, hostFile: string, confi
   // Tabs an agent's action is at work in: its clicks and keys reach the page as the user's do,
   // and are not to be told to core as the user taking the tab.
   const agentActing = new Set<string>()
+  const userInputs = new UserInputs()
   // The agent's clicks wait on an element being visible and still, which a resting tab never is:
   // while any of the agent's calls is on it, it lays out, paints and runs its frames.
   const awake = new Map<string, number>()
@@ -161,10 +160,19 @@ export async function startBrowserHost(slot: WindowSlot, hostFile: string, confi
     captures.set(tab.id, capture)
     views.set(tab.id, view)
     slot.rest(view)
-    contents.once('destroyed', () => void close())
-    // A link that wants a window of its own gets a tab of the same owner's instead.
+    contents.once('destroyed', () => {
+      userInputs.forget(tab.id)
+      void close()
+    })
+    // A link that wants a window of its own gets a tab of the same owner's instead; one the user
+    // just clicked takes that tab for them before it goes, as their click took this one.
     contents.setWindowOpenHandler(({ url }) => {
-      if (/^https?:\/\//i.test(url)) void open(tab.conversationId, null, tab.userOwned).then((opened) => goto(opened, { url })).catch(() => {})
+      if (!/^https?:\/\//i.test(url)) return { action: 'deny' }
+      const byUser = userInputs.opensForUser(tab.id, agentActing.has(tab.id), Date.now())
+      void open(tab.conversationId, null, tab.userOwned).then((opened) => {
+        if (byUser) server?.emit({ event: 'userInput', tabId: opened.id })
+        return goto(opened, { url })
+      }).catch(() => {})
       return { action: 'deny' }
     })
     bindBrowserShortcuts(contents, tab.id, slot, process.platform === 'darwin' ? 'darwin' : process.platform === 'win32' ? 'win32' : 'linux', () => capture.active)
@@ -174,13 +182,8 @@ export async function startBrowserHost(slot: WindowSlot, hostFile: string, confi
     // asked, as Chrome asks.
     // The user clicking or typing in the page takes the tab, as navigating it from the panel does:
     // where it goes then is theirs to say, and the agent waits. Scrolling to read does not.
-    let toldAt = 0
     contents.on('input-event', (_event, input) => {
-      if (agentActing.has(tab.id) || !USER_INPUT.has(input.type)) return
-      const now = Date.now()
-      if (now - toldAt < USER_INPUT_EVERY_MS) return
-      toldAt = now
-      server?.emit({ event: 'userInput', tabId: tab.id })
+      if (userInputs.note(tab.id, input.type, agentActing.has(tab.id), Date.now())) server?.emit({ event: 'userInput', tabId: tab.id })
     })
     contents.on('will-prevent-unload', (event) => {
       if (confirmLeave()) event.preventDefault()

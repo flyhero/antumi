@@ -117,7 +117,8 @@ function ConversationMeta({ conversation, heading = 'none' }: { conversation: Co
   const projects = metaProjects(conversation.projectPaths, heading === 'project')
   return (
     <>
-      {heading !== 'agent' && <span className="conversation-agent" role="img" aria-label={agent} title={agent}><AgentIcon agent={conversation.agent} /></span>}
+      {/* Its logo already leads the row, unless a robot stands there for one of the user's agents. */}
+      {heading !== 'agent' && conversation.profile && <span className="conversation-agent" role="img" aria-label={agent} title={agent}><AgentIcon agent={conversation.agent} /></span>}
       {projects !== null && <>{projects}{' · '}</>}
       <span className="conversation-live" data-state={activity?.state}>{state}</span>
     </>

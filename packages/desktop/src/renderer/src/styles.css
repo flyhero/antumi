@@ -775,6 +775,7 @@ body.stacked-panel-resizing * {
   .conversation-status[data-glyph='awaiting'],
   .profile-mark[data-glyph='awaiting'],
   .task-mark[data-glyph='awaiting'],
+  .agent-status-mark[data-glyph='awaiting'] .agent-status-badge,
   .discussion-mark[data-tone='awaiting'] { animation: none; }
 }
 /* The message a search matched, under the row's meta line. */
@@ -10328,6 +10329,18 @@ button.island-compact:focus-visible { outline: 2px solid var(--focus); outline-o
 .task-mark-status { position: absolute; right: -4px; bottom: -3px; display: grid; place-items: center; width: 10px; height: 10px; border-radius: 50%; background: var(--surface); box-shadow: 0 0 0 1.5px var(--surface); }
 .task-row:hover .task-mark-status { background: var(--surface-muted); box-shadow: 0 0 0 1.5px var(--surface-muted); }
 .task-mark-status .status-icon { width: 9px; height: 9px; }
+
+/* A chat's agent logo in the status column, its own colours kept; how the chat stands is the badge
+   at the bottom right, cut out of the logo by a ring of the row's background like a task's status. */
+.agent-status-mark { position: relative; justify-self: center; display: grid; place-items: center; width: 16px; height: 16px; margin-top: 2px; }
+.agent-status-mark > .agent-mark { width: 14px; height: 14px; }
+.agent-status-badge { position: absolute; right: -4px; bottom: -3px; display: grid; place-items: center; width: 9px; height: 9px; border-radius: 50%; background: var(--surface); box-shadow: 0 0 0 1.5px var(--surface); }
+.task-row:hover .agent-status-badge { box-shadow: 0 0 0 1.5px var(--surface-muted); }
+/* At this size the usual grey track vanishes on a dark row: the whole ring takes the running colour. */
+.agent-status-mark[data-glyph='running'] .agent-status-badge .chat-spinner { width: 9px; height: 9px; border-width: 1.5px; border-color: color-mix(in srgb, var(--status-running) 35%, transparent); border-top-color: var(--status-running); }
+.agent-status-mark[data-glyph='unseen'] .agent-status-badge { background: var(--accent); }
+.agent-status-mark[data-glyph='failed'] .agent-status-badge { background: var(--danger); }
+.agent-status-mark[data-glyph='awaiting'] .agent-status-badge { background: var(--warning); animation: status-pulse 1.6s ease-out infinite; }
 /* The task's status in the row's meta line: a word in the status's colour, no heavier than the rest. */
 .conversation-task-status { font-weight: 500; }
 
@@ -10840,6 +10853,7 @@ button.squad-member-main { cursor: pointer; }
   .discussion-mark[data-tone='awaiting'],
   .profile-mark[data-glyph='awaiting'],
   .task-mark[data-glyph='awaiting'],
+  .agent-status-mark[data-glyph='awaiting'] .agent-status-badge,
   .discussion-typing i
 ) { animation-play-state: paused; }
 /* A pseudo-element cannot stand inside :is(): the list is forgiving and drops what it cannot

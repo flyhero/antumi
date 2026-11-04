@@ -18,8 +18,15 @@ describe('the status column in the list', () => {
     expect(mark({ profile, lastExit: { code: 1, at: 1 } })).toContain('data-glyph="failed"')
   })
 
-  it('keeps the dot for any other chat, and in the conversation\'s own header', () => {
-    expect(mark({})).toMatch(/^<span class="conversation-status" data-glyph="idle"/)
+  it('holds any other chat\'s agent logo, with how it stands as a badge only when something is going on', () => {
+    const idle = mark({})
+    expect(idle).toMatch(/^<span class="agent-status-mark" data-glyph="idle" role="img" aria-label="Claude Code · [^"]+"[^>]*><svg class="agent-mark agent-mark-claude"/)
+    expect(idle).not.toContain('agent-status-badge')
+    expect(mark({ lastExit: { code: 1, at: 1 } })).toMatch(/data-glyph="failed".*<span class="agent-status-badge"><\/span>/)
+    expect(mark({ sessionId: 's', chat: { turn: 'running' } })).toMatch(/data-glyph="running".*<span class="agent-status-badge"><span class="chat-spinner"/)
+  })
+
+  it('keeps the dot in the conversation\'s own header', () => {
     expect(renderToStaticMarkup(createElement(ConversationStatus, { conversation: { ...conversation, profile } }))).toMatch(/^<span class="conversation-status"/)
   })
 })

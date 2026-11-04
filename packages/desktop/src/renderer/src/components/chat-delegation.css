@@ -14,6 +14,9 @@
 .chat-delegation-recipient strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; font-size: var(--chat-font-size); }
 .chat-delegation-avatar { display: grid; place-items: center; width: 32px; height: 32px; flex-shrink: 0; border: 1px solid var(--border); border-radius: var(--radius); }
 .chat-delegation-avatar > svg { width: 20px; height: 20px; }
+/* A saved agent's face fills the frame, which then needs no border of its own. */
+.chat-delegation-avatar:has(> .agent-avatar) { border-color: transparent; }
+.chat-delegation-avatar > .agent-avatar { width: 100%; height: 100%; }
 .chat-delegation-recipient .chat-delegation-avatar { position: relative; }
 .chat-delegation[data-active] .chat-delegation-recipient .chat-delegation-avatar::after { content: ''; position: absolute; inset: -4px; border: 1px solid var(--delegation-tone); border-radius: var(--radius-lg); animation: delegation-breathe 2.4s ease-out infinite; pointer-events: none; }
 .chat-delegation-goal { margin: 4px 16px 12px; font-size: var(--chat-font-size); line-height: 1.6; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }

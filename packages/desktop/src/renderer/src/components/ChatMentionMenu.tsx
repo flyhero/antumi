@@ -6,6 +6,7 @@ import { useCore, useFileMentionsSupported } from '../core-store'
 import { fileTarget, insertMention, matchConversations, matchProjects, mentionQuery, placeMention, type MentionedText, type MentionTarget } from '../chat-mentions'
 import type { SetText } from './ChatMentionField'
 import { projectName } from './ProjectPicker'
+import { AgentAvatar } from './AgentAvatar'
 import { AgentIcon, ChatIcon, FolderIcon } from './icons'
 import { FileTypeIcon } from './FileTypeIcon'
 import { isDarkTheme, onThemeChange } from '../appearance'
@@ -182,7 +183,7 @@ export function useChatMentionMenu({ value, setText, setValue, roots, cwd, agent
     const profileRows = callable.filter((profile) => profile.name.toLocaleLowerCase().includes(query.toLocaleLowerCase())).map((profile): MentionEntry => ({
       key: `profile:${profile.id}`, group: 'profiles', target: { kind: 'agent', id: profile.id, name: profile.name }, name: profile.name, opens: null,
       detail: [profile.description || agentLabel(profile.agent), quotaOf(targets.find((each) => each.profileId === profile.id))].filter(Boolean).join(' · '),
-      icon: <AgentIcon agent={profile.agent} />
+      icon: <AgentAvatar id={profile.id} />
     }))
     // Named in the text only: the agent finds it by name among those antumi_agent_list returns.
     const directRows = direct.filter((entry) => entry.name.toLocaleLowerCase().includes(query.toLocaleLowerCase())).map((entry): MentionEntry => ({

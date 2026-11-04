@@ -3,7 +3,8 @@ import type { Conversation } from '@antumi/protocol'
 import { useCore } from '../core-store'
 import { conversationGlyph, conversationState } from '../conversation-state'
 import { agentLabel } from '../labels'
-import { AgentIcon, RobotIcon } from './icons'
+import { AgentAvatar } from './AgentAvatar'
+import { AgentIcon } from './icons'
 import { Spinner } from './Spinner'
 
 const SPOKEN: Record<string, string> = localized(() => ({ unseen: t('ConversationStatus.newActivity') }))
@@ -26,23 +27,17 @@ export function ConversationStatus({ conversation }: { conversation: Conversatio
   )
 }
 
-// In a list, a chat with one of the user's agents holds a robot in the status column, coloured as
-// the dot would be, as a group chat holds its own mark: the kind reads from the column alone. Any
-// other chat holds its agent's logo, which keeps its own colours, so how it stands sits small at
-// the logo's bottom right, as a task's status sits on its mark; nothing when nothing is going on.
+// In a list, a chat holds its agent's logo in the status column, or, with an agent the user saved,
+// that agent's face; either keeps its own colours, so how it stands sits small at its bottom right,
+// as a task's status sits on its mark; nothing when nothing is going on.
 export function ConversationMark({ conversation }: { conversation: Conversation }) {
   const { glyph, label, detail } = useStatus(conversation)
-  if (!conversation.profile) {
-    return (
-      <span className="agent-status-mark" data-glyph={glyph} role="img" aria-label={`${agentLabel(conversation.agent)} · ${label}`} title={detail ?? label}>
-        <AgentIcon agent={conversation.agent} />
-        {glyph !== 'idle' && <span className="agent-status-badge">{glyph === 'running' && <Spinner />}</span>}
-      </span>
-    )
-  }
+  const { profile } = conversation
+  const saved = useCore((s) => Boolean(profile && s.agentProfiles[profile.id]))
   return (
-    <span className="profile-mark" data-glyph={glyph} role="img" aria-label={`${conversation.profile.name} · ${label}`} title={detail ?? label}>
-      <RobotIcon />
+    <span className="agent-status-mark" data-glyph={glyph} role="img" aria-label={`${profile?.name ?? agentLabel(conversation.agent)} · ${label}`} title={detail ?? label}>
+      {profile && saved ? <AgentAvatar id={profile.id} /> : <AgentIcon agent={conversation.agent} />}
+      {glyph !== 'idle' && <span className="agent-status-badge">{glyph === 'running' && <Spinner />}</span>}
     </span>
   )
 }

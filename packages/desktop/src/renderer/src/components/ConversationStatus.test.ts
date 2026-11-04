@@ -12,10 +12,8 @@ const profile = AgentProfile.parse({ id: '44444444-4444-4444-8444-444444444444',
 const mark = (patch: Partial<Conversation>) => renderToStaticMarkup(createElement(ConversationMark, { conversation: { ...conversation, ...patch } }))
 
 describe('the status column in the list', () => {
-  it('holds a robot for a chat with one of the user\'s agents, in the state its dot would show', () => {
-    const idle = mark({ profile })
-    expect(idle).toMatch(/^<span class="profile-mark" data-glyph="idle" role="img" aria-label="审查员 · [^"]+"[^>]*><svg/)
-    expect(mark({ profile, lastExit: { code: 1, at: 1 } })).toContain('data-glyph="failed"')
+  it('keeps the agent\'s logo for a direct call, whose stand-in profile is saved nowhere', () => {
+    expect(mark({ profile })).toMatch(/aria-label="审查员 · [^"]+"[^>]*><svg class="agent-mark agent-mark-claude"/)
   })
 
   it('holds any other chat\'s agent logo, with how it stands as a badge only when something is going on', () => {

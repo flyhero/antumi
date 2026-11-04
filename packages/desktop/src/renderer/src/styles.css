@@ -773,7 +773,6 @@ body.stacked-panel-resizing * {
 
 @media (prefers-reduced-motion: reduce) {
   .conversation-status[data-glyph='awaiting'],
-  .profile-mark[data-glyph='awaiting'],
   .task-mark[data-glyph='awaiting'],
   .agent-status-mark[data-glyph='awaiting'] .agent-status-badge,
   .discussion-mark[data-tone='awaiting'] { animation: none; }
@@ -10329,13 +10328,8 @@ button.island-compact:focus-visible { outline: 2px solid var(--focus); outline-o
 .discussion-dot[data-tone='done'] { background: var(--status-done); transform: scale(0.75); }
 .discussion-view .detail-header .discussion-dot { margin-top: 0; }
 /* A group chat's row in the list: its mark in the status column, coloured as the dot would be. */
-.discussion-mark, .profile-mark { justify-self: center; display: grid; place-items: center; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; color: var(--text-muted); }
-.discussion-mark svg, .profile-mark svg { width: 14px; height: 14px; }
-/* A chat with one of the user's agents: its robot in the status column, in the colours of the dot. */
-.profile-mark[data-glyph='running'] { color: var(--status-running); }
-.profile-mark[data-glyph='unseen'] { color: var(--accent); }
-.profile-mark[data-glyph='failed'] { color: var(--danger); }
-.profile-mark[data-glyph='awaiting'] { color: var(--warning); animation: status-pulse 1.6s ease-out infinite; }
+.discussion-mark { justify-self: center; display: grid; place-items: center; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; color: var(--text-muted); }
+.discussion-mark svg { width: 14px; height: 14px; }
 .discussion-mark[data-tone='working'] { color: var(--status-running); }
 .discussion-mark[data-tone='awaiting'] { color: var(--warning); animation: status-pulse 1.6s ease-out infinite; }
 .discussion-mark[data-tone='done'] { color: var(--status-done); }
@@ -10356,6 +10350,9 @@ button.island-compact:focus-visible { outline: 2px solid var(--focus); outline-o
    at the bottom right, cut out of the logo by a ring of the row's background like a task's status. */
 .agent-status-mark { position: relative; justify-self: center; display: grid; place-items: center; width: 16px; height: 16px; margin-top: 2px; }
 .agent-status-mark > .agent-mark { width: 14px; height: 14px; }
+.agent-status-mark > .agent-avatar { width: 16px; height: 16px; }
+/* A saved agent's face (AgentAvatar); each place it stands in sets its size. */
+.agent-avatar { display: block; flex-shrink: 0; }
 .agent-status-badge { position: absolute; right: -4px; bottom: -3px; display: grid; place-items: center; width: 9px; height: 9px; border-radius: 50%; background: var(--surface); box-shadow: 0 0 0 1.5px var(--surface); }
 .task-row:hover .agent-status-badge { box-shadow: 0 0 0 1.5px var(--surface-muted); }
 /* At this size the usual grey track vanishes on a dark row: the whole ring takes the running colour. */
@@ -10599,6 +10596,7 @@ button.island-compact:focus-visible { outline: 2px solid var(--focus); outline-o
 .squad-card-top { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .squad-card-icon { display: grid; place-items: center; width: 32px; height: 32px; flex-shrink: 0; border-radius: var(--radius); background: var(--accent-bg); color: var(--accent); }
 .squad-card-icon svg { width: 18px; height: 18px; }
+.squad-card-icon > .agent-avatar { width: 100%; height: 100%; }
 .squad-card-name { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .squad-card-description { min-height: 3.2em; font-size: 12px; line-height: 1.6; color: var(--text-muted); overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .squad-card-description[data-empty] { color: var(--text-3); }
@@ -10873,7 +10871,6 @@ button.squad-member-main { cursor: pointer; }
   .dashboard-refresh[data-loading] svg,
   .discussion-dot[data-tone='awaiting'],
   .discussion-mark[data-tone='awaiting'],
-  .profile-mark[data-glyph='awaiting'],
   .task-mark[data-glyph='awaiting'],
   .agent-status-mark[data-glyph='awaiting'] .agent-status-badge,
   .discussion-typing i

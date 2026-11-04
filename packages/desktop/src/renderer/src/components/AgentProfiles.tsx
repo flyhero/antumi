@@ -8,6 +8,7 @@ import { useInstalledAgents } from '../installed-agents'
 import { agentLabel } from '../labels'
 import { t } from '../i18n'
 import { timeAgo } from '../conversation-state'
+import { AgentAvatar } from './AgentAvatar'
 import { AgentIcon, InfoIcon, PlusIcon } from './icons'
 import { AgentsPageHeader } from './AgentsPageHeader'
 import { AgentModelPicker } from './AgentModelPicker'
@@ -85,7 +86,7 @@ function ProfilesView() {
       {tab === 'active' && shown.length === 0 ? <p className="agent-templates-empty muted">{t('AgentTemplates.emptyHint')}</p> : <ul className="squad-cards agent-profile-list">{shown.map((item) => <li key={item.id}>
         <article className="squad-card agent-profile-card" data-archived={item.archivedAt !== null || undefined}>
           <button type="button" className="agent-profile-card-main" onClick={() => edit(item)}>
-            <span className="squad-card-top"><span className="squad-card-icon"><AgentIcon agent={item.agent} /></span><span className="squad-card-name">{item.name}</span>{item.archivedAt !== null && <span className="squad-tag">{t('ConversationList.archived')}</span>}</span>
+            <span className="squad-card-top"><span className="squad-card-icon"><AgentAvatar id={item.id} /></span><span className="squad-card-name">{item.name}</span>{item.archivedAt !== null && <span className="squad-tag">{t('ConversationList.archived')}</span>}</span>
             <span className="squad-card-description" data-empty={!item.description || undefined}>{item.description || t('Squads.noDescription')}</span>
             <span className="squad-card-members"><span className="squad-card-member">{t(item.capability === 'readOnly' ? 'Squads.readOnlyAnalysis' : 'Squads.developmentTesting')}</span></span>
             <span className="squad-card-foot"><span className="agent-profile-engine" title={[agentLabel(item.agent), item.model].filter(Boolean).join(' · ')}>{[agentLabel(item.agent), item.model].filter(Boolean).join(' · ')}</span><span className="squad-card-time">{t('SourceInboxView.updated', { value1: timeAgo(item.updatedAt, now) })}</span></span>

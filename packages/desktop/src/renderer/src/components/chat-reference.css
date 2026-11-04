@@ -25,6 +25,7 @@ button.chat-reference:disabled { color: var(--text-muted); cursor: default; }
 button.chat-reference:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .chat-reference-icon { display: inline-flex; flex-shrink: 0; color: var(--text-muted); }
 .chat-reference-icon > svg { width: 14px; height: 14px; }
+.chat-reference-icon > .agent-avatar { width: 14px; height: 14px; }
 /* Which kind, at a glance: a hue each from the code colours, so each palette tints them its own way.
    Agents and files bring their own colours. */
 [data-reference-kind='link'] > .chat-reference-icon,

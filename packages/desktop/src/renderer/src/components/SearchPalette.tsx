@@ -7,7 +7,8 @@ import { t } from '../i18n'
 import { agentEntries, conversationEntries, discussionEntries, matchScore, recentEntries, searchSections, SEARCH_CATEGORIES, taskEntries, type SearchCategory, type SearchEntry, type SearchKind, type SearchSection } from '../search-palette'
 import { openAgentProfile } from './AgentProfiles'
 import { FileTypeIcon } from './FileTypeIcon'
-import { AgentIcon, BoardIcon, GroupChatIcon, RobotIcon, SearchIcon } from './icons'
+import { AgentAvatar } from './AgentAvatar'
+import { AgentIcon, BoardIcon, GroupChatIcon, SearchIcon } from './icons'
 import { projectName } from './ProjectPicker'
 import './search-palette.css'
 
@@ -122,7 +123,7 @@ export function SearchPalette({ initial }: { initial: SearchCategory }) {
     if (entry.discussion) return <GroupChatIcon />
     if (entry.kind === 'conversations') return <AgentIcon agent={conversations[entry.id]?.agent ?? null} />
     if (entry.kind === 'tasks') return <BoardIcon />
-    if (entry.kind === 'agents') return <RobotIcon />
+    if (entry.kind === 'agents') return <AgentAvatar id={entry.id} />
     return <FileTypeIcon path={entry.id} directory={entry.title.endsWith('/')} dark={dark} />
   }
 

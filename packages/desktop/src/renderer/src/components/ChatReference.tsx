@@ -9,6 +9,7 @@ import { showChatFile } from '../file-actions'
 import { t } from '../i18n'
 import { useChatFiles } from './ChatContextMenu'
 import { openAgentProfile } from './AgentProfiles'
+import { AgentAvatar } from './AgentAvatar'
 import { FileTypeIcon } from './FileTypeIcon'
 import { AgentIcon, ChatIcon, FolderIcon, GlobeIcon } from './icons'
 import './chat-reference.css'
@@ -18,7 +19,8 @@ export function ReferenceIcon({ target }: { target: ChatReferenceTarget }) {
   const agent = useCore((state) => target.kind === 'agent' ? state.agentProfiles[target.id]?.agent ?? null : null)
   const dark = useSyncExternalStore(onThemeChange, isDarkTheme, () => false)
   if (target.kind === 'conversation') return <ChatIcon />
-  if (target.kind === 'agent') return <AgentIcon agent={agent} />
+  // A saved agent's face; one no longer saved keeps the plain agent mark.
+  if (target.kind === 'agent') return agent ? <AgentAvatar id={target.id} /> : <AgentIcon agent={null} />
   if (target.kind === 'project') return <FolderIcon />
   return <FileTypeIcon path={target.path} directory={target.kind === 'directory'} dark={dark} />
 }

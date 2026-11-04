@@ -13,6 +13,7 @@
 .search-palette-row[aria-selected='true'] { background: var(--fill-2); }
 .search-palette-icon { display: grid; place-items: center; flex-shrink: 0; width: 16px; height: 16px; color: var(--text-muted); }
 .search-palette-icon svg { width: 14px; height: 14px; }
+.search-palette-icon > .agent-avatar { width: 16px; height: 16px; }
 .search-palette-title { flex-shrink: 1; min-width: 0; overflow: hidden; color: var(--text); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
 .search-palette-detail { flex: 1 1 0; min-width: 0; overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .search-palette-empty { margin: 0; padding: 12px; font-size: 12px; }

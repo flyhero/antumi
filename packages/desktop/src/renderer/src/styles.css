@@ -9243,6 +9243,8 @@ div.inspector-empty > p { margin: 0 0 8px; }
 .browser-tab-close { flex-shrink: 0; }
 .browser-tab-icon { display: inline-flex; flex-shrink: 0; color: var(--text-3); }
 .browser-tab-icon svg { width: 14px; height: 14px; }
+/* An agent's logo in its own colours, as in the conversation list; one drawn in the text's colour is not greyed like the globe. */
+.browser-tab-icon:has(.agent-mark) { color: var(--text); }
 .browser-tab-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .browser-tab[data-active] .browser-tab-name { font-weight: 500; }
 .browser-tab[data-loading] .browser-tab-name { font-style: italic; }

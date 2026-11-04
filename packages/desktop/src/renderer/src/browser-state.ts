@@ -1,6 +1,6 @@
 import { createContext, useEffect, useState } from 'react'
 import { create } from 'zustand'
-import { isBrowserTool, type BrowserTab, type RpcConnection } from '@antumi/protocol'
+import { isBrowserTool, type AgentKind, type BrowserTab, type RpcConnection } from '@antumi/protocol'
 import { perform, showBrowserPanel, useCore } from './core-store'
 import { focusPanelWindow, sendPanelCommand } from './desktop-bridge'
 import { urlPath } from './file-links'
@@ -188,6 +188,16 @@ export function shouldOpenBrowser(): boolean {
 
 // Whose a tab or a visited page is, where everyone's show: a conversation by its title, the
 // user's own by nothing.
+// The agent of the conversation holding a tab, for its mark; null for a tab of the user's own.
+export function useConversationAgents(): (conversationId: string | null) => AgentKind | null {
+  const conversations = useCore((s) => s.conversations)
+  const tasks = useCore((s) => s.tasks)
+  return (conversationId) => {
+    if (conversationId === null) return null
+    return conversations[conversationId]?.agent ?? Object.values(tasks).find((each) => each.conversationId === conversationId)?.agent ?? null
+  }
+}
+
 export function useConversationNames(): (conversationId: string | null) => string | null {
   const conversations = useCore((s) => s.conversations)
   const tasks = useCore((s) => s.tasks)

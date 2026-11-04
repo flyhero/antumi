@@ -1423,6 +1423,14 @@ export const MESSAGES = {
     "zh": "页面在 Antumi 应用里显示",
     "en": "Pages are displayed in the Antumi app"
   },
+  "BrowserPanel.tabOfConversation": {
+    "zh": "{value1} · 会话：{value2}",
+    "en": "{value1} · Conversation: {value2}"
+  },
+  "BrowserPanel.tabOwnerTooltip": {
+    "zh": "会话：{value1}\n{value2}",
+    "en": "Conversation: {value1}\n{value2}"
+  },
   "BrowserPanel.conversation": {
     "zh": "会话",
     "en": "Conversation"

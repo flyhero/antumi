@@ -1,12 +1,12 @@
 import { localized, t, tr } from '../i18n'
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
 import type { BrowserTab, BrowserViewport } from '@antumi/protocol'
-import { ALL_TABS, openUserBrowserTab, selectBrowserTab, useBrowserTabs, useConversationNames, useWatchAllBrowser } from '../browser-state'
+import { ALL_TABS, openUserBrowserTab, selectBrowserTab, useBrowserTabs, useConversationAgents, useConversationNames, useWatchAllBrowser } from '../browser-state'
 import { perform, useCore } from '../core-store'
 import { canShowNativeBrowser, onBrowserFocused, reportBrowserBounds, showNativeBrowserTab } from '../desktop-bridge'
 import { BookmarksButton, BookmarkStar } from './BrowserBookmarks'
 import { ChatPicker } from './ChatPicker'
-import { ArrowLeftIcon, ArrowRightIcon, CameraIcon, CloseIcon, CustomSizeIcon, FitPanelIcon, GlobeIcon, LaptopIcon, MonitorIcon, PhoneIcon, PlusIcon, RefreshIcon, TabletIcon } from './icons'
+import { AgentIcon, ArrowLeftIcon, ArrowRightIcon, CameraIcon, CloseIcon, CustomSizeIcon, FitPanelIcon, GlobeIcon, LaptopIcon, MonitorIcon, PhoneIcon, PlusIcon, RefreshIcon, TabletIcon } from './icons'
 import { Spinner } from './Spinner'
 import { BrowserCaptureButton, BrowserDeveloperButton, BrowserShareButton } from './BrowserActions'
 import { BrowserDownloadsButton, useBrowserDownloads } from './BrowserDownloads'
@@ -25,9 +25,11 @@ function tabName(tab: BrowserTab): string {
 
 // The tabs as pills in the panel's top bar, the one shown filled in, each with its close, and a
 // plus for a tab of the user's own after them. The pills share the width and shrink as tabs come,
-// so the plus stays in reach however many there are.
+// so the plus stays in reach however many there are. A tab a conversation holds leads with its
+// agent's logo rather than the globe, the page keeping the width; which conversation, on hover.
 export function BrowserTabStrip() {
   const ownerName = useConversationNames()
+  const ownerAgent = useConversationAgents()
   const { tabs, selectedId } = useBrowserTabs((s) => s[ALL_TABS]) ?? { tabs: [], selectedId: null }
   const strip = useRef<HTMLDivElement>(null)
   // The shown tab is scrolled into the strip when there are more than fit.
@@ -38,18 +40,21 @@ export function BrowserTabStrip() {
   return (
     <div className="browser-tab-strip">
     <div className="browser-tabs" role="tablist" aria-label={t('chatTools.tabs')} ref={strip}>
-      {tabs.map((each) => (
+      {tabs.map((each) => {
+        const owner = ownerName(each.conversationId)
+        const agent = ownerAgent(each.conversationId)
+        return (
         <div key={each.id} className="browser-tab" data-tab-id={each.id} data-active={each.id === selectedId || undefined} data-loading={each.loading || undefined}>
-          <button type="button" role="tab" aria-selected={each.id === selectedId} title={each.url} onClick={() => selectBrowserTab(ALL_TABS, each.id)}>
-            <span className="browser-tab-icon" aria-hidden="true"><GlobeIcon /></span>
-            {ownerName(each.conversationId) && <span className="browser-tab-owner">{ownerName(each.conversationId)}</span>}
+          <button type="button" role="tab" aria-selected={each.id === selectedId} aria-label={owner ? t('BrowserPanel.tabOfConversation', { value1: tabName(each), value2: owner }) : undefined} title={owner ? t('BrowserPanel.tabOwnerTooltip', { value1: owner, value2: each.url }) : each.url} onClick={() => selectBrowserTab(ALL_TABS, each.id)}>
+            <span className="browser-tab-icon" aria-hidden="true">{agent ? <AgentIcon agent={agent} /> : <GlobeIcon />}</span>
             <span className="browser-tab-name">{tabName(each)}</span>
           </button>
           <button type="button" className="browser-tab-close" aria-label={t('BrowserPanel.closeTab', { value1: tabName(each) })} onClick={() => void perform((rpc) => rpc.call('browser.closeTab', { tabId: each.id }))}>
             <CloseIcon />
           </button>
         </div>
-      ))}
+        )
+      })}
     </div>
     <button type="button" className="tool-button browser-tab-add" aria-label={t('BrowserPanel.newTab')} data-tooltip={t('BrowserPanel.newTab')} onClick={() => void openUserBrowserTab()}><PlusIcon /></button>
     </div>

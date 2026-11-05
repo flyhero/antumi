@@ -773,7 +773,6 @@ body.stacked-panel-resizing * {
 
 @media (prefers-reduced-motion: reduce) {
   .conversation-status[data-glyph='awaiting'],
-  .task-mark[data-glyph='awaiting'],
   .discussion-mark[data-tone='awaiting'] { animation: none; }
 }
 /* The message a search matched, under the row's meta line. */
@@ -10332,18 +10331,9 @@ button.island-compact:focus-visible { outline: 2px solid var(--focus); outline-o
 .discussion-mark[data-tone='working'] { color: var(--status-running); }
 .discussion-mark[data-tone='awaiting'] { color: var(--warning); animation: status-pulse 1.6s ease-out infinite; }
 .discussion-mark[data-tone='done'] { color: var(--status-done); }
-/* A task's row in the list: the board's icon in the status column, in the colours of a
-   conversation's dot, with the task's status small at its bottom right, ringed in the row's
-   surface so it stands off the icon. */
-.task-mark { position: relative; justify-self: center; display: grid; place-items: center; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; color: var(--text-muted); }
+/* A task's row in the list: the board's icon in a conversation's status ring (.agent-status-mark). */
+.task-mark { color: var(--text-muted); }
 .task-mark > svg { width: 14px; height: 14px; }
-.task-mark[data-glyph='running'] { color: var(--status-running); }
-.task-mark[data-glyph='unseen'] { color: var(--accent); }
-.task-mark[data-glyph='failed'] { color: var(--danger); }
-.task-mark[data-glyph='awaiting'] { color: var(--warning); animation: status-pulse 1.6s ease-out infinite; }
-.task-mark-status { position: absolute; right: -4px; bottom: -3px; display: grid; place-items: center; width: 10px; height: 10px; border-radius: 50%; background: var(--surface); box-shadow: 0 0 0 1.5px var(--surface); }
-.task-row:hover .task-mark-status { background: var(--surface-muted); box-shadow: 0 0 0 1.5px var(--surface-muted); }
-.task-mark-status .status-icon { width: 9px; height: 9px; }
 
 /* Rings extend beyond the icon column, keeping titles aligned with the group heading. */
 .agent-status-mark { position: relative; justify-self: center; display: grid; place-items: center; width: 16px; height: 16px; margin-top: 2px; }
@@ -10873,7 +10863,6 @@ button.squad-member-main { cursor: pointer; }
   .dashboard-refresh[data-loading] svg,
   .discussion-dot[data-tone='awaiting'],
   .discussion-mark[data-tone='awaiting'],
-  .task-mark[data-glyph='awaiting'],
   .agent-status-mark[data-glyph='running'] .agent-status-ring,
   .discussion-typing i
 ) { animation-play-state: paused; }

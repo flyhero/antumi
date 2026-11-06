@@ -20,6 +20,8 @@ export const OPENCODE_BYPASS_AGENT = 'antumi-bypass'
 const rule = (action: string, effect: 'allow' | 'ask' | 'deny', resource = '*') => ({ action, resource, effect })
 
 // The provider as OpenCode names it, and its models under it.
+const DEFAULT_OUTPUT = 16_384
+
 const providerName = (provider: Pick<ProviderLaunch, 'providerId'>) => `antumi-${provider.providerId}`
 export const opencodeProviderModels = (provider: Pick<ProviderLaunch, 'providerId' | 'models' | 'defaultModel'>) =>
   providerChatModels(provider, (model) => `${providerName(provider)}/${model.id}`)
@@ -42,7 +44,8 @@ function opencodeProvider(provider: ProviderLaunch): Record<string, unknown> {
     },
     models: Object.fromEntries(provider.models.map((model) => [model.id, {
       name: model.label ?? model.id,
-      ...(model.contextWindow !== null && model.maxOutput !== null ? { limit: { context: model.contextWindow, output: model.maxOutput } } : {}),
+      // OpenCode takes a limit only with both halves; an output not known is what pi and dsh assume.
+      ...(model.contextWindow !== null ? { limit: { context: model.contextWindow, output: model.maxOutput ?? Math.min(DEFAULT_OUTPUT, model.contextWindow) } } : {}),
       ...(model.efforts.length ? { reasoning: true } : {})
     }]))
   }

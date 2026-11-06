@@ -88,7 +88,10 @@ describe('starting an agent on a model provider', () => {
         models: { 'glm-5.3': { name: 'GLM-5.3', limit: { context: 1_000_000, output: 128_000 }, reasoning: true }, 'glm-5.3-flash': { name: 'glm-5.3-flash' } }
       } }
     })
-    expect(config.provider['antumi-glm-1'].models['glm-5.3-flash']).not.toHaveProperty('limit')
+    // A known context with no known output still limits it, on the output pi and dsh assume.
+    expect(config.provider['antumi-glm-1'].models['glm-5.3-flash'].limit).toEqual({ context: 200_000, output: 16_384 })
+    const unknown = { ...launchOn('opencode'), models: [{ ...models[0]!, contextWindow: null }] }
+    expect(JSON.parse(start('opencode', unknown).env?.OPENCODE_CONFIG_CONTENT ?? '{}').provider['antumi-glm-1'].models['glm-5.3']).not.toHaveProperty('limit')
     const anthropic = JSON.parse(start('opencode', launchOn('opencode', 'minimax')).env?.OPENCODE_CONFIG_CONTENT ?? '{}')
     expect(anthropic.provider['antumi-glm-1']).toMatchObject({
       npm: '@ai-sdk/anthropic',

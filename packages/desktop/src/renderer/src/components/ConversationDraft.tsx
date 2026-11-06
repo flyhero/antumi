@@ -178,7 +178,8 @@ export function ConversationDraft() {
     if (!agent || !await quotaAllows(agent)) return null
     return perform((rpc) => rpc.call('conversations.create', { agent, ...where, ...(deferStart ? { deferStart: true } : {}), ...startOptions(), ...chosen }))
   }
-  // Core fetches the issue and starts the agent on it before answering, so the page waits.
+  // A current core answers at once and fetches the issue behind the open conversation; an older
+  // one fetches it and starts the agent before answering, so the page waits.
   const investigate = async () => {
     if (!agent || !issue || !await quotaAllows(agent)) return
     setBusy(true)

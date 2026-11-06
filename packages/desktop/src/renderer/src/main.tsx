@@ -16,6 +16,7 @@ import { PanelWindow } from './components/PanelWindow'
 import { ConfirmDialog } from './components/ConfirmDialog'
 import { SettingsPage } from './components/SettingsPage'
 import { applyTitleBar } from './desktop-bridge'
+import { startInboxSeen } from './inbox-news'
 import { startNotifications } from './notifications'
 import { startDisabledAgentsMirror } from './installed-agents'
 import { followPreferences } from './preferences'
@@ -62,6 +63,7 @@ if (playground) {
   startUnsavedEditRetries()
   startWorktreeUpdates()
   startNotifications()
+  startInboxSeen()
   startDisabledAgentsMirror()
   startPanelWindowHost()
 }

@@ -1,4 +1,5 @@
 import { t } from './i18n'
+import { reasonText } from './labels'
 import type { Conversation } from '@antumi/protocol'
 
 export type ConversationState = { label: string; running: boolean; failed: boolean; detail: string | null }
@@ -33,6 +34,9 @@ export function timeAgo(at: number, now: number): string {
 // last failed, is all there is to say.
 export function conversationState(conversation: Conversation): ConversationState {
   const { sessionId, lastExit, chat } = conversation
+  const { preparing } = conversation
+  if (preparing?.error) return { label: t('conversationState.issueNotFetched'), running: false, failed: true, detail: preparingError(preparing) }
+  if (preparing) return { label: t(preparing.step === 'images' ? 'conversationState.fetchingImages' : 'conversationState.fetchingIssue'), running: true, failed: false, detail: t('conversationState.agentStartsOnceTheIssueIsIn') }
   if (conversation.starting) return { label: t('conversationState.starting'), running: true, failed: false, detail: t('conversationState.preparingAgentYourMessageWillBeSentAfterward') }
   if (sessionId && chat?.turn === 'awaiting') return { label: t('conversationState.awaitingApproval'), running: true, failed: false, detail: t('attention.agentNeedsYourApprovalOrAnswer') }
   if (sessionId && chat?.turn === 'running') return { label: t('ConversationList.running'), running: true, failed: false, detail: null }
@@ -41,4 +45,9 @@ export function conversationState(conversation: Conversation): ConversationState
   if (sessionId && chat?.turn === 'idle' && chat.request?.async) return { label: t('ChatWorking.waitingForYourAnswer'), running: false, failed: false, detail: t('conversationState.agentHasAQuestionForYouAnswerIn') }
   if (!sessionId && lastExit?.code) return { label: t('SettingsPage.unexpectedExit'), running: false, failed: true, detail: t('attention.agentExitedUnexpectedlyCodeSendAMessageTo', { value1: lastExit.code }) }
   return { label: t('SquadWorkPanel.idle'), running: false, failed: false, detail: t('conversationState.sendAMessageToContinue') }
+}
+
+// Why an issue's fetch stopped, in the words the reason has here; the core's own words otherwise.
+export function preparingError(preparing: NonNullable<Conversation['preparing']>): string {
+  return preparing.reason ? reasonText(preparing.reason, preparing.error ?? '') : preparing.error ?? ''
 }

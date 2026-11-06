@@ -89,4 +89,28 @@ describe('probeModelProvider', () => {
     expect(probe.checks.map((check) => [check.wire, check.model, check.ok, check.status])).toEqual([['openai-chat', 'big', true, 200], ['openai-chat', 'small', false, 404]])
     expect(seen).toHaveLength(2)
   })
+
+  it('asks one request at a time, and stops once the provider refuses the key or asks to slow down', async () => {
+    const { base, seen } = await serve(({ url }) => (url?.endsWith('/v1/messages')
+      ? { status: 429, body: { error: { message: 'slow down' } } }
+      : { status: 200, body: { choices: [{ message: { content: 'ok' } }] } }))
+    const probe = await probeModelProvider({ anthropic: { baseUrl: base, auth: 'api_key', env: {} }, openai: { chatUrl: base, responsesUrl: null }, defaultModel: 'big', smallModel: 'small' }, 'k')
+    expect(probe.ok).toBe(false)
+    expect(probe.checks.map((check) => [check.wire, check.model, check.status])).toEqual([['anthropic', 'big', 429]])
+    // Asked one at a time, nothing went out after the 429: the Chat endpoint was never reached.
+    expect(seen).toHaveLength(1)
+  })
+
+  it('does not ask an endpoint that does not answer again for its other model', async () => {
+    const probe = await probeModelProvider({ anthropic: null, openai: { chatUrl: 'http://127.0.0.1:9/v1', responsesUrl: null }, defaultModel: 'big', smallModel: 'small' }, 'k', { timeoutMs: 2_000 })
+    expect(probe.checks).toHaveLength(1)
+    expect(probe.checks[0]).toMatchObject({ ok: false, status: null })
+  })
+
+  it('sends the provider\'s headers, and leaves out the small model where small jobs do not go to it', async () => {
+    const { base, seen } = await serve(() => ({ status: 200, body: { choices: [{ message: { content: 'ok' } }] } }))
+    const probe = await probeModelProvider({ anthropic: null, openai: { chatUrl: base, responsesUrl: null }, defaultModel: 'big', smallModel: 'small', headers: { 'User-Agent': 'proxy-client/1', 'Content-Type': 'text/plain' }, smallJobs: 'account' }, 'k')
+    expect(probe.checks.map((check) => check.model)).toEqual(['big'])
+    expect(seen[0]?.headers).toMatchObject({ 'user-agent': 'proxy-client/1', 'content-type': 'application/json', authorization: 'Bearer k' })
+  })
 })

@@ -125,19 +125,17 @@ function ConversationMeta({ conversation, heading = 'none' }: { conversation: Co
   )
 }
 
-// A task's row carries the task mark in the status column, the board's icon as the sidebar's 任务
-// entry has it, coloured as a conversation's dot would be: amber when its chat waits on the user,
-// red when it failed, the accent when a turn finished unseen. The task's status sits small at the
-// mark's bottom right, in the shape the board gives it.
+// A task's row carries the board's icon, as the sidebar's 任务 entry has it, in the same status ring
+// as a conversation's mark; the task's own status is the pill in the meta line.
 function TaskMark({ task, conversation }: { task: Task; conversation: Conversation }) {
   const unseen = useCore((s) => Boolean(s.unseen[conversation.id]))
   const glyph = conversationGlyph(conversation, unseen)
   const state = conversationState(conversation)
   const label = glyph === 'unseen' ? t('ConversationStatus.newActivity') : state.label
   return (
-    <span className="task-mark" data-glyph={glyph} role="img" aria-label={`${t('sidebar.tasks')} · ${STATUS_LABEL[task.status]} · ${label}`} title={`${STATUS_LABEL[task.status]} · ${state.detail ?? label}`}>
+    <span className="agent-status-mark task-mark" data-glyph={glyph} role="img" aria-label={`${t('sidebar.tasks')} · ${STATUS_LABEL[task.status]} · ${label}`} title={`${STATUS_LABEL[task.status]} · ${state.detail ?? label}`}>
       <BoardIcon />
-      <span className="task-mark-status"><StatusIcon status={task.status} decorative /></span>
+      {glyph !== 'idle' && <span className="agent-status-ring" aria-hidden="true" />}
     </span>
   )
 }

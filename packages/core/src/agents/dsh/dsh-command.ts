@@ -17,9 +17,11 @@ export function dshProvider(provider: ProviderLaunch): Record<string, unknown> {
     apiKeyEnv: DSH_PROVIDER_KEY_ENV,
     api: anthropic ? 'anthropic-messages' : provider.endpoint.wire === 'openai-responses' ? 'openai-responses' : 'openai-completions',
     baseURL: anthropic ? anthropicBaseUrl(provider.endpoint.baseUrl) : provider.endpoint.baseUrl.replace(/\/+$/, ''),
-    ...(anthropic && provider.endpoint.anthropic?.auth === 'auth_token' ? { headers: { authorization: `Bearer \${${DSH_PROVIDER_KEY_ENV}}` } } : {}),
+    ...(Object.keys(provider.headers).length || (anthropic && provider.endpoint.anthropic?.auth === 'auth_token')
+      ? { headers: { ...provider.headers, ...(anthropic && provider.endpoint.anthropic?.auth === 'auth_token' ? { authorization: `Bearer \${${DSH_PROVIDER_KEY_ENV}}` } : {}) } }
+      : {}),
     models: provider.models.map((model) => ({
-      id: model.id, name: model.label ?? model.id, input: ['text'],
+      id: model.id, name: model.label ?? model.id, input: model.images ? ['text', 'image'] : ['text'],
       contextWindow: model.contextWindow ?? 128_000, maxTokens: model.maxOutput ?? 16_384,
       reasoningEfforts: model.efforts.some((level) => LEVELS.has(level)) ? Object.fromEntries(model.efforts.filter((level) => LEVELS.has(level)).map((level) => [level, level])) : false
     }))

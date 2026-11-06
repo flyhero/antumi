@@ -48,6 +48,7 @@ import { useChatTypeface } from '../chat-typeface'
 import { freshKeys, useJustFinished } from '../chat-motion'
 import { acknowledgeInitialMessage, sendInitialMessage, useInitialMessages, type InitialMessage } from '../initial-messages'
 import { Spinner } from './Spinner'
+import { InvestigationPreparing } from './InvestigationPreparing'
 import { TranslateButton, useTranslated } from './TranslateButton'
 import { ChatFind, useChatFindState, type ChatHistoryResult } from './ChatFind'
 import { ArrowDownIcon, ChevronDownIcon, ChevronRightIcon, FileChangesIcon, AgentIcon, ForkIcon } from './icons'
@@ -917,7 +918,7 @@ export function ConversationChat({ conversation, surface, onHandoff, variant = '
         }}
       >
         {page?.before && <button type="button" className="link-button chat-older" onClick={() => void loadOlder()}>{t('ConversationChat.loadEarlierMessages')}</button>}
-        {!page && !initialMessage && <ChatSkeleton />}
+        {!page && !initialMessage && !conversation.preparing && <ChatSkeleton />}
         {blocks.map((block, index) => {
           const next = blocks[index + 1]
           const message = userItem(block)
@@ -938,6 +939,7 @@ export function ConversationChat({ conversation, surface, onHandoff, variant = '
         {initialMessage && !items.some((item) => item.kind === 'user' && item.id === `u:${initialMessage.ref}`) && (
           <InitialMessageEntry id={id} agent={conversation.agent} message={initialMessage} />
         )}
+        {conversation.preparing && <InvestigationPreparing conversation={conversation} />}
         {(turn === 'running' || turn === 'awaiting') && (
           <ChatWorking
             phase={running.phase}

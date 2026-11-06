@@ -106,8 +106,8 @@ export function runSourcePlugin(options: Options): { close(): void } {
         return source.list(settings, credential, signal)
       }
       case 'fetch': {
-        const { settings, credential, key } = pluginSchemas.fetch.params.parse(params)
-        const detail = await source.fetch(settings, credential, key, signal)
+        const { settings, credential, key, images } = pluginSchemas.fetch.params.parse(params)
+        const detail = await source.fetch(settings, credential, key, signal, { images: images ?? true })
         return { ...detail, images: detail.images?.map((image) => ({ name: image.name, base64: Buffer.from(image.bytes).toString('base64') })) }
       }
     }

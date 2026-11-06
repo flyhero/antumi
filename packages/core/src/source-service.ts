@@ -35,6 +35,9 @@ const MIN_REFRESH_MS = 10_000
 const CALL_TIMEOUT_MS = 20_000
 // Fetching one issue may download its images too.
 const FETCH_TIMEOUT_MS = 120_000
+// How long an issue's agent waits for the images a provider sends apart from the text; past it,
+// the agent starts on the text and the images follow as the next message.
+const IMAGE_GRACE_MS = 8_000
 const MAX_ISSUES = 200
 
 export type SourceTasks = {
@@ -50,19 +53,24 @@ export type SourceDismissals = {
   restoreIssue(provider: string, instance: string, key: string): void
 }
 
-// Where an issue is looked into before, or instead of, becoming a task.
+// Where an issue is looked into before, or instead of, becoming a task: the conversation opens at
+// once and waits, preparing, while the issue is fetched; then its agent starts on the issue.
 export type SourceConversations = {
   investigations(provider: string, instance: string): Map<string, string>
-  investigate(
+  get(id: string): Conversation
+  openInvestigation(
     agent: AgentKind,
     projectPaths: readonly string[],
     allowBypass: boolean | undefined,
     start: { permissionMode?: string; model?: string; effort?: string; worktree?: boolean; branch?: string; modelProvider?: string },
-    issue: { source: TaskSource; title: string; brief: string; readable: readonly string[] },
-    note: string,
-    references?: ChatReference[]
+    issue: { source: TaskSource; title: string }
   ): Promise<Conversation>
+  setPreparing(id: string, step: 'issue' | 'images', error?: { reason: string; message: string } | null): void
+  beginInvestigation(id: string, issue: { title: string; brief: string; readable: readonly string[] }, note: string, references?: ChatReference[]): Promise<Conversation>
+  sendInvestigationImages(id: string, text: string, imageIds: readonly string[]): Promise<void>
 }
+
+type Fetched = { issue: SourceIssue; snapshot: SourceSnapshot; deferred: number }
 
 export type InvestigateOptions = Omit<RpcParsedParams<'sources.investigate'>, 'provider' | 'instance' | 'key'>
 
@@ -116,6 +124,9 @@ export class SourceService {
   private readonly operations = new Map<string, Set<Promise<unknown>>>()
   private timer: ReturnType<typeof setInterval> | undefined
   private conversations: SourceConversations | null = null
+  // What each issue conversation's agent is to start with, kept until it has: the user's note
+  // (null for the default one) and references. Gone after a restart, when a retry starts afresh.
+  private readonly investigating = new Map<string, { note: string | null; references?: ChatReference[]; running: boolean }>()
 
   constructor(
     private providers: readonly SourceProvider[],
@@ -127,7 +138,8 @@ export class SourceService {
     private readonly attachments: AttachmentStore,
     private readonly events: SourceEvents,
     private readonly env: NodeJS.ProcessEnv = process.env,
-    private readonly now: () => number = Date.now
+    private readonly now: () => number = Date.now,
+    private readonly imageGraceMs: number = IMAGE_GRACE_MS
   ) {}
 
   async pause(ids: readonly string[]): Promise<void> {
@@ -399,30 +411,107 @@ export class SourceService {
     return this.track(id, () => this.investigateInner(id, instance, rawKey, options))
   }
 
-  // The issue is fetched in full, as for an import, and handed to a new conversation to read first.
+  // The conversation opens at once, named after the issue as the inbox has it; the issue is
+  // fetched in full behind it, as for an import, and handed to its agent to read first. An issue
+  // the inbox does not hold has its text fetched first, for the name and address.
   private async investigateInner(id: string, instance: string, rawKey: string, options: InvestigateOptions): Promise<Conversation> {
-    const conversations = this.conversations
-    if (!conversations) throw new Rejection('source-investigate-unavailable', 'conversations are not ready yet')
+    const conversations = this.requireConversations()
     const check = this.guard(id, instance)
     const ready = this.requireReady(id, instance)
     const key = await this.checkedKey(ready.provider, rawKey)
     check()
-    const { issue, snapshot } = await this.fetch(ready, key, this.state(id, instance).controller.signal)
+    const listed = this.state(id, instance).found.find((issue) => issue.key === key)
+    const first = listed ? null : await this.fetch(ready, key, this.state(id, instance).controller.signal, false)
     check()
-    const source: TaskSource = { provider: id, instance, name: ready.provider.name, key: issue.key, url: issue.url }
-    const images = await Promise.all(snapshot.images.map(async (image) => ({ name: image.name, path: await this.attachments.pathOf(image.id) })))
+    const known = listed ?? first!.issue
+    const source: TaskSource = { provider: id, instance, name: ready.provider.name, key: known.key, url: known.url }
     const { agent, projectPaths, allowBypass, note, references, ...start } = options
-    const title = issue.title.trim() || issue.key
     // Unless asked otherwise, it only reads: a finding first, then the user decides on a fix.
     const permissionMode = start.permissionMode ?? agentDescriptor(agent).discussionMode
-    const conversation = await conversations.investigate(agent, projectPaths, allowBypass, { ...start, permissionMode }, {
-      source,
-      title,
-      brief: investigationBrief(source, snapshot, images),
-      readable: images.flatMap((image) => (image.path ? [image.path] : []))
-    }, note?.trim() || `排查 ${source.name} ${source.key}：${title}`, references)
+    const conversation = await conversations.openInvestigation(agent, projectPaths, allowBypass, { ...start, permissionMode }, { source, title: known.title.trim() || known.key })
+    this.investigating.set(conversation.id, { note: note?.trim() || null, ...(references ? { references } : {}), running: true })
     this.emitInbox(id, instance)
+    void this.track(id, () => this.prepare(conversation.id, source, first)).catch(() => {})
     return conversation
+  }
+
+  // Fetches an issue conversation's issue again, after a failure or a restart cut it off.
+  async retryInvestigation(conversationId: string): Promise<Conversation> {
+    const conversations = this.requireConversations()
+    const conversation = conversations.get(conversationId)
+    const { source } = conversation
+    if (!source) throw new Rejection('source-none', 'the conversation was not opened from an issue')
+    const pending = this.investigating.get(conversationId)
+    if (pending?.running || (conversation.preparing && conversation.preparing.error === null)) throw new Rejection('conversation-preparing', 'the issue is still being fetched')
+    if (!conversation.preparing) throw new Rejection('conversation-running', 'the agent has started already')
+    return this.track(source.provider, async () => {
+      this.requireReady(source.provider, source.instance)
+      this.investigating.set(conversationId, { note: pending?.note ?? null, ...(pending?.references ? { references: pending.references } : {}), running: true })
+      conversations.setPreparing(conversationId, 'issue')
+      void this.track(source.provider, () => this.prepare(conversationId, source, null)).catch(() => {})
+      return conversations.get(conversationId)
+    })
+  }
+
+  // The text first, then a short wait for the images where the provider sends them apart: the
+  // agent starts on whatever is in by then, and images still on the way follow it.
+  private async prepare(conversationId: string, source: TaskSource, first: Fetched | null): Promise<void> {
+    const conversations = this.requireConversations()
+    try {
+      const check = this.guard(source.provider, source.instance)
+      const ready = this.requireReady(source.provider, source.instance)
+      const abort = this.state(source.provider, source.instance).controller.signal
+      const text = first ?? await this.fetch(ready, source.key, abort, false)
+      check()
+      let fetched = text
+      let later: Promise<Fetched> | null = null
+      if (text.deferred > 0) {
+        conversations.setPreparing(conversationId, 'images')
+        later = this.fetch(ready, source.key, abort, true)
+        const full = await Promise.race([later.catch(() => null), new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), this.imageGraceMs).unref())])
+        if (full !== undefined) later = null
+        if (full) fetched = full
+        check()
+      }
+      const { issue, snapshot } = fetched
+      const pending = this.investigating.get(conversationId)
+      const title = issue.title.trim() || issue.key
+      const images = await Promise.all(snapshot.images.map(async (image) => ({ name: image.name, path: await this.attachments.pathOf(image.id) })))
+      await conversations.beginInvestigation(conversationId, {
+        title,
+        brief: investigationBrief(source, snapshot, images, later ? text.deferred : 0),
+        readable: images.flatMap((image) => (image.path ? [image.path] : []))
+      }, pending?.note ?? `排查 ${source.name} ${source.key}：${title}`, pending?.references)
+      this.investigating.delete(conversationId)
+      this.emitInbox(source.provider, source.instance)
+      if (later) void this.track(source.provider, () => this.sendLateImages(conversationId, source, later!)).catch(() => {})
+    } catch (error) {
+      const pending = this.investigating.get(conversationId)
+      if (pending) pending.running = false
+      const rejection = error instanceof Rejection ? error : sourceRejection(error)
+      // A conversation deleted meanwhile, or started after all, has nothing left to show it on.
+      try {
+        if (conversations.get(conversationId).preparing) conversations.setPreparing(conversationId, 'issue', { reason: rejection.reason, message: rejection.message })
+      } catch { /* Deleted. */ }
+      console.error(`[antumi-core] ${source.provider}/${source.instance}: ${source.key} was not fetched for its conversation:`, rejection.message)
+    }
+  }
+
+  private async sendLateImages(conversationId: string, source: TaskSource, later: Promise<Fetched>): Promise<void> {
+    try {
+      const { snapshot } = await later
+      if (snapshot.images.length === 0) return
+      await this.requireConversations().sendInvestigationImages(conversationId,
+        `${source.name} ${source.key} 附件里的 ${snapshot.images.length} 张图片下载好了，请结合图片看看前面的判断是否需要修正。`,
+        snapshot.images.map((image) => image.id))
+    } catch (error) {
+      console.error(`[antumi-core] ${source.provider}/${source.instance}: the images of ${source.key} did not reach its conversation:`, error instanceof Error ? error.message : error)
+    }
+  }
+
+  private requireConversations(): SourceConversations {
+    if (!this.conversations) throw new Rejection('source-investigate-unavailable', 'conversations are not ready yet')
+    return this.conversations
   }
 
   resync(taskId: string): Promise<Task> {
@@ -465,10 +554,11 @@ export class SourceService {
     )
   }
 
-  private async fetch(ready: Ready, key: string, abort: AbortSignal): Promise<{ issue: SourceIssue; snapshot: SourceSnapshot }> {
+  // images false asks for the text alone; deferred is how many images the provider left for later.
+  private async fetch(ready: Ready, key: string, abort: AbortSignal, images = true): Promise<Fetched> {
     let raw: SourceIssueDetail
     try {
-      raw = await this.call((signal) => ready.provider.fetch(ready.settings, ready.credential, key, AbortSignal.any([signal, abort])), FETCH_TIMEOUT_MS)
+      raw = await this.call((signal) => ready.provider.fetch(ready.settings, ready.credential, key, AbortSignal.any([signal, abort]), ...(images ? [] : [{ images: false }])), FETCH_TIMEOUT_MS)
     } catch (error) {
       throw sourceRejection(error)
     }
@@ -476,11 +566,11 @@ export class SourceService {
     if (!issue) {
       throw new Rejection('source-request-failed', `${ready.provider.name} answered with an issue core cannot accept`)
     }
-    const { images, lost } = await this.storeImages(raw.images ?? [])
+    const { images: stored, lost } = await this.storeImages(raw.images ?? [])
     const note = lost > 0 ? `\n\n（还有 ${lost} 张图片没能保存）` : ''
     const text = typeof raw.markdown === 'string' ? raw.markdown : ''
     const markdown = text.slice(0, MAX_SNAPSHOT_LENGTH - note.length) + note
-    return { issue, snapshot: { markdown, fetchedAt: this.now(), images } }
+    return { issue, snapshot: { markdown, fetchedAt: this.now(), images: stored }, deferred: images ? 0 : Math.max(0, Math.floor(raw.imagesDeferred ?? 0)) }
   }
 
   // Each image passes the same checks as one the user uploads; one that fails is counted, not fatal.

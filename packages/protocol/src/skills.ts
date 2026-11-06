@@ -39,6 +39,13 @@ export const SkillRepo = z.object({
 })
 export type SkillRepo = z.infer<typeof SkillRepo>
 
+// The user's own skills in a folder an agent loads by itself, outside Antumi's library: shown, never
+// changed. agents: those that load the folder. A name is the frontmatter's, else the folder's.
+export const LocalSkill = z.object({ name: z.string(), description: z.string(), dir: z.string() })
+export type LocalSkill = z.infer<typeof LocalSkill>
+export const LocalSkillFolder = z.object({ dir: z.string(), agents: z.array(AgentKind), skills: z.array(LocalSkill) })
+export type LocalSkillFolder = z.infer<typeof LocalSkillFolder>
+
 // A skill named by its repository: what a feature asks for in an agent's bundle.
 export const SkillRef = z.object({ repo: SkillRepoId, skill: SkillName })
 export type SkillRef = z.infer<typeof SkillRef>

@@ -103,6 +103,7 @@ export function ChatUsageLimitCard({ conversation, item }: { conversation: Conve
       <div className="chat-request-title">{t('ChatUsageLimit.conversationQuotaExhausted')}</div>
       <p className="chat-request-detail muted">{detail}</p>
       {item.error && !retrying && <p className="chat-request-detail chat-usage-limit-error">{tr('ChatUsageLimit.lastResumeFailed', { value1: item.error })}</p>}
+      {item.autoContinueStopped && !item.autoContinue && !retrying && <p className="chat-request-detail chat-usage-limit-error">{t('ChatUsageLimit.autoResumeStopped')}</p>}
       <div className="chat-request-actions">
         {takenOver ? (
           <button type="button" className="link-button settings-link" onClick={() => setSchedulesOpen(true)}>{t('ChatDock.manageSchedule')}</button>

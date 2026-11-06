@@ -15,6 +15,15 @@ describe('conversationState', () => {
     expect(conversationGlyph({ ...base, starting: true }, false)).toBe('running')
   })
 
+  it("shows an issue's conversation fetching its issue, and why the fetch stopped", () => {
+    expect(label({ preparing: { step: 'issue', error: null } })).toMatchObject({ label: '拉取问题中', running: true, failed: false })
+    expect(label({ preparing: { step: 'images', error: null } }).label).toBe('下载附件中')
+    expect(conversationGlyph({ ...base, preparing: { step: 'issue', error: null } }, false)).toBe('running')
+    expect(label({ preparing: { step: 'issue', error: 'fetch failed', reason: 'source-request-failed' } })).toMatchObject({ label: '问题没拉取到', running: false, failed: true, detail: '连不上' })
+    expect(label({ preparing: { step: 'issue', error: 'odd', reason: 'something-new' } }).detail).toBe('odd')
+    expect(conversationGlyph({ ...base, preparing: { step: 'issue', error: 'x' } }, false)).toBe('failed')
+  })
+
   it('tells an agent that waits on the user from one that works', () => {
     expect(label({ sessionId: 's', chat: { turn: 'running' } }).label).toBe('运行中')
     expect(label({ sessionId: 's', chat: { turn: 'awaiting' } }).label).toBe('等待确认')

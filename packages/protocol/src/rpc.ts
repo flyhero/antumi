@@ -35,10 +35,10 @@ import { Discussion, DiscussionAction, DiscussionCreate, DiscussionFormat, Discu
 
 import { Squad, SquadFields, SquadRun, SquadWork, SquadPlanRef } from './squad'
 import { KnowledgeFolder, KnowledgeVault } from './knowledge'
-import { CommitSha, RecommendedSkillRepo, SkillActivation, SkillRepo, SkillRepoId, SkillSearchResult, SkillUpdateCheck } from './skills'
+import { CommitSha, LocalSkillFolder, RecommendedSkillRepo, SkillActivation, SkillRepo, SkillRepoId, SkillSearchResult, SkillUpdateCheck } from './skills'
 import { TodoList, TodoOwner, TodoText, TodoTitle } from './todos'
 import { McpImportCandidate, McpImportItem, McpProbe, McpServer, McpServerInput, McpServerName } from './mcp'
-import { ModelProvider, ModelProviderId, ModelProviderInput, ModelProviderProbe } from './model-provider'
+import { ModelProvider, ModelProviderId, ModelProviderInput, ModelProviderModels, ModelProviderModelsQuery, ModelProviderProbe } from './model-provider'
 import { AgentAccount, AgentAccountId, AgentAccounts } from './agent-account'
 import { ExternalSession, ExternalSessionRef } from './session-import'
 import { ProjectStarIdentity, ProjectStarResult, ProjectStarStatus } from './project-star'
@@ -118,7 +118,7 @@ const UsageParams = z.object({ windowKinds: z.array(z.string()).optional() })
 // chat-references: user messages and queues retain the composer's explicit reference targets.
 // pasted-text: a long paste is uploaded as an attachment and kept as a text file the conversation's
 //   agent reads without asking (attachments.commitText).
-export const CORE_FEATURES = ['chat-references', 'conversation-references', 'agent-profiles', 'pets', 'plugins', 'plugin-recommendations', 'chat-options', 'chat-images', 'task-start', 'worktrees', 'conversation-branches', 'conversation-commit-push', 'find-file', 'conversation-projects', 'browser', 'browser-collaboration', 'browser-file-transfers', 'keep-awake', 'terminal-commands', 'bookmarks', 'browser-history', 'usage-limit', 'agent-stats', 'conversation-stats', 'prompt-suggestions', 'environment', 'conversation-pin', 'schedules', 'chat-commands', 'file-mentions', 'plan-modes', 'agent-terminals', 'schedule-images', 'dashboard', 'task-conversation-summaries', 'routines', 'ports', 'conversation-fork', 'conversation-configuration', 'conversation-commit-steps', 'conversation-worktrees', 'conversation-start-branch', 'wire-log', 'file-preview', 'deferred-conversation-start', 'agent-cli-installation', 'agent-cli-maintenance', 'task-launch-options', 'git-management', 'git-commit-branches', 'task-handoff', 'handoff-model', 'handoff-mode', 'task-launch', 'discussions', 'discussion-members', 'discussion-projects', 'discussion-topics', 'discussion-requirements', 'task-cancel', 'task-redo-in-place', 'conversation-archive', 'discussion-archive', 'translate', 'commit-message', 'squads', 'squad-leader-planning', 'conversation-todos', 'knowledge-base', 'knowledge-base-kind', 'skills-library', 'skills-search', 'skills-activation', 'mcp-servers', 'source-investigate', 'todo-overview', 'conversation-helper', 'small-model-stats', 'terminal-color-prompt', 'git-commit-actions', 'file-editor', 'project-config', 'project-config-edit', 'model-providers', 'git-update', 'git-push-target', 'git-cherry-pick', 'git-amend', 'git-force-push', 'task-auto-run', 'session-import', 'agent-accounts', 'usage-analytics', 'task-references', 'release-idle-chats', 'project-star', 'git-favorites', 'project-files', 'git-projects', 'git-branch-browser', 'git-rebase', 'direct-agent-calls', 'discussion-formats', 'discussion-format-suggest', 'agent-call-resume', 'delegation-worktree', 'pasted-text', 'task-conversation-rows', 'inline-visualizations', 'archived-worktrees'] as const
+export const CORE_FEATURES = ['chat-references', 'conversation-references', 'agent-profiles', 'pets', 'plugins', 'plugin-recommendations', 'chat-options', 'chat-images', 'task-start', 'worktrees', 'conversation-branches', 'conversation-commit-push', 'find-file', 'conversation-projects', 'browser', 'browser-collaboration', 'browser-file-transfers', 'keep-awake', 'terminal-commands', 'bookmarks', 'browser-history', 'usage-limit', 'agent-stats', 'conversation-stats', 'prompt-suggestions', 'environment', 'conversation-pin', 'schedules', 'chat-commands', 'file-mentions', 'plan-modes', 'agent-terminals', 'schedule-images', 'dashboard', 'task-conversation-summaries', 'routines', 'ports', 'conversation-fork', 'conversation-configuration', 'conversation-commit-steps', 'conversation-worktrees', 'conversation-start-branch', 'wire-log', 'file-preview', 'deferred-conversation-start', 'agent-cli-installation', 'agent-cli-maintenance', 'task-launch-options', 'git-management', 'git-commit-branches', 'task-handoff', 'handoff-model', 'handoff-mode', 'task-launch', 'discussions', 'discussion-members', 'discussion-projects', 'discussion-topics', 'discussion-requirements', 'task-cancel', 'task-redo-in-place', 'conversation-archive', 'discussion-archive', 'translate', 'commit-message', 'squads', 'squad-leader-planning', 'conversation-todos', 'knowledge-base', 'knowledge-base-kind', 'skills-library', 'skills-search', 'skills-activation', 'mcp-servers', 'source-investigate', 'todo-overview', 'conversation-helper', 'small-model-stats', 'terminal-color-prompt', 'git-commit-actions', 'file-editor', 'project-config', 'project-config-edit', 'model-providers', 'git-update', 'git-push-target', 'git-cherry-pick', 'git-amend', 'git-force-push', 'task-auto-run', 'session-import', 'agent-accounts', 'usage-analytics', 'task-references', 'release-idle-chats', 'project-star', 'git-favorites', 'project-files', 'git-projects', 'git-branch-browser', 'git-rebase', 'direct-agent-calls', 'discussion-formats', 'discussion-format-suggest', 'agent-call-resume', 'delegation-worktree', 'pasted-text', 'task-conversation-rows', 'inline-visualizations', 'archived-worktrees', 'model-provider-models', 'skills-local', 'model-provider-headers', 'provider-model-images'] as const
 // session-import: core lists the sessions agents ran outside Antumi and imports them as conversations (sessionImports.*).
 // agent-accounts: Claude and Codex sign in to several accounts, one active each, and a usage limit
 // moves the agent to the next with quota (accounts.*); usage readings name their account.
@@ -248,6 +248,8 @@ export const rpcMethods = {
   'knowledge.inspect': { params: z.object({ path: z.string().min(1).max(32_768) }), result: KnowledgeFolder },
   'skills.list': { params: z.object({}), result: z.array(SkillRepo) },
   'skills.recommended': { params: z.object({}), result: z.array(RecommendedSkillRepo) },
+  // The skills in the folders agents load by themselves (~/.claude/skills and the like), as they are.
+  'skills.local': { params: z.object({}), result: z.array(LocalSkillFolder) },
   // Searches the open skills.sh registry (feature skills-search); results install over the same
   // git path as the rest, so a hit is the repository the skill lives in, not the skill alone.
   'skills.search': { params: z.object({ query: z.string().trim().min(1).max(200) }), result: z.array(SkillSearchResult) },
@@ -281,6 +283,8 @@ export const rpcMethods = {
   'modelProviders.remove': { params: z.object({ id: ModelProviderId }), result: Ok },
   // One small request per endpoint and model, as an agent would send it.
   'modelProviders.probe': { params: z.object({ id: ModelProviderId }), result: ModelProviderProbe },
+  // The models the endpoints list, before or after the provider is saved.
+  'modelProviders.fetchModels': { params: ModelProviderModelsQuery, result: ModelProviderModels },
   'accounts.list': { params: z.object({}), result: AgentAccounts },
   // Adds an account and signs it in, in a terminal (terminals.*) the user follows; the account is
   // there, signed out, until the sign-in ends well.
@@ -823,6 +827,8 @@ export const rpcMethods = {
     }),
     result: Conversation
   },
+  // Fetches the issue of a conversation whose fetch failed or was cut off, and starts its agent on it.
+  'sources.retryInvestigation': { params: z.object({ id: z.string().uuid() }), result: Conversation },
   'sources.dismiss': { params: IssueRef, result: SourceInbox },
   'sources.restore': { params: IssueRef, result: SourceInbox },
   // Fetches the task's issue again and replaces its snapshot.

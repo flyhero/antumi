@@ -1,3 +1,5 @@
+import os from 'node:os'
+import path from 'node:path'
 import { antigravityTranscripts } from './antigravity-transcripts'
 import type { ChatCatalog } from '@antumi/protocol'
 import { probeChatCatalog } from '../../chat-catalog'
@@ -21,6 +23,8 @@ async function antigravityCatalog(cwd: string): Promise<ChatCatalog | null> {
 
 export const antigravity: AgentAdapter = {
   kind: 'antigravity',
+  // The folders its docs name (antigravity.google/docs/skills); a plugin's skills are not read here.
+  globalSkillDirs: () => [path.join('.gemini', 'config', 'skills'), path.join('.gemini', 'antigravity-cli', 'skills'), path.join('.gemini', 'skills')].map((dir) => path.join(os.homedir(), dir)),
   transcripts: antigravityTranscripts(),
   createDriver: (stageId, options) => new AcpDriver(antigravityDialect, stageId, options),
   // Antumi's MCP servers and the user's go in session/new; extra projects ride in the first

@@ -1,12 +1,14 @@
 import { attentionCount, noticesBetween, unseenConversations } from './attention'
-import { openConversationTarget, openUsageCard, selectTask, setRoutinesOpen, useCore } from './core-store'
+import { openConversationTarget, openUsageCard, selectTask, setInboxOpen, setInboxTab, setRoutinesOpen, useCore } from './core-store'
 import { canNotify, canShowIsland, canShowRequestPopup, notify, onNotificationClick, setBadge, setRequestPopupMode, tellRequestPopupAttention, wantRequestPopup } from './desktop-bridge'
+import { inboxNoticesBetween } from './inbox-news'
 import { currentInstalledAgents } from './installed-agents'
 import { usePreferences, type Preferences } from './preferences'
 import { quotaNoticesBetween } from './quota-notices'
 import { newlyWaiting } from './request-popup'
 import { routineNoticesBetween } from './routines'
 import { scheduleNoticesBetween } from './schedules'
+import { activeInboxes } from './source-inboxes'
 
 // Tells the user what happened while they were away: a system notification when the window is
 // not in front, and the count of what waits on them on the dock icon; an agent held up on them,
@@ -35,6 +37,9 @@ export function startNotifications(): void {
     if (next.routines !== prev.routines && away) {
       routineNoticesBetween(prev.routines, next.routines).forEach(notify)
     }
+    if (next.inboxes !== prev.inboxes && away) {
+      inboxNoticesBetween(prev.inboxes, activeInboxes(next.sources, next.inboxes)).forEach(notify)
+    }
     // Advice seen while the window is in front counts as told: the usage bar shows it there.
     if (next.usage !== prev.usage && usePreferences.getState().quotaAdvice) {
       const notices = quotaNoticesBetween(prev.usage, next.usage, Date.now(), sentAdvice, currentInstalledAgents())
@@ -47,7 +52,10 @@ export function startNotifications(): void {
     if (target.kind === 'task') selectTask(target.id)
     else if (target.kind === 'conversation') openConversationTarget(target.id)
     else if (target.kind === 'usage') openUsageCard(target.agent)
-    else setRoutinesOpen(true, 'routines')
+    else if (target.kind === 'inbox') {
+      setInboxOpen(true)
+      setInboxTab(target.key)
+    } else setRoutinesOpen(true, 'routines')
   })
 }
 

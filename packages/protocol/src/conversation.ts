@@ -94,6 +94,10 @@ export const Conversation = z.object({
   workspaceReadOnly: z.boolean().optional(),
   // The issue it was opened to look into, from the inbox. Older cores leave it out.
   source: TaskSource.nullable().optional(),
+  // While core fetches that issue before its agent can start: the issue's text, then its images,
+  // which the agent waits a moment for. error: why the fetch stopped, reason its code; it can be retried
+  // (sources.retryInvestigation). Older cores leave it out, fetching before they answer.
+  preparing: z.object({ step: z.enum(['issue', 'images']).catch('issue'), error: z.string().nullable(), reason: z.string().optional() }).nullable().optional(),
   // The model provider it was started on, fixed for good; null on the agents' own accounts. route:
   // what its agent's next stage runs on. Older cores leave both out.
   modelProvider: ModelProviderId.nullable().optional(),

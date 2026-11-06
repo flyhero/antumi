@@ -50,6 +50,7 @@ export function piProvider(provider: ProviderLaunch): PiProvider {
     baseUrl: anthropic ? anthropicBaseUrl(endpoint.baseUrl) : endpoint.baseUrl.replace(/\/+$/, ''),
     api: anthropic ? 'anthropic-messages' : endpoint.wire === 'openai-responses' ? 'openai-responses' : 'openai-completions',
     bearer: anthropic && endpoint.anthropic?.auth === 'auth_token',
+    headers: { ...provider.headers },
     models: piProviderEntries(provider)
   }
 }

@@ -23,7 +23,7 @@ npmRebuild: false
 afterPack: scripts/mac-adhoc-sign.mjs
 mac:
   category: public.app-category.developer-tools
-  # From docs/branding/antumi-icon-agent-blocks-3d.png, laid on macOS's icon grid: an 824px rounded square on a
+  # From docs/branding/antumi-icon-neural.png, laid on macOS's icon grid: an 824px rounded square on a
   # 1024px canvas, with room for its shadow.
   icon: build/icon.png
   # Every installer is named <version>-<os>-<arch>, so a download says which system it is for. The

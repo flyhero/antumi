@@ -17,6 +17,7 @@ import { ConversationFiles, fileScope } from './conversation-files'
 import { readCodexVisualization } from './agents/codex/codex-visualizations'
 import type { ProjectRegistry } from './project-registry'
 import { Rejection } from './rejection'
+import { localSkillFolders } from './local-skills'
 import type { PluginService } from './plugin-service'
 import type { PetLibrary } from './pet-library'
 import type { SourceService } from './source-service'
@@ -277,7 +278,7 @@ export function createRpcHandlers(
     'pets.cancel': ({ id }) => { petLibrary().cancel(id); return OK },
     'pets.remove': ({ id }) => petLibrary().remove(id),
     'pets.read': ({ id }) => petLibrary().read(id),
-    'system.hello': () => ({ protocolVersion: PROTOCOL_VERSION, serverVersion: packageJson.version, features: CORE_FEATURES.filter((feature) => (feature !== 'agent-profiles' || Boolean(profiles)) && (feature !== 'project-star' || Boolean(projectStar)) && (feature !== 'bookmarks' || Boolean(bookmarks)) && (feature !== 'browser-history' || Boolean(browserHistory)) && (feature !== 'pets' || Boolean(pets)) && (feature !== 'squads' || Boolean(squads)) && (!['plugins', 'plugin-recommendations'].includes(feature) || Boolean(plugins)) && (!['skills-library', 'skills-search', 'skills-activation'].includes(feature) || Boolean(skills)) && (feature !== 'mcp-servers' || Boolean(mcpServers)) && (feature !== 'small-model-stats' || Boolean(smallModels)) && (feature !== 'model-providers' || Boolean(modelProviders)) && (feature !== 'agent-accounts' || Boolean(accounts))) }),
+    'system.hello': () => ({ protocolVersion: PROTOCOL_VERSION, serverVersion: packageJson.version, features: CORE_FEATURES.filter((feature) => (feature !== 'agent-profiles' || Boolean(profiles)) && (feature !== 'project-star' || Boolean(projectStar)) && (feature !== 'bookmarks' || Boolean(bookmarks)) && (feature !== 'browser-history' || Boolean(browserHistory)) && (feature !== 'pets' || Boolean(pets)) && (feature !== 'squads' || Boolean(squads)) && (!['plugins', 'plugin-recommendations'].includes(feature) || Boolean(plugins)) && (!['skills-library', 'skills-search', 'skills-activation'].includes(feature) || Boolean(skills)) && (feature !== 'mcp-servers' || Boolean(mcpServers)) && (feature !== 'small-model-stats' || Boolean(smallModels)) && (!['model-providers', 'model-provider-models'].includes(feature) || Boolean(modelProviders)) && (feature !== 'agent-accounts' || Boolean(accounts))) }),
     'files.resolve': ({ conversationId, roots, path }) => files.resolve(fileScope(conversationId, roots), path),
     'files.read': ({ conversationId, roots, path }) => files.read(fileScope(conversationId, roots), path),
     'visualizations.read': ({ conversationId, stageId, path }) => {
@@ -301,6 +302,7 @@ export function createRpcHandlers(
     'knowledge.inspect': ({ path }) => inspectKnowledgeFolder(path),
     'skills.list': () => [...skillsLibrary().list()],
     'skills.recommended': () => [...skillsLibrary().recommended()],
+    'skills.local': () => localSkillFolders(),
     'skills.search': ({ query }) => { skillsLibrary(); return searchSkills(query) },
     'skills.install': ({ url }) => skillsLibrary().install(url),
     'skills.setActivation': ({ id, activation }) => skillsLibrary().setActivation(id, activation),
@@ -322,6 +324,7 @@ export function createRpcHandlers(
     'modelProviders.save': (input) => modelProviderStore().save(input),
     'modelProviders.remove': async ({ id }) => { await modelProviderStore().remove(id); return OK },
     'modelProviders.probe': ({ id }) => modelProviderStore().probe(id),
+    'modelProviders.fetchModels': (query) => modelProviderStore().fetchModels(query),
     'accounts.list': () => accountStore().list(),
     'accounts.add': ({ agent, label }) => accountStore().add(agent, label),
     'accounts.login': ({ agent, id }) => accountStore().login(agent, id),
@@ -716,6 +719,7 @@ export function createRpcHandlers(
     'sources.refresh': ({ provider, instance }) => sources.refresh(provider, instance),
     'sources.import': ({ provider, instance, key, agent }) => sources.import(provider, instance, key, agent ?? null),
     'sources.investigate': ({ provider, instance, key, ...options }) => sources.investigate(provider, instance, key, options),
+    'sources.retryInvestigation': ({ id }) => sources.retryInvestigation(id),
     'sources.dismiss': ({ provider, instance, key }) => sources.dismiss(provider, instance, key),
     'sources.restore': ({ provider, instance, key }) => sources.restore(provider, instance, key),
     'sources.resync': ({ taskId }) => sources.resync(taskId)

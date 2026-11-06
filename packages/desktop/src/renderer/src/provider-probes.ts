@@ -5,6 +5,14 @@ import { perform, useCore } from './core-store'
 type Probe = { revision: number; result: ModelProviderProbe | 'running' }
 export const useProviderProbes = create<{ probes: Record<string, Probe> }>()(() => ({ probes: {} }))
 
+// An edit a test would not tell apart (a name, the agents, a model's limits) keeps the last result.
+export function keepProbe(id: string, from: number, to: number): void {
+  useProviderProbes.setState(({ probes }) => {
+    const probe = probes[id]
+    return probe?.revision === from && probe.result !== 'running' ? { probes: { ...probes, [id]: { ...probe, revision: to } } } : { probes }
+  })
+}
+
 // Results survive navigation, but never describe a later edit of the provider.
 export async function probeProvider(id: string): Promise<void> {
   const provider = useCore.getState().modelProviders.find((entry) => entry.id === id)

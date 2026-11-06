@@ -3,10 +3,12 @@ import { untrustedSource, type SnapshotImagePath, type SourceSnapshot, type Task
 // What a conversation opened from an inbox issue reads first: the issue, fenced off as the
 // tracker's words, and what to do with it. It starts read-only, so it stops at a finding and a
 // proposed fix; the user decides whether to fix it there.
-export function investigationBrief(source: TaskSource, snapshot: SourceSnapshot, images: readonly SnapshotImagePath[]): string {
+// pending: images still being downloaded, sent as a later message.
+export function investigationBrief(source: TaskSource, snapshot: SourceSnapshot, images: readonly SnapshotImagePath[], pending = 0): string {
   return [
     '# 待排查的问题',
     untrustedSource(source, snapshot, images),
+    ...(pending > 0 ? [`附件里还有 ${pending} 张图片在下载，下载好后会作为下一条消息发给你。先根据文字排查；只有看图才能确定的地方，说明需要看图，不要猜。`] : []),
     '## 请这样排查',
     [
       '1. 先弄清问题：它说的现象是什么，能否从代码或现有记录里确认，缺什么信息就问我。',

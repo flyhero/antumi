@@ -153,6 +153,8 @@ export class ConversationService {
   private knowledgeBase: KnowledgeBase | null = null
   private readonly retiring = new Set<string>()
   private readonly launching = new Map<string, AgentKind>()
+  // Issue conversations whose issue is being fetched, or failed to be (see openInvestigation).
+  private readonly fetchingIssues = new Map<string, NonNullable<Conversation['preparing']>>()
   // Conversations whose last start took its opening into the handoff it began from.
   private readonly openedInHandoff = new Set<string>()
   private readonly gitSending = new Map<string, number>()
@@ -919,24 +921,61 @@ export class ConversationService {
   // A conversation opened to look into an inbox issue: named after the issue, it reads the brief
   // (the issue's text and how to go about it) first, the way a handoff is read, so the chat shows
   // only what the user added. readable: the issue's images, which the brief points at.
-  async investigate(
+  // Opens a conversation for an issue at once, preparing while the issue is fetched: its agent
+  // starts from beginInvestigation once the issue is in, and nothing starts it before.
+  async openInvestigation(
     agent: AgentKind,
     projectPaths: readonly string[],
     allowBypass: boolean | undefined,
     start: { permissionMode?: string; model?: string; effort?: string; worktree?: boolean; branch?: string; modelProvider?: string },
-    issue: { source: TaskSource; title: string; brief: string; readable: readonly string[] },
-    note: string,
-    references?: ChatReference[]
+    issue: { source: TaskSource; title: string }
   ): Promise<Conversation> {
     if (!this.capacityAvailable(agent)) throw new Rejection('agent-capacity', 'Agent 运行数量已达到上限，请等待其他会话结束，或预约稍后执行')
     const { id } = await this.create(agent, projectPaths, allowBypass, { ...start, deferStart: true })
+    this.fetchingIssues.set(id, { step: 'issue', error: null })
     this.store.setSource(id, issue.source)
-    this.store.update(id, { title: issue.title, titleLocked: true })
-    const directory = path.join(this.sessionsRoot, id, 'handoffs')
-    await mkdir(directory, { recursive: true, mode: 0o700 })
-    const brief = path.join(directory, `${randomUUID()}.md`)
-    await writeFile(brief, issue.brief, { mode: 0o600 })
-    return this.start(id, agent, note, false, { brief, readable: issue.readable, references })
+    return this.changed(this.store.update(id, { title: issue.title, titleLocked: true }))
+  }
+
+  // How far an issue's fetch has got, or why it stopped; null once it is in. A conversation gone
+  // meanwhile is left alone.
+  setPreparing(id: string, step: 'issue' | 'images', error: { reason: string; message: string } | null = null): void {
+    if (!this.store.get(id)) return
+    this.fetchingIssues.set(id, { step, error: error?.message ?? null, ...(error ? { reason: error.reason } : {}) })
+    this.changed(this.get(id))
+  }
+
+  // Starts the agent on the issue's brief. A start that fails leaves the conversation preparing
+  // with the failure, to be tried again.
+  async beginInvestigation(id: string, issue: { title: string; brief: string; readable: readonly string[] }, note: string, references?: ChatReference[]): Promise<Conversation> {
+    const current = this.get(id)
+    this.fetchingIssues.delete(id)
+    try {
+      this.store.update(id, { title: issue.title, titleLocked: true })
+      const directory = path.join(this.sessionsRoot, id, 'handoffs')
+      await mkdir(directory, { recursive: true, mode: 0o700 })
+      const brief = path.join(directory, `${randomUUID()}.md`)
+      await writeFile(brief, issue.brief, { mode: 0o600 })
+      return await this.start(id, current.agent, note, false, { brief, readable: issue.readable, references })
+    } catch (error) {
+      if (!this.store.get(id) || this.store.get(id)?.sessionId) throw error
+      this.setPreparing(id, 'issue', { reason: error instanceof Rejection ? error.reason : 'chat-start-failed', message: error instanceof Error ? error.message : String(error) })
+      throw error
+    }
+  }
+
+  // The issue's images, come after its agent started: the next message once the turn is over.
+  async sendInvestigationImages(id: string, text: string, imageIds: readonly string[]): Promise<void> {
+    await this.send(id, text, imageIds, true, false, `investigation-images:${id}`)
+  }
+
+  // An issue's conversation that never got its agent: still fetching, stopped on a failure, or cut
+  // off by a restart (one with an issue and no stage at all, which a retry picks up again).
+  private preparingOf(conversation: Conversation): Conversation['preparing'] {
+    const known = this.fetchingIssues.get(conversation.id)
+    if (known) return known
+    if (!conversation.source || conversation.sessionId || this.launching.has(conversation.id) || this.store.stages(conversation.id).length > 0) return null
+    return { step: 'issue', error: '问题没拉取完就中断了，可以重试', reason: 'investigation-interrupted' }
   }
 
   // The latest conversation opened for each issue of a source instance, by issue key.
@@ -1065,6 +1104,8 @@ export class ConversationService {
   private async start(id: string, agent: AgentKind, note: string, handoff: boolean, launch: StageLaunch = {}): Promise<Conversation> {
     this.squadGuard?.(this.get(id))
     if (this.launching.has(id) || this.retiring.has(id)) throw new Rejection('conversation-running')
+    // Its agent waits for the issue, which only beginInvestigation hands over.
+    if (!launch.brief && this.preparingOf(this.store.get(id)!)) throw new Rejection('conversation-preparing', 'the issue is still being fetched')
     if (!this.capacityAvailable(agent)) throw new Rejection('agent-capacity', 'Agent 运行数量已达到上限，请等待其他会话结束，或预约稍后执行')
     this.launching.set(id, agent)
     try {
@@ -1507,6 +1548,7 @@ export class ConversationService {
   // A retry may resume in a new stage; its ref still names the original message.
   async send(id: string, text: string, imageIds: readonly string[] = [], queue = false, steer = false, ref?: string, references?: ChatReference[]): Promise<void> {
     const conversation = this.writable(id)
+    if (this.preparingOf(conversation)) throw new Rejection('conversation-preparing', 'the issue is still being fetched')
     this.squadGuard?.(conversation)
     if (adapterOf(conversation.agent).turns?.serialized) {
       return this.serially(id, () => this.sendNow(id, text, imageIds, queue, steer, ref, references))
@@ -1950,6 +1992,7 @@ export class ConversationService {
 
   private async remove(id: string): Promise<void> {
     if (this.launching.has(id)) throw new Rejection('conversation-running')
+    this.fetchingIssues.delete(id)
     this.retiring.add(id)
     this.attend(id)
     try {
@@ -2178,7 +2221,8 @@ export class ConversationService {
     const doing = turn === 'running' ? this.chats.doing(conversation.id) : null
     const providerId = conversation.modelProvider ?? null
     const route = providerId === null ? null : conversationRoute(providerId, this.routeFor(conversation, conversation.agent), this.providers?.get(providerId)?.name ?? this.store.latestStage(conversation.id, conversation.agent)?.route?.name ?? null)
-    return { ...conversation, ...(this.delegationStatus ? { delegation: this.delegationStatus(conversation.id) } : {}), starting: this.launching.has(conversation.id), chat: turn ? { turn, ...(suggestion ? { suggestion } : {}), ...(request ? { request } : {}), ...(doing ? { doing } : {}) } : null, chatOptions, route }
+    const preparing = this.preparingOf(conversation)
+    return { ...conversation, ...(this.delegationStatus ? { delegation: this.delegationStatus(conversation.id) } : {}), ...(preparing ? { preparing } : {}), starting: this.launching.has(conversation.id), chat: turn ? { turn, ...(suggestion ? { suggestion } : {}), ...(request ? { request } : {}), ...(doing ? { doing } : {}) } : null, chatOptions, route }
   }
 
   private changed(value: Conversation): Conversation {
@@ -2192,7 +2236,10 @@ function quickProviderOf(decision: RouteDecision): QuickProvider | undefined {
   if (decision.kind === 'unavailable') throw new Rejection('model-provider-unavailable', decision.message)
   if (decision.kind === 'own') return undefined
   const { route, apiKey } = decision
-  return { endpoint: { wire: route.wire, baseUrl: route.baseUrl, anthropic: route.anthropic }, apiKey, model: route.smallModel, routeKey: route.key }
+  // The user may keep these off a provider whose accounts must not see more than the agent sends.
+  if (route.smallJobs === 'account') return undefined
+  if (route.smallJobs === 'off') throw new Rejection('model-provider-small-jobs-off', `服务商「${route.name}」设置了不做标题、翻译这类小任务`)
+  return { endpoint: { wire: route.wire, baseUrl: route.baseUrl, anthropic: route.anthropic }, apiKey, model: route.smallModel, routeKey: route.key, headers: route.headers ?? {} }
 }
 
 // What was said in a lost provider session that never got an answer is left out of the handoff:

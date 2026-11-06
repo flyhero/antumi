@@ -13,6 +13,12 @@ type LimitItem = Extract<ChatItem, { kind: 'usageLimit' }>
 // user to check again or retry, where a resume cancelled for other reasons is over.
 export const AUTO_CONTINUE_OFF = 'auto-continue-off'
 
+// How many limits in a row, with no turn finishing between them, core goes on from by itself: a
+// limit that does not lift (a provider that never says when) would otherwise be retried all night,
+// every 15 minutes. The next one is left to the user.
+export const AUTO_CONTINUE_LIMIT = 3
+export const AUTO_CONTINUE_STOPPED = 'auto-continue-stopped'
+
 // Turns a usage limit the agent reports into a scheduled resume, and reads the run back onto the
 // limit's card: whether core goes on by itself, when, and how it went. The waiting and the
 // starting are the ScheduleService's; this only speaks the card's language for them.
@@ -28,15 +34,24 @@ export class UsageLimitResumes {
     private readonly switchAccount: (agent: AgentKind, spent: string) => string | null = () => null
   ) {}
 
+  // Limits each conversation ran into since a turn last finished or the user last acted. Kept in
+  // memory: a restart starts the count over, which only allows a few more tries.
+  private readonly streaks = new Map<string, number>()
+
   // Limit items as a live stage puts them out. A new one is the conversation's limit now; one a
   // replay brings back is already known, or too old to act on.
   observe(conversationId: string, items: readonly ChatItem[]): void {
     for (const item of items) {
+      if (item.kind === 'turn' && item.state === 'completed') this.streaks.delete(conversationId)
       if (item.kind !== 'usageLimit' || this.now() - item.at >= FRESH_MS || this.schedules.runForLimit(refOf(item))) continue
       const conversation = this.conversation(conversationId)
       if (!conversation) continue
+      const streak = (this.streaks.get(conversationId) ?? 0) + 1
+      this.streaks.set(conversationId, streak)
       const switchedTo = this.switchedTo(conversationId, item)
-      this.schedules.createResume(conversationId, refOf(item), item.resetsAt ?? this.resetFromUsage(conversation), switchedTo ?? undefined)
+      this.schedules.createResume(conversationId, refOf(item), item.resetsAt ?? this.resetFromUsage(conversation), {
+        ...(switchedTo ? { switchedTo } : {}), ...(streak > AUTO_CONTINUE_LIMIT ? { stopped: AUTO_CONTINUE_STOPPED } : {})
+      })
     }
   }
 
@@ -65,6 +80,8 @@ export class UsageLimitResumes {
       const item = this.conversations.chatItem(conversationId, stageId, itemId)
       if (item?.kind !== 'usageLimit') throw new Rejection('usage-limit-not-found', 'no such usage limit in this conversation')
       const conversation = this.conversations.get(conversationId)
+      // Ticked again by the user: core may go on by itself as at first.
+      this.streaks.delete(conversationId)
       this.schedules.createResume(conversationId, limit, item.resetsAt ?? this.resetFromUsage(conversation))
       return
     }
@@ -76,11 +93,16 @@ export class UsageLimitResumes {
   // Goes on now, the way the timer would, but without waiting to see the limit lifted: the user
   // may know better. Resolves once the message is out, or rejects with why it is not.
   async retry(conversationId: string, stageId: string, itemId: string): Promise<void> {
-    const run = this.schedules.runForLimit({ stageId, itemId })
+    const limit = { stageId, itemId }
+    const run = this.schedules.runForLimit(limit)
     if (!run || run.status === 'starting') throw new Rejection('usage-limit-busy', 'this usage limit is already being retried or settled')
-    if (run.status !== 'waiting') throw new Rejection('usage-limit-settled', 'this usage limit is no longer waiting')
+    // An unticked or stopped card still offers to go on: a resume made for this try alone.
+    const unticked = run.status === 'cancelled' && (run.error === AUTO_CONTINUE_OFF || run.error === AUTO_CONTINUE_STOPPED)
+    if (!unticked && run.status !== 'waiting') throw new Rejection('usage-limit-settled', 'this usage limit is no longer waiting')
+    if (unticked) this.streaks.delete(conversationId)
+    const id = unticked ? this.schedules.createResume(conversationId, limit, run.resetsAt, { held: true }).id : run.id
     try {
-      await this.schedules.runNow(run.id)
+      await this.schedules.runNow(id)
     } catch (error) {
       if (error instanceof Rejection && error.reason === 'schedule-busy') throw new Rejection('usage-limit-busy', error.message)
       throw new Rejection('usage-limit-retry-failed', error instanceof Error ? error.message : String(error))
@@ -95,6 +117,7 @@ export class UsageLimitResumes {
   // The user went on another way (sent a message, stopped the agent): a resume from before would
   // now continue out of nowhere. A limit their own message hit stays.
   cancelFor(conversationId: string, before: number): void {
+    this.streaks.delete(conversationId)
     this.schedules.userActed(conversationId, before)
   }
 
@@ -144,6 +167,7 @@ function withRun(item: LimitItem, run: LimitRun | null): LimitItem {
     case 'failed':
       return { ...base, status: 'waiting', autoContinue: false, error: run.error }
     case 'cancelled':
+      if (run.error === AUTO_CONTINUE_STOPPED) return { ...base, status: 'waiting', autoContinue: false, error: null, autoContinueStopped: true }
       return run.error === AUTO_CONTINUE_OFF
         ? { ...base, status: 'waiting', autoContinue: false, error: null }
         : { ...base, status: 'cancelled', autoContinue: false, error: null }

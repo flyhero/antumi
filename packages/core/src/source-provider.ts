@@ -20,6 +20,8 @@ export type SourceIssueDetail = SourceIssue & {
   markdown: string
   // The issue's images as fetched; core checks each one and stores what passes.
   images?: readonly { name: string; bytes: Uint8Array }[]
+  // Images left out because they were not asked for yet (fetch's images: false).
+  imagesDeferred?: number
 }
 
 export type SourceProvider = {
@@ -39,5 +41,7 @@ export type SourceProvider = {
     signal: AbortSignal
   ): Promise<{ credential: SourceCredential; account: string }>
   list(settings: SourceSettings, credential: SourceCredential, signal: AbortSignal): Promise<SourceIssue[]>
-  fetch(settings: SourceSettings, credential: SourceCredential, key: string, signal: AbortSignal): Promise<SourceIssueDetail>
+  // images false: the text alone, the images left to a later call, if the provider can; one that
+  // cannot sends them anyway.
+  fetch(settings: SourceSettings, credential: SourceCredential, key: string, signal: AbortSignal, options?: { images: boolean }): Promise<SourceIssueDetail>
 }

@@ -20,6 +20,7 @@ lines.on('line', (line) => {
     send({ type: 'result', id, result: { protocolVersion: behavior.badHandshake ? 999 : 1, id: manifest.id, version: manifest.version, sources: manifest.contributes.sources.map((source) => source.id) } })
     return
   }
+  if (behavior.stderr) process.stderr.write(behavior.stderr)
   if (behavior.mode === 'crash') process.exit(2)
   if (behavior.mode === 'hang') return
   if (behavior.mode === 'invalid') { process.stdout.write('not JSON\n'); return }
@@ -35,6 +36,6 @@ lines.on('line', (line) => {
     : method === 'normalizeSettings' ? behavior.changeSettings ? { query: 'changed' } : params.settings
     : method === 'normalizeKey' ? behavior.mode === 'environment' ? JSON.stringify(process.env) : params.key.trim()
     : method === 'list' ? []
-    : { key: params.key, title: 'Demo', url: 'https://example.test/1', status: 'open', statusCategory: 'todo', type: 'Issue', priority: null, updatedAt: null, markdown: 'Snapshot' }
+    : { key: params.key, title: 'Demo', url: 'https://example.test/1', status: 'open', statusCategory: 'todo', type: 'Issue', priority: null, updatedAt: null, markdown: 'Snapshot', ...(params.images === false ? { imagesDeferred: 1 } : {}) }
   send({ type: 'result', id, result })
 })

@@ -14,7 +14,7 @@ function launchOn(agent: AgentKind, preset: keyof typeof MODEL_PROVIDER_PRESETS 
   const { anthropic, openai } = MODEL_PROVIDER_PRESETS[preset]
   const endpoint = providerEndpoint({ anthropic, openai, agents: [agent] }, agent)
   if (!endpoint) throw new Error(`${preset} serves no ${agent}`)
-  return { providerId: 'glm-1', endpoint, models, defaultModel: 'glm-5.3', smallModel: 'glm-5.3-flash', apiKey: KEY }
+  return { providerId: 'glm-1', endpoint, models, defaultModel: 'glm-5.3', smallModel: 'glm-5.3-flash', headers: {}, apiKey: KEY }
 }
 
 const start = (agent: AgentKind, provider: ProviderLaunch, model?: string) =>
@@ -88,13 +88,35 @@ describe('starting an agent on a model provider', () => {
         models: { 'glm-5.3': { name: 'GLM-5.3', limit: { context: 1_000_000, output: 128_000 }, reasoning: true }, 'glm-5.3-flash': { name: 'glm-5.3-flash' } }
       } }
     })
-    expect(config.provider['antumi-glm-1'].models['glm-5.3-flash']).not.toHaveProperty('limit')
+    // A known context with no known output still limits it, on the output pi and dsh assume.
+    expect(config.provider['antumi-glm-1'].models['glm-5.3-flash'].limit).toEqual({ context: 200_000, output: 16_384 })
+    const unknown = { ...launchOn('opencode'), models: [{ ...models[0]!, contextWindow: null }] }
+    expect(JSON.parse(start('opencode', unknown).env?.OPENCODE_CONFIG_CONTENT ?? '{}').provider['antumi-glm-1'].models['glm-5.3']).not.toHaveProperty('limit')
     const anthropic = JSON.parse(start('opencode', launchOn('opencode', 'minimax')).env?.OPENCODE_CONFIG_CONTENT ?? '{}')
     expect(anthropic.provider['antumi-glm-1']).toMatchObject({
       npm: '@ai-sdk/anthropic',
       options: { baseURL: 'https://api.minimax.io/anthropic/v1', apiKey: '{env:ANTUMI_MODEL_PROVIDER_KEY}', headers: { authorization: 'Bearer {env:ANTUMI_MODEL_PROVIDER_KEY}' } }
     })
     expect(adapterOf('opencode').providerModels?.(launchOn('opencode')).map((model) => model.id)).toEqual(['antumi-glm-1/glm-5.3', 'antumi-glm-1/glm-5.3-air', 'antumi-glm-1/glm-5.3-flash'])
+  })
+
+  it('tells the agents that must be told which models read images', () => {
+    const seeing = { ...launchOn('opencode'), models: [{ ...models[0]!, images: true }, models[1]!] }
+    const opencode = JSON.parse(start('opencode', seeing).env?.OPENCODE_CONFIG_CONTENT ?? '{}').provider['antumi-glm-1'].models
+    expect(opencode['glm-5.3'].modalities).toEqual({ input: ['text', 'image'], output: ['text'] })
+    expect(opencode['glm-5.3-air']).not.toHaveProperty('modalities')
+  })
+
+  it('sends the provider\'s own headers from every agent that can run on it', () => {
+    const headers = { 'User-Agent': 'proxy-client/1', 'X-Team': 'antumi' }
+    const on = (agent: AgentKind, preset: keyof typeof MODEL_PROVIDER_PRESETS = 'zhipu-glm-coding') => ({ ...launchOn(agent, preset), headers })
+    expect(start('claude', on('claude')).env?.ANTHROPIC_CUSTOM_HEADERS).toBe('User-Agent: proxy-client/1\nX-Team: antumi')
+    expect(start('claude', launchOn('claude')).env?.ANTHROPIC_CUSTOM_HEADERS).toBe('')
+    expect(start('codex', on('codex', 'volcengine-agent-plan')).args.join(' ')).toContain('http_headers={"User-Agent"="proxy-client/1","X-Team"="antumi"}')
+    const opencode = JSON.parse(start('opencode', on('opencode')).env?.OPENCODE_CONFIG_CONTENT ?? '{}')
+    expect(opencode.provider['antumi-glm-1'].options.headers).toEqual(headers)
+    const minimax = JSON.parse(start('opencode', on('opencode', 'minimax')).env?.OPENCODE_CONFIG_CONTENT ?? '{}')
+    expect(minimax.provider['antumi-glm-1'].options.headers).toEqual({ ...headers, authorization: 'Bearer {env:ANTUMI_MODEL_PROVIDER_KEY}' })
   })
 
   it('leaves an agent on its own account without a provider', () => {

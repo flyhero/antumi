@@ -312,7 +312,9 @@ export function ChatComposer({ conversation, state, compact = false }: { convers
   // An older core takes a message only between turns.
   const queueable = optionsSupported && working
   const stopped = !running
-  const starting = Boolean(conversation.starting) || (stopped && busy) || Boolean(initialMessage)
+  // An issue's conversation takes nothing until its agent has started on the issue.
+  const preparing = conversation.preparing ?? null
+  const starting = Boolean(conversation.starting) || (stopped && busy) || Boolean(initialMessage) || preparing !== null
   const mentionMenu = useChatMentionMenu({ conversationId: conversation.id, value, setText, setValue, roots: conversation.projectPaths, cwd: conversation.workspacePath, agent: conversation.agent })
   const files = useComposerFiles({
     conversationId: id, cwd: conversation.workspacePath, input: mentionMenu.inputProps.input, setValue, addImages: attached.add,
@@ -564,7 +566,7 @@ export function ChatComposer({ conversation, state, compact = false }: { convers
             onClick={() => void handOff()}
           >{t('ChatComposer.handOff')}</button>
         ) : (
-          <SendCard rows={sendRows} note={initialHint ?? (starting ? t('ChatComposer.starting', { value1: agentLabel(conversation.agent) }) : null)}>
+          <SendCard rows={sendRows} note={initialHint ?? (preparing ? t(preparing.error === null ? 'InvestigationPreparing.waitForTheIssue' : 'InvestigationPreparing.retryFirst') : starting ? t('ChatComposer.starting', { value1: agentLabel(conversation.agent) }) : null)}>
             {working ? (
               <button type="button" className="chat-input-button" data-stop aria-label={interruptLabel} onClick={interrupt}>
                 <StopIcon />

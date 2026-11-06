@@ -1,3 +1,5 @@
+import os from 'node:os'
+import path from 'node:path'
 import { piTranscripts } from './pi-transcripts'
 import { Rejection } from '../../rejection'
 import type { AgentAdapter, AgentStage } from '../agent-adapter'
@@ -15,6 +17,8 @@ const MCP_WAIT_MS = 20_000
 
 export const pi: AgentAdapter = {
   kind: 'pi',
+  // Its agent folder's, then the Agent Skills folder; not Claude Code's (config.js in Pi 1.3).
+  globalSkillDirs: (env) => [path.join(env.PI_CODING_AGENT_DIR || path.join(os.homedir(), '.pi', 'agent'), 'skills'), path.join(os.homedir(), '.agents', 'skills')],
   transcripts: piTranscripts(),
   maintenance: { packageName: '@earendil-works/pi-coding-agent', packageArgs: ['--ignore-scripts'], native: { roots: { darwin: ['.local/share/pi'], linux: ['.local/share/pi'], win32: ['AppData/Local/pi'] }, args: ['update', '--self'], latestUrl: 'https://registry.npmjs.org/@earendil-works/pi-coding-agent/latest' } },
   createDriver: (stageId, options) => new PiRpc(stageId, options),

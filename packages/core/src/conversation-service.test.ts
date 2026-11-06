@@ -870,16 +870,41 @@ describe('ConversationService', () => {
     expect(service.get(created.id).title).not.toContain('Antumi')
   })
 
-  it('opens a conversation on an issue: named after it, reading the brief first, the note alone as said', async () => {
+  it('opens a conversation on an issue at once, preparing, and starts it on the brief once the issue is in', async () => {
     const source = { provider: 'demo', instance: 'default', name: 'Demo', key: 'D-1', url: 'https://demo.test/issues/D-1' }
-    const opened = await service.investigate('claude', [], undefined, { permissionMode: 'plan' },
-      { source, title: 'Login fails', brief: '# 待排查的问题\nthe brief', readable: [] }, '排查 Demo D-1：Login fails')
-    expect(opened).toMatchObject({ title: 'Login fails', titleLocked: true, source, chatOptions: { permissionMode: 'plan' } })
-    expect(handoffFile(opened.sessionId!)).toBe('# 待排查的问题\nthe brief')
-    await settle()
-    expect(service.messages(opened.id).filter((message) => message.role === 'user').map((message) => message.text)).toEqual(['排查 Demo D-1：Login fails'])
+    const opened = await service.openInvestigation('claude', [], undefined, { permissionMode: 'plan' }, { source, title: 'Login fails' })
+    expect(opened).toMatchObject({ title: 'Login fails', titleLocked: true, source, sessionId: null, preparing: { step: 'issue', error: null }, chatOptions: { permissionMode: 'plan' } })
     expect(service.investigations('demo', 'default')).toEqual(new Map([['D-1', opened.id]]))
     expect(service.investigations('demo', 'other').size).toBe(0)
+    // Nothing starts its agent before the issue does.
+    await expect(service.send(opened.id, 'hello')).rejects.toMatchObject({ reason: 'conversation-preparing' })
+    await expect(service.continue(opened.id)).rejects.toMatchObject({ reason: 'conversation-preparing' })
+    service.setPreparing(opened.id, 'images')
+    expect(service.get(opened.id).preparing).toEqual({ step: 'images', error: null })
+
+    const started = await service.beginInvestigation(opened.id, { title: 'Login fails on Safari', brief: '# 待排查的问题\nthe brief', readable: [] }, '排查 Demo D-1：Login fails')
+    expect(started).toMatchObject({ title: 'Login fails on Safari', sessionId: expect.any(String) })
+    expect(started.preparing).toBeUndefined()
+    expect(handoffFile(started.sessionId!)).toBe('# 待排查的问题\nthe brief')
+    await settle()
+    expect(service.messages(opened.id).filter((message) => message.role === 'user').map((message) => message.text)).toEqual(['排查 Demo D-1：Login fails'])
+  })
+
+  it('keeps an issue conversation preparing with what went wrong, and one a restart cut off', async () => {
+    const source = { provider: 'demo', instance: 'default', name: 'Demo', key: 'D-2', url: 'https://demo.test/issues/D-2' }
+    const opened = await service.openInvestigation('claude', [], undefined, {}, { source, title: 'Crash' })
+    service.setPreparing(opened.id, 'issue', { reason: 'source-request-failed', message: 'fetch failed' })
+    expect(service.get(opened.id).preparing).toEqual({ step: 'issue', error: 'fetch failed', reason: 'source-request-failed' })
+    await expect(service.send(opened.id, 'hello')).rejects.toMatchObject({ reason: 'conversation-preparing' })
+
+    // One that started is not preparing, whatever happens after.
+    const other = await service.openInvestigation('claude', [], undefined, {}, { source: { ...source, key: 'D-3' }, title: 'Other' })
+    const started = await service.beginInvestigation(other.id, { title: 'Other', brief: 'brief', readable: [] }, 'note')
+    await service.stop(started.id)
+    // A new service knows nothing of the fetch: an issue and no stage reads as cut off.
+    const restarted = serve()
+    expect(restarted.get(opened.id).preparing).toMatchObject({ step: 'issue', reason: 'investigation-interrupted' })
+    expect(restarted.get(other.id).preparing).toBeUndefined()
   })
 
   it('keeps nothing as said for a handoff without a note', async () => {
@@ -1354,13 +1379,24 @@ describe('ConversationService', () => {
       expect(lastSpawn().args).toEqual(expect.arrayContaining(['--resume', first!.providerSessionId]))
     })
 
+    it('sends small jobs where the provider says: its small model with its headers, the agent\'s own account, or nowhere', async () => {
+      const saved = await providers.save(gateway({ headers: { 'User-Agent': 'proxy-client/1' } }))
+      const created = await service.create('claude', [root], undefined, { modelProvider: saved.id })
+      expect(service.quickProvider(created.id)).toMatchObject({ model: 'gw-small', headers: { 'User-Agent': 'proxy-client/1' } })
+      await providers.save(gateway({ id: saved.id, apiKey: null, smallJobs: 'account' }))
+      expect(service.quickProvider(created.id)).toBeUndefined()
+      await providers.save(gateway({ id: saved.id, apiKey: null, smallJobs: 'off' }))
+      expect(() => service.quickProvider(created.id)).toThrow(expect.objectContaining({ reason: 'model-provider-small-jobs-off' }))
+      expect(() => service.quickProviderFor(saved.id, 'claude')).toThrow(expect.objectContaining({ reason: 'model-provider-small-jobs-off' }))
+    })
+
     it('starts afresh from a handoff once the provider\'s address changed, and not at all once it is gone', async () => {
       const saved = await providers.save(gateway())
       const created = await service.create('claude', [root], undefined, { modelProvider: saved.id })
       await service.send(created.id, 'Fix the build')
       await settle()
       await service.stop(created.id)
-      await providers.save(gateway({ id: saved.id, apiKey: null, anthropic: { baseUrl: 'http://127.0.0.1:4001', auth: 'auth_token', env: {} } }))
+      await providers.save(gateway({ id: saved.id, apiKey: 'sk-gateway-moved', anthropic: { baseUrl: 'http://127.0.0.1:4001', auth: 'auth_token', env: {} } }))
       const moved = await service.continue(created.id)
       expect(lastSpawn().args).not.toContain('--resume')
       expect(handoffFile(moved.sessionId!)).toContain('Fix the build')

@@ -46,6 +46,30 @@ export const ProviderUrl = z.string().trim().max(2048).refine((text) => provider
 export const PROVIDER_CLAUDE_ENV = ['API_TIMEOUT_MS', 'ENABLE_TOOL_SEARCH', 'CLAUDE_CODE_MAX_OUTPUT_TOKENS', 'CLAUDE_CODE_AUTO_COMPACT_WINDOW'] as const
 export const ProviderClaudeEnv = z.enum(PROVIDER_CLAUDE_ENV)
 
+// Request headers sent to a provider besides those each agent sets itself, such as a client name a
+// proxy in front of subscription accounts expects. Never a header that carries the key or frames the
+// request, which the agent sets; names are unique whatever their case. Not secret: kept in the
+// settings file and shown to clients.
+const RESERVED_HEADERS = new Set(['authorization', 'proxy-authorization', 'x-api-key', 'host', 'content-length', 'content-type', 'transfer-encoding', 'connection'])
+export const PROVIDER_HEADER_LIMIT = 20
+
+export function providerHeaderProblem(name: string, value: string): 'name' | 'reserved' | 'value' | null {
+  if (!/^[A-Za-z0-9!#$%&'*+.^_`|~-]{1,100}$/.test(name)) return 'name'
+  if (RESERVED_HEADERS.has(name.toLowerCase())) return 'reserved'
+  if (value.length > 1000 || /[\r\n\0]/.test(value)) return 'value'
+  return null
+}
+
+export const ProviderHeaders = z.record(z.string(), z.string())
+  .refine((headers) => Object.entries(headers).every(([name, value]) => providerHeaderProblem(name, value) === null))
+  .refine((headers) => Object.keys(headers).length <= PROVIDER_HEADER_LIMIT && new Set(Object.keys(headers).map((name) => name.toLowerCase())).size === Object.keys(headers).length)
+export type ProviderHeaders = z.infer<typeof ProviderHeaders>
+
+// Where a conversation's small jobs on the provider go (titles, translations, commit messages):
+// the provider's small model, the agent's own account, or nowhere.
+export const ProviderSmallJobs = z.enum(['provider', 'account', 'off'])
+export type ProviderSmallJobs = z.infer<typeof ProviderSmallJobs>
+
 // auth: how the key goes: a bearer token (ANTHROPIC_AUTH_TOKEN), or an x-api-key (ANTHROPIC_API_KEY),
 // which some endpoints require and refuse the other.
 export const AnthropicEndpoint = z.object({
@@ -64,16 +88,29 @@ export const OpenAiEndpoint = z.object({
 export type OpenAiEndpoint = z.infer<typeof OpenAiEndpoint>
 
 // A model as the provider names it. contextWindow: what it takes, where known; agents assume less of
-// a model they don't know. reasoningSummaries: whether its Responses endpoint returns them.
+// a model they don't know. reasoningSummaries: whether its Responses endpoint returns them. images:
+// whether it reads images, for the agents that must be told (absent: text only).
 export const ProviderModel = z.object({
   id: z.string().trim().min(1).max(200),
   label: z.string().trim().max(200).nullable(),
   contextWindow: z.number().int().positive().nullable(),
   maxOutput: z.number().int().positive().nullable(),
   efforts: z.array(z.string().min(1).max(40)).max(10),
-  reasoningSummaries: z.boolean().optional()
+  reasoningSummaries: z.boolean().optional(),
+  images: z.boolean().optional()
 })
 export type ProviderModel = z.infer<typeof ProviderModel>
+
+// The same models in the same order, each as the preset has it: what the preset's list looks like
+// once edited back. A model given another context or output is the user's own.
+export function sameModels(models: readonly ProviderModel[], others: readonly ProviderModel[]): boolean {
+  return models.length === others.length && models.every((model, index) => {
+    const other = others[index]
+    return other !== undefined && model.id === other.id && model.label === other.label && model.contextWindow === other.contextWindow && model.maxOutput === other.maxOutput
+      && model.efforts.join('\n') === other.efforts.join('\n') && (model.reasoningSummaries ?? false) === (other.reasoningSummaries ?? false)
+      && (model.images ?? false) === (other.images ?? false)
+  })
+}
 
 // As clients see one: endpoints already resolved (a preset's come from the preset table), never the
 // key. revision rises with each save, so whatever is kept by provider can tell an edit.
@@ -92,6 +129,9 @@ export const ModelProvider = z.object({
   // A preset's provider whose models are the preset's own, which follow it from release to release.
   // Older cores leave it out.
   modelsFromPreset: z.boolean().optional(),
+  // Older cores leave these out: no headers, small jobs on the provider.
+  headers: ProviderHeaders.optional(),
+  smallJobs: ProviderSmallJobs.optional(),
   hasKey: z.boolean(),
   revision: z.number().int().nonnegative(),
   createdAt: z.number(),
@@ -111,7 +151,10 @@ export const ModelProviderInput = z.object({
   defaultModel: z.string().trim().min(1),
   smallModel: z.string().trim().min(1),
   agents: z.array(AgentKind),
-  apiKey: z.string().trim().min(1).max(4096).nullable()
+  apiKey: z.string().trim().min(1).max(4096).nullable(),
+  // Left out (an older client), what was saved stays.
+  headers: ProviderHeaders.optional(),
+  smallJobs: ProviderSmallJobs.optional()
 })
 export type ModelProviderInput = z.infer<typeof ModelProviderInput>
 
@@ -127,6 +170,26 @@ export const ModelProviderCheck = z.object({
 })
 export const ModelProviderProbe = z.object({ ok: z.boolean(), checks: z.array(ModelProviderCheck), at: z.number() })
 export type ModelProviderProbe = z.infer<typeof ModelProviderProbe>
+
+// The models a provider's endpoints list, asked of the endpoints in a form not yet saved. apiKey null
+// takes the key of the provider saved as id, which goes only to the addresses it was saved with.
+export const ModelProviderModelsQuery = z.object({
+  id: ModelProviderId.nullable(),
+  preset: ModelProviderPreset,
+  anthropic: AnthropicEndpoint.nullable().optional(),
+  openai: OpenAiEndpoint.nullable().optional(),
+  apiKey: z.string().trim().min(1).max(4096).nullable(),
+  headers: ProviderHeaders.optional()
+})
+export type ModelProviderModelsQuery = z.infer<typeof ModelProviderModelsQuery>
+
+// models: every endpoint's, by id, with what any of them told of a model's context and output;
+// most list only ids. One entry per endpoint asked, message as for a probe.
+export const ModelProviderModels = z.object({
+  models: z.array(ProviderModel),
+  endpoints: z.array(z.object({ wire: ProviderWire, ok: z.boolean(), count: z.number().int().nonnegative(), status: z.number().int().nullable(), message: z.string().nullable() }))
+})
+export type ModelProviderModels = z.infer<typeof ModelProviderModels>
 
 // The endpoint an agent reaches a provider at: the first wire, in the agent's order of preference,
 // that the provider serves.
@@ -171,7 +234,10 @@ export const ProviderRoute = z.object({
   key: z.string(),
   models: z.array(ProviderModel),
   defaultModel: z.string(),
-  smallModel: z.string()
+  smallModel: z.string(),
+  // Absent on stages that ran before them: no headers, small jobs on the provider.
+  headers: ProviderHeaders.optional(),
+  smallJobs: ProviderSmallJobs.optional()
 })
 export type ProviderRoute = z.infer<typeof ProviderRoute>
 

@@ -7,6 +7,7 @@ import { zcodeProviderConfig, zcodeProviderLaunch, zcodeProviderModels } from '.
 
 const provider = (wire: ProviderLaunch['endpoint']['wire'], baseUrl: string): ProviderLaunch => ({
   providerId: 'zhipu-glm-coding',
+  headers: {},
   endpoint: { wire, baseUrl, anthropic: wire === 'anthropic' ? { baseUrl, auth: 'auth_token', env: {} } : null },
   models: [
     { id: 'glm-5.3', label: 'GLM-5.3', contextWindow: 1_000_000, maxOutput: 32_000, efforts: ['low', 'high'] },
@@ -27,6 +28,12 @@ describe('ZCode on a model provider', () => {
       { id: 'antumi-zhipu-glm-coding/glm-5.3', label: 'GLM-5.3', description: null, efforts: ['low', 'high'], isDefault: true, autoMode: true },
       { id: 'antumi-zhipu-glm-coding/glm-5.3-flash', label: 'glm-5.3-flash', description: null, efforts: [], isDefault: false, autoMode: true }
     ])
+  })
+
+  it('tells ZCode which models read images', () => {
+    const seeing = { ...provider('openai-chat', 'https://api.example/v1'), models: [{ id: 'v', label: null, contextWindow: null, maxOutput: null, efforts: [], images: true }] }
+    const rules = JSON.parse(zcodeProviderConfig(seeing)).config.modelConfigRules.providerModelRules
+    expect(rules[0].config.properties).toEqual({ inputFormat: { supportsImage: true } })
   })
 
   it('names the API, address, models and efforts as ZCode reads them', () => {

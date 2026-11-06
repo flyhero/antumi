@@ -35,9 +35,12 @@ export function claudeProviderEnv(provider: ProviderLaunch): Record<string, stri
   const named = (id: string) => { const model = byId(id); return model ? claudeModelId(model) : id }
   // One limit for every model the chat may switch to, so the smallest of those under 1M.
   const windows = provider.models.flatMap((model) => (model.contextWindow !== null && model.contextWindow < ONE_MILLION ? [model.contextWindow] : []))
+  const headers = Object.entries(provider.headers)
   return {
     ...Object.fromEntries(CLEARED.map((name) => [name, ''])),
     ...anthropic?.env,
+    // The provider's own headers, one `Name: value` a line; inherited ones stay cleared.
+    ...(headers.length ? { ANTHROPIC_CUSTOM_HEADERS: headers.map(([name, value]) => `${name}: ${value}`).join('\n') } : {}),
     CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST: '1',
     CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
     ANTHROPIC_BASE_URL: anthropicBaseUrl(provider.endpoint.baseUrl),

@@ -1,12 +1,15 @@
-import { probeProvider, useProviderProbes } from '../provider-probes'
+import { keepProbe, probeProvider, useProviderProbes } from '../provider-probes'
 import { getLocale, t } from '../i18n'
 import { useLayoutEffect, useId, useRef, useState, type FormEvent } from 'react'
 import {
-  AGENT_KINDS, MODEL_PROVIDER_PRESETS, MODEL_PROVIDER_PRESET_IDS, providerUrlProblem, providerWireFor,
-  type AgentKind, type ModelProvider, type ModelProviderInput, type ModelProviderPreset, type ModelProviderPresetId, type ModelProviderProbe, type ProviderModel, type ProviderWire
+  AGENT_KINDS, MODEL_PROVIDER_PRESETS, MODEL_PROVIDER_PRESET_IDS, agentDescriptor, providerUrlProblem, providerWireFor, sameModels,
+  type AgentKind, type ModelProvider, type ModelProviderInput, type ModelProviderModels, type ProviderSmallJobs, type ModelProviderPreset, type ModelProviderPresetId, type ModelProviderProbe, type ProviderModel, type ProviderWire
 } from '@antumi/protocol'
 import { perform, setSettingsOpen, useAccountsSupported, useCore } from '../core-store'
 import { agentLabel } from '../labels'
+import { formatTokens, pickedIds } from '../provider-model-limits'
+import { blankRow, modelsOfRows, rowOf, rowProblems, withListedRows, withPastedRows, type ModelRow, type RowProblem } from '../provider-model-rows'
+import { formatProviderHeaders, parseProviderHeaders } from '../provider-headers'
 import { Segmented } from './SettingsControls'
 import { PRESET_VENDOR } from '../provider-vendors'
 import { SettingsEmptyState } from './SettingsEmptyState'
@@ -16,11 +19,15 @@ type Draft = {
   id: string | null
   name: string
   preset: ModelProviderPreset
+  // The local gateway a custom provider was started from, its addresses filled in; null when none.
+  template: ProviderTemplate | null
   apiKey: string
   hasKey: boolean
-  // One model id per line; known: what is known of each beyond its id (the preset's, or as saved).
-  models: string
-  known: readonly ProviderModel[]
+  // The models, one a row of the table.
+  rows: readonly ModelRow[]
+  // Extra request headers, one `Name: value` a line, and where small jobs go.
+  headers: string
+  smallJobs: ProviderSmallJobs
   defaultModel: string
   smallModel: string
   agents: AgentKind[]
@@ -30,23 +37,47 @@ type Draft = {
   responsesUrl: string
 }
 
+// A custom provider for a gateway on this machine, addresses at its default port: not a preset, whose
+// addresses are fixed, as the user may have moved the port.
+const PROVIDER_TEMPLATES = ['cliproxyapi'] as const
+type ProviderTemplate = (typeof PROVIDER_TEMPLATES)[number]
+type Choice = ModelProviderPreset | ProviderTemplate
+const CLIPROXYAPI_URL = 'http://127.0.0.1:8317'
+
+// The most models a provider holds (ModelProvider.models).
+const MODEL_LIMIT = 100
+
 const presetName = (id: ModelProviderPresetId) => (getLocale() === 'en' ? MODEL_PROVIDER_PRESETS[id].translations.en.name : MODEL_PROVIDER_PRESETS[id].name)
 const presetNotes = (id: ModelProviderPresetId) => MODEL_PROVIDER_PRESETS[id].notes.map((note) => (getLocale() === 'en' ? note.en : note.zh))
 
 function draftOfPreset(preset: ModelProviderPreset): Draft {
-  const blank = { id: null, apiKey: '', hasKey: false, anthropicUrl: '', anthropicAuth: 'auth_token' as const, chatUrl: '', responsesUrl: '' }
-  if (preset === 'custom') return { ...blank, name: '', preset, models: '', known: [], defaultModel: '', smallModel: '', agents: [] }
+  const blank = { id: null, template: null, apiKey: '', hasKey: false, anthropicUrl: '', anthropicAuth: 'auth_token' as const, chatUrl: '', responsesUrl: '', headers: '', smallJobs: 'provider' as const }
+  if (preset === 'custom') return { ...blank, name: '', preset, rows: [blankRow()], defaultModel: '', smallModel: '', agents: [] }
   const entry = MODEL_PROVIDER_PRESETS[preset]
   return {
-    ...blank, name: presetName(preset), preset, models: entry.models.map((model) => model.id).join('\n'), known: entry.models,
+    ...blank, name: presetName(preset), preset, rows: entry.models.map(rowOf),
     defaultModel: entry.defaultModel, smallModel: entry.smallModel, agents: [...entry.agents]
   }
 }
 
+// CLIProxyAPI serves all three wires under one port and takes its key in either header; the models
+// are whatever accounts it holds, so they come from its list.
+function draftOfTemplate(template: ProviderTemplate): Draft {
+  const draft: Draft = {
+    // Its accounts are subscriptions: nothing goes to them but what an agent sends itself.
+    ...draftOfPreset('custom'), name: 'CLIProxyAPI', template, smallJobs: 'off',
+    anthropicUrl: CLIPROXYAPI_URL, responsesUrl: `${CLIPROXYAPI_URL}/v1`, chatUrl: `${CLIPROXYAPI_URL}/v1`
+  }
+  const endpoints = endpointsOf(draft)
+  return { ...draft, agents: (['claude', 'codex', 'opencode'] as const).filter((agent) => providerWireFor(endpoints, agent)) }
+}
+
+const draftOfChoice = (choice: Choice): Draft => (choice === 'cliproxyapi' ? draftOfTemplate(choice) : draftOfPreset(choice))
+
 function draftOf(provider: ModelProvider): Draft {
   return {
-    id: provider.id, name: provider.name, preset: provider.preset, apiKey: '', hasKey: provider.hasKey,
-    models: provider.models.map((model) => model.id).join('\n'), known: provider.models,
+    id: provider.id, template: null, name: provider.name, preset: provider.preset, apiKey: '', hasKey: provider.hasKey, headers: formatProviderHeaders(provider.headers ?? {}), smallJobs: provider.smallJobs ?? 'provider',
+    rows: provider.models.map(rowOf),
     defaultModel: provider.defaultModel, smallModel: provider.smallModel, agents: [...provider.agents],
     anthropicUrl: provider.anthropic?.baseUrl ?? '', anthropicAuth: provider.anthropic?.auth ?? 'auth_token',
     chatUrl: provider.openai?.chatUrl ?? '', responsesUrl: provider.openai?.responsesUrl ?? ''
@@ -64,18 +95,30 @@ function endpointsOf(draft: Draft): Pick<ModelProvider, 'anthropic' | 'openai'> 
   }
 }
 
-function modelsOf(draft: Draft): ProviderModel[] {
-  const ids = [...new Set(draft.models.split('\n').map((line) => line.trim()).filter(Boolean))]
-  return ids.map((id) => draft.known.find((model) => model.id === id) ?? { id, label: null, contextWindow: null, maxOutput: null, efforts: [] })
+// The rows as models; images: whether the table sets image support (a core that keeps it).
+const modelsOf = (draft: Draft, images: boolean) => modelsOfRows(draft.rows, images)
+
+// The rows as changed, the default and small model kept where they still are among them.
+function withRows(draft: Draft, rows: readonly ModelRow[]): Draft {
+  const next = modelsOfRows(rows, false).map((model) => model.id)
+  return { ...draft, rows, defaultModel: next.includes(draft.defaultModel) ? draft.defaultModel : next[0] ?? '', smallModel: next.includes(draft.smallModel) ? draft.smallModel : next[0] ?? '' }
 }
 
-function inputOf(draft: Draft): ModelProviderInput {
+// An older core keeps neither headers nor where small jobs go: they are sent only to one that does.
+function inputOf(draft: Draft, extras: boolean, images: boolean): ModelProviderInput {
   const endpoints = endpointsOf(draft)
   return {
+    ...(extras ? { headers: parseProviderHeaders(draft.headers).headers, smallJobs: draft.smallJobs } : {}),
     id: draft.id, name: draft.name.trim(), preset: draft.preset, ...(draft.preset === 'custom' ? endpoints : {}),
-    models: modelsOf(draft), defaultModel: draft.defaultModel, smallModel: draft.smallModel,
+    models: modelsOf(draft, images), defaultModel: draft.defaultModel, smallModel: draft.smallModel,
     agents: draft.agents.filter((agent) => providerWireFor(endpoints, agent)), apiKey: draft.apiKey.trim() || null
   }
+}
+
+// Where a key would go: a kept key goes only where it was saved to go (model-providers.ts in core).
+function addressesOf(draft: Draft): string {
+  const { anthropic, openai } = endpointsOf(draft)
+  return JSON.stringify([anthropic?.baseUrl ?? null, openai?.chatUrl ?? null, openai?.responsesUrl ?? null])
 }
 
 function urlProblems(draft: Draft): string[] {
@@ -83,22 +126,31 @@ function urlProblems(draft: Draft): string[] {
   return [draft.anthropicUrl, draft.chatUrl, draft.responsesUrl].map((url) => url.trim()).filter((url) => url && providerUrlProblem(url) !== null)
 }
 
-function PresetGrid({ value, onPick }: { value: ModelProviderPreset; onPick: (preset: ModelProviderPreset) => void }) {
+function PresetGrid({ value, onPick }: { value: Choice; onPick: (choice: Choice) => void }) {
   return (
     <div className="provider-presets" role="radiogroup" aria-label={t('ModelProviderSettings.plan')}>
-      {[...MODEL_PROVIDER_PRESET_IDS, 'custom' as const].map((preset) => (
-        <button key={preset} type="button" role="radio" aria-checked={preset === value} className="provider-preset" onClick={() => onPick(preset)}>
+      {[...MODEL_PROVIDER_PRESET_IDS, ...PROVIDER_TEMPLATES, 'custom' as const].map((choice) => (
+        <button key={choice} type="button" role="radio" aria-checked={choice === value} className="provider-preset" onClick={() => onPick(choice)}>
           <span className="provider-preset-name">
-            <span className="provider-mark" data-vendor={preset === 'custom' ? 'custom' : PRESET_VENDOR[preset].vendor} aria-hidden="true">{preset === 'custom' ? '+' : PRESET_VENDOR[preset].mark}</span>
-            {preset === 'custom' ? t('ModelProviderSettings.custom') : presetName(preset)}
-            {preset !== 'custom' && <VerifiedBadge preset={preset} />}
+            <ChoiceMark choice={choice} />
+            {choiceName(choice)}
+            {choice !== 'custom' && choice !== 'cliproxyapi' && <VerifiedBadge preset={choice} />}
           </span>
-          <span className="provider-preset-host" title={preset === 'custom' ? undefined : presetHost(preset)}>{preset === 'custom' ? t('ModelProviderSettings.customHint') : presetHost(preset)}</span>
+          <span className="provider-preset-host" title={choice === 'custom' || choice === 'cliproxyapi' ? undefined : presetHost(choice)}>{choiceHint(choice)}</span>
         </button>
       ))}
     </div>
   )
 }
+
+function ChoiceMark({ choice }: { choice: Choice }) {
+  if (choice === 'custom') return <span className="provider-mark" data-vendor="custom" aria-hidden="true">+</span>
+  if (choice === 'cliproxyapi') return <span className="provider-mark" data-vendor="local" aria-hidden="true">C</span>
+  return <span className="provider-mark" data-vendor={PRESET_VENDOR[choice].vendor} aria-hidden="true">{PRESET_VENDOR[choice].mark}</span>
+}
+
+const choiceName = (choice: Choice) => (choice === 'custom' ? t('ModelProviderSettings.custom') : choice === 'cliproxyapi' ? 'CLIProxyAPI' : presetName(choice))
+const choiceHint = (choice: Choice) => (choice === 'custom' ? t('ModelProviderSettings.customHint') : choice === 'cliproxyapi' ? t('ModelProviderSettings.cliProxyHint') : presetHost(choice))
 
 function presetHost(preset: ModelProviderPresetId): string {
   const { anthropic, openai } = MODEL_PROVIDER_PRESETS[preset]
@@ -116,39 +168,160 @@ function VerifiedBadge({ preset }: { preset: ModelProviderPresetId }) {
   return <span className="provider-badge" data-verified={verified}>{verified ? t('ModelProviderSettings.verified') : t('ModelProviderSettings.unverified')}</span>
 }
 
-function ProviderForm({ initial, onDone }: { initial: Draft; onDone: (saved: string | null) => void }) {
+type Listing = { result: ModelProviderModels; picked: ReadonlySet<string>; filter: string }
+
+// The models the endpoints listed, to pick from: those already in the list start picked.
+function ModelListing({ listing, current, onChange, onTake }: { listing: Listing; current: readonly string[]; onChange: (next: Listing | null) => void; onTake: (taken: Listing) => void }) {
+  const { result, picked, filter } = listing
+  const shown = result.models.filter((model) => !filter.trim() || `${model.id} ${model.label ?? ''}`.toLowerCase().includes(filter.trim().toLowerCase()))
+  const total = pickedIds(current, result.models.map((model) => model.id), picked).length
+  const toggle = (id: string, on: boolean) => {
+    const next = new Set(picked)
+    if (on) next.add(id)
+    else next.delete(id)
+    onChange({ ...listing, picked: next })
+  }
+  return (
+    <div className="provider-model-listing">
+      {result.models.length > 0 && <input className="input" value={filter} onChange={(event) => onChange({ ...listing, filter: event.target.value })} placeholder={t('ModelProviderSettings.listedSearch')} aria-label={t('ModelProviderSettings.listedSearch')} autoFocus />}
+      {result.models.length > 0
+        ? <ul className="provider-model-listed">
+          {shown.map((model) => (
+            <li key={model.id}><label>
+              <input type="checkbox" checked={picked.has(model.id)} onChange={(event) => toggle(model.id, event.target.checked)} />
+              <span className="mono">{model.id}</span>
+              {(model.label || model.contextWindow !== null) && <span className="muted">{[model.label, model.contextWindow !== null ? t('ModelProviderSettings.listedContext', { value1: formatTokens(model.contextWindow) }) : null].filter(Boolean).join(' · ')}</span>}
+            </label></li>
+          ))}
+        </ul>
+        : <p className="settings-note">{t('ModelProviderSettings.listedEmpty')}</p>}
+      {result.endpoints.some((endpoint) => !endpoint.ok) && (
+        <ul className="provider-checks" role="status">
+          {result.endpoints.map((endpoint) => (
+            <li key={endpoint.wire} className="provider-check" data-ok={endpoint.ok}>
+              <span>{endpoint.ok ? '✓' : '✗'} {WIRE_LABELS[endpoint.wire]}</span>
+              <span className="muted">{endpoint.ok ? ` · ${t('ModelProviderSettings.listedCount', { value1: endpoint.count })}` : ` · ${endpoint.status ?? t('ModelProviderSettings.noResponse')}${endpoint.message ? ` · ${endpoint.message}` : ''}`}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="plugin-actions">
+        {total > MODEL_LIMIT && <span className="settings-note warning">{t('ModelProviderSettings.tooManyModels', { value1: MODEL_LIMIT })}</span>}
+        <button type="button" className="button ghost" onClick={() => onChange(null)}>{t('ChatCommandSettings.cancel')}</button>
+        {result.models.length > 0 && <button type="button" className="button primary" disabled={total === 0 || total > MODEL_LIMIT} onClick={() => onTake(listing)}>{t('ModelProviderSettings.listedTake', { value1: total })}</button>}
+      </div>
+    </div>
+  )
+}
+
+const SMALL_JOBS = ['provider', 'account', 'off'] as const satisfies readonly ProviderSmallJobs[]
+const SMALL_JOB_LABELS = { provider: 'ModelProviderSettings.smallJobsProvider', account: 'ModelProviderSettings.smallJobsAccount', off: 'ModelProviderSettings.smallJobsOff' } as const satisfies Record<ProviderSmallJobs, string>
+
+const ADDRESS_LABELS = { anthropic: 'ModelProviderSettings.anthropicUrl', 'openai-responses': 'ModelProviderSettings.responsesUrl', 'openai-chat': 'ModelProviderSettings.chatUrl' } as const satisfies Record<ProviderWire, string>
+
+// Why an agent can't be ticked: for a custom provider, the address it would need (any of those its
+// descriptor takes); an agent that takes no provider, or a preset's, which has the addresses it has.
+function UnservableHint({ servable, custom }: { servable: readonly AgentKind[]; custom: boolean }) {
+  const unservable = AGENT_KINDS.filter((agent) => !servable.includes(agent))
+  const wiresOf = (agent: AgentKind) => agentDescriptor(agent).capabilities.modelProviders
+  const needs = custom ? unservable.filter((agent) => wiresOf(agent).length > 0) : []
+  const never = unservable.filter((agent) => !needs.includes(agent))
+  if (unservable.length === 0) return null
+  return (
+    <span className="chat-command-hint">
+      {needs.length > 0 && <>{t('ModelProviderSettings.agentsNeed', { value1: needs.map((agent) => t('ModelProviderSettings.agentAddress', { value1: agentLabel(agent), value2: wiresOf(agent).map((wire) => t(ADDRESS_LABELS[wire])).join(t('ModelProviderSettings.or')) })).join(t('ModelProviderSettings.listSeparator')) })} </>}
+      {never.length > 0 && t('ModelProviderSettings.agentsUnservable', { value1: never.map(agentLabel).join('、') })}
+    </span>
+  )
+}
+
+// One row of the model table. locked: a preset's list on an older core, which keeps only its ids.
+function ModelRowCells({ row, problems, locked, images, focus, onChange, onRemove }: {
+  row: ModelRow; problems: readonly RowProblem[]; locked: boolean; images: boolean; focus: boolean
+  onChange: (patch: Partial<ModelRow>) => void; onRemove: () => void
+}) {
+  const name = row.id.trim() || t('ModelProviderSettings.newModel')
+  const cell = (field: 'id' | 'label' | 'context' | 'output' | 'efforts', label: string, placeholder: string, mono: boolean) => (
+    <input className={`input${mono ? ' mono' : ''}`} value={row[field]} onChange={(event) => onChange({ [field]: event.target.value })} placeholder={placeholder} spellCheck={false}
+      aria-label={field === 'id' ? label : `${name} ${label}`} aria-invalid={problems.includes(field) || (field === 'id' && problems.includes('duplicate'))} disabled={locked} autoFocus={field === 'id' && focus} role="cell" />
+  )
+  return (
+    <div className="provider-model-row" role="row">
+      {cell('id', t('ModelProviderSettings.modelId'), 'model-id', true)}
+      {cell('label', t('ModelProviderSettings.modelLabel'), '', false)}
+      {cell('context', t('ModelProviderSettings.limitContext'), t('ModelProviderSettings.limitUnknown'), true)}
+      {cell('output', t('ModelProviderSettings.limitOutput'), t('ModelProviderSettings.limitUnknown'), true)}
+      {cell('efforts', t('ModelProviderSettings.efforts'), 'low, high', true)}
+      {images && <span role="cell" className="provider-model-images"><input type="checkbox" checked={row.images} disabled={locked} onChange={(event) => onChange({ images: event.target.checked })} aria-label={`${name} ${t('ModelProviderSettings.images')}`} /></span>}
+      <span role="cell"><button type="button" className="icon-button provider-model-remove" disabled={locked} onClick={onRemove} aria-label={`${t('ModelProviderSettings.removeModel')} ${name}`}>×</button></span>
+    </div>
+  )
+}
+
+function ProviderForm({ initial, onDone }: { initial: Draft; onDone: (saved: ModelProvider | null, retest?: boolean) => void }) {
   const [draft, setDraft] = useState(initial)
   const [saving, setSaving] = useState(false)
+  const [listing, setListing] = useState<Listing | 'running' | null>(null)
+  const canList = useCore((s) => s.rpc?.features.includes('model-provider-models') ?? false)
+  const canExtras = useCore((s) => s.rpc?.features.includes('model-provider-headers') ?? false)
+  const canImages = useCore((s) => s.rpc?.features.includes('provider-model-images') ?? false)
+  const [pasting, setPasting] = useState<string | null>(null)
+  const [focusKey, setFocusKey] = useState<string | null>(null)
   const authId = useId()
   const keyHintId = useId()
+  const modelsId = useId()
   const form = useRef<HTMLFormElement>(null)
   useLayoutEffect(() => { form.current?.closest('.settings-content')?.scrollTo({ top: 0 }) }, [])
   const set = (patch: Partial<Draft>) => setDraft((current) => ({ ...current, ...patch }))
   const endpoints = endpointsOf(draft)
-  const models = modelsOf(draft)
+  const models = modelsOf(draft, canImages)
   const ids = models.map((model) => model.id)
   const servable = AGENT_KINDS.filter((agent) => providerWireFor(endpoints, agent))
   const badUrls = urlProblems(draft)
   const presetId = draft.preset === 'custom' ? null : draft.preset
   const preset = presetId ? MODEL_PROVIDER_PRESETS[presetId] : null
   // Saved as the preset's own list, core keeps it following the preset (model-providers.ts).
-  const followsPreset = preset !== null && ids.length === preset.models.length && preset.models.every((model, index) => ids[index] === model.id)
-  const ready = draft.name.trim() && (draft.apiKey.trim() || draft.hasKey) && ids.includes(draft.defaultModel) && ids.includes(draft.smallModel)
-    && draft.agents.some((agent) => servable.includes(agent)) && badUrls.length === 0 && (endpoints.anthropic || endpoints.openai)
+  const followsPreset = preset !== null && sameModels(models, preset.models)
+  // An older core keeps a preset's list by its ids alone, and would drop what is edited there.
+  const locked = preset !== null && !canList
+  const problems = rowProblems(draft.rows)
+  const hasEndpoint = Boolean(endpoints.anthropic || endpoints.openai)
+  const moved = draft.id !== null && addressesOf(draft) !== addressesOf(initial)
+  const { headers: typedHeaders, bad: badHeaders } = parseProviderHeaders(draft.headers)
+  const keyReady = Boolean(draft.apiKey.trim() || (draft.hasKey && !moved))
+  const ready = draft.name.trim() && keyReady && ids.includes(draft.defaultModel) && ids.includes(draft.smallModel)
+    && draft.agents.some((agent) => servable.includes(agent)) && badUrls.length === 0 && hasEndpoint && problems.size === 0 && ids.length <= MODEL_LIMIT && !(canExtras && badHeaders.length)
+  const canFetch = canList && hasEndpoint && badUrls.length === 0 && keyReady && listing !== 'running'
 
   // Picking a preset starts its form over; the key typed so far stays.
-  const pick = (next: ModelProviderPreset) => setDraft((current) => ({ ...draftOfPreset(next), apiKey: current.apiKey }))
-  const setModels = (text: string) => {
-    const next = [...new Set(text.split('\n').map((line) => line.trim()).filter(Boolean))]
-    set({ models: text, defaultModel: next.includes(draft.defaultModel) ? draft.defaultModel : next[0] ?? '', smallModel: next.includes(draft.smallModel) ? draft.smallModel : next[0] ?? '' })
+  const pick = (next: Choice) => setDraft((current) => ({ ...draftOfChoice(next), apiKey: current.apiKey }))
+  const setRows = (update: (rows: readonly ModelRow[]) => readonly ModelRow[]) => setDraft((current) => withRows(current, update(current.rows)))
+  const setCell = (key: string, patch: Partial<ModelRow>) => setRows((rows) => rows.map((row) => (row.key === key ? { ...row, ...patch } : row)))
+  const addRow = () => { const row = blankRow(); setFocusKey(row.key); setRows((rows) => [...rows, row]) }
+  // The preset's models whole, their contexts and efforts too.
+  const restorePreset = (entry: NonNullable<typeof preset>) => setRows(() => entry.models.map(rowOf))
+  const fetchModels = async () => {
+    setListing('running')
+    const result = await perform((rpc) => rpc.call('modelProviders.fetchModels', { id: draft.id, preset: draft.preset, ...endpoints, apiKey: draft.apiKey.trim() || null, ...(canExtras ? { headers: typedHeaders } : {}) }))
+    setListing(result ? { result, picked: new Set(result.models.filter((model) => ids.includes(model.id)).map((model) => model.id)), filter: '' } : null)
+  }
+  const takeListed = (taken: Listing) => {
+    setDraft((current) => {
+      // What the endpoint tells fills a cell left empty, never one typed.
+      return withRows(current, withListedRows(current.rows, taken.result.models, taken.picked))
+    })
+    setListing(null)
   }
   const save = async (event?: FormEvent) => {
     event?.preventDefault()
     if (!ready || saving) return
     setSaving(true)
-    const saved = await perform((rpc) => rpc.call('modelProviders.save', inputOf(draft)))
+    const saved = await perform((rpc) => rpc.call('modelProviders.save', inputOf(draft, canExtras, canImages)))
     setSaving(false)
-    if (saved) onDone(saved.id)
+    // Tested again only where a test could answer differently: each test is requests the provider sees.
+    const retest = draft.id === null || Boolean(draft.apiKey.trim()) || addressesOf(draft) !== addressesOf(initial) || draft.anthropicAuth !== initial.anthropicAuth
+      || draft.defaultModel !== initial.defaultModel || draft.smallModel !== initial.smallModel || draft.headers !== initial.headers || draft.smallJobs !== initial.smallJobs
+    if (saved) onDone(saved, retest)
   }
 
   return (
@@ -159,8 +332,8 @@ function ProviderForm({ initial, onDone }: { initial: Draft; onDone: (saved: str
       {/* Both parts open at first: what a plan fills in is there to read before saving. */}
       {draft.id === null && (
         <details open className="settings-disclosure provider-plan-switcher">
-          <summary>{t('ModelProviderSettings.plan')}<span>{draft.preset === 'custom' ? t('ModelProviderSettings.custom') : presetName(draft.preset)}</span><ChevronDownIcon /></summary>
-          <PresetGrid value={draft.preset} onPick={pick} />
+          <summary>{t('ModelProviderSettings.plan')}<span>{choiceName(draft.template ?? draft.preset)}</span><ChevronDownIcon /></summary>
+          <PresetGrid value={draft.template ?? draft.preset} onPick={pick} />
           <span className="chat-command-hint">{t('ModelProviderSettings.unverifiedHint')}</span>
         </details>
       )}
@@ -171,27 +344,55 @@ function ProviderForm({ initial, onDone }: { initial: Draft; onDone: (saved: str
       <label className="chat-command-field">
         <span>API Key</span>
         <input className="input mono" aria-label="API Key" aria-describedby={keyHintId} type="password" autoComplete="new-password" value={draft.apiKey} onChange={(event) => set({ apiKey: event.target.value })}
-          placeholder={draft.hasKey ? t('McpSettingsSection.alreadySetLeaveEmptyToKeep') : ''} />
+          placeholder={draft.hasKey && !moved ? t('McpSettingsSection.alreadySetLeaveEmptyToKeep') : ''} />
         <span id={keyHintId} className="chat-command-hint">
+          {draft.hasKey && moved && !draft.apiKey.trim() && <span className="warning">{t('ModelProviderSettings.keyAgain')} </span>}
           {t('ModelProviderSettings.keyHint')}
           {preset && <> <a className="provider-link" href={preset.keyUrl} target="_blank" rel="noreferrer">{t('ModelProviderSettings.getKey')}</a></>}
         </span>
       </label>
       {presetId && <p className="settings-note">{presetNotes(presetId)[0]}</p>}
+      {draft.template === 'cliproxyapi' && <p className="settings-note">{t('ModelProviderSettings.cliProxyNote')}</p>}
       {preset && <p className="provider-ready-summary">{t('SettingsPage.providerPresetHint', { model: draft.defaultModel, agents: draft.agents.filter((agent) => servable.includes(agent)).map(agentLabel).join('、') })}</p>}
       <details open className="settings-disclosure provider-advanced">
         <summary>{preset ? t('SettingsPage.providerAdvanced') : t('SettingsPage.providerCustomSetup')}</summary>
         {preset && <p className="settings-note">{t('SettingsPage.providerPresetHint', { model: draft.defaultModel, agents: draft.agents.map(agentLabel).join('、') })}</p>}
-      <label className="chat-command-field">
-        <span>{t('ModelProviderSettings.models')}</span>
-        <textarea className="input mono mcp-args" rows={4} value={draft.models} onChange={(event) => setModels(event.target.value)} spellCheck={false} placeholder="glm-5.3" />
-        <span className="chat-command-hint">
-          {t('ModelProviderSettings.modelsHint')}
+      <div className="chat-command-field">
+        <div className="provider-models-head">
+          <span id={modelsId}>{t('ModelProviderSettings.models')}</span>
+          {canList && <button type="button" className="link-button" disabled={!canFetch} onClick={() => void fetchModels()}>{listing === 'running' ? t('ModelProviderSettings.fetchingModels') : t('ModelProviderSettings.fetchModels')}</button>}
+        </div>
+        {canList && !canFetch && listing !== 'running' && <span className="chat-command-hint">{t('ModelProviderSettings.fetchModelsNeeds')}</span>}
+        {listing && listing !== 'running' && <ModelListing listing={listing} current={ids} onChange={setListing} onTake={takeListed} />}
+        <div className="provider-model-table" role="table" aria-labelledby={modelsId} data-images={canImages}>
+          <div className="provider-model-row provider-model-row-head" role="row">
+            {[t('ModelProviderSettings.modelId'), t('ModelProviderSettings.modelLabel'), t('ModelProviderSettings.limitContext'), t('ModelProviderSettings.limitOutput'), t('ModelProviderSettings.efforts'), ...(canImages ? [t('ModelProviderSettings.images')] : [])].map((title) => <span key={title} role="columnheader">{title}</span>)}
+            <span role="columnheader" aria-label={t('ModelProviderSettings.removeModel')} />
+          </div>
+          {draft.rows.map((row) => <ModelRowCells key={row.key} row={row} problems={problems.get(row.key) ?? []} locked={locked} images={canImages} focus={row.key === focusKey}
+            onChange={(patch) => setCell(row.key, patch)} onRemove={() => setRows((rows) => rows.filter((each) => each.key !== row.key))} />)}
+        </div>
+        <div className="provider-model-actions">
+          <button type="button" className="button" disabled={locked} onClick={addRow}><PlusIcon />{t('ModelProviderSettings.addModel')}</button>
+          <button type="button" className="link-button" disabled={locked} onClick={() => setPasting(pasting === null ? '' : null)}>{t('ModelProviderSettings.pasteModels')}</button>
           {preset && (followsPreset
-            ? <> {t('ModelProviderSettings.modelsFollowPreset')}</>
-            : <button type="button" className="link-button" onClick={() => setModels(preset.models.map((model) => model.id).join('\n'))}>{t('ModelProviderSettings.restorePresetModels')}</button>)}
+            ? <span className="chat-command-hint">{t('ModelProviderSettings.modelsFollowPreset')}</span>
+            : <button type="button" className="link-button" onClick={() => restorePreset(preset)}>{t('ModelProviderSettings.restorePresetModels')}</button>)}
+        </div>
+        {pasting !== null && (
+          <div className="provider-model-paste">
+            <textarea className="input mono mcp-args" rows={4} value={pasting} onChange={(event) => setPasting(event.target.value)} placeholder={t('ModelProviderSettings.pasteHint')} aria-label={t('ModelProviderSettings.pasteModels')} spellCheck={false} autoFocus />
+            <div className="plugin-actions">
+              <button type="button" className="button ghost" onClick={() => setPasting(null)}>{t('ChatCommandSettings.cancel')}</button>
+              <button type="button" className="button primary" disabled={!pasting.trim()} onClick={() => { const text = pasting; setRows((rows) => withPastedRows(rows, text)); setPasting(null) }}>{t('ModelProviderSettings.pasteAdd')}</button>
+            </div>
+          </div>
+        )}
+        <span className="chat-command-hint">
+          {problems.size > 0 ? <span className="warning">{t('ModelProviderSettings.rowsInvalid')}</span> : t('ModelProviderSettings.modelsHint')}
+          {ids.length > MODEL_LIMIT && <span className="warning"> {t('ModelProviderSettings.tooManyModels', { value1: MODEL_LIMIT })}</span>}
         </span>
-      </label>
+      </div>
       <div className="provider-model-pickers">
         <label className="chat-command-field">
           <span>{t('ModelProviderSettings.defaultModel')}</span>
@@ -204,7 +405,7 @@ function ProviderForm({ initial, onDone }: { initial: Draft; onDone: (saved: str
           <select className="input mono" value={draft.smallModel} onChange={(event) => set({ smallModel: event.target.value })}>
             {ids.map((id) => <option key={id} value={id}>{id}</option>)}
           </select>
-          <span className="chat-command-hint">{t('ModelProviderSettings.smallModelHint')}</span>
+          {(!canExtras || draft.smallJobs === 'provider') && <span className="chat-command-hint">{t('ModelProviderSettings.smallModelHint')}</span>}
         </label>
       </div>
       <div className="chat-command-field">
@@ -218,9 +419,7 @@ function ProviderForm({ initial, onDone }: { initial: Draft; onDone: (saved: str
             </label>
           ))}
         </span>
-        {servable.length < AGENT_KINDS.length && (
-          <span className="chat-command-hint">{t('ModelProviderSettings.agentsUnservable', { value1: AGENT_KINDS.filter((agent) => !servable.includes(agent)).map(agentLabel).join('、') })}</span>
-        )}
+        <UnservableHint servable={servable} custom={draft.preset === 'custom'} />
       </div>
       {preset ? (
         <div className="chat-command-field">
@@ -253,6 +452,24 @@ function ProviderForm({ initial, onDone }: { initial: Draft; onDone: (saved: str
             <span>{t('ModelProviderSettings.chatUrl')}</span>
             <input className="input mono" value={draft.chatUrl} onChange={(event) => set({ chatUrl: event.target.value })} placeholder="https://api.example.com/v1" spellCheck={false} />
             <span className="chat-command-hint">{badUrls.length ? t('ModelProviderSettings.badUrl') : t('ModelProviderSettings.openaiUrlHint')}</span>
+          </label>
+        </>
+      )}
+      {canExtras && (
+        <>
+          <label className="chat-command-field">
+            <span>{t('ModelProviderSettings.smallJobs')}</span>
+            <select className="input" value={draft.smallJobs} onChange={(event) => { const value = SMALL_JOBS.find((each) => each === event.target.value); if (value) set({ smallJobs: value }) }}>
+              {SMALL_JOBS.map((value) => <option key={value} value={value}>{t(SMALL_JOB_LABELS[value])}</option>)}
+            </select>
+            <span className="chat-command-hint">{t('ModelProviderSettings.smallJobsHint')}</span>
+          </label>
+          <label className="chat-command-field">
+            <span>{t('ModelProviderSettings.headers')}</span>
+            <textarea className="input mono mcp-args" rows={3} value={draft.headers} onChange={(event) => set({ headers: event.target.value })} spellCheck={false} placeholder="User-Agent: my-client/1.0" aria-invalid={badHeaders.length > 0} />
+            <span className="chat-command-hint">{badHeaders.length
+              ? <span className="warning">{t('ModelProviderSettings.headersInvalid', { value1: badHeaders.map((each) => each.line).join('、') })}</span>
+              : t('ModelProviderSettings.headersHint')}</span>
           </label>
         </>
       )}
@@ -335,7 +552,7 @@ export function ModelProviderSettings() {
   const probes = useProviderProbes((state) => state.probes)
 
   if (!connected) return <SettingsEmptyState icon={<CloudIcon />} title={t('SettingsPage.providersDisconnected')}>{t('ChatCommandSettings.connectToAntumiCoreToView')}</SettingsEmptyState>
-  if (draft) return <ProviderForm key={draft.id ?? 'new'} initial={draft} onDone={(saved) => { setDraft(null); if (saved) void probeProvider(saved) }} />
+  if (draft) return <ProviderForm key={draft.id ?? 'new'} initial={draft} onDone={(saved, retest) => { setDraft(null); if (saved && retest) void probeProvider(saved.id); else if (saved) keepProbe(saved.id, saved.revision - 1, saved.revision) }} />
   return (
     <div className="provider-settings">
       {providers.length === 0 ? <>
@@ -348,6 +565,11 @@ export function ModelProviderSettings() {
             <span className="provider-mark" data-vendor={PRESET_VENDOR[preset].vendor} aria-hidden="true">{PRESET_VENDOR[preset].mark}</span>
             <span><strong>{presetName(preset)}</strong><span className="settings-quota-note">{MODEL_PROVIDER_PRESETS[preset].agents.map(agentLabel).join(' · ')}</span></span>
             <VerifiedBadge preset={preset} /><ChevronRightIcon />
+          </button>)}
+          {PROVIDER_TEMPLATES.map((template) => <button type="button" key={template} className="provider-start-row" onClick={() => setDraft(draftOfTemplate(template))}>
+            <ChoiceMark choice={template} />
+            <span><strong>{choiceName(template)}</strong><span className="settings-quota-note">{choiceHint(template)}</span></span>
+            <ChevronRightIcon />
           </button>)}
           <p className="settings-note">{t('ModelProviderSettings.unverifiedHint')}</p>
         </div>

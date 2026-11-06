@@ -120,6 +120,9 @@ export interface AgentAdapter {
   signedIn?(home?: string): Promise<boolean | null>
   readonly usage?: UsageSource
   readonly accounts?: AccountSupport
+  // The folders of the user's own Agent Skills it loads by itself, wherever it runs: shown beside
+  // Antumi's library, never changed.
+  globalSkillDirs?(env: NodeJS.ProcessEnv): string[]
   // Spends one of the usage resets its reading reports, without the agent's own app.
   readonly useResetCredit?: ResetCreditUse
   // The command that installs its CLI, offered when its application is found without the CLI.

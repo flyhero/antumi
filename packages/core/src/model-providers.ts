@@ -1,11 +1,12 @@
 import { randomBytes } from 'node:crypto'
 import { z } from 'zod'
 import {
-  AgentKind, AnthropicEndpoint, MODEL_PROVIDER_PRESETS, ModelProviderId, ModelProviderPreset, OpenAiEndpoint, ProviderModel, agentDescriptor, providerUrlProblem, providerWireFor,
-  type ModelProvider, type ModelProviderInput, type ModelProviderProbe
+  AgentKind, AnthropicEndpoint, MODEL_PROVIDER_PRESETS, ModelProviderId, ModelProviderPreset, OpenAiEndpoint, ProviderHeaders, ProviderModel, ProviderSmallJobs, agentDescriptor, providerUrlProblem, providerWireFor, sameModels,
+  type ModelProvider, type ModelProviderInput, type ModelProviderModels, type ModelProviderModelsQuery, type ModelProviderProbe
 } from '@antumi/protocol'
 import { readJsonIfExists, writePrivateJson } from '@antumi/protocol/node'
 import type { CredentialStore } from './credential-store'
+import { fetchProviderModels } from './model-provider-models'
 import { probeModelProvider } from './model-provider-probe'
 import { Rejection } from './rejection'
 
@@ -25,6 +26,9 @@ const Saved = z.object({
   defaultModel: z.string().nullable(),
   smallModel: z.string().nullable(),
   agents: z.array(AgentKind),
+  // Absent in files written before them: none, and small jobs on the provider.
+  headers: ProviderHeaders.optional(),
+  smallJobs: ProviderSmallJobs.optional(),
   keyRef: z.string().nullable(),
   revision: z.number().int(),
   createdAt: z.number(),
@@ -98,13 +102,22 @@ export class ModelProviderStore {
     return probeModelProvider(resolved.provider, resolved.apiKey)
   }
 
+  // A key kept goes only where it was saved to go: a client could otherwise send it anywhere by
+  // naming a new address and leaving the key out.
+  async fetchModels(query: ModelProviderModelsQuery): Promise<ModelProviderModels> {
+    const endpoints = endpointsOf(query)
+    checkEndpoints(endpoints)
+    const apiKey = query.apiKey ?? this.keptKey(query.id, endpoints)
+    const saved = query.id === null ? null : this.require(query.id)
+    return fetchProviderModels(endpoints, apiKey, { headers: query.headers ?? saved?.headers ?? {} })
+  }
+
   save(input: ModelProviderInput): Promise<ModelProvider> {
     return this.serially(async () => {
       const previous = input.id === null ? null : this.require(input.id)
-      const endpoints = input.preset === 'custom'
-        ? { anthropic: input.anthropic ?? null, openai: input.openai ?? null }
-        : { anthropic: MODEL_PROVIDER_PRESETS[input.preset].anthropic, openai: MODEL_PROVIDER_PRESETS[input.preset].openai }
+      const endpoints = endpointsOf(input)
       checkEndpoints(endpoints)
+      if (input.apiKey === null && previous) this.keptKey(previous.id, endpoints)
       const ids = input.models.map((model) => model.id)
       if (new Set(ids).size !== ids.length) throw new Rejection('model-provider-model-missing', '模型列表里有重复的名字')
       for (const model of [input.defaultModel, input.smallModel]) {
@@ -124,7 +137,7 @@ export class ModelProviderStore {
       }
       // The preset's own list, kept as the preset's so it follows the table; the user's, as given.
       const preset = input.preset === 'custom' ? null : MODEL_PROVIDER_PRESETS[input.preset]
-      const follows = preset !== null && sameIds(input.models, preset.models)
+      const follows = preset !== null && sameModels(input.models, preset.models)
       const saved: Saved = {
         id, name: input.name, preset: input.preset,
         anthropic: input.preset === 'custom' ? endpoints.anthropic : null,
@@ -133,6 +146,9 @@ export class ModelProviderStore {
         defaultModel: follows && input.defaultModel === preset.defaultModel ? null : input.defaultModel,
         smallModel: follows && input.smallModel === preset.smallModel ? null : input.smallModel,
         agents,
+        // An older client sends neither: what was saved stays.
+        headers: input.headers ?? previous?.headers ?? {},
+        smallJobs: input.smallJobs ?? previous?.smallJobs ?? 'provider',
         keyRef, revision, createdAt: previous?.createdAt ?? now, updatedAt: now
       }
       await this.write(previous ? this.providers.map((each) => (each.id === id ? saved : each)) : [...this.providers, saved])
@@ -164,8 +180,19 @@ export class ModelProviderStore {
       defaultModel: pick(saved.defaultModel, preset?.defaultModel),
       smallModel: pick(saved.smallModel, preset?.smallModel),
       modelsFromPreset: saved.models === null,
+      headers: saved.headers ?? {},
+      smallJobs: saved.smallJobs ?? 'provider',
       hasKey: this.keyOf(saved) !== null
     }
+  }
+
+  // The saved provider's key, for endpoints at the addresses it has now.
+  private keptKey(id: string | null, endpoints: Pick<ModelProvider, 'anthropic' | 'openai'>): string {
+    const saved = id === null ? null : this.require(id)
+    const apiKey = saved ? this.keyOf(saved) : null
+    if (!saved || !apiKey) throw new Rejection('model-provider-key-missing', '还没有填 API Key')
+    if (addresses(this.shown(saved)) !== addresses(endpoints)) throw new Rejection('model-provider-key-missing', '换了接口地址，要重新填 API Key')
+    return apiKey
   }
 
   private keyOf(saved: Saved): string | null {
@@ -191,6 +218,17 @@ export class ModelProviderStore {
   }
 }
 
+function endpointsOf(input: Pick<ModelProviderInput, 'preset' | 'anthropic' | 'openai'>): Pick<ModelProvider, 'anthropic' | 'openai'> {
+  return input.preset === 'custom'
+    ? { anthropic: input.anthropic ?? null, openai: input.openai ?? null }
+    : { anthropic: MODEL_PROVIDER_PRESETS[input.preset].anthropic, openai: MODEL_PROVIDER_PRESETS[input.preset].openai }
+}
+
+// Where a key would be sent: what keeps one may differ in anything else.
+function addresses(endpoints: Pick<ModelProvider, 'anthropic' | 'openai'>): string {
+  return JSON.stringify([endpoints.anthropic?.baseUrl ?? null, endpoints.openai?.chatUrl ?? null, endpoints.openai?.responsesUrl ?? null])
+}
+
 function checkEndpoints(endpoints: Pick<ModelProvider, 'anthropic' | 'openai'>): void {
   if (!endpoints.anthropic && !endpoints.openai) throw new Rejection('model-provider-endpoint-missing', '至少要填一个接口地址')
   const urls = [endpoints.anthropic?.baseUrl, endpoints.openai?.chatUrl, endpoints.openai?.responsesUrl].filter((url) => typeof url === 'string')
@@ -198,9 +236,4 @@ function checkEndpoints(endpoints: Pick<ModelProvider, 'anthropic' | 'openai'>):
     const problem = providerUrlProblem(url)
     if (problem) throw new Rejection('model-provider-insecure-url', URL_PROBLEM[problem])
   }
-}
-
-// The same models in the same order, by name: what the preset's list looks like once edited back.
-function sameIds(models: readonly ProviderModel[], others: readonly ProviderModel[]): boolean {
-  return models.length === others.length && models.every((model, index) => model.id === others[index]?.id)
 }

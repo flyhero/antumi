@@ -5,7 +5,7 @@
 要求 Node >=22.13。SDK npm 包首次发布前，先在 Antumi 主仓库生成 tgz，复制到新仓库 vendor/，再运行：
 
 ```sh
-npm install ./vendor/antumi-plugin-sdk-0.1.1.tgz
+npm install ./vendor/antumi-plugin-sdk-0.1.2.tgz
 npm install
 npm run check
 ```

@@ -7,6 +7,7 @@ import { dshCompatible, dshInstallation } from './dsh-cli'
 
 const launch: AgentLaunch = { providerSessionId: null, resume: false, handoffPath: null, extraProjects: ['/extra'] }
 const provider: ProviderLaunch = {
+  headers: {},
   providerId: 'test', apiKey: 'secret-test-key',
   endpoint: { wire: 'openai-chat', baseUrl: 'https://provider.example/v1/', anthropic: null },
   defaultModel: 'model', smallModel: 'model',

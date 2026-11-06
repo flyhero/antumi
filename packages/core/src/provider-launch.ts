@@ -10,6 +10,8 @@ export type ProviderLaunch = {
   models: readonly ProviderModel[]
   defaultModel: string
   smallModel: string
+  // Sent on every request besides the agent's own (ModelProvider.headers).
+  headers: Readonly<Record<string, string>>
   apiKey: string
 }
 

@@ -5,7 +5,8 @@ import type { ProviderEndpoint } from '@antumi/protocol'
 // a timeout or an unreachable address comes back as a failure with what the endpoint said, never
 // with the key in it.
 
-export type ProviderCall = { endpoint: ProviderEndpoint; apiKey: string; model: string }
+// headers: the provider's own (ModelProvider.headers), under the ones the wire needs.
+export type ProviderCall = { endpoint: ProviderEndpoint; apiKey: string; model: string; headers?: Readonly<Record<string, string>> }
 export type ProviderReply =
   | { ok: true; text: string; usage: { input: number; output: number } | null; status: number; latencyMs: number }
   | { ok: false; status: number | null; message: string; latencyMs: number }
@@ -13,7 +14,7 @@ export type ProviderReply =
 const MESSAGE_LIMIT = 300
 
 // Agents add the version segment themselves; one already on the address would go twice.
-function trimmed(baseUrl: string): string {
+export function trimmed(baseUrl: string): string {
   return baseUrl.replace(/\/+$/, '')
 }
 
@@ -28,17 +29,24 @@ export function anthropicMessagesUrl(baseUrl: string): string {
 
 type Built = { url: string; headers: Record<string, string>; body: unknown }
 
-function build({ endpoint, apiKey, model }: ProviderCall, prompt: string, maxTokens: number): Built {
+// The provider's headers under the ones a request needs: one the request sets, in any case, is
+// the request's alone.
+export function withProviderHeaders(own: Readonly<Record<string, string>>, needed: Record<string, string>): Record<string, string> {
+  const taken = new Set(Object.keys(needed).map((name) => name.toLowerCase()))
+  return { ...Object.fromEntries(Object.entries(own).filter(([name]) => !taken.has(name.toLowerCase()))), ...needed }
+}
+
+function build({ endpoint, apiKey, model, headers: own = {} }: ProviderCall, prompt: string, maxTokens: number): Built {
   const json = { 'content-type': 'application/json' }
   if (endpoint.wire === 'anthropic') {
     const auth: Record<string, string> = endpoint.anthropic?.auth === 'api_key' ? { 'x-api-key': apiKey } : { authorization: `Bearer ${apiKey}` }
     return {
       url: anthropicMessagesUrl(endpoint.baseUrl),
-      headers: { ...json, ...auth, 'anthropic-version': '2023-06-01' },
+      headers: withProviderHeaders(own, { ...json, ...auth, 'anthropic-version': '2023-06-01' }),
       body: { model, max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] }
     }
   }
-  const headers = { ...json, authorization: `Bearer ${apiKey}` }
+  const headers = withProviderHeaders(own, { ...json, authorization: `Bearer ${apiKey}` })
   return endpoint.wire === 'openai-responses'
     ? { url: `${trimmed(endpoint.baseUrl)}/responses`, headers, body: { model, input: prompt, max_output_tokens: maxTokens, store: false } }
     : { url: `${trimmed(endpoint.baseUrl)}/chat/completions`, headers, body: { model, messages: [{ role: 'user', content: prompt }], max_tokens: maxTokens } }

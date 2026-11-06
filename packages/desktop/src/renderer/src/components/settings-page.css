@@ -54,7 +54,8 @@
 .settings .settings-none { display: grid; justify-items: center; align-content: center; min-height: 360px; gap: 16px; padding: 32px 0; text-align: center; color: var(--text-muted); }
 .settings-none > svg { width: 32px; height: 32px; }
 .settings-none p { margin: 0; overflow-wrap: anywhere; }
-.settings :is(button, input, summary):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+/* A text field shows focus by its own border (.input:focus); a ring around it would read as two. */
+.settings :is(button, summary, input:is([type='checkbox'], [type='radio'], [type='range'], [type='color'])):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .settings ::selection { background: var(--accent-bg); color: var(--text); }
 .settings input { caret-color: var(--accent); }
 

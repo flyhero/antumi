@@ -227,6 +227,14 @@ export const MESSAGES = {
   "ChatCommandSettings.noMatches": {"zh": "没有匹配的命令", "en": "No matching commands"},
   "ChatCommandSettings.deleteNamed": {"zh": "删除 /{name}？之后将无法从输入框选用。", "en": "Delete /{name}? It will no longer be available in the composer."},
   "SkillsSettingsSection.emptyTitle": {"zh": "为 Agent 安装技能", "en": "Install skills for your agents"},
+  "SkillsSettingsSection.localTab": {"zh": "本机技能", "en": "On this machine"},
+  "SkillsSettingsSection.localIntro": {"zh": "Agent 自己会从这些目录加载技能，不经过 Antumi；在这里只能查看，增删请直接改目录。悬停技能名可看说明。", "en": "Agents load these skills from their own folders, without Antumi. They are shown here only; add or remove them in the folders. Hover a name for what it does."},
+  "SkillsSettingsSection.localRefresh": {"zh": "刷新", "en": "Refresh"},
+  "SkillsSettingsSection.localLoading": {"zh": "正在读取本机技能……", "en": "Reading the skills on this machine…"},
+  "SkillsSettingsSection.localEmpty": {"zh": "Agent 的全局技能目录里还没有技能。", "en": "The agents' own skill folders hold no skills yet."},
+  "SkillsSettingsSection.localCount": {"zh": "{count} 个技能", "en": "{count} skills"},
+  "SkillsSettingsSection.localLoadedBy": {"zh": "{value1} 会加载", "en": "Loaded by {value1}"},
+  "SkillsSettingsSection.localSameName": {"zh": "{value1}：Antumi 也给 {value2} 启用了同名技能，Agent 里会有两个。", "en": "{value1}: Antumi also enables a skill of this name for {value2}, which then has two."},
   "SkillsSettingsSection.emptyHint": {"zh": "选择上方安装入口，将技能提供给兼容的 Agent。", "en": "Choose an installation tab above to make skills available to compatible agents."},
   "SkillsSettingsSection.filterInstalled": {"zh": "搜索仓库或已安装技能", "en": "Search repositories or installed skills"},
   "SkillsSettingsSection.filteredCount": {"zh": "显示 {count} / {total} 个仓库", "en": "Showing {count} of {total} repositories"},
@@ -3062,6 +3070,10 @@ export const MESSAGES = {
     "zh": "会话额度已用完",
     "en": "Conversation quota exhausted"
   },
+  "ChatUsageLimit.autoResumeStopped": {
+    "zh": "连续 3 次自动续跑都又撞上额度，中间没有一轮跑完，已停止自动续跑。可以稍后手动重试，或重新勾选自动继续。",
+    "en": "Three automatic resumes in a row ran back into the limit with no turn finishing between them, so automatic resuming stopped. Retry later, or tick auto-resume again."
+  },
   "ChatUsageLimit.lastResumeFailed": {
     "zh": "上次没能继续：{value1}",
     "en": "Last resume failed: {value1}"
@@ -5595,6 +5607,10 @@ export const MESSAGES = {
     "zh": "，{waiting} 个待处理",
     "en": ", {waiting} pending"
   },
+  "InboxEntry.pendingFresh": {
+    "zh": "，{waiting} 个待处理，有新的",
+    "en": ", {waiting} pending, some new"
+  },
   "InboxEntry.inbox_1125": {
     "zh": "收件箱",
     "en": "Inbox"
@@ -6579,6 +6595,7 @@ export const MESSAGES = {
     "zh": "安装插件",
     "en": "Install plugin"
   },
+  "PluginSettings.notAgentPlugins": {"zh": "这里是 Antumi 的插件，用来从 GitHub、Jira 等导入任务。Agent 自己的插件不在这里，照常生效，在 Agent 里管理（Claude Code 用 /plugin）；它们的全局技能见「技能 → 本机技能」。", "en": "These are Antumi's plugins, which import tasks from GitHub, Jira and the like. An agent's own plugins are not here and work as ever; manage them in the agent (/plugin in Claude Code). Their global skills are under Skills → On this machine."},
   "PluginSettings.loadingPlugins": {
     "zh": "正在读取插件…",
     "en": "Loading plugins…"
@@ -10275,6 +10292,17 @@ export const MESSAGES = {
     "zh": "{days} 天前",
     "en": "{days} {days, plural, one {day} other {days}} ago"
   },
+  "conversationState.fetchingIssue": {"zh": "拉取问题中", "en": "Fetching the issue"},
+  "conversationState.fetchingImages": {"zh": "下载附件中", "en": "Downloading attachments"},
+  "conversationState.agentStartsOnceTheIssueIsIn": {"zh": "问题拉取完后 Agent 会自动开始", "en": "The agent starts once the issue is in"},
+  "conversationState.issueNotFetched": {"zh": "问题没拉取到", "en": "Issue not fetched"},
+  "labels.theIssueIsStillBeingFetched": {"zh": "还在拉取问题，拉取完 Agent 会自动开始", "en": "The issue is still being fetched; the agent starts once it is in"},
+  "labels.theIssueFetchWasCutOff": {"zh": "问题没拉取完就中断了，可以重试", "en": "Fetching the issue was cut off; try again"},
+  "InvestigationPreparing.fetchingIssue": {"zh": "正在从 {source} 拉取 {key}，拉取完 Agent 会自动开始…", "en": "Fetching {key} from {source}; the agent starts once it is in…"},
+  "InvestigationPreparing.fetchingImages": {"zh": "{key} 的正文已拉取，正在下载附件图片，最多再等几秒…", "en": "Got the text of {key}; downloading its images, a few seconds at most…"},
+  "InvestigationPreparing.failed": {"zh": "{key} 没拉取到：{error}", "en": "Could not fetch {key}: {error}"},
+  "InvestigationPreparing.waitForTheIssue": {"zh": "等问题拉取完再发消息", "en": "Wait for the issue before sending"},
+  "InvestigationPreparing.retryFirst": {"zh": "先重试拉取问题", "en": "Retry fetching the issue first"},
   "conversationState.starting": {
     "zh": "启动中",
     "en": "Starting"
@@ -11715,6 +11743,10 @@ export const MESSAGES = {
     "zh": "中断了",
     "en": "Interrupted"
   },
+  "inboxNews.newIssues": {
+    "zh": "{issue} 等 {count} 个新 issue",
+    "en": "{count} new issues, including {issue}"
+  },
   "routines.routine": {
     "zh": "定时任务「{value1}」",
     "en": "Routine “{value1}”"
@@ -12237,20 +12269,58 @@ export const MESSAGES = {
   },
   "ModelProviderSettings.plan": { "zh": "套餐", "en": "Plan" },
   "ModelProviderSettings.custom": { "zh": "自定义", "en": "Custom" },
+  "ModelProviderSettings.cliProxyHint": { "zh": "本机的 CLIProxyAPI，默认端口 8317", "en": "CLIProxyAPI on this machine, port 8317 by default" },
+  "ModelProviderSettings.cliProxyNote": { "zh": "Key 填 CLIProxyAPI 配置里 access.api-keys 中的一个。地址按默认端口 8317 填好了，改过端口就在下面改。填好后点「从接口获取模型」。注意：通过代理使用 Claude、Gemini 等订阅账号可能违反其服务条款并导致封号，长时间无人值守或多会话并发时更容易触发；所以这里默认不让标题、翻译这类小任务走它。", "en": "Use one of the keys under access.api-keys in CLIProxyAPI's config. The addresses assume its default port 8317; change them below if you moved it. Then fetch the models from the endpoints. Note: using Claude, Gemini or other subscription accounts through a proxy may break their terms and get them banned, more so when left running unattended or with many conversations at once; so small jobs such as titles and translations are kept off it by default." },
   "ModelProviderSettings.customHint": { "zh": "自己填地址、Key 和模型", "en": "Your own address, key and models" },
   "ModelProviderSettings.verified": { "zh": "已验证", "en": "Verified" },
   "ModelProviderSettings.unverified": { "zh": "未验证", "en": "Unverified" },
   "ModelProviderSettings.unverifiedHint": { "zh": "「未验证」的预设按各家文档填好，还没在 Antumi 里用真 Key 实测过。", "en": "Unverified presets follow each vendor's docs and have not been tried with a real key in Antumi yet." },
   "ModelProviderSettings.keyHint": { "zh": "只存在本机的 Antumi 里，不进 Agent 的配置、命令行和日志。", "en": "Kept only in Antumi on this machine, never in an agent's configuration, command line or logs." },
+  "ModelProviderSettings.smallJobs": { "zh": "标题、翻译、提交说明", "en": "Titles, translations and commit messages" },
+  "ModelProviderSettings.smallJobsProvider": { "zh": "用服务商的小模型", "en": "On the provider's small model" },
+  "ModelProviderSettings.smallJobsAccount": { "zh": "用 Agent 自己的账号", "en": "On the agent's own account" },
+  "ModelProviderSettings.smallJobsOff": { "zh": "不做", "en": "Not done" },
+  "ModelProviderSettings.smallJobsHint": { "zh": "这些是 Antumi 自己发的小请求，不经过 Agent。服务商背后是订阅账号时，建议不让它们走服务商。Agent 自己的辅助请求不受这一项控制，比如 OpenCode 每个新会话会自己发一个请求生成标题。", "en": "Antumi sends these small requests itself, not through the agent. Keep them off a provider that fronts subscription accounts. An agent's own side requests are not covered: OpenCode, for one, asks for a title in each new conversation." },
+  "ModelProviderSettings.headers": { "zh": "额外请求头", "en": "Extra request headers" },
+  "ModelProviderSettings.headersHint": { "zh": "每行一个「名称: 值」，Agent 和 Antumi 发往这个服务商的请求都会带上。不能改 Authorization、x-api-key 这类放 Key 的头；不要在这里放密钥。", "en": "One “Name: value” a line, sent on every request agents and Antumi make to this provider. Headers that carry the key, such as Authorization or x-api-key, cannot be set; keep secrets out of here." },
+  "ModelProviderSettings.headersInvalid": { "zh": "第 {value1} 行不对：要写成「名称: 值」，不能是放 Key 的头，名称不能重复，最多 20 个。", "en": "Line {value1} is wrong: write “Name: value”, not a header that carries the key, each name once, at most 20." },
+  "ModelProviderSettings.keyAgain": { "zh": "换了接口地址，要重新填 API Key。", "en": "The address changed: enter the API key again." },
   "ModelProviderSettings.getKey": { "zh": "去控制台获取 ↗", "en": "Get one in the console ↗" },
   "ModelProviderSettings.models": { "zh": "模型", "en": "Models" },
-  "ModelProviderSettings.modelsHint": { "zh": "一行一个，用服务商给的模型名。新建会话时可以在这些里面换。", "en": "One per line, named as the provider names them. A new conversation can switch among these." },
+  "ModelProviderSettings.modelsHint": { "zh": "模型 ID 用服务商给的名字。上下文和最大输出按服务商的实际上限填，可写 200k、1M；不填时 Agent 按保守的默认值估算。思考档位用逗号分隔。新建会话时可以在这些模型里切换。", "en": "Name each model as the provider does. Enter the provider's real context and output limits, such as 200k or 1M; left empty, agents assume a cautious default. Separate efforts with commas. A new conversation can switch among these models." },
+  "ModelProviderSettings.modelId": { "zh": "模型 ID", "en": "Model ID" },
+  "ModelProviderSettings.modelLabel": { "zh": "显示名称", "en": "Display name" },
+  "ModelProviderSettings.efforts": { "zh": "思考档位", "en": "Efforts" },
+  "ModelProviderSettings.images": { "zh": "支持图片", "en": "Images" },
+  "ModelProviderSettings.newModel": { "zh": "新模型", "en": "New model" },
+  "ModelProviderSettings.addModel": { "zh": "添加模型", "en": "Add model" },
+  "ModelProviderSettings.removeModel": { "zh": "删除", "en": "Remove" },
+  "ModelProviderSettings.pasteModels": { "zh": "批量粘贴", "en": "Paste many" },
+  "ModelProviderSettings.pasteHint": { "zh": "每行一个模型 ID", "en": "One model ID a line" },
+  "ModelProviderSettings.pasteAdd": { "zh": "添加", "en": "Add" },
+  "ModelProviderSettings.rowsInvalid": { "zh": "标红的格子要改：模型 ID 不能为空或重复；上下文、最大输出要填正整数，或 200k、1M 这样的写法；思考档位最多 10 个。", "en": "Fix the cells marked red: each model needs an ID of its own; context and output take a whole number or a form such as 200k or 1M; at most 10 efforts." },
   "ModelProviderSettings.modelsFollowPreset": { "zh": "这是预设的列表，Antumi 更新预设时会跟着更新；改了就以你的为准。", "en": "This is the preset's list, updated with Antumi's presets; once edited, yours stands." },
   "ModelProviderSettings.restorePresetModels": { "zh": "恢复预设的模型列表", "en": "Restore the preset's models" },
+  "ModelProviderSettings.fetchModels": { "zh": "从接口获取模型", "en": "Fetch models from the endpoints" },
+  "ModelProviderSettings.fetchingModels": { "zh": "正在获取模型列表……", "en": "Fetching the model list…" },
+  "ModelProviderSettings.fetchModelsNeeds": { "zh": "先填好接口地址和 API Key。", "en": "Fill in an endpoint and the API key first." },
+  "ModelProviderSettings.listedSearch": { "zh": "搜索模型", "en": "Search models" },
+  "ModelProviderSettings.listedEmpty": { "zh": "接口没有列出模型，可以在上面手填。", "en": "The endpoints listed no models; type them above." },
+  "ModelProviderSettings.listedContext": { "zh": "上下文 {value1}", "en": "{value1} context" },
+  "ModelProviderSettings.listedCount": { "zh": "{value1} 个模型", "en": "{value1} models" },
+  "ModelProviderSettings.listedTake": { "zh": "使用勾选的 {value1} 个模型", "en": "Use the {value1} checked models" },
+  "ModelProviderSettings.tooManyModels": { "zh": "一个服务商最多 {value1} 个模型。", "en": "A provider holds at most {value1} models." },
+  "ModelProviderSettings.limitContext": { "zh": "上下文", "en": "Context" },
+  "ModelProviderSettings.limitOutput": { "zh": "最大输出", "en": "Max output" },
+  "ModelProviderSettings.limitUnknown": { "zh": "未知", "en": "Unknown" },
   "ModelProviderSettings.defaultModel": { "zh": "默认模型", "en": "Default model" },
   "ModelProviderSettings.smallModel": { "zh": "小模型", "en": "Small model" },
   "ModelProviderSettings.smallModelHint": { "zh": "标题、翻译、提交说明这类小任务用它。", "en": "Used for small jobs such as titles, translations and commit messages." },
   "ModelProviderSettings.agents": { "zh": "给哪些 Agent 用", "en": "Agents that use it" },
+  "ModelProviderSettings.agentsNeed": { "zh": "还缺地址：{value1}。", "en": "Missing an address for {value1}." },
+  "ModelProviderSettings.agentAddress": { "zh": "{value1}（{value2}）", "en": "{value1} ({value2})" },
+  "ModelProviderSettings.listSeparator": { "zh": "、", "en": ", " },
+  "ModelProviderSettings.or": { "zh": "或", "en": " or " },
   "ModelProviderSettings.agentsUnservable": { "zh": "{value1} 用不了这个服务商的接口，只能用自己的账号。", "en": "{value1} cannot use this provider's endpoints and keep their own accounts." },
   "ModelProviderSettings.addresses": { "zh": "地址", "en": "Addresses" },
   "ModelProviderSettings.anthropicUrl": { "zh": "Anthropic 协议地址", "en": "Anthropic endpoint" },

@@ -13,7 +13,8 @@ export type RouteDecision =
 export function providerRoute(provider: ModelProvider, endpoint: ProviderEndpoint): ProviderRoute {
   return {
     providerId: provider.id, name: provider.name, wire: endpoint.wire, baseUrl: endpoint.baseUrl, anthropic: endpoint.anthropic,
-    key: providerRouteKey(provider.id, endpoint), models: provider.models, defaultModel: provider.defaultModel, smallModel: provider.smallModel
+    key: providerRouteKey(provider.id, endpoint), models: provider.models, defaultModel: provider.defaultModel, smallModel: provider.smallModel,
+    headers: provider.headers ?? {}, smallJobs: provider.smallJobs ?? 'provider'
   }
 }
 
@@ -43,6 +44,6 @@ export function sameRoute(a: ProviderRoute | null | undefined, b: ProviderRoute 
 export function providerLaunch(route: ProviderRoute, apiKey: string): ProviderLaunch {
   return {
     providerId: route.providerId, endpoint: { wire: route.wire, baseUrl: route.baseUrl, anthropic: route.anthropic },
-    models: route.models, defaultModel: route.defaultModel, smallModel: route.smallModel, apiKey
+    models: route.models, defaultModel: route.defaultModel, smallModel: route.smallModel, headers: route.headers ?? {}, apiKey
   }
 }

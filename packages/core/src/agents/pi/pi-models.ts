@@ -65,7 +65,7 @@ export function piProviderEntries(provider: Pick<ProviderLaunch, 'models'>): PiP
       id: model.id,
       name: model.label ?? model.id,
       reasoning: levels.length > 0,
-      input: ['text'],
+      input: model.images ? ['text', 'image'] : ['text'],
       contextWindow: model.contextWindow ?? 128_000,
       maxTokens: model.maxOutput ?? 16_384,
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },

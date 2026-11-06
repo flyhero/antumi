@@ -33,6 +33,8 @@ describe('listedModel', () => {
     expect(listedModel({ id: 'a', context_length: 131072, top_provider: { max_completion_tokens: 8192 } }, 'openai-chat')).toEqual({ id: 'a', label: null, contextWindow: 131072, maxOutput: 8192, efforts: [] })
     expect(listedModel({ id: 'b', max_model_len: '32768' }, 'openai-chat')).toMatchObject({ contextWindow: 32768, maxOutput: null })
     expect(listedModel({ id: 'c', display_name: 'Claude C', max_input_tokens: 200000, max_tokens: 64000 }, 'anthropic')).toMatchObject({ label: 'Claude C', contextWindow: 200000, maxOutput: 64000 })
+    expect(listedModel({ id: 'v', architecture: { input_modalities: ['text', 'image'] } }, 'openai-chat')).toMatchObject({ images: true })
+    expect(listedModel({ id: 't', architecture: { input_modalities: ['text'] } }, 'openai-chat')).not.toHaveProperty('images')
     // max_tokens means either elsewhere, so it is no output there.
     expect(listedModel({ id: 'd', max_tokens: 4096 }, 'openai-chat')).toMatchObject({ maxOutput: null })
   })

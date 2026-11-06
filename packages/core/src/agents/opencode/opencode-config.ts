@@ -48,7 +48,8 @@ function opencodeProvider(provider: ProviderLaunch): Record<string, unknown> {
       name: model.label ?? model.id,
       // OpenCode takes a limit only with both halves; an output not known is what pi and dsh assume.
       ...(model.contextWindow !== null ? { limit: { context: model.contextWindow, output: model.maxOutput ?? Math.min(DEFAULT_OUTPUT, model.contextWindow) } } : {}),
-      ...(model.efforts.length ? { reasoning: true } : {})
+      ...(model.efforts.length ? { reasoning: true } : {}),
+      ...(model.images ? { modalities: { input: ['text', 'image'], output: ['text'] } } : {})
     }]))
   }
 }

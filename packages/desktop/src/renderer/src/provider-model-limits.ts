@@ -1,5 +1,3 @@
-import type { ProviderModel } from '@antumi/protocol'
-
 // A token count as typed: 200000, 200k, 1M, 1.5m, 128_000. '' is unknown (null); anything else that
 // is no positive whole count is undefined, which the form refuses.
 export function parseTokens(text: string): number | null | undefined {
@@ -26,15 +24,4 @@ export function pickedIds(current: readonly string[], listed: readonly string[],
   const listedSet = new Set(listed)
   const kept = current.filter((id) => !listedSet.has(id) || picked.has(id))
   return [...kept, ...listed.filter((id) => picked.has(id) && !kept.includes(id))]
-}
-
-// What is known of each model once a list is taken in: a listed model fills what is still unknown,
-// never what the user or a preset gave.
-export function withListed(known: readonly ProviderModel[], listed: readonly ProviderModel[]): ProviderModel[] {
-  const byId = new Map(listed.map((model) => [model.id, model]))
-  const filled = known.map((model) => {
-    const found = byId.get(model.id)
-    return found ? { ...model, label: model.label ?? found.label, contextWindow: model.contextWindow ?? found.contextWindow, maxOutput: model.maxOutput ?? found.maxOutput } : model
-  })
-  return [...filled, ...listed.filter((model) => !known.some((each) => each.id === model.id))]
 }

@@ -30,6 +30,12 @@ describe('ZCode on a model provider', () => {
     ])
   })
 
+  it('tells ZCode which models read images', () => {
+    const seeing = { ...provider('openai-chat', 'https://api.example/v1'), models: [{ id: 'v', label: null, contextWindow: null, maxOutput: null, efforts: [], images: true }] }
+    const rules = JSON.parse(zcodeProviderConfig(seeing)).config.modelConfigRules.providerModelRules
+    expect(rules[0].config.properties).toEqual({ inputFormat: { supportsImage: true } })
+  })
+
   it('names the API, address, models and efforts as ZCode reads them', () => {
     const chat = JSON.parse(zcodeProviderConfig(provider('openai-chat', 'https://open.bigmodel.cn/api/coding/paas/v4/')))
     expect(chat.config.providerConfigRules.providerRules[0]).toMatchObject({

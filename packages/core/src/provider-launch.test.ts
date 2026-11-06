@@ -100,6 +100,13 @@ describe('starting an agent on a model provider', () => {
     expect(adapterOf('opencode').providerModels?.(launchOn('opencode')).map((model) => model.id)).toEqual(['antumi-glm-1/glm-5.3', 'antumi-glm-1/glm-5.3-air', 'antumi-glm-1/glm-5.3-flash'])
   })
 
+  it('tells the agents that must be told which models read images', () => {
+    const seeing = { ...launchOn('opencode'), models: [{ ...models[0]!, images: true }, models[1]!] }
+    const opencode = JSON.parse(start('opencode', seeing).env?.OPENCODE_CONFIG_CONTENT ?? '{}').provider['antumi-glm-1'].models
+    expect(opencode['glm-5.3'].modalities).toEqual({ input: ['text', 'image'], output: ['text'] })
+    expect(opencode['glm-5.3-air']).not.toHaveProperty('modalities')
+  })
+
   it('sends the provider\'s own headers from every agent that can run on it', () => {
     const headers = { 'User-Agent': 'proxy-client/1', 'X-Team': 'antumi' }
     const on = (agent: AgentKind, preset: keyof typeof MODEL_PROVIDER_PRESETS = 'zhipu-glm-coding') => ({ ...launchOn(agent, preset), headers })

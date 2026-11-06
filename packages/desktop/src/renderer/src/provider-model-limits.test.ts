@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { ProviderModel } from '@antumi/protocol'
-import { formatTokens, parseTokens, pickedIds, withListed } from './provider-model-limits'
-
-const model = (id: string, more: Partial<ProviderModel> = {}): ProviderModel => ({ id, label: null, contextWindow: null, maxOutput: null, efforts: [], ...more })
+import { formatTokens, parseTokens, pickedIds } from './provider-model-limits'
 
 describe('token counts as typed', () => {
   it.each([
@@ -20,15 +17,5 @@ describe('token counts as typed', () => {
 describe('taking in a listed model list', () => {
   it('keeps what stays picked in place, adds the newly picked, and leaves what was not listed', () => {
     expect(pickedIds(['mine', 'a', 'b'], ['a', 'b', 'c', 'd'], new Set(['b', 'd', 'c']))).toEqual(['mine', 'b', 'c', 'd'])
-  })
-
-  it('fills only what is unknown, keeping a model\'s efforts and label', () => {
-    const known = [model('a', { label: 'A', contextWindow: 64_000, efforts: ['high'], reasoningSummaries: false }), model('b')]
-    const listed = [model('a', { label: 'Other', contextWindow: 200_000, maxOutput: 8_000 }), model('b', { contextWindow: 32_000 }), model('c', { contextWindow: 1_000 })]
-    expect(withListed(known, listed)).toEqual([
-      model('a', { label: 'A', contextWindow: 64_000, maxOutput: 8_000, efforts: ['high'], reasoningSummaries: false }),
-      model('b', { contextWindow: 32_000 }),
-      model('c', { contextWindow: 1_000 })
-    ])
   })
 })

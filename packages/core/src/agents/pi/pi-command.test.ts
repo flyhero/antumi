@@ -26,6 +26,11 @@ describe('Pi command', () => {
     expect([...command.args, command.env?.[PI_CONFIG_ENV] ?? ''].some((value) => value.includes('sk-secret'))).toBe(false)
   })
 
+  it('tells Pi which models read images', () => {
+    const seeing = { ...PROVIDER, models: PROVIDER.models.map((model) => ({ ...model, images: true })) }
+    expect(config({ ...LAUNCH, provider: seeing }).provider.models[0].input).toEqual(['text', 'image'])
+  })
+
   it('reaches a provider over the API its wire names, Anthropic without its /v1 and with a bearer token where it takes one', () => {
     const anthropic = { wire: 'anthropic' as const, baseUrl: 'https://open.bigmodel.cn/api/anthropic/v1', anthropic: { baseUrl: 'https://open.bigmodel.cn/api/anthropic/v1', auth: 'auth_token' as const, env: {} } }
     expect(config({ ...LAUNCH, provider: { ...PROVIDER, endpoint: anthropic } }).provider).toMatchObject({ baseUrl: 'https://open.bigmodel.cn/api/anthropic', api: 'anthropic-messages', bearer: true })

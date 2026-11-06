@@ -22,7 +22,7 @@ In [**Settings → Model providers**](antumi:settings/model-providers), click **
 
 Pick it in the **Provider** control of the input box when starting a conversation. It bills the provider's plan, not the agent's quota, and cannot be changed once the conversation has started.
 
-**A local proxy (CLIProxyAPI and the like)**: pick **CLIProxyAPI**; its addresses are filled in for the default port 8317. Use one of the keys under `access.api-keys` in its config, then click **Fetch models from the endpoints**. For another proxy pick **Custom**: Claude Code needs the Anthropic endpoint, Codex the Responses endpoint, and OpenCode takes any. Where the endpoint does not say how large a model is, enter its real limits under **Context and output**.
+**A local proxy (CLIProxyAPI and the like)**: pick **CLIProxyAPI**; its addresses are filled in for the default port 8317. Use one of the keys under `access.api-keys` in its config, then click **Fetch models from the endpoints**. For another proxy pick **Custom**: Claude Code needs the Anthropic endpoint, Codex the Responses endpoint, and OpenCode takes any. Where the endpoint does not say how large a model is, enter its real limits in the **Context** and **Max output** columns of the model table; tick **Images** for a model that reads them.
 
 Using Claude, Gemini or other subscription accounts through a proxy may break their terms and get them banned, more so when left running unattended or with several conversations at once. CLIProxyAPI keeps Antumi's own small requests, such as titles and translations, off it by default (**Titles, translations and commit messages**); if the proxy tells clients apart by their headers, set them under **Extra request headers**.
 

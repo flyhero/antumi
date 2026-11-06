@@ -88,14 +88,16 @@ export const OpenAiEndpoint = z.object({
 export type OpenAiEndpoint = z.infer<typeof OpenAiEndpoint>
 
 // A model as the provider names it. contextWindow: what it takes, where known; agents assume less of
-// a model they don't know. reasoningSummaries: whether its Responses endpoint returns them.
+// a model they don't know. reasoningSummaries: whether its Responses endpoint returns them. images:
+// whether it reads images, for the agents that must be told (absent: text only).
 export const ProviderModel = z.object({
   id: z.string().trim().min(1).max(200),
   label: z.string().trim().max(200).nullable(),
   contextWindow: z.number().int().positive().nullable(),
   maxOutput: z.number().int().positive().nullable(),
   efforts: z.array(z.string().min(1).max(40)).max(10),
-  reasoningSummaries: z.boolean().optional()
+  reasoningSummaries: z.boolean().optional(),
+  images: z.boolean().optional()
 })
 export type ProviderModel = z.infer<typeof ProviderModel>
 
@@ -106,6 +108,7 @@ export function sameModels(models: readonly ProviderModel[], others: readonly Pr
     const other = others[index]
     return other !== undefined && model.id === other.id && model.label === other.label && model.contextWindow === other.contextWindow && model.maxOutput === other.maxOutput
       && model.efforts.join('\n') === other.efforts.join('\n') && (model.reasoningSummaries ?? false) === (other.reasoningSummaries ?? false)
+      && (model.images ?? false) === (other.images ?? false)
   })
 }
 

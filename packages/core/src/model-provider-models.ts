@@ -40,7 +40,10 @@ export function listedModel(value: unknown, wire: ProviderWire): ProviderModel |
   const label = typeof named === 'string' ? named.trim().slice(0, 200) : null
   // Anthropic's max_tokens is what a reply may take; elsewhere it is used for either.
   const output = firstTokens(item, OUTPUT_FIELDS) ?? tokens(record(item.top_provider)?.max_completion_tokens) ?? (wire === 'anthropic' ? tokens(item.max_tokens) : null)
-  return { id, label, contextWindow: firstTokens(item, CONTEXT_FIELDS) ?? tokens(record(item.top_provider)?.context_length), maxOutput: output, efforts: [] }
+  // OpenRouter and others name what a model reads; a list that does not leaves it unknown.
+  const inputs = [record(item.architecture)?.input_modalities, item.input_modalities, record(item.modalities)?.input].find(Array.isArray)
+  const images = Array.isArray(inputs) && inputs.includes('image')
+  return { id, label, contextWindow: firstTokens(item, CONTEXT_FIELDS) ?? tokens(record(item.top_provider)?.context_length), maxOutput: output, efforts: [], ...(images ? { images: true } : {}) }
 }
 
 function listings(provider: Pick<ModelProvider, 'anthropic' | 'openai'>, apiKey: string, own: Readonly<Record<string, string>>): Listing[] {
@@ -135,7 +138,7 @@ function merged(lists: ProviderModel[][]): ProviderModel[] {
   for (const model of lists.flat()) {
     const known = byId.get(model.id)
     byId.set(model.id, known
-      ? { ...known, label: known.label ?? model.label, contextWindow: known.contextWindow ?? model.contextWindow, maxOutput: known.maxOutput ?? model.maxOutput }
+      ? { ...known, label: known.label ?? model.label, contextWindow: known.contextWindow ?? model.contextWindow, maxOutput: known.maxOutput ?? model.maxOutput, ...(known.images || model.images ? { images: true } : {}) }
       : model)
   }
   return [...byId.values()]

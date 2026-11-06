@@ -42,7 +42,7 @@ function modelRule(provider: ProviderLaunch, model: ProviderModel): Record<strin
     modelId: model.id,
     config: {
       enabled: true,
-      ...(model.contextWindow !== null ? { properties: { contextWindow: model.contextWindow } } : {}),
+      ...(model.contextWindow !== null || model.images ? { properties: { ...(model.contextWindow !== null ? { contextWindow: model.contextWindow } : {}), ...(model.images ? { inputFormat: { supportsImage: true } } : {}) } } : {}),
       optionSpecs: { ...(model.maxOutput !== null ? { maxOutputTokens: { max: model.maxOutput } } : {}), ...reasoning }
     }
   }

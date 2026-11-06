@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { SourceCommentState } from './source-comments'
 import { TextTranslations } from './localization'
 import { TaskImage } from './attachments'
 
@@ -31,6 +32,8 @@ export type TaskSource = z.infer<typeof TaskSource>
 export const SourceSnapshot = z.object({
   markdown: z.string().max(MAX_SNAPSHOT_LENGTH),
   fetchedAt: z.number(),
+  imagesFetchedAt: z.number().optional(),
+  commentState: SourceCommentState.optional(),
   // The issue's own images, stored by core; untrusted like the text.
   images: z.array(TaskImage).default([])
 })

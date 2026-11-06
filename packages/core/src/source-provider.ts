@@ -1,3 +1,4 @@
+import type { SourceCommentState, SourceCommentOptions, SourceCommentPage } from '@antumi/protocol'
 import type { LoginNotice, LoginPrompt, SettingField, SourceIssue } from '@antumi/protocol'
 
 // The seam a task source plugs into. Core owns everything around it (settings and credential
@@ -18,6 +19,7 @@ export type LoginSession = {
 export type SourceIssueDetail = SourceIssue & {
   // The issue's own text, converted by the provider; it reaches agents only as untrusted data.
   markdown: string
+  commentState?: SourceCommentState
   // The issue's images as fetched; core checks each one and stores what passes.
   images?: readonly { name: string; bytes: Uint8Array }[]
   // Images left out because they were not asked for yet (fetch's images: false).
@@ -27,6 +29,8 @@ export type SourceIssueDetail = SourceIssue & {
 export type SourceProvider = {
   readonly id: string
   readonly name: string
+  readonly commentSync?: 1
+  comments?(settings: SourceSettings, credential: SourceCredential, key: string, signal: AbortSignal, options: SourceCommentOptions): Promise<SourceCommentPage>
   readonly settings: readonly SettingField[]
   // Checks and canonicalizes settings before they are saved; throws SourceError('invalid-settings').
   normalizeSettings(values: SourceSettings): Record<string, string> | Promise<Record<string, string>>

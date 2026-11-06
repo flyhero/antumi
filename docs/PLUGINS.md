@@ -249,3 +249,7 @@ core 使用 `process.execPath` 和 argv 启动入口，不经过 shell。环境�
 SDK 的 `fetch` 可以返回 `images: [{ name, bytes: Uint8Array }]`。SDK 转成 base64，宿主校验后解码，再交给既有附件仓库存储与检查。限制与 Jira 导入一致：20 张、单张 10 MiB、合计 50 MiB；`fetch` 的进程输出最多 72 MiB，其余操作仍为 8 MiB。按块收集输出后逐行解码，避免对大图片反复复制缓冲。
 
 这是 v1 的可选扩展，旧插件继续工作；图片插件必须使用包含此扩展的宿主。早期 v1 宿主会忽略图片字段，不能以协议版本相同作为图片兼容依据。独立 Jira 插件还要求宿主已移除内置 Jira，否则来源所有权冲突会拒绝安装。
+
+### 评论同步
+
+SDK 0.1.3 支持来源声明 `commentSync: 1`，通过 `fetch.commentState` 建立基线、`comments` 分页补拉新增评论。旧插件不受影响。详见 SDK README 和 [来源评论同步](SOURCE-COMMENTS.md)。

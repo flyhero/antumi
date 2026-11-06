@@ -7,6 +7,7 @@ import type { AgentMcpServer, McpServer } from './agent-command'
 // What happened in a chat stage, in order: a frame from the agent or to it, a note Antumi made,
 // the process ending. A stage's log holds these, and replaying them rebuilds the stage.
 export type ChatRecord =
+  | { dir: 'receipt'; at: number; ref: string }
   | { dir: 'in'; at: number; frame: unknown }
   // ref names the item an outgoing user message becomes, images what it showed the agent.
   | { dir: 'out'; at: number; frame: unknown; ref?: string; images?: ChatImage[]; references?: ChatReference[] }

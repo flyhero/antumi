@@ -22,6 +22,7 @@ import {
   type RpcParams,
   type SourceDescriptor,
   type SourceInbox,
+  type SourceUpdateSummary,
   type SourceProblem,
   type Task,
   type Terminal,
@@ -204,6 +205,7 @@ export type CoreState = {
   usageCardAgent: AgentKind | null
   // null until core answers sources.list.
   sources: SourceDescriptor[] | null
+  sourceUpdates: Record<string, SourceUpdateSummary>
   inboxes: Record<string, SourceInbox>
   // Shells in the app's terminal panel, oldest first. The panel only hides them; they keep running.
   terminals: Terminal[]
@@ -318,6 +320,7 @@ export const useCore = create<CoreState>()(() => ({
   accounts: null,
   usageCardAgent: null,
   sources: null,
+  sourceUpdates: {},
   inboxes: {},
   terminals: [],
   terminalPanelOpen: false,
@@ -1498,6 +1501,7 @@ export function startCoreConnection(scope: 'app' | 'requests' = 'app'): void {
           if (!initialized) profileChanges.set(profile.id, profile)
           useCore.setState((state) => ({ agentProfiles: { ...state.agentProfiles, [profile.id]: profile } }))
         })
+        let sourceUpdateChanges: SourceUpdateSummary[] | null = null
         const discussionChanges = new Map<string, Discussion | null>()
         useCore.setState({ attentionSummaryLoading: true, attentionSummaryError: null, agentCli: {} })
         rpc.on('squads.changed', ({ squad }) => {
@@ -1593,6 +1597,7 @@ export function startCoreConnection(scope: 'app' | 'requests' = 'app'): void {
         })
         rpc.on('discussions.posts', ({ discussionId, posts }) => receiveDiscussionPosts(discussionId, posts))
         rpc.on('todos.changed', ({ conversationId, groups }) => receiveTodos(conversationId, groups))
+        rpc.on('sources.updatesChanged', ({ summaries }) => { sourceUpdateChanges = summaries; useCore.setState({ sourceUpdates: Object.fromEntries(summaries.map((summary) => [`${summary.target.kind}:${summary.target.id}`, summary])) }) })
         rpc.on('sources.inboxChanged', ({ inbox }) =>
           useCore.setState((s) => ({ inboxes: { ...s.inboxes, [inboxKey(inbox)]: inbox } }))
         )
@@ -1612,6 +1617,7 @@ export function startCoreConnection(scope: 'app' | 'requests' = 'app'): void {
         const usage = full ? await rpc.call('usage.list', { windowKinds: [...USAGE_WINDOW_KINDS] }).catch(() => null) : null
         const sources = full ? await rpc.call('sources.list', {}) : []
         const modelProviders = full && rpc.features.includes('model-providers') ? await rpc.call('modelProviders.list', {}) : []
+        const sourceUpdates = full && rpc.features.includes('source-comments-v1') ? await rpc.call('sources.updateSummaries', {}) : []
         const inboxes = full ? await rpc.call('sources.inbox', {}) : []
         const terminals = full ? await rpc.call('terminals.list', {}).catch(() => []) : []
         const terminalCommands = full && rpc.features.includes('terminal-commands') ? await rpc.call('terminalCommands.list', {}).catch(() => []) : []
@@ -1651,6 +1657,7 @@ export function startCoreConnection(scope: 'app' | 'requests' = 'app'): void {
           ...(usage ? withUsage(usage, accounts) : { usage: null, accountUsage: [] }),
           sources,
           modelProviders,
+          sourceUpdates: Object.fromEntries((sourceUpdateChanges ?? sourceUpdates).map((summary) => [`${summary.target.kind}:${summary.target.id}`, summary])),
           inboxes: Object.fromEntries(inboxes.map((inbox) => [inboxKey(inbox), inbox])),
           terminals,
           activeTerminalId: activeAmong(s.activeTerminalId, terminals),

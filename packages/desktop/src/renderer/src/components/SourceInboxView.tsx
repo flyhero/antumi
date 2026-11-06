@@ -1,3 +1,4 @@
+import { SourceUpdatesPanel, SourceCommentBadge } from './SourceUpdatesPanel'
 import { getLocale, t, tr } from '../i18n'
 import { useEffect, useState, type ReactNode } from 'react'
 import type { SourceInbox, SourceIssue, Task } from '@antumi/protocol'
@@ -32,6 +33,7 @@ function IssueRow({ issue, name, busy, investigating = false, children }: { issu
             {issue.status}
           </span>
           {issue.updatedAt !== null && <span>{tr('SourceInboxView.updated', { value1: updatedOn(issue.updatedAt) })}</span>}
+          {issue.conversationId && <SourceCommentBadge target={{ kind: 'conversation', id: issue.conversationId }} />}
           {investigating && <span className="inbox-investigating">{t('SourceInboxView.investigating')}</span>}
         </div>
         <div className="inbox-row-title">{issue.title}</div>

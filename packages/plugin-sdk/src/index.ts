@@ -6,3 +6,6 @@ export { MAX_ATTACHMENT_BYTES, MAX_TASK_IMAGES } from '../../protocol/src/attach
 export { MAX_SOURCE_IMAGE_BYTES } from '../../protocol/src/plugin.js'
 export { ISSUE_STATUS_CATEGORIES, MAX_ISSUE_TITLE_LENGTH, MAX_SNAPSHOT_LENGTH, SourceIssue } from '../../protocol/src/source.js'
 export type { SettingField, LoginPrompt, LoginNotice, SourceFailure, SourceProblem } from '../../protocol/src/source.js'
+
+export * from '../../protocol/src/source-comments.js'
+export { commentState, commentPage } from './comment-pagination.js'

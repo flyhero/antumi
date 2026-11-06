@@ -283,6 +283,22 @@ describe('ChatHost', () => {
     await expect(host.sendQueued(STAGE.conversationId)).rejects.toMatchObject({ reason: 'chat-nothing-queued' })
   })
 
+  it('records accepted source deliveries and never queues the same ref twice', async () => {
+    const { host, sessionId } = await started()
+    daemon.reply = () => {}
+    await host.send(STAGE.conversationId, 'first')
+    const ref = 'source-comments:batch'
+    await host.send(STAGE.conversationId, 'new comments', [], true, false, ref)
+    await host.send(STAGE.conversationId, 'new comments', [], true, false, ref)
+    expect(stateOf(host)).toMatchObject({ queue: [{ ref }] })
+    const state = stateOf(host)
+    expect(state?.kind === 'state' ? state.queue : []).toHaveLength(1)
+    finish(sessionId, 'completed')
+    await flushMicrotasks()
+    expect(userFrames(sessionId)).toHaveLength(2)
+    expect(ChatLog.of(root, STAGE.conversationId, STAGE.stageId).read().records.filter((record) => record.dir === 'receipt' && record.ref === ref)).toHaveLength(1)
+  })
+
   it('sends queued messages one turn at a time, in the order they were written', async () => {
     const { host, sessionId } = await started()
     daemon.reply = () => {}

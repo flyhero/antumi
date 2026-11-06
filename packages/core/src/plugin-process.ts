@@ -186,6 +186,7 @@ export class PluginProcess {
       const timed = () => AbortSignal.timeout(20_000)
       providers.push({
         ...source,
+        ...(source.commentSync === 1 ? { comments: (settings, credential, key, signal, options) => this.call('comments', { source: source.id, settings, credential, key, ...options }, signal) } satisfies Partial<SourceProvider> : {}),
         envCredential: () => credential,
         normalizeSettings: (settings) => this.call('normalizeSettings', { source: source.id, settings }, timed()),
         normalizeKey: (key) => this.call('normalizeKey', { source: source.id, key }, timed()),

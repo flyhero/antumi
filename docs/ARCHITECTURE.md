@@ -180,6 +180,8 @@ GitHub 在 设置 → 集成 → GitHub 中登录，登录时输入 Personal acc
 
 导入的任务详情是空的，留给你写方案，或开始后让 Agent 先规划；issue 的描述、最近 20 条评论，以及来源支持时的附件清单作为**原文快照**单独保存，在任务详情里只读显示，可以「重新拉取」。交给 Agent 时，原文快照被标记为**不可信的参考资料**包在 `<untrusted-source>` 里，其中的指令不会被当作你的要求。执行时分支名带上 issue key（`antumi/PROJ-123-…`），Jira 靠这个把分支关联到 issue。删除导入的任务后 issue 会回到收件箱；重做出的新任务继承原任务的来源和快照。
 
+**新评论**：支持评论同步的来源插件为排查会话和导入任务建立关注关系，core 每 15 分钟补拉，独立于收件箱筛选结果；只同步资料，不启动 Agent。界面分别显示未查看和未交给 Agent 的评论，用户可手动提交到原会话，运行中排到下一回合。归档、完成和取消时暂停，恢复后补拉；外部关闭 issue 不停止关注。协议、持久化、分页和投递对账见 [来源评论同步](SOURCE-COMMENTS.md)。
+
 **凭据**：设置（`~/.antumi/sources.json`）里没有密钥，凭据单独存在 `~/.antumi/credentials.json`（权限 600），只交给对应的来源，永远不会返回给界面，也不会交给 Agent。修改站点会自动退出登录，保存的 token 不会发往新地址。没有界面的机器上，Jira 可以用 `ANTUMI_JIRA_EMAIL` 和 `ANTUMI_JIRA_TOKEN`，GitHub 可以用 `ANTUMI_GITHUB_TOKEN`；环境变量优先于保存的凭据。旧版本的 `~/.antumi/jira.json` 会在 core 启动时自动迁移。
 
 ## 3. Worktree 与 Git

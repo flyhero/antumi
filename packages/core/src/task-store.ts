@@ -386,7 +386,13 @@ export const MIGRATIONS = [
    ALTER TABLE discussion_posts ADD COLUMN verdict TEXT;`,
   `ALTER TABLE conversation_stages ADD COLUMN context_usage TEXT;`,
   // The worktrees cleaned while a conversation was archived, laid out again when it is taken out.
-  `ALTER TABLE conversations ADD COLUMN cleaned_worktrees TEXT NOT NULL DEFAULT '[]';`
+  `ALTER TABLE conversations ADD COLUMN cleaned_worktrees TEXT NOT NULL DEFAULT '[]';`,
+  `CREATE TABLE source_items(id TEXT PRIMARY KEY, data TEXT NOT NULL);
+   CREATE TABLE source_targets(id TEXT PRIMARY KEY, data TEXT NOT NULL);
+   CREATE TABLE source_comments(sequence INTEGER PRIMARY KEY AUTOINCREMENT, item_id TEXT NOT NULL, external_id TEXT NOT NULL, data TEXT NOT NULL, UNIQUE(item_id,external_id));
+   CREATE INDEX source_comments_item ON source_comments(item_id,sequence);
+   CREATE TABLE source_deliveries(id TEXT PRIMARY KEY, data TEXT NOT NULL);
+   CREATE TABLE source_delivery_comments(delivery_id TEXT NOT NULL, comment_id TEXT NOT NULL, PRIMARY KEY(delivery_id,comment_id));`
 ]
 
 

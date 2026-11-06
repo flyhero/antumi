@@ -20,6 +20,7 @@ export function runSourcePlugin(options: Options): { close(): void } {
   if (sources.size !== options.sources.length || new Set(expected).size !== expected.length || sources.size !== expected.length || expected.some((id) => !sources.has(id))) {
     throw new Error('Plugin sources must match the manifest exactly')
   }
+  if (manifest.contributes.sources.some((entry) => entry.commentSync === 1 && !sources.get(entry.id)?.comments)) throw new Error('Comment sync capability requires a comments implementation')
   const input = options.input ?? process.stdin
   const output = options.output ?? process.stdout
   const env = options.env ?? process.env
@@ -104,6 +105,11 @@ export function runSourcePlugin(options: Options): { close(): void } {
       case 'list': {
         const { settings, credential } = pluginSchemas.list.params.parse(params)
         return source.list(settings, credential, signal)
+      }
+      case 'comments': {
+        const { settings, credential, key, checkpoint, continuation } = pluginSchemas.comments.params.parse(params)
+        if (!source.comments) throw new SourceError('request-failed', '来源不支持评论同步')
+        return source.comments(settings, credential, key, signal, { checkpoint, continuation })
       }
       case 'fetch': {
         const { settings, credential, key, images } = pluginSchemas.fetch.params.parse(params)

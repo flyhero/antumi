@@ -324,7 +324,7 @@ export class ChatHost {
   // A caller that names the message's ref sends it at most once per stage: again, it is a no-op.
   async send(conversationId: string, text: string, images: readonly ChatImage[] = [], queue = false, steer = false, ref: string = randomUUID(), references?: ChatReference[]): Promise<void> {
     const live = this.running(conversationId)
-    if (live.driver.items.get(`u:${ref}`)) return
+    if (live.driver.items.get(`u:${ref}`) || this.queued(live).some((entry) => entry.ref === ref)) return
     const busy = live.driver.activity() !== 'idle'
     if (busy && queue && !steer) {
       this.enqueue(live, text, images, ref, references)
@@ -582,7 +582,13 @@ export class ChatHost {
     }
     const line = JSON.stringify(message.wire)
     this.tap(live, [{ dir: 'stdin', text: line }])
-    return this.daemon.request('write', { sessionId: live.sessionId, data: `${line}\n` })
+    return this.daemon.request('write', { sessionId: live.sessionId, data: `${line}\n` }).then((result) => {
+      if (ref?.startsWith('source-comments:')) {
+        live.log.append([{ dir: 'receipt', at: this.now(), ref }])
+        this.sink.activity(live.conversationId)
+      }
+      return result
+    })
   }
 
   private tap(live: Live, entries: Parameters<WireTap['record']>[2]): void {

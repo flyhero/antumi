@@ -1,3 +1,4 @@
+import { SourceUpdatesPanel } from './SourceUpdatesPanel'
 import { useAgentCalls, useAgentCallsSupported } from '../agent-calls'
 import { t, tr } from '../i18n'
 import { RouteBadge } from './RouteBadge'
@@ -174,6 +175,7 @@ export function ConversationView({ id, pane }: { id: string; pane?: Conversation
           : <button type="button" className="tool-button" aria-label={t('BackdropPicker.close')} data-tooltip={t('BackdropPicker.close')} onClick={openOverview}><CloseIcon /></button>}
       </div>
     </header>
+    {conversation.source && <SourceUpdatesPanel target={{ kind: 'conversation', id }} />}
     <div className="terminal-body">
       <ConversationChat conversation={conversation} onHandoff={conversation.discussionId || conversation.parentConversationId ? undefined : openHandoff} />
     </div>

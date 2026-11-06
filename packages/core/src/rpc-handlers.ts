@@ -4,7 +4,7 @@ import { suggestForProject } from './project-config-suggest'
 import { EMPTY_BASELINE, type SmallModelStore } from './small-model-store'
 import { GitService } from './git-service'
 import type { GitFavoriteStore } from './git-favorite-store'
-import { agentDescriptor, CORE_FEATURES, PROTOCOL_VERSION, type ChatItem } from '@antumi/protocol'
+import { SourceDeliveryInfo, agentDescriptor, CORE_FEATURES, PROTOCOL_VERSION, type ChatItem } from '@antumi/protocol'
 import packageJson from '../package.json' with { type: 'json' }
 import type { AgentRunStore } from './agent-run-store'
 import type { ChatTurnStore } from './chat-turn-store'
@@ -20,6 +20,7 @@ import { Rejection } from './rejection'
 import { localSkillFolders } from './local-skills'
 import type { PluginService } from './plugin-service'
 import type { PetLibrary } from './pet-library'
+import type { SourceUpdates } from './source-updates'
 import type { SourceService } from './source-service'
 import type { RpcHandlers } from './rpc-server'
 import type { TaskService } from './task-service'
@@ -106,7 +107,8 @@ export function createRpcHandlers(
   projectStar?: ProjectStar,
   profiles?: AgentProfileService,
   bookmarks?: BookmarkStore,
-  browserHistory?: BrowserHistoryStore
+  browserHistory?: BrowserHistoryStore,
+  sourceUpdates?: SourceUpdates
 ): RpcHandlers {
   const profileService = () => {
     if (!profiles) throw new Rejection('profile-unavailable')
@@ -714,6 +716,17 @@ export function createRpcHandlers(
     'sources.disconnect': async ({ provider, instance }) => {
       await sources.disconnect(provider, instance)
       return OK
+    },
+    'sources.updateSummaries': () => sourceUpdates?.summaries() ?? [],
+    'sources.updates': ({ target, before }) => { if (!sourceUpdates) throw new Rejection('source-comments-unavailable'); return sourceUpdates.page(target, before) },
+    'sources.refreshUpdates': ({ target }) => { if (!sourceUpdates) throw new Rejection('source-comments-unavailable'); return sourceUpdates.refresh(target) },
+    'sources.setWatching': ({ target, watching }) => { if (!sourceUpdates) throw new Rejection('source-comments-unavailable'); return sourceUpdates.watching(target, watching) },
+    'sources.markUpdatesSeen': ({ target, through }) => { if (!sourceUpdates) throw new Rejection('source-comments-unavailable'); return sourceUpdates.seen(target, through) },
+    'sources.sendUpdates': ({ target, requestId, through }) => {
+      if (!sourceUpdates) throw new Rejection('source-comments-unavailable')
+      const id = target.kind === 'task' ? service.get(target.id).conversationId : target.id
+      if (!id) throw new Rejection('no-chat')
+      return userActed(id, () => { profiles?.guardUser(id, true); squads?.guardUser(id, true); return sourceUpdates.send(target, requestId, through).then((delivery) => SourceDeliveryInfo.parse(delivery)) })
     },
     'sources.inbox': () => sources.inboxes(),
     'sources.refresh': ({ provider, instance }) => sources.refresh(provider, instance),

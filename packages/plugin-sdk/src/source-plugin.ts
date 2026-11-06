@@ -1,4 +1,5 @@
 import type { LoginNotice, LoginPrompt, SourceIssue } from '../../protocol/src/source.js'
+import type { SourceCommentOptions, SourceCommentPage } from '../../protocol/src/source-comments.js'
 import type { PluginCredential, PluginResult } from '../../protocol/src/plugin.js'
 
 export type SourceSettings = Readonly<Record<string, string>>
@@ -12,6 +13,7 @@ export type LoginSession = {
 
 export type SourcePlugin = {
   readonly id: string
+  comments?(settings: SourceSettings, credential: SourceCredential, key: string, signal: AbortSignal, options: SourceCommentOptions): Promise<SourceCommentPage>
   normalizeSettings(values: SourceSettings): Record<string, string> | Promise<Record<string, string>>
   normalizeKey?(key: string): string | Promise<string>
   envCredential?(env: Readonly<Record<string, string | undefined>>): SourceCredential | null

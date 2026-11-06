@@ -1641,6 +1641,22 @@ export class ConversationService {
       .some((stage) => this.chats.items(this.chatStage(conversation, stage)).some((item) => item.id === `u:${ref}`))
   }
 
+  sourceDeliveryReceipt(id: string, ref: string, known: import('@antumi/protocol').SourceDelivery['state']): import('./source-updates').SourceDeliveryReceipt | null {
+    const conversation = this.store.get(id)
+    if (!conversation) return { state: 'cancelled' }
+    let result: import('./source-updates').SourceDeliveryReceipt | null = null
+    for (const stage of this.store.stages(id)) {
+      const records = ChatLog.of(this.sessionsRoot, id, stage.id).read().records
+      if (records.some((record) => record.dir === 'out' && record.ref === ref)) result = { state: known === 'submitted' || records.some((record) => record.dir === 'receipt' && record.ref === ref) ? 'submitted' : 'uncertain' }
+      else if (records.some((record) => record.dir === 'queue' && record.ref === ref && record.text !== null)) {
+        const state = this.stageChatItems(id, stage.id).findLast((item) => item.kind === 'state')
+        const entry = state?.kind === 'state' ? state.queue.find((entry) => entry.ref === ref) : undefined
+        result = entry ? { state: entry.held || stage.endedAt !== null ? 'held' : 'queued' } : { state: 'cancelled' }
+      }
+    }
+    return result
+  }
+
   // One item as the stage holds it now, for whoever has news about it; null once it is gone.
   chatItem(id: string, stageId: string, itemId: string): ChatItem | null {
     return this.stageChatItems(id, stageId).find((item) => item.id === itemId) ?? null

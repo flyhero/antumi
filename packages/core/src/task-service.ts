@@ -56,7 +56,7 @@ import type { TrustedSetup } from './project-config'
 import type { WorktreeSetup } from './worktree-setup'
 import { normalizeRepoPath, prepareRefineWorkspace, prepareWorkspace, projectHead, removePlanningCheckouts, restartBranches, startOptions, withKnownWorktrees } from './workspace'
 
-export type TaskEvent = { type: 'changed'; task: Task } | { type: 'deleted'; id: string }
+export type TaskEvent = { type: 'changed'; task: Task; sourceOnly?: boolean } | { type: 'deleted'; id: string }
 
 // English words for a title's branch, from the task's agent; null when it gave none.
 // modelProvider: the one the task's agent runs on, which names the branch too.
@@ -80,6 +80,13 @@ export type TaskSquads = {
 }
 
 export class TaskService {
+  private sourcePrompt: ((task: Task, conversationId: string, text: string) => Promise<{ text: string; ref?: string }>) | null = null
+  setSourcePrompt(enrich: (task: Task, conversationId: string, text: string) => Promise<{ text: string; ref?: string }>): void { this.sourcePrompt = enrich }
+  private async sendInitial(task: Task, conversationId: string, text: string, imageIds: readonly string[]): Promise<void> {
+    const initial = await this.sourcePrompt?.(task, conversationId, text) ?? { text }
+    await this.requireChats().send(conversationId, initial.text, imageIds, false, false, initial.ref)
+  }
+
   private squads: TaskSquads | null = null
   setSquads(squads: TaskSquads): void { this.squads = squads }
 
@@ -237,9 +244,11 @@ export class TaskService {
     return this.changed(this.store.update(task.id, { images: task.images.filter((image) => image.id !== attachmentId) }))
   }
 
-  setSnapshot(id: string, snapshot: SourceSnapshot): Task {
+  setSnapshot(id: string, snapshot: SourceSnapshot, sourceOnly = false): Task {
     const task = this.get(id)
-    return this.changed(this.store.update(task.id, { sourceSnapshot: snapshot }))
+    const updated = this.store.update(task.id, { sourceSnapshot: snapshot })
+    this.emit({ type: 'changed', task: updated, ...(sourceOnly ? { sourceOnly: true } : {}) })
+    return updated
   }
 
   update({ id, title, details, repos, dependsOn, agent, squadId, starts, references, launch, autoRun }: RpcParsedParams<'tasks.update'>): Task {
@@ -504,7 +513,7 @@ export class TaskService {
           cwd: workspace.cwd, extraDirs: workspace.dirs.filter((dir) => dir !== workspace.cwd && !workspace.references.has(dir)), referenceDirs: [...workspace.references], planOnly: true, session: 'new',
           readable: images.readable, allowBypass, ...launch, permissionMode
         })
-        await chats.send(conversation.id, chatPlanPrompt(task, workspace, dependencies, this.previousAttempt(task), images.prompt), imageIds)
+        await this.sendInitial(task, conversation.id, chatPlanPrompt(task, workspace, dependencies, this.previousAttempt(task), images.prompt), imageIds)
         return this.changed(this.get(task.id))
       }
       const setups = await this.trustedSetups(task)
@@ -543,7 +552,7 @@ export class TaskService {
         const prompt = coordinator
           ? leaderStartPrompt(task, workspace, dependencies, this.previousAttempt(task), images.prompt, task.plan, coordinator)
           : chatStartPrompt(task, workspace, dependencies, this.previousAttempt(task), images.prompt, task.plan, unattended !== undefined, permissionMode)
-        await chats.send(conversation.id, [prompt, projectNote(setups, failures)].filter(Boolean).join('\n\n'), imageIds)
+        await this.sendInitial(task, conversation.id, [prompt, projectNote(setups, failures)].filter(Boolean).join('\n\n'), imageIds)
       }
       return this.changed(this.get(task.id))
     })

@@ -1,3 +1,4 @@
+import { SourceUpdatesPanel } from './SourceUpdatesPanel'
 import { useAgentCallsSupported } from '../agent-calls'
 import { getLocale, t, tr } from '../i18n'
 import { useHelperSupported } from '../helper-conversations'
@@ -175,6 +176,7 @@ export function TaskChat({ taskId }: { taskId: string }) {
         <TaskToolbar task={task} view="chat" />
       </header>
       {memberChatId && <div className="squad-member-nav"><button type="button" className="button ghost" onClick={() => setMemberChatId(null)}>{t('TaskChat.backToLeader')}</button><span>{memberConversation?.title ?? t('TaskChat.loadingMemberConversation')}</span></div>}
+      {task.source && <SourceUpdatesPanel target={{ kind: 'task', id: task.id }} />}
       <div className="terminal-body">
         {memberChatId ? (
           memberConversation ? <ConversationChat conversation={memberConversation} surface={{ ...surface, showBrowser: () => showBrowserPanel(memberConversation.id), prepareSend: async () => false, sendBlocker: t('TaskChat.theLeaderCoordinatesMemberAssignmentsReturnToThe'), handoffPlan: undefined, savePlan: null, handoff: null }} /> : <p className="muted">{t('TaskChat.loadingMemberConversation')}</p>

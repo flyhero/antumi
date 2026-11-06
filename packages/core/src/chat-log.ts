@@ -8,6 +8,7 @@ import type { ChatRecord } from './chat-driver'
 const Level = z.enum(['info', 'warning', 'error']).catch('info')
 const Images = z.array(ChatImage).optional()
 const LogLine = z.discriminatedUnion('dir', [
+  z.object({ dir: z.literal('receipt'), at: z.number(), ref: z.string() }),
   // end: the output offset just past this frame's line, so a restart knows where to pick up.
   z.object({ dir: z.literal('in'), at: z.number(), frame: z.unknown(), end: z.number().optional() }),
   z.object({ dir: z.literal('out'), at: z.number(), frame: z.unknown(), ref: z.string().optional(), images: Images, references: z.array(ChatReference).optional() }),

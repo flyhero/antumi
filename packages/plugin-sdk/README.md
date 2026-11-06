@@ -59,3 +59,21 @@ pnpm verify:plugin-sdk
 初次发布前，可将生成的 tgz 放进插件仓库 `vendor/`，以 `file:vendor/antumi-plugin-sdk-0.1.1.tgz` 依赖它；无需 npm 发布权限即可独立安装、构建。npm 正式发布后，把依赖改为正式版本并更新锁文件。SDK 维护者发布前需确认 npm 包名的所有权，执行全仓库检查和独立包验证；发布是单独操作。
 
 SDK API 遵循语义化版本。只重构 SDK 不改变插件协议；更改协议时必须同步宿主支持和 `PLUGIN_PROTOCOL_VERSION`，不得让已经发布的 v1 插件失效。
+
+## Incremental comments (SDK 0.1.3)
+
+A source can opt into comment synchronization with `commentSync: 1` in its manifest source entry and a `comments` implementation. Older sources remain compatible and are never sent this operation.
+
+`fetch` returns optional `commentState: commentState(comments)` alongside the existing Markdown snapshot. Pass stable native IDs, author, creation and edit timestamps, a web URL, Markdown, and `truncated`. The initial snapshot can keep twenty comments, but its checkpoint must include **all** IDs sharing the newest creation timestamp. Never invent an ID from body text or an array offset.
+
+`comments(settings, credential, key, signal, { checkpoint, continuation })` fetches all native pages down to the inclusive creation-time boundary, then returns `commentPage(comments, options)`. Each result contains at most 100 comments, an optional continuation, and a complete checkpoint. Keep fetching native pages until the boundary is covered; do not cap incremental results at twenty. The helper freezes the upper boundary during pagination and includes same-time identities so arrivals between calls are picked up next time. Native timestamps and identities must remain stable.
+
+```ts
+import { commentState, commentPage } from '@antumi/plugin-sdk'
+// In fetch, use the same native response as the Markdown snapshot:
+return { ...issue, markdown, commentState: commentState(nativeComments) }
+// In comments, fetch down to options.checkpoint inclusively:
+return commentPage(nativeComments, options)
+```
+
+Only complete checkpoints may advance after every page succeeds. Callers may repeat operations; keep stable identities so they can deduplicate. New comments are synchronized as external reference data and never wake an Agent automatically. Comment edits and deletions do not have a complete audit guarantee in this version.

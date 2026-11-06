@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto'
+import type { SourceUpdateTarget, SourceCommentOptions } from '@antumi/protocol'
 import type { ChatReference } from '@antumi/protocol'
 import {
   agentDescriptor,
@@ -122,6 +124,7 @@ export class SourceService {
   private readonly states = new Map<string, InstanceState>()
   private readonly paused = new Set<string>()
   private readonly operations = new Map<string, Set<Promise<unknown>>>()
+  private updateSink: ((target: SourceUpdateTarget, source: TaskSource, snapshot: SourceSnapshot) => void) | undefined
   private timer: ReturnType<typeof setInterval> | undefined
   private conversations: SourceConversations | null = null
   // What each issue conversation's agent is to start with, kept until it has: the user's note
@@ -192,6 +195,28 @@ export class SourceService {
     const generation = state.generation
     return () => {
       if (this.paused.has(id) || state.generation !== generation) throw new Rejection('source-changed', '来源已改变，请重试')
+    }
+  }
+
+  setUpdateSink(sink: (target: SourceUpdateTarget, source: TaskSource, snapshot: SourceSnapshot) => void): void { this.updateSink = sink }
+
+  updateConnection(source: TaskSource) {
+    const ready = this.ready(source.provider, source.instance)
+    if (!ready) return null
+    const check = this.guard(source.provider, source.instance)
+    const sites = ready.provider.settings.filter((field) => field.bindsCredential).map((field) => [field.key, ready.settings[field.key]])
+    const account = this.credential(ready.provider, source.instance)?.account
+    const binding = createHash('sha256').update(JSON.stringify([source.provider, source.instance, sites, account ?? ready.credential.payload])).digest('hex')
+    const abort = this.state(source.provider, source.instance).controller.signal
+    return {
+      binding, supported: ready.provider.commentSync === 1 && !!ready.provider.comments,
+      fetch: async () => { const detail = await this.fetch(ready, source.key, abort, false); check(); return detail.snapshot },
+      comments: async (options: SourceCommentOptions) => {
+        if (!ready.provider.comments) throw new Rejection('source-comments-unsupported')
+        const result = await this.call((signal) => ready.provider.comments!(ready.settings, ready.credential, source.key, AbortSignal.any([signal, abort]), options), FETCH_TIMEOUT_MS)
+        check()
+        return result
+      }
     }
   }
 
@@ -403,6 +428,7 @@ export class SourceService {
       source: { provider: id, instance, name: ready.provider.name, key: detail.issue.key, url: detail.issue.url },
       snapshot: detail.snapshot
     })
+    this.updateSink?.({ kind: 'task', id: task.id }, task.source!, detail.snapshot)
     this.emitInbox(id, instance)
     return task
   }
@@ -477,6 +503,7 @@ export class SourceService {
       const pending = this.investigating.get(conversationId)
       const title = issue.title.trim() || issue.key
       const images = await Promise.all(snapshot.images.map(async (image) => ({ name: image.name, path: await this.attachments.pathOf(image.id) })))
+      this.updateSink?.({ kind: 'conversation', id: conversationId }, source, snapshot)
       await conversations.beginInvestigation(conversationId, {
         title,
         brief: investigationBrief(source, snapshot, images, later ? text.deferred : 0),
@@ -528,7 +555,9 @@ export class SourceService {
     const check = this.guard(source.provider, source.instance)
     const detail = await this.fetch(this.requireReady(source.provider, source.instance), source.key, this.state(source.provider, source.instance).controller.signal)
     check()
-    return this.tasks.setSnapshot(task.id, detail.snapshot)
+    const updated = this.tasks.setSnapshot(task.id, detail.snapshot)
+    this.updateSink?.({ kind: 'task', id: task.id }, source, detail.snapshot)
+    return updated
   }
 
   dismiss(id: string, instance: string, key: string): SourceInbox {
@@ -570,7 +599,7 @@ export class SourceService {
     const note = lost > 0 ? `\n\n（还有 ${lost} 张图片没能保存）` : ''
     const text = typeof raw.markdown === 'string' ? raw.markdown : ''
     const markdown = text.slice(0, MAX_SNAPSHOT_LENGTH - note.length) + note
-    return { issue, snapshot: { markdown, fetchedAt: this.now(), images: stored }, deferred: images ? 0 : Math.max(0, Math.floor(raw.imagesDeferred ?? 0)) }
+    return { issue, snapshot: { markdown, fetchedAt: this.now(), ...(images ? { imagesFetchedAt: this.now() } : {}), ...(raw.commentState ? { commentState: raw.commentState } : {}), images: stored }, deferred: images ? 0 : Math.max(0, Math.floor(raw.imagesDeferred ?? 0)) }
   }
 
   // Each image passes the same checks as one the user uploads; one that fails is counted, not fatal.

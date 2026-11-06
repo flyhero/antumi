@@ -1,3 +1,4 @@
+import { SourceUpdatesPanel, SourceCommentBadge } from './SourceUpdatesPanel'
 import { localized, t, tr } from '../i18n'
 import { useCallback, useEffect, useRef, useState, type MouseEvent } from 'react'
 import type { Conversation, Discussion, Task } from '@antumi/protocol'
@@ -374,7 +375,7 @@ export function ConversationList() {
           <ConversationMark conversation={conversation} />
           <span className="conversation-row-title">
             <ConversationIdentity profile={conversation.profile} />
-            <span className="task-row-title">{conversation.title}</span>
+            <span className="task-row-title">{conversation.title}</span><SourceCommentBadge target={{ kind: 'conversation', id: conversation.id }} />
           </span>
           <span className="conversation-trailing">
             {panes?.includes(conversation.id)
@@ -440,7 +441,7 @@ export function ConversationList() {
         >
           <TaskMark task={task} conversation={conversation} />
           <span className="conversation-row-title">
-            <span className="task-row-title">{task.title}</span>
+            <span className="task-row-title">{task.title}</span><SourceCommentBadge target={{ kind: 'task', id: task.id }} />
           </span>
           <span className="conversation-trailing">
             <span className="conversation-age">{timeAgo(Math.max(task.updatedAt, conversation.updatedAt), now)}</span>

@@ -11202,3 +11202,10 @@ button.squad-member-main { cursor: pointer; }
 .markdown-community-card { margin-top: 20px; }
 .markdown-community-previews { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .markdown-community-previews img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; object-position: top; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+
+.source-updates { padding: 8px 16px; border-bottom: 1px solid var(--border); font-size: 12px; }
+.source-updates-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.source-updates-content { max-height: 50vh; overflow: auto; padding-top: 8px; }
+.source-update-comment { padding: 12px 0; border-bottom: 1px solid var(--border); }
+.source-update-delivery { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 8px 0; }
+.source-comment-badge { color: var(--accent); font-size: 12px; white-space: nowrap; }

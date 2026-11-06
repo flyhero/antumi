@@ -1,3 +1,4 @@
+import { SourceUpdatesPanel, SourceCommentBadge } from './SourceUpdatesPanel'
 import { getLocale, localized, t, tr } from '../i18n'
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { create } from 'zustand'
@@ -185,7 +186,7 @@ function TaskCard({ task, tasks, now, fresh, renaming, menuOpen, onRenamed, onMe
       )}
       {(planning || task.source || waitingOn(task, tasks) > 0) && (
         <span className="task-card-tags">
-          {task.source && <span className="task-tag mono">{task.source.key}</span>}
+          {task.source && <><span className="task-tag mono">{task.source.key}</span><SourceCommentBadge target={{ kind: 'task', id: task.id }} /></>}
           {planning && <span className="task-tag task-tag-refining">{task.plan && !task.plan.approved ? t('TaskBoard.planSaved') : t('TaskBoard.planning')}</span>}
           {waitingOn(task, tasks) > 0 && <span className="task-tag">{t('TaskBoard.waitingForDependencies')}</span>}
         </span>

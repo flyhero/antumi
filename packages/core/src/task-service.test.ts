@@ -77,9 +77,18 @@ describe('TaskService', () => {
     }
     service = new TaskService(store, projects, path.join(dir, 'worktrees'), (event) => {
       events.push(event)
-      if (event.type === 'changed') schedules?.taskChanged(event.task)
+      if (event.type === 'changed') { if (!event.sourceOnly) schedules?.taskChanged(event.task) }
       else schedules?.taskDeleted(event.id)
     }, attachments, conversations, runs)
+  })
+
+  it('marks background source snapshots as data-only without changing the task status', () => {
+    const task = service.create({ title: 'Imported issue' })
+    const before = daemon.spawns.length
+    const updated = service.setSnapshot(task.id, { markdown: 'new comment', images: [], fetchedAt: 1000 }, true)
+    expect(updated.status).toBe('pending')
+    expect(daemon.spawns.length).toBe(before)
+    expect(events.at(-1)).toMatchObject({ type: 'changed', sourceOnly: true })
   })
 
   afterEach(async () => {
@@ -211,6 +220,17 @@ describe('TaskService', () => {
   const told = (taskId: string) => daemon.written(sessionOf(taskId)).flatMap(userText).join('\n\n')
 
   // Hands a task in once its agent's turn is over.
+  it('enriches the first task prompt with source context and keeps its delivery ref', async () => {
+    const task = readyTask('Source context', [initRepo('source-context')])
+    const ref = 'source-comments:initial-context'
+    service.setSourcePrompt(async (_task, _conversationId, text) => ({ text: `${text}\n\nSOURCE_CONTEXT_INCLUDED`, ref }))
+    const started = await service.start(task.id)
+    await settle()
+    const messages = conversations.messages(started.conversationId!).filter((message) => message.role === 'user')
+    expect(messages.at(-1)?.text).toContain('SOURCE_CONTEXT_INCLUDED')
+    expect(conversations.sourceDeliveryReceipt(started.conversationId!, ref, 'prepared')).toEqual({ state: 'submitted' })
+  })
+
   async function handIn(taskId: string): Promise<Task> {
     await settle()
     return service.submit(taskId)

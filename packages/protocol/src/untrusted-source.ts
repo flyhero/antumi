@@ -25,7 +25,8 @@ function imageList(images: readonly SnapshotImagePath[]): string | null {
 export function untrustedSource(
   source: TaskSource,
   snapshot: SourceSnapshot | null,
-  images: readonly SnapshotImagePath[] = []
+  images: readonly SnapshotImagePath[] = [],
+  limit = LIMIT
 ): string {
   const origin = `这个任务来自 ${source.name} ${source.key}：${source.url}`
   const text = clean(snapshot?.markdown ?? '').trim()
@@ -34,7 +35,7 @@ export function untrustedSource(
     return origin
   }
   const body =
-    text.length > LIMIT ? `${text.slice(0, LIMIT)}\n……（后面还有 ${text.length - LIMIT} 字，完整内容见 ${source.url}）` : text
+    text.length > limit ? `${text.slice(0, limit)}\n……（后面还有 ${text.length - limit} 字，完整内容见 ${source.url}）` : text
   const fenced = [body, list && clean(list)].filter(Boolean).join('\n\n')
   const fetched = new Date(snapshot.fetchedAt).toISOString().slice(0, 10)
   return [

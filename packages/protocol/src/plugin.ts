@@ -1,11 +1,12 @@
 import { z } from 'zod'
+import { SourceCommentOptions, SourceCommentPage, SourceCommentState } from './source-comments'
 import { MAX_ATTACHMENT_BYTES, MAX_TASK_IMAGES } from './attachments'
 import { LoginNotice, LoginPrompt, SettingField, SourceId, SourceIssue, SourceProblem } from './source'
 
 export const PLUGIN_PROTOCOL_VERSION = 1
 export const PluginId = z.string().max(120).regex(/^[a-z][a-z0-9-]*(?:\.[a-z][a-z0-9-]*)+$/)
 export const PluginVersion = z.string().max(80).regex(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?$/)
-export const PluginSource = z.object({ id: SourceId, name: z.string().min(1).max(64), settings: z.array(SettingField).max(32) })
+export const PluginSource = z.object({ id: SourceId, name: z.string().min(1).max(64), settings: z.array(SettingField).max(32), commentSync: z.literal(1).optional() })
 export const PluginManifest = z.object({
   id: PluginId,
   version: PluginVersion,
@@ -61,9 +62,10 @@ export const pluginMethods = {
   list: { params: z.object({ source: SourceId, settings: Settings, credential: PluginCredential }), result: z.array(SourceIssue).max(200) },
   // images false: the issue's text alone, its images fetched by a later call; a plugin that leaves
   // them out says how many in imagesDeferred. Older plugins ignore it and send the images anyway.
+  comments: { params: SourceCommentOptions.extend({ source: SourceId, settings: Settings, credential: PluginCredential, key: z.string() }), result: SourceCommentPage },
   fetch: {
     params: z.object({ source: SourceId, settings: Settings, credential: PluginCredential, key: z.string(), images: z.boolean().optional() }),
-    result: SourceIssue.extend({ markdown: z.string().max(50_000), images: SourceImages.optional(), imagesDeferred: z.number().int().nonnegative().max(1000).optional() })
+    result: SourceIssue.extend({ markdown: z.string().max(50_000), images: SourceImages.optional(), imagesDeferred: z.number().int().nonnegative().max(1000).optional(), commentState: SourceCommentState.optional() })
   }
 } as const
 export type PluginMethod = keyof typeof pluginMethods
@@ -73,7 +75,7 @@ export type PluginParams<M extends PluginMethod> = z.output<(typeof pluginMethod
 export type PluginResult<M extends PluginMethod> = z.output<(typeof pluginMethods)[M]['result']>
 export const PluginCall = z.object({
   type: z.literal('call'), id: z.string(),
-  method: z.enum(['handshake', 'normalizeSettings', 'normalizeKey', 'envCredential', 'login', 'list', 'fetch']),
+  method: z.enum(['handshake', 'normalizeSettings', 'normalizeKey', 'envCredential', 'login', 'list', 'fetch', 'comments']),
   params: z.unknown()
 })
 export const PluginAnswer = z.object({ type: z.literal('answer'), id: z.string(), value: z.string() })

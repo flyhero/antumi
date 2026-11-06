@@ -1,3 +1,4 @@
+import { SourceUpdatesPanel } from './SourceUpdatesPanel'
 import { localized, t, tr } from '../i18n'
 import { useState } from 'react'
 import { checkChangePrimary, checkEditProjects, shortTaskId, type Task } from '@antumi/protocol'
@@ -156,6 +157,7 @@ function TaskDetailBody({ task }: { task: Task }) {
 
         <div className="task-detail-main">
           <SourceSnapshotCard task={task} />
+          {task.source && <SourceUpdatesPanel target={{ kind: 'task', id: task.id }} />}
           <TaskPlanCard task={task} />
 
           <MarkdownEditor

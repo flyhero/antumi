@@ -48,6 +48,18 @@ describe('source SDK protocol runtime', () => {
     expect(h.messages[1]).toEqual({ type: 'result', id: 'normalizeKey', result: 'DEMO-1' })
   })
 
+  it('dispatches incremental comment pages through the optional v1 operation', async () => {
+    const h = harness({ comments: async (_settings, _credential, _key, _signal, options) => ({ comments: [], continuation: null, checkpoint: options.checkpoint }) })
+    await h.hello()
+    h.call('comments', { source: 'demo', settings: {}, credential: { kind: 'token', payload: {} }, key: 'DEMO-1', checkpoint: { createdAt: 1000, ids: ['one'] }, continuation: null })
+    await h.tick()
+    expect(h.messages[1]).toMatchObject({ type: 'result', result: { comments: [], checkpoint: { createdAt: 1000, ids: ['one'] } } })
+  })
+
+  it('requires implementations for advertised comment capabilities', () => {
+    expect(() => runSourcePlugin({ manifest: { ...manifest, contributes: { sources: [{ ...manifest.contributes.sources[0], commentSync: 1 }] } }, sources: [source] })).toThrow('comments implementation')
+  })
+
   it('keeps sequential login questions and notifications in the same operation', async () => {
     const h = harness()
     await h.hello()

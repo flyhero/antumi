@@ -4,16 +4,19 @@ import type { ResolvedFile } from '@antumi/protocol'
 import { canOpenFile, canRevealFile } from '../desktop-bridge'
 import { copyFileText, FILE_MANAGER, openResolvedFile, revealResolvedFile, showResolvedFile } from '../file-actions'
 import type { FileScope } from '../file-tabs'
+import { fileQuoteText, quoteFileInChat, useFileQuoteTarget } from '../file-quotes'
 import { ContextMenu, MenuItem, menuPoint, type MenuPoint } from './ContextMenu'
-import { CopyIcon, ExternalIcon, FolderIcon, InspectorIcon } from './icons'
+import { ChatIcon, CopyIcon, ExternalIcon, FolderIcon, InspectorIcon } from './icons'
 
 // `inPanel`: the menu is in the side panel's files already, where a click opens the file and
 // offering to open it there again does nothing.
 export function FileMenuItems({ scope, file, line = null, inPanel = false, onClose }: {
   scope: FileScope; file: ResolvedFile; line?: number | null; inPanel?: boolean; onClose(): void
 }) {
+  const conversationId = useFileQuoteTarget(scope)
   const act = (action: () => void | Promise<void>) => { onClose(); void action() }
   return <>
+    {inPanel && conversationId && <MenuItem label={t('FileQuotes.addFileToConversation')} icon={<ChatIcon />} onSelect={() => { onClose(); void quoteFileInChat(conversationId, fileQuoteText(file.path)) }} />}
     {!inPanel && <MenuItem label={t('FileMenu.openInSidebar')} icon={<InspectorIcon />} onSelect={() => act(() => showResolvedFile(scope, file, line))} />}
     <MenuItem label={t('FileMenu.copyAbsolutePath')} icon={<CopyIcon />} onSelect={() => act(() => copyFileText(file.path))} />
     {file.relative !== null && <MenuItem label={t('FileMenu.copyProjectRelativePath')} icon={<CopyIcon />} onSelect={() => act(() => copyFileText(file.relative ?? file.path))} />}

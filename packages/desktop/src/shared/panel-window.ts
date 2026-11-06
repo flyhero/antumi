@@ -97,7 +97,7 @@ export type PanelDockPayload = z.infer<typeof PanelDockPayload>
 
 export const PanelBrowserContext = z.object({ tab: BrowserTab, text: z.string(), images: z.array(ChatImage) })
 export type PanelBrowserContext = z.infer<typeof PanelBrowserContext>
-export const PanelQuote = z.object({ conversationId: z.string().min(1), text: z.string().min(1).max(100_000) })
+export const PanelQuote = z.object({ conversationId: z.string().min(1), text: z.string().min(1).max(100_000), note: z.string().max(100_000).optional() })
 
 export const PanelDelivery = z.object({
   id: z.number().int().positive(),

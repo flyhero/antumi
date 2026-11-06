@@ -5,9 +5,14 @@ import { takeComposerInsertions } from './composer-insertions'
 import { useCore } from './core-store'
 import { exportFileTabs, fileDraft, importFileTabs } from './file-tabs'
 import { panelContext } from './panel-window-context'
+import { addQuote, setQuotes } from './chat-quotes'
 import { detachPanel, startPanelWindowHost } from './panel-window-host'
 
 vi.mock('./helper-conversations', () => ({ focusChatInput: vi.fn() }))
+vi.mock('./chat-quotes', async (original) => {
+  const actual = await original<typeof import('./chat-quotes')>()
+  return { ...actual, addQuote: vi.fn(actual.addQuote) }
+})
 
 const conversation = Conversation.parse({ id: '11111111-1111-4111-8111-111111111111', title: 'Project', titleLocked: false, agent: 'claude', workspacePath: '/project', managedWorkspace: false, sessionId: null, projectPaths: ['/project'], createdAt: 1, updatedAt: 1 })
 const tab = BrowserTab.parse({ id: '55555555-5555-4555-8555-555555555555', conversationId: conversation.id, userOwned: false, url: 'http://localhost/', title: 'Page', loading: false, active: true, createdAt: 1 })
@@ -28,6 +33,8 @@ beforeEach(() => {
   takeComposerInsertions(null)
   receipt.mockClear()
   ready.mockClear()
+  vi.mocked(addQuote).mockClear()
+  setQuotes(conversation.id, [])
   vi.stubGlobal('location', { hash: '' })
   vi.stubGlobal('window', { antumi: {
     onPanelWindows: (listener: (message: unknown) => void) => { receive = listener; return () => { receive = undefined } },
@@ -37,6 +44,18 @@ beforeEach(() => {
 })
 
 afterEach(() => { stop(); stop = () => {}; vi.unstubAllGlobals() })
+
+it('delivers a file selection with its comment once, while accepting older quotes without comments', () => {
+  useCore.setState({ connection: 'connected', conversations: { [conversation.id]: conversation } })
+  stop = startPanelWindowHost()
+  const delivery: PanelDelivery = { id: 1, action: { type: 'quote', conversationId: conversation.id, text: '/project/a.ts:2\nconst x = 1', note: 'Rename x' } }
+  emit([delivery])
+  emit([delivery])
+  expect(addQuote).toHaveBeenCalledExactlyOnceWith(conversation.id, null, '/project/a.ts:2\nconst x = 1', 'Rename x')
+  emit([{ id: 2, action: { type: 'quote', conversationId: conversation.id, text: 'terminal output' } }])
+  expect(addQuote).toHaveBeenLastCalledWith(conversation.id, null, 'terminal output', undefined)
+  expect(receipt).toHaveBeenLastCalledWith({ id: 2, accepted: true })
+})
 
 it('subscribes before requesting retained deliveries and adds browser text and images exactly once', () => {
   ready.mockImplementationOnce(() => expect(receive).toBeTypeOf('function'))

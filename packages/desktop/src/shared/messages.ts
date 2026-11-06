@@ -1,5 +1,10 @@
 // Application-owned text. Values and external content are passed separately.
 export const MESSAGES = {
+  "FileQuotes.addFileToConversation": {"zh": "将文件加入会话", "en": "Add file to conversation"},
+  "FileQuotes.addSelectionToConversation": {"zh": "将选区加入会话", "en": "Add selection to conversation"},
+  "FileQuotes.addToConversation": {"zh": "加入会话", "en": "Add to chat"},
+  "FileQuotes.commentOnSelection": {"zh": "评论文件选区", "en": "Comment on file selection"},
+  "FileQuotes.optionalComment": {"zh": "添加评论（可选）", "en": "Add a comment (optional)"},
   "ChatVisualization.title": {"zh": "交互预览", "en": "Interactive preview"},
   "ChatVisualization.adjust": {"zh": "调整", "en": "Adjust"},
   "ChatVisualization.expand": {"zh": "展开", "en": "Expand"},

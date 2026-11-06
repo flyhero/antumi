@@ -104,6 +104,6 @@ export function startPanelWindowPage(): void {
   onPanelRequestClose(() => hideThisPanel())
 }
 
-export function quoteFromPanel(conversationId: string, text: string): Promise<boolean> {
-  return sendPanelQuote({ conversationId, text })
+export function quoteFromPanel(conversationId: string, text: string, note?: string): Promise<boolean> {
+  return sendPanelQuote({ conversationId, text, ...(note === undefined ? {} : { note }) })
 }

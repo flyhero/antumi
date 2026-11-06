@@ -388,7 +388,7 @@ export function panelReceipt(id: number, accepted: boolean): void {
   window.antumi?.panelReceipt?.({ id, accepted })
 }
 
-export async function sendPanelQuote(quote: { conversationId: string; text: string }): Promise<boolean> {
+export async function sendPanelQuote(quote: { conversationId: string; text: string; note?: string }): Promise<boolean> {
   return await window.antumi?.sendPanelQuote?.(quote) === true
 }
 

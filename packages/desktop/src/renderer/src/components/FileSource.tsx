@@ -11,8 +11,10 @@ import { tags } from '@lezer/highlight'
 import { perform } from '../core-store'
 import { dropFileDraft, fileDraft, fileScopeKey, fileScopeParams, keepFileDraft, markedDirty, registerFileDraft, saveFileScroll, updateFileTabs, useFileTabs, type FileScope, type FileTab } from '../file-tabs'
 import { copyFileText } from '../file-actions'
+import { fileQuoteText, quoteFileInChat, selectedFilePassage, useFileQuoteTarget } from '../file-quotes'
 import { ContextMenu, MenuItem, menuPoint, type MenuPoint } from './ContextMenu'
-import { CheckIcon, CopyIcon, DocumentIcon } from './icons'
+import { ChatIcon, CheckIcon, CopyIcon, DocumentIcon } from './icons'
+import { FileSelectionComment } from './FileSelectionComment'
 import { isShortcut, useShortcutLabel } from '../keyboard-shortcuts'
 import { createFileSearchPanel, runFileSearchShortcut } from '../file-search-panel'
 import { FileImage } from './FileImage'
@@ -94,10 +96,12 @@ export function FileSource({ scope, tab, disk, wrap, writable, preview, ref }: {
   const markdownThemePacks = usePreferences((state) => state.markdownThemePacks)
   const markdownBase = resolveMarkdownTheme(markdownTheme, markdownThemePacks).base
   const host = useRef<HTMLDivElement>(null)
+  const rendered = useRef<HTMLDivElement>(null)
+  const conversationId = useFileQuoteTarget(scope)
   const saveKey = useShortcutLabel('save-file')
   const editor = useRef<EditorView | null>(null)
   const base = useRef<{ text: string; doc: Text | null; mtimeMs: number | null }>({ text: disk.text, doc: null, mtimeMs: disk.mtimeMs })
-  const [menu, setMenu] = useState<{ at: MenuPoint; selected: string; text: string } | null>(null)
+  const [menu, setMenu] = useState<{ at: MenuPoint; selected: string; text: string; quote: string | null } | null>(null)
   const [notice, setNotice] = useState<Notice>(null)
   const [saving, setSaving] = useState(false)
   const [previewText, setPreviewText] = useState(disk.text)
@@ -258,19 +262,22 @@ export function FileSource({ scope, tab, disk, wrap, writable, preview, ref }: {
     </div>}
     {preview && (/\.svg$/i.test(path)
       ? <FileImage path={path} text={previewText} />
-      : <div className="file-markdown-scroll markdown-sheet" data-md-theme={markdownBase} tabIndex={0} role="region" aria-label={t('FileSource.markdownPreview')}><Suspense fallback={<p className="inspector-empty muted" role="status">{t('FileSource.renderingMarkdown')}</p>}><FileMarkdown text={previewText} file={tab.file} scope={scope} theme={markdownTheme} packs={markdownThemePacks} /></Suspense></div>)}
+      : <div ref={rendered} className="file-markdown-scroll markdown-sheet" data-md-theme={markdownBase} tabIndex={0} role="region" aria-label={t('FileSource.markdownPreview')}><Suspense fallback={<p className="inspector-empty muted" role="status">{t('FileSource.renderingMarkdown')}</p>}><FileMarkdown text={previewText} file={tab.file} scope={scope} theme={markdownTheme} packs={markdownThemePacks} /></Suspense></div>)}
     <div className="file-source" hidden={preview} ref={host} onContextMenu={(event) => {
       event.preventDefault()
       const view = editor.current
       if (!view) return
       const selection = view.state.selection.main
-      setMenu({ at: menuPoint(event), selected: view.state.sliceDoc(selection.from, selection.to), text: view.state.sliceDoc() })
+      const passage = selectedFilePassage(view.state)
+      setMenu({ at: menuPoint(event), selected: view.state.sliceDoc(selection.from, selection.to), text: view.state.sliceDoc(), quote: passage ? fileQuoteText(path, passage) : null })
     }}>
       {menu && <ContextMenu at={menu.at} label={t('FileSource.fileContent')} onClose={close}>
         {writable && tab.dirty && <MenuItem label={t('FileEditor.save')} icon={<CheckIcon />} hint={saveKey} onSelect={() => { close(); void save() }} />}
+        {conversationId && menu.quote && <MenuItem label={t('FileQuotes.addSelectionToConversation')} icon={<ChatIcon />} onSelect={() => { close(); void quoteFileInChat(conversationId, menu.quote ?? '') }} />}
         {menu.selected && <MenuItem label={t('ChatContextMenu.copySelection')} icon={<CopyIcon />} onSelect={() => { close(); void copyFileText(menu.selected) }} />}
         <MenuItem label={t('FileSource.copyAllContent')} icon={<DocumentIcon />} onSelect={() => { close(); void copyFileText(menu.text) }} />
       </ContextMenu>}
     </div>
+    {conversationId && <FileSelectionComment key={`${conversationId}:${preview}`} conversationId={conversationId} path={path} source={host} editor={editor} preview={preview} rendered={rendered} hidden={menu !== null} />}
   </>
 }

@@ -68,7 +68,7 @@ function applyPanelWindows(message: PanelWindowsMessage): void {
 }
 
 function applyDelivery(action: PanelDelivery['action']): boolean {
-  if (action.type === 'quote') return addQuote(action.conversationId, null, action.text) !== null
+  if (action.type === 'quote') return addQuote(action.conversationId, null, action.text, action.note) !== null
   if (action.type === 'browser-context') return insertBrowserContext(action.tab, action.text, action.images)
   const { handoff, kind, docked } = action
   if (handoff.files) importFileTabs(handoff.files)

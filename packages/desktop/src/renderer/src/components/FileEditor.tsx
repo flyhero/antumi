@@ -4,6 +4,7 @@ import type { FileRead, ResolvedFile } from '@antumi/protocol'
 import { useCore } from '../core-store'
 import { canOpenWith } from '../desktop-bridge'
 import { isImagePath } from '../file-links'
+import { fileQuoteText, quoteFileInChat, useFileQuoteTarget } from '../file-quotes'
 import { closedFile, dropFileDraft, EMPTY_FILE_TABS, expandedFolders, fileScopeKey, fileScopeParams, openedFile, revealedFile, revealedFolder, toggledFolder, updateFileTabs, useFileTabs, type FileScope, type FileTab } from '../file-tabs'
 import { MAX_FILE_TREE_WIDTH, MIN_FILE_TREE_WIDTH, setPreference, usePreferences } from '../preferences'
 import { isShortcut, useShortcutLabel } from '../keyboard-shortcuts'
@@ -15,7 +16,7 @@ import { useFocusCount } from './Inspector'
 import { ContextMenu, MenuItem, type MenuPoint } from './ContextMenu'
 import { FileMenu, FileMenuItems } from './FileMenu'
 import { Segmented } from './SettingsControls'
-import { CheckIcon, CloseIcon, MoreIcon, RefreshIcon, SearchIcon, SidebarIcon } from './icons'
+import { ChatIcon, CheckIcon, CloseIcon, MoreIcon, RefreshIcon, SearchIcon, SidebarIcon } from './icons'
 import { askConfirm } from '../confirm-dialog'
 import { MarkdownThemePicker } from './MarkdownThemePicker'
 
@@ -97,6 +98,7 @@ function TreeResizer({ width, onWidth }: { width: number; onWidth(width: number)
 // The files panel's body: the folders' files on the left, the open ones on the right. Without
 // core's file-editor it is the earlier preview: read-only, with no tree.
 export function FileEditor({ scope, updatedAt, editor }: { scope: FileScope; updatedAt: number; editor: boolean }) {
+  const conversationId = useFileQuoteTarget(scope)
   const saveKey = useShortcutLabel('save-file')
   const findKey = useShortcutLabel('find-content')
   const key = fileScopeKey(scope)
@@ -159,6 +161,7 @@ export function FileEditor({ scope, updatedAt, editor }: { scope: FileScope; upd
         </div>)}
       </div>
       {active && canOpenWith() && <OpenWithButton file={active.file} />}
+      {active && conversationId && <button type="button" className="tool-button" aria-label={t('FileQuotes.addFileToConversation')} title={t('FileQuotes.addFileToConversation')} onClick={() => void quoteFileInChat(conversationId, fileQuoteText(active.file.path))}><ChatIcon /></button>}
       {text && <button type="button" className="tool-button" aria-label={t('FileEditor.searchFileContents')} title={[t('FileEditor.searchFileContents'), findKey].filter(Boolean).join(' · ')} onClick={() => { setPreview(false); requestAnimationFrame(() => source.current?.search()) }}><SearchIcon /></button>}
       <button type="button" className="tool-button" ref={more} aria-label={t('FileEditor.moreActions')} aria-haspopup="menu" aria-expanded={menu !== null} onClick={(event) => {
         const bounds = event.currentTarget.getBoundingClientRect()

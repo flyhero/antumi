@@ -6,6 +6,13 @@
 .files-panel-body { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .files-panel-body > .inspector-empty { padding: 16px; }
 
+.file-selection-comment { gap: 8px; padding-left: 12px; box-shadow: var(--shadow-float); }
+.file-selection-comment .selection-comment-input { font-size: var(--chat-font-small); }
+.file-selection-send { flex-shrink: 0; padding: 4px 8px; border: 0; border-radius: var(--radius-sm); background: var(--fill); color: var(--text); font: inherit; font-size: var(--chat-font-small); cursor: pointer; }
+.file-selection-send:hover { background: var(--fill-2); }
+.file-selection-send:focus-visible { outline: 2px solid var(--focus); }
+.file-selection-send:disabled { opacity: 0.5; cursor: default; }
+
 
 /* Its status bar button, before the browser in the right-hand group: first of the group
    it takes the auto margin, and the one after it gives that up. */

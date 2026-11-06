@@ -7889,7 +7889,7 @@ export const MESSAGES = {
   "SettingsPage.adjust": {"zh": "调整", "en": "Adjust"},
   "SettingsPage.permissions": {"zh": "权限", "en": "Permissions"},
   "SettingsPage.permissionsDescription": {"zh": "无人值守时 Agent 能做什么，以及能用你的哪些东西。", "en": "What agents may do unattended, and what of yours they can use."},
-  "SettingsPage.conversationDescription": {"zh": "下一步建议、待办、标题、自动归档和轻量任务用的模型。", "en": "Next-step suggestions, to-dos, titles, auto-archive, and the model for quick tasks."},
+  "SettingsPage.conversationDescription": {"zh": "下一步建议、待办、标题、自动归档、翻译和轻量任务用的模型。", "en": "Next-step suggestions, to-dos, titles, auto-archive, translation, and the model for quick tasks."},
   "SettingsPage.extensions": {"zh": "扩展", "en": "Extensions"},
   "SettingsPage.localAgents": {
     "zh": "外部智能体",

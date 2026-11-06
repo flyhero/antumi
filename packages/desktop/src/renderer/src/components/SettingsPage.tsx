@@ -46,8 +46,7 @@ import {
   BoltIcon,
   RobotIcon,
   PulseIcon,
-  TerminalIcon,
-  TranslateIcon
+  TerminalIcon
 } from './icons'
 import { ChatCommandSettings } from './ChatCommandSettings'
 import { KnowledgeBaseSettings } from './KnowledgeBaseSettings'
@@ -139,7 +138,7 @@ function QuickModelPicker({ agent }: { agent: AgentKind }) {
   )
 }
 
-function TranslationSettings() {
+function TranslationRows() {
   const to = usePreferences((s) => s.translateTo)
   const auto = usePreferences((s) => s.autoTranslate)
   const supported = useTranslateSupported()
@@ -158,7 +157,6 @@ function TranslationSettings() {
         description={t('SettingsPage.translateOnlyRepliesVisibleOnScreenClickOriginal')}
         control={(labelId) => <Toggle labelId={labelId} checked={auto} onChange={(next) => setPreference('autoTranslate', next)} />}
       />
-      <p className="settings-note">{t('SettingsPage.usesTheConversationSAgentChooseTheModel')}</p>
     </>
   )
 }
@@ -358,6 +356,7 @@ function ConversationSettings() {
       <TitleNamingSettings />
       <AutoArchiveSettings />
       <WorktreeCleanSettings />
+      <TranslationRows />
       <SettingsRow
         label={t('SettingsPage.modelForQuickTasks_1609')}
         description={t('SettingsPage.useThisAgentSModelForTranslationCommit')}
@@ -561,15 +560,6 @@ const SECTIONS: readonly Section[] = localized(() => ([
     grouped: true
   },
   {
-    id: 'translation',
-    group: t('SettingsPage.interface'),
-    title: t('ChatContextMenu.translate'),
-    description: t('SettingsPage.translateAgentRepliesIntoYourLanguage'),
-    keywords: [t('ChatContextMenu.translate'), t('SettingsPage.language'), t('SettingsPage.chinese'), t('SettingsPage.english'), 'english', t('SettingsPage.japanese'), t('SettingsPage.korean'), t('SettingsPage.autoTranslate'), t('SettingsPage.original'), t('SettingsPage.translation'), 'haiku'],
-    Icon: TranslateIcon,
-    Body: TranslationSettings
-  },
-  {
     id: 'usage',
     group: t('SettingsPage.interface'),
     title: t('SettingsPage.usageQuota'),
@@ -660,13 +650,23 @@ const PERMISSIONS_SECTION: Section = localized(() => ({
   Body: PermissionSettings
 }))
 
-// How conversations behave: suggestions, to-dos, titles, archiving, the quick-task model.
+// How conversations behave: suggestions, to-dos, titles, archiving, translation, the quick-task model.
 const CONVERSATION_SECTION: Section = localized(() => ({
   id: 'conversation',
   group: t('sidebar.conversations'),
   title: t('sidebar.conversations'),
   description: t('SettingsPage.conversationDescription'),
-  keywords: [t('SettingsPage.chat'), t('BrowserPanel.conversation'), t('SettingsPage.suggestNextStepsAfterEachTurn'), t('chatTools.toDos'), 'todo', t('ConversationList.title'), t('SettingsPage.naming'), t('ConversationActions.rename'), t('SettingsPage.firstTurn'), t('SettingsPage.everyTurn'), t('ConversationActions.archive'), t('SettingsPage.autoArchive'), t('SettingsPage.inactive'), t('SettingsPage.cleanup'), t('AgentModelPicker.model'), t('SettingsPage.quick'), t('ConversationBranches.commitMessage'), t('DiscussionView.summary'), 'haiku'],
+  keywords: [
+    t('SettingsPage.chat'), t('BrowserPanel.conversation'), t('SettingsPage.suggestNextStepsAfterEachTurn'),
+    t('chatTools.toDos'), 'todo', t('ConversationList.title'), t('SettingsPage.naming'),
+    t('ConversationActions.rename'), t('SettingsPage.firstTurn'), t('SettingsPage.everyTurn'),
+    t('ConversationActions.archive'), t('SettingsPage.autoArchive'), t('SettingsPage.inactive'),
+    t('SettingsPage.cleanup'), t('ChatContextMenu.translate'), t('SettingsPage.language'),
+    t('SettingsPage.chinese'), t('SettingsPage.english'), 'english', t('SettingsPage.japanese'),
+    t('SettingsPage.korean'), t('SettingsPage.autoTranslate'), t('SettingsPage.original'),
+    t('SettingsPage.translation'), t('AgentModelPicker.model'), t('SettingsPage.quick'),
+    t('ConversationBranches.commitMessage'), t('DiscussionView.summary'), 'haiku'
+  ],
   Icon: ChatIcon,
   Body: ConversationSettings
 }))

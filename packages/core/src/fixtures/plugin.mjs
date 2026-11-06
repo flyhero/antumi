@@ -20,6 +20,7 @@ lines.on('line', (line) => {
     send({ type: 'result', id, result: { protocolVersion: behavior.badHandshake ? 999 : 1, id: manifest.id, version: manifest.version, sources: manifest.contributes.sources.map((source) => source.id) } })
     return
   }
+  if (behavior.stderr) process.stderr.write(behavior.stderr)
   if (behavior.mode === 'crash') process.exit(2)
   if (behavior.mode === 'hang') return
   if (behavior.mode === 'invalid') { process.stdout.write('not JSON\n'); return }

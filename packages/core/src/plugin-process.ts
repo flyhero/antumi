@@ -6,6 +6,33 @@ import type { LoginSession, SourceCredential, SourceProvider } from './source-pr
 
 const MAX_OUTPUT = 8 * 1024 * 1024
 const RESERVED_ENV = /^(?:NODE_|ELECTRON_|ANTUMI_HOME$|LD_|DYLD_)/
+// What a plugin writes to stderr goes to core's log, as far as a log can take it from one call.
+const LOGGED_LINES = 50
+const LOGGED_LINE_LENGTH = 500
+
+// Lines as they complete, each cut to a length and stripped of control characters, up to a count.
+export function stderrLines(log: (line: string) => void, limit = LOGGED_LINES): { write(chunk: Buffer): void; end(): void } {
+  let partial = ''
+  let logged = 0
+  const emit = (line: string) => {
+    const text = line.replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, '').trim()
+    if (!text || logged > limit) return
+    logged += 1
+    log(logged > limit ? '…（后面的输出没有记录）' : text.length > LOGGED_LINE_LENGTH ? `${text.slice(0, LOGGED_LINE_LENGTH)}…` : text)
+  }
+  return {
+    write(chunk) {
+      const lines = (partial + chunk.toString('utf8')).split('\n')
+      partial = lines.pop() ?? ''
+      if (partial.length > LOGGED_LINE_LENGTH * 4) partial = partial.slice(0, LOGGED_LINE_LENGTH * 4)
+      lines.forEach(emit)
+    },
+    end() {
+      if (partial) emit(partial)
+      partial = ''
+    }
+  }
+}
 
 export function pluginEnvironment(names: readonly string[], env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const result: NodeJS.ProcessEnv = { PATH: env.PATH ?? '', ELECTRON_RUN_AS_NODE: '1' }
@@ -21,7 +48,12 @@ export class PluginProcess {
   private readonly controllers = new Set<AbortController>()
   private stopped = false
 
-  constructor(readonly manifest: PluginManifest, private readonly main: string, private readonly env: NodeJS.ProcessEnv = process.env) {}
+  constructor(
+    readonly manifest: PluginManifest,
+    private readonly main: string,
+    private readonly env: NodeJS.ProcessEnv = process.env,
+    private readonly log: (line: string) => void = (line) => console.error(`[antumi-core] plugin ${manifest.id}: ${line}`)
+  ) {}
 
   stop(): void {
     this.stopped = true
@@ -79,10 +111,13 @@ export class PluginProcess {
       signal.addEventListener('abort', cancel, { once: true })
       child.stdin.on('error', () => fail('插件输入已关闭'))
       child.on('error', () => fail('无法启动插件进程'))
+      const stderr = stderrLines(this.log)
       child.stderr.on('data', (chunk: Buffer) => {
         stderrBytes += chunk.length
         if (stderrBytes > MAX_OUTPUT) fail('插件日志超出大小限制')
+        else stderr.write(chunk)
       })
+      child.stderr.on('end', () => stderr.end())
       child.stdout.on('data', (chunk: Buffer) => {
         if (outcome) return
         bytes += chunk.length

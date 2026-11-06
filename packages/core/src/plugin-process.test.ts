@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { PluginProcess, pluginEnvironment } from './plugin-process'
+import { PluginProcess, pluginEnvironment, stderrLines } from './plugin-process'
 import { pluginFixture } from './plugin-fixtures'
 
 describe('plugin process boundary', () => {
@@ -42,6 +42,22 @@ describe('plugin process boundary', () => {
     const manifest = await pluginFixture(directory, { behavior: { mode } })
     const runtime = new PluginProcess(manifest, path.join(directory, 'main.mjs'))
     await expect(runtime.call('normalizeKey', { source: 'demo', key: '1' })).rejects.toBeInstanceOf(Error)
+  })
+
+  it("logs the plugin's stderr line by line", async () => {
+    const manifest = await pluginFixture(directory, { behavior: { stderr: '[demo] image a.png not fetched: timeout\n\u001b[31mred\u001b[0m\nlast without newline' } })
+    const logged: string[] = []
+    const runtime = new PluginProcess(manifest, path.join(directory, 'main.mjs'), process.env, (line) => logged.push(line))
+    await runtime.call('normalizeKey', { source: 'demo', key: 'D-1' })
+    expect(logged).toEqual(['[demo] image a.png not fetched: timeout', '[31mred[0m', 'last without newline'])
+  })
+
+  it('caps what one call can put in the log', () => {
+    const logged: string[] = []
+    const lines = stderrLines((line) => logged.push(line), 2)
+    lines.write(Buffer.from(`one\n${'x'.repeat(600)}\nthree\nfour\n`))
+    lines.end()
+    expect(logged).toEqual(['one', `${'x'.repeat(500)}…`, '…（后面的输出没有记录）'])
   })
 
   it('rejects incompatible handshakes', async () => {

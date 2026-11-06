@@ -1730,7 +1730,7 @@ button.task-tag:hover {
 .input::placeholder { color: var(--text-3); }
 
 .input:focus {
-  outline: 2px solid var(--focus);
+  outline: none;
   border-color: var(--accent);
 }
 
@@ -2627,7 +2627,6 @@ button.task-tag:hover {
 
 .md-editor:focus-within {
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--focus);
 }
 
 /* Live preview decorations from markdown-live-preview.ts; `.cm-editor` outranks CodeMirror's own `.cm-line` rules. */
@@ -3048,7 +3047,7 @@ body.side-panel-resizing * {
 .file-search-row > .tool-button { flex-shrink: 0; width: 26px; height: 26px; border-radius: var(--radius-sm); }
 .file-search-row > .tool-button svg { width: 16px; height: 16px; }
 .file-search-field { display: flex; align-items: center; gap: 2px; flex: 1 1 160px; max-width: 360px; min-width: 160px; height: 26px; padding: 0 3px 0 8px; border: 1px solid var(--border-2); border-radius: var(--radius-sm); background: var(--surface); }
-.file-search-field:focus-within { border-color: var(--accent); box-shadow: 0 0 0 2px var(--focus); }
+.file-search-field:focus-within { border-color: var(--accent); }
 .file-search-field[data-invalid='true'] { border-color: var(--danger); }
 .file-search-input { flex: 1; min-width: 0; padding: 0; border: 0; outline: none; background: transparent; color: var(--text); font: inherit; }
 .file-search-input::placeholder { color: var(--text-3); }

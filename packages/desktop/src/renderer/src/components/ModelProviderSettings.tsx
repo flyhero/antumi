@@ -2,7 +2,7 @@ import { probeProvider, useProviderProbes } from '../provider-probes'
 import { getLocale, t } from '../i18n'
 import { useLayoutEffect, useId, useRef, useState, type FormEvent } from 'react'
 import {
-  AGENT_KINDS, MODEL_PROVIDER_PRESETS, MODEL_PROVIDER_PRESET_IDS, providerUrlProblem, providerWireFor, sameModels,
+  AGENT_KINDS, MODEL_PROVIDER_PRESETS, MODEL_PROVIDER_PRESET_IDS, agentDescriptor, providerUrlProblem, providerWireFor, sameModels,
   type AgentKind, type ModelProvider, type ModelProviderInput, type ModelProviderModels, type ModelProviderPreset, type ModelProviderPresetId, type ModelProviderProbe, type ProviderModel, type ProviderWire
 } from '@antumi/protocol'
 import { perform, setSettingsOpen, useAccountsSupported, useCore } from '../core-store'
@@ -17,6 +17,8 @@ type Draft = {
   id: string | null
   name: string
   preset: ModelProviderPreset
+  // The local gateway a custom provider was started from, its addresses filled in; null when none.
+  template: ProviderTemplate | null
   apiKey: string
   hasKey: boolean
   // One model id per line; known: what is known of each beyond its id (the preset's, or as saved).
@@ -33,6 +35,13 @@ type Draft = {
   responsesUrl: string
 }
 
+// A custom provider for a gateway on this machine, addresses at its default port: not a preset, whose
+// addresses are fixed, as the user may have moved the port.
+const PROVIDER_TEMPLATES = ['cliproxyapi'] as const
+type ProviderTemplate = (typeof PROVIDER_TEMPLATES)[number]
+type Choice = ModelProviderPreset | ProviderTemplate
+const CLIPROXYAPI_URL = 'http://127.0.0.1:8317'
+
 type Limits = { context: string; output: string }
 type LimitField = keyof Limits
 
@@ -43,7 +52,7 @@ const presetName = (id: ModelProviderPresetId) => (getLocale() === 'en' ? MODEL_
 const presetNotes = (id: ModelProviderPresetId) => MODEL_PROVIDER_PRESETS[id].notes.map((note) => (getLocale() === 'en' ? note.en : note.zh))
 
 function draftOfPreset(preset: ModelProviderPreset): Draft {
-  const blank = { id: null, apiKey: '', hasKey: false, anthropicUrl: '', anthropicAuth: 'auth_token' as const, chatUrl: '', responsesUrl: '', limits: {} }
+  const blank = { id: null, template: null, apiKey: '', hasKey: false, anthropicUrl: '', anthropicAuth: 'auth_token' as const, chatUrl: '', responsesUrl: '', limits: {} }
   if (preset === 'custom') return { ...blank, name: '', preset, models: '', known: [], defaultModel: '', smallModel: '', agents: [] }
   const entry = MODEL_PROVIDER_PRESETS[preset]
   return {
@@ -52,9 +61,22 @@ function draftOfPreset(preset: ModelProviderPreset): Draft {
   }
 }
 
+// CLIProxyAPI serves all three wires under one port and takes its key in either header; the models
+// are whatever accounts it holds, so they come from its list.
+function draftOfTemplate(template: ProviderTemplate): Draft {
+  const draft: Draft = {
+    ...draftOfPreset('custom'), name: 'CLIProxyAPI', template,
+    anthropicUrl: CLIPROXYAPI_URL, responsesUrl: `${CLIPROXYAPI_URL}/v1`, chatUrl: `${CLIPROXYAPI_URL}/v1`
+  }
+  const endpoints = endpointsOf(draft)
+  return { ...draft, agents: (['claude', 'codex', 'opencode'] as const).filter((agent) => providerWireFor(endpoints, agent)) }
+}
+
+const draftOfChoice = (choice: Choice): Draft => (choice === 'cliproxyapi' ? draftOfTemplate(choice) : draftOfPreset(choice))
+
 function draftOf(provider: ModelProvider): Draft {
   return {
-    id: provider.id, name: provider.name, preset: provider.preset, apiKey: '', hasKey: provider.hasKey, limits: {},
+    id: provider.id, template: null, name: provider.name, preset: provider.preset, apiKey: '', hasKey: provider.hasKey, limits: {},
     models: provider.models.map((model) => model.id).join('\n'), known: provider.models,
     defaultModel: provider.defaultModel, smallModel: provider.smallModel, agents: [...provider.agents],
     anthropicUrl: provider.anthropic?.baseUrl ?? '', anthropicAuth: provider.anthropic?.auth ?? 'auth_token',
@@ -116,22 +138,31 @@ function urlProblems(draft: Draft): string[] {
   return [draft.anthropicUrl, draft.chatUrl, draft.responsesUrl].map((url) => url.trim()).filter((url) => url && providerUrlProblem(url) !== null)
 }
 
-function PresetGrid({ value, onPick }: { value: ModelProviderPreset; onPick: (preset: ModelProviderPreset) => void }) {
+function PresetGrid({ value, onPick }: { value: Choice; onPick: (choice: Choice) => void }) {
   return (
     <div className="provider-presets" role="radiogroup" aria-label={t('ModelProviderSettings.plan')}>
-      {[...MODEL_PROVIDER_PRESET_IDS, 'custom' as const].map((preset) => (
-        <button key={preset} type="button" role="radio" aria-checked={preset === value} className="provider-preset" onClick={() => onPick(preset)}>
+      {[...MODEL_PROVIDER_PRESET_IDS, ...PROVIDER_TEMPLATES, 'custom' as const].map((choice) => (
+        <button key={choice} type="button" role="radio" aria-checked={choice === value} className="provider-preset" onClick={() => onPick(choice)}>
           <span className="provider-preset-name">
-            <span className="provider-mark" data-vendor={preset === 'custom' ? 'custom' : PRESET_VENDOR[preset].vendor} aria-hidden="true">{preset === 'custom' ? '+' : PRESET_VENDOR[preset].mark}</span>
-            {preset === 'custom' ? t('ModelProviderSettings.custom') : presetName(preset)}
-            {preset !== 'custom' && <VerifiedBadge preset={preset} />}
+            <ChoiceMark choice={choice} />
+            {choiceName(choice)}
+            {choice !== 'custom' && choice !== 'cliproxyapi' && <VerifiedBadge preset={choice} />}
           </span>
-          <span className="provider-preset-host" title={preset === 'custom' ? undefined : presetHost(preset)}>{preset === 'custom' ? t('ModelProviderSettings.customHint') : presetHost(preset)}</span>
+          <span className="provider-preset-host" title={choice === 'custom' || choice === 'cliproxyapi' ? undefined : presetHost(choice)}>{choiceHint(choice)}</span>
         </button>
       ))}
     </div>
   )
 }
+
+function ChoiceMark({ choice }: { choice: Choice }) {
+  if (choice === 'custom') return <span className="provider-mark" data-vendor="custom" aria-hidden="true">+</span>
+  if (choice === 'cliproxyapi') return <span className="provider-mark" data-vendor="local" aria-hidden="true">C</span>
+  return <span className="provider-mark" data-vendor={PRESET_VENDOR[choice].vendor} aria-hidden="true">{PRESET_VENDOR[choice].mark}</span>
+}
+
+const choiceName = (choice: Choice) => (choice === 'custom' ? t('ModelProviderSettings.custom') : choice === 'cliproxyapi' ? 'CLIProxyAPI' : presetName(choice))
+const choiceHint = (choice: Choice) => (choice === 'custom' ? t('ModelProviderSettings.customHint') : choice === 'cliproxyapi' ? t('ModelProviderSettings.cliProxyHint') : presetHost(choice))
 
 function presetHost(preset: ModelProviderPresetId): string {
   const { anthropic, openai } = MODEL_PROVIDER_PRESETS[preset]
@@ -195,6 +226,24 @@ function ModelListing({ listing, current, onChange, onTake }: { listing: Listing
   )
 }
 
+const ADDRESS_LABELS = { anthropic: 'ModelProviderSettings.anthropicUrl', 'openai-responses': 'ModelProviderSettings.responsesUrl', 'openai-chat': 'ModelProviderSettings.chatUrl' } as const satisfies Record<ProviderWire, string>
+
+// Why an agent can't be ticked: for a custom provider, the address it would need (any of those its
+// descriptor takes); an agent that takes no provider, or a preset's, which has the addresses it has.
+function UnservableHint({ servable, custom }: { servable: readonly AgentKind[]; custom: boolean }) {
+  const unservable = AGENT_KINDS.filter((agent) => !servable.includes(agent))
+  const wiresOf = (agent: AgentKind) => agentDescriptor(agent).capabilities.modelProviders
+  const needs = custom ? unservable.filter((agent) => wiresOf(agent).length > 0) : []
+  const never = unservable.filter((agent) => !needs.includes(agent))
+  if (unservable.length === 0) return null
+  return (
+    <span className="chat-command-hint">
+      {needs.length > 0 && <>{t('ModelProviderSettings.agentsNeed', { value1: needs.map((agent) => t('ModelProviderSettings.agentAddress', { value1: agentLabel(agent), value2: wiresOf(agent).map((wire) => t(ADDRESS_LABELS[wire])).join(t('ModelProviderSettings.or')) })).join(t('ModelProviderSettings.listSeparator')) })} </>}
+      {never.length > 0 && t('ModelProviderSettings.agentsUnservable', { value1: never.map(agentLabel).join('、') })}
+    </span>
+  )
+}
+
 function ProviderForm({ initial, onDone }: { initial: Draft; onDone: (saved: string | null) => void }) {
   const [draft, setDraft] = useState(initial)
   const [saving, setSaving] = useState(false)
@@ -225,7 +274,7 @@ function ProviderForm({ initial, onDone }: { initial: Draft; onDone: (saved: str
   const canFetch = canList && hasEndpoint && badUrls.length === 0 && keyReady && listing !== 'running'
 
   // Picking a preset starts its form over; the key typed so far stays.
-  const pick = (next: ModelProviderPreset) => setDraft((current) => ({ ...draftOfPreset(next), apiKey: current.apiKey }))
+  const pick = (next: Choice) => setDraft((current) => ({ ...draftOfChoice(next), apiKey: current.apiKey }))
   const setModels = (text: string) => setDraft((current) => withModels(current, text))
   const setLimit = (model: ProviderModel, field: LimitField, text: string) => setDraft((current) => ({
     ...current,
@@ -270,8 +319,8 @@ function ProviderForm({ initial, onDone }: { initial: Draft; onDone: (saved: str
       {/* Both parts open at first: what a plan fills in is there to read before saving. */}
       {draft.id === null && (
         <details open className="settings-disclosure provider-plan-switcher">
-          <summary>{t('ModelProviderSettings.plan')}<span>{draft.preset === 'custom' ? t('ModelProviderSettings.custom') : presetName(draft.preset)}</span><ChevronDownIcon /></summary>
-          <PresetGrid value={draft.preset} onPick={pick} />
+          <summary>{t('ModelProviderSettings.plan')}<span>{choiceName(draft.template ?? draft.preset)}</span><ChevronDownIcon /></summary>
+          <PresetGrid value={draft.template ?? draft.preset} onPick={pick} />
           <span className="chat-command-hint">{t('ModelProviderSettings.unverifiedHint')}</span>
         </details>
       )}
@@ -290,6 +339,7 @@ function ProviderForm({ initial, onDone }: { initial: Draft; onDone: (saved: str
         </span>
       </label>
       {presetId && <p className="settings-note">{presetNotes(presetId)[0]}</p>}
+      {draft.template === 'cliproxyapi' && <p className="settings-note">{t('ModelProviderSettings.cliProxyNote')}</p>}
       {preset && <p className="provider-ready-summary">{t('SettingsPage.providerPresetHint', { model: draft.defaultModel, agents: draft.agents.filter((agent) => servable.includes(agent)).map(agentLabel).join('、') })}</p>}
       <details open className="settings-disclosure provider-advanced">
         <summary>{preset ? t('SettingsPage.providerAdvanced') : t('SettingsPage.providerCustomSetup')}</summary>
@@ -358,9 +408,7 @@ function ProviderForm({ initial, onDone }: { initial: Draft; onDone: (saved: str
             </label>
           ))}
         </span>
-        {servable.length < AGENT_KINDS.length && (
-          <span className="chat-command-hint">{t('ModelProviderSettings.agentsUnservable', { value1: AGENT_KINDS.filter((agent) => !servable.includes(agent)).map(agentLabel).join('、') })}</span>
-        )}
+        <UnservableHint servable={servable} custom={draft.preset === 'custom'} />
       </div>
       {preset ? (
         <div className="chat-command-field">
@@ -488,6 +536,11 @@ export function ModelProviderSettings() {
             <span className="provider-mark" data-vendor={PRESET_VENDOR[preset].vendor} aria-hidden="true">{PRESET_VENDOR[preset].mark}</span>
             <span><strong>{presetName(preset)}</strong><span className="settings-quota-note">{MODEL_PROVIDER_PRESETS[preset].agents.map(agentLabel).join(' · ')}</span></span>
             <VerifiedBadge preset={preset} /><ChevronRightIcon />
+          </button>)}
+          {PROVIDER_TEMPLATES.map((template) => <button type="button" key={template} className="provider-start-row" onClick={() => setDraft(draftOfTemplate(template))}>
+            <ChoiceMark choice={template} />
+            <span><strong>{choiceName(template)}</strong><span className="settings-quota-note">{choiceHint(template)}</span></span>
+            <ChevronRightIcon />
           </button>)}
           <p className="settings-note">{t('ModelProviderSettings.unverifiedHint')}</p>
         </div>

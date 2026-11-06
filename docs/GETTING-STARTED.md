@@ -22,6 +22,8 @@
 
 新建会话时在输入框的 **服务商** 里选它，按服务商计费，不占官方额度；会话开始后不能再换。
 
+**本机代理（CLIProxyAPI 等）**：选 **CLIProxyAPI**，地址按默认端口 8317 填好，Key 填它配置里 `access.api-keys` 的一个，再点 **从接口获取模型**。其他代理选 **自定义**：Claude Code 要填 Anthropic 协议地址，Codex 要填 Responses 地址，OpenCode 填哪种都行；接口没列出上下文大小的，在 **上下文与最大输出** 里按实际上限填。
+
 ## 多个账号
 
 **可选，** 只有 Claude Code 和 Codex 支持。

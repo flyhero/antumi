@@ -5396,6 +5396,7 @@ div.inspector-empty > p { margin: 0 0 8px; }
 .provider-mark[data-vendor='minimax'] { --vendor: var(--vendor-minimax); }
 .provider-mark[data-vendor='bailian'] { --vendor: var(--vendor-bailian); }
 .provider-mark[data-vendor='deepseek'] { --vendor: var(--vendor-deepseek); }
+.provider-mark[data-vendor='local'] { --vendor: var(--surface-muted); --vendor-ink: var(--text); border: 1px solid var(--border-2); }
 .provider-mark[data-vendor='custom'] { --vendor: transparent; --vendor-ink: var(--text-muted); border: 1px dashed var(--border-2); font-size: 12px; font-weight: 400; }
 .provider-preset:hover { border-color: var(--border-2); }
 .provider-preset[aria-checked='true'] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }

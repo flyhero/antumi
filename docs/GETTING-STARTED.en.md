@@ -22,6 +22,8 @@ In [**Settings → Model providers**](antumi:settings/model-providers), click **
 
 Pick it in the **Provider** control of the input box when starting a conversation. It bills the provider's plan, not the agent's quota, and cannot be changed once the conversation has started.
 
+**A local proxy (CLIProxyAPI and the like)**: pick **CLIProxyAPI**; its addresses are filled in for the default port 8317. Use one of the keys under `access.api-keys` in its config, then click **Fetch models from the endpoints**. For another proxy pick **Custom**: Claude Code needs the Anthropic endpoint, Codex the Responses endpoint, and OpenCode takes any. Where the endpoint does not say how large a model is, enter its real limits under **Context and output**.
+
 ## Multiple accounts
 
 **Optional,** for Claude Code and Codex only.

@@ -20,7 +20,7 @@ type QuickOutput = { stdout: string; error: Rejection | null }
 
 // Where a small job for a conversation on a model provider goes: the provider, on its small model,
 // whatever model the user picked for the agent's own small jobs. routeKey: ProviderRoute.key.
-export type QuickProvider = { endpoint: ProviderEndpoint; apiKey: string; model: string; routeKey: string }
+export type QuickProvider = { endpoint: ProviderEndpoint; apiKey: string; model: string; routeKey: string; headers?: Readonly<Record<string, string>> }
 
 // A translation's answer is as long as the reply; a provider caps what it takes below this anyway.
 const PROVIDER_MAX_TOKENS = 8192

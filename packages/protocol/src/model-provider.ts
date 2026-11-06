@@ -46,6 +46,30 @@ export const ProviderUrl = z.string().trim().max(2048).refine((text) => provider
 export const PROVIDER_CLAUDE_ENV = ['API_TIMEOUT_MS', 'ENABLE_TOOL_SEARCH', 'CLAUDE_CODE_MAX_OUTPUT_TOKENS', 'CLAUDE_CODE_AUTO_COMPACT_WINDOW'] as const
 export const ProviderClaudeEnv = z.enum(PROVIDER_CLAUDE_ENV)
 
+// Request headers sent to a provider besides those each agent sets itself, such as a client name a
+// proxy in front of subscription accounts expects. Never a header that carries the key or frames the
+// request, which the agent sets; names are unique whatever their case. Not secret: kept in the
+// settings file and shown to clients.
+const RESERVED_HEADERS = new Set(['authorization', 'proxy-authorization', 'x-api-key', 'host', 'content-length', 'content-type', 'transfer-encoding', 'connection'])
+export const PROVIDER_HEADER_LIMIT = 20
+
+export function providerHeaderProblem(name: string, value: string): 'name' | 'reserved' | 'value' | null {
+  if (!/^[A-Za-z0-9!#$%&'*+.^_`|~-]{1,100}$/.test(name)) return 'name'
+  if (RESERVED_HEADERS.has(name.toLowerCase())) return 'reserved'
+  if (value.length > 1000 || /[\r\n\0]/.test(value)) return 'value'
+  return null
+}
+
+export const ProviderHeaders = z.record(z.string(), z.string())
+  .refine((headers) => Object.entries(headers).every(([name, value]) => providerHeaderProblem(name, value) === null))
+  .refine((headers) => Object.keys(headers).length <= PROVIDER_HEADER_LIMIT && new Set(Object.keys(headers).map((name) => name.toLowerCase())).size === Object.keys(headers).length)
+export type ProviderHeaders = z.infer<typeof ProviderHeaders>
+
+// Where a conversation's small jobs on the provider go (titles, translations, commit messages):
+// the provider's small model, the agent's own account, or nowhere.
+export const ProviderSmallJobs = z.enum(['provider', 'account', 'off'])
+export type ProviderSmallJobs = z.infer<typeof ProviderSmallJobs>
+
 // auth: how the key goes: a bearer token (ANTHROPIC_AUTH_TOKEN), or an x-api-key (ANTHROPIC_API_KEY),
 // which some endpoints require and refuse the other.
 export const AnthropicEndpoint = z.object({
@@ -102,6 +126,9 @@ export const ModelProvider = z.object({
   // A preset's provider whose models are the preset's own, which follow it from release to release.
   // Older cores leave it out.
   modelsFromPreset: z.boolean().optional(),
+  // Older cores leave these out: no headers, small jobs on the provider.
+  headers: ProviderHeaders.optional(),
+  smallJobs: ProviderSmallJobs.optional(),
   hasKey: z.boolean(),
   revision: z.number().int().nonnegative(),
   createdAt: z.number(),
@@ -121,7 +148,10 @@ export const ModelProviderInput = z.object({
   defaultModel: z.string().trim().min(1),
   smallModel: z.string().trim().min(1),
   agents: z.array(AgentKind),
-  apiKey: z.string().trim().min(1).max(4096).nullable()
+  apiKey: z.string().trim().min(1).max(4096).nullable(),
+  // Left out (an older client), what was saved stays.
+  headers: ProviderHeaders.optional(),
+  smallJobs: ProviderSmallJobs.optional()
 })
 export type ModelProviderInput = z.infer<typeof ModelProviderInput>
 
@@ -145,7 +175,8 @@ export const ModelProviderModelsQuery = z.object({
   preset: ModelProviderPreset,
   anthropic: AnthropicEndpoint.nullable().optional(),
   openai: OpenAiEndpoint.nullable().optional(),
-  apiKey: z.string().trim().min(1).max(4096).nullable()
+  apiKey: z.string().trim().min(1).max(4096).nullable(),
+  headers: ProviderHeaders.optional()
 })
 export type ModelProviderModelsQuery = z.infer<typeof ModelProviderModelsQuery>
 
@@ -200,7 +231,10 @@ export const ProviderRoute = z.object({
   key: z.string(),
   models: z.array(ProviderModel),
   defaultModel: z.string(),
-  smallModel: z.string()
+  smallModel: z.string(),
+  // Absent on stages that ran before them: no headers, small jobs on the provider.
+  headers: ProviderHeaders.optional(),
+  smallJobs: ProviderSmallJobs.optional()
 })
 export type ProviderRoute = z.infer<typeof ProviderRoute>
 

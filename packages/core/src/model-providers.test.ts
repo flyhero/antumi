@@ -3,7 +3,7 @@ import { readFile, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { MODEL_PROVIDER_PRESETS, type ModelProviderInput } from '@antumi/protocol'
+import { MODEL_PROVIDER_PRESETS, ModelProviderInput } from '@antumi/protocol'
 import { CredentialStore } from './credential-store'
 import { ModelProviderStore } from './model-providers'
 
@@ -129,6 +129,25 @@ describe('ModelProviderStore', () => {
     expect(saved.models[0]).toMatchObject({ contextWindow: 64_000, maxOutput: 8_000, efforts: own.models[0]?.efforts })
     const restored = await store.save(preset({ id: saved.id, apiKey: null, preset: 'zhipu-glm-coding', models: [...own.models], defaultModel: own.defaultModel, smallModel: own.smallModel, agents: ['claude'] }))
     expect(restored.modelsFromPreset).toBe(true)
+  })
+
+  it('keeps headers and where small jobs go across an edit that leaves them out', async () => {
+    const saved = await store.save(custom({ headers: { 'User-Agent': 'claude-cli/2.1.280 (external, cli)' }, smallJobs: 'off' }))
+    expect(saved).toMatchObject({ headers: { 'User-Agent': 'claude-cli/2.1.280 (external, cli)' }, smallJobs: 'off' })
+    const renamed = await store.save(custom({ id: saved.id, name: 'Renamed', apiKey: null }))
+    expect(renamed).toMatchObject({ headers: { 'User-Agent': 'claude-cli/2.1.280 (external, cli)' }, smallJobs: 'off' })
+    expect(await store.save(custom({ id: saved.id, apiKey: null, headers: {}, smallJobs: 'provider' }))).toMatchObject({ headers: {}, smallJobs: 'provider' })
+    expect((await store.save(preset())).smallJobs).toBe('provider')
+  })
+
+  it.each([
+    ['a header that carries the key', { Authorization: 'Bearer x' }],
+    ['one that frames the request', { 'content-length': '1' }],
+    ['a name that is no header name', { 'User Agent': 'x' }],
+    ['a value over two lines', { 'X-Client': 'a\r\nX-Other: b' }],
+    ['the same name twice', { 'X-Client': 'a', 'x-client': 'b' }]
+  ])('refuses %s', (_label, headers) => {
+    expect(ModelProviderInput.safeParse(custom({ headers })).success).toBe(false)
   })
 
   it('takes a custom provider\'s own endpoints, and http on this machine', async () => {

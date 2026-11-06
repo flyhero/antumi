@@ -11,7 +11,9 @@ export function codexProviderLaunch(provider: ProviderLaunch, model: string | un
   const name = `antumi-${provider.providerId}`
   const chosen = model ?? provider.defaultModel
   const entry = { name, base_url: provider.endpoint.baseUrl, env_key: PROVIDER_KEY_ENV, wire_api: 'responses' }
-  const table = `{${Object.entries(entry).map(([key, value]) => `${key}=${JSON.stringify(value)}`).join(',')},requires_openai_auth=false}`
+  const headers = Object.entries(provider.headers)
+  const httpHeaders = headers.length ? `,http_headers={${headers.map(([name, value]) => `${JSON.stringify(name)}=${JSON.stringify(value)}`).join(',')}}` : ''
+  const table = `{${Object.entries(entry).map(([key, value]) => `${key}=${JSON.stringify(value)}`).join(',')},requires_openai_auth=false${httpHeaders}}`
   const picked = provider.models.find((each) => each.id === chosen)
   return {
     args: [

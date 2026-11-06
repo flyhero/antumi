@@ -26,7 +26,7 @@ export type PiExtensionConfig = {
 
 // A model provider as registerProvider takes one, but the key. bearer: the provider takes the key
 // as a bearer token over Anthropic's API, which sends it as x-api-key.
-export type PiProvider = { name: string; baseUrl: string; api: 'openai-completions' | 'openai-responses' | 'anthropic-messages'; bearer: boolean; models: PiProviderModel[] }
+export type PiProvider = { name: string; baseUrl: string; api: 'openai-completions' | 'openai-responses' | 'anthropic-messages'; bearer: boolean; headers: Record<string, string>; models: PiProviderModel[] }
 
 export const PI_CONFIG_ENV = 'ANTUMI_PI'
 
@@ -93,7 +93,7 @@ function registerProvider(pi, provider) {
     baseUrl: provider.baseUrl,
     api: provider.api,
     apiKey,
-    ...(provider.bearer ? { headers: { authorization: 'Bearer ' + key } } : {}),
+    headers: { ...provider.headers, ...(provider.bearer ? { authorization: 'Bearer ' + key } : {}) },
     models: provider.models
   })
 }

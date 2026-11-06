@@ -34,7 +34,7 @@ async function load(config: PiExtensionConfig) {
 
 const CONFIG: PiExtensionConfig = { mode: 'ask', servers: {}, noEdit: [], workDirs: [], readTools: ['mcp__antumi__show_preview'] }
 
-const PROVIDER = { name: 'antumi-glm', baseUrl: 'https://open.bigmodel.cn/api/anthropic', api: 'anthropic-messages' as const, bearer: true, models: [] }
+const PROVIDER = { name: 'antumi-glm', baseUrl: 'https://open.bigmodel.cn/api/anthropic', api: 'anthropic-messages' as const, bearer: true, headers: {}, models: [] }
 const KEY = 'ANTUMI_MODEL_PROVIDER_KEY'
 
 describe('Antumi extension for Pi', () => {

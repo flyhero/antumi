@@ -55,6 +55,12 @@ describe('fetchProviderModels', () => {
     expect(found.endpoints).toEqual([{ wire: 'openai-responses', ok: true, count: 2, status: 200, message: null }])
   })
 
+  it('sends the provider\'s headers under its own auth', async () => {
+    const { base, seen } = await serve(() => ({ status: 200, body: { data: [] } }))
+    await fetchProviderModels(openai(base), KEY, { headers: { 'User-Agent': 'proxy-client/1', authorization: 'nope' } })
+    expect(seen[0]?.headers).toMatchObject({ 'user-agent': 'proxy-client/1', authorization: `Bearer ${KEY}` })
+  })
+
   it('pages an Anthropic list at its own address, and stops on a cursor it has seen', async () => {
     const { base, seen } = await serve(({ url }) => {
       const after = new URL(url, 'http://x').searchParams.get('after_id')

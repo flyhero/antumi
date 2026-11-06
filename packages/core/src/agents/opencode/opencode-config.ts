@@ -40,7 +40,9 @@ function opencodeProvider(provider: ProviderLaunch): Record<string, unknown> {
       // The Anthropic package adds /messages only.
       baseURL: anthropic ? `${anthropicBaseUrl(endpoint.baseUrl)}/v1` : endpoint.baseUrl.replace(/\/+$/, ''),
       apiKey: key,
-      ...(anthropic && endpoint.anthropic?.auth === 'auth_token' ? { headers: { authorization: `Bearer ${key}` } } : {})
+      ...(Object.keys(provider.headers).length || (anthropic && endpoint.anthropic?.auth === 'auth_token')
+        ? { headers: { ...provider.headers, ...(anthropic && endpoint.anthropic?.auth === 'auth_token' ? { authorization: `Bearer ${key}` } : {}) } }
+        : {})
     },
     models: Object.fromEntries(provider.models.map((model) => [model.id, {
       name: model.label ?? model.id,

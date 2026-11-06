@@ -2236,7 +2236,10 @@ function quickProviderOf(decision: RouteDecision): QuickProvider | undefined {
   if (decision.kind === 'unavailable') throw new Rejection('model-provider-unavailable', decision.message)
   if (decision.kind === 'own') return undefined
   const { route, apiKey } = decision
-  return { endpoint: { wire: route.wire, baseUrl: route.baseUrl, anthropic: route.anthropic }, apiKey, model: route.smallModel, routeKey: route.key }
+  // The user may keep these off a provider whose accounts must not see more than the agent sends.
+  if (route.smallJobs === 'account') return undefined
+  if (route.smallJobs === 'off') throw new Rejection('model-provider-small-jobs-off', `服务商「${route.name}」设置了不做标题、翻译这类小任务`)
+  return { endpoint: { wire: route.wire, baseUrl: route.baseUrl, anthropic: route.anthropic }, apiKey, model: route.smallModel, routeKey: route.key, headers: route.headers ?? {} }
 }
 
 // What was said in a lost provider session that never got an answer is left out of the handoff:

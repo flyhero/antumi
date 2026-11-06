@@ -14,7 +14,7 @@ function launchOn(agent: AgentKind, preset: keyof typeof MODEL_PROVIDER_PRESETS 
   const { anthropic, openai } = MODEL_PROVIDER_PRESETS[preset]
   const endpoint = providerEndpoint({ anthropic, openai, agents: [agent] }, agent)
   if (!endpoint) throw new Error(`${preset} serves no ${agent}`)
-  return { providerId: 'glm-1', endpoint, models, defaultModel: 'glm-5.3', smallModel: 'glm-5.3-flash', apiKey: KEY }
+  return { providerId: 'glm-1', endpoint, models, defaultModel: 'glm-5.3', smallModel: 'glm-5.3-flash', headers: {}, apiKey: KEY }
 }
 
 const start = (agent: AgentKind, provider: ProviderLaunch, model?: string) =>
@@ -98,6 +98,18 @@ describe('starting an agent on a model provider', () => {
       options: { baseURL: 'https://api.minimax.io/anthropic/v1', apiKey: '{env:ANTUMI_MODEL_PROVIDER_KEY}', headers: { authorization: 'Bearer {env:ANTUMI_MODEL_PROVIDER_KEY}' } }
     })
     expect(adapterOf('opencode').providerModels?.(launchOn('opencode')).map((model) => model.id)).toEqual(['antumi-glm-1/glm-5.3', 'antumi-glm-1/glm-5.3-air', 'antumi-glm-1/glm-5.3-flash'])
+  })
+
+  it('sends the provider\'s own headers from every agent that can run on it', () => {
+    const headers = { 'User-Agent': 'proxy-client/1', 'X-Team': 'antumi' }
+    const on = (agent: AgentKind, preset: keyof typeof MODEL_PROVIDER_PRESETS = 'zhipu-glm-coding') => ({ ...launchOn(agent, preset), headers })
+    expect(start('claude', on('claude')).env?.ANTHROPIC_CUSTOM_HEADERS).toBe('User-Agent: proxy-client/1\nX-Team: antumi')
+    expect(start('claude', launchOn('claude')).env?.ANTHROPIC_CUSTOM_HEADERS).toBe('')
+    expect(start('codex', on('codex', 'volcengine-agent-plan')).args.join(' ')).toContain('http_headers={"User-Agent"="proxy-client/1","X-Team"="antumi"}')
+    const opencode = JSON.parse(start('opencode', on('opencode')).env?.OPENCODE_CONFIG_CONTENT ?? '{}')
+    expect(opencode.provider['antumi-glm-1'].options.headers).toEqual(headers)
+    const minimax = JSON.parse(start('opencode', on('opencode', 'minimax')).env?.OPENCODE_CONFIG_CONTENT ?? '{}')
+    expect(minimax.provider['antumi-glm-1'].options.headers).toEqual({ ...headers, authorization: 'Bearer {env:ANTUMI_MODEL_PROVIDER_KEY}' })
   })
 
   it('leaves an agent on its own account without a provider', () => {

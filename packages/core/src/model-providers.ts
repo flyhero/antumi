@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { z } from 'zod'
 import {
-  AgentKind, AnthropicEndpoint, MODEL_PROVIDER_PRESETS, ModelProviderId, ModelProviderPreset, OpenAiEndpoint, ProviderModel, agentDescriptor, providerUrlProblem, providerWireFor, sameModels,
+  AgentKind, AnthropicEndpoint, MODEL_PROVIDER_PRESETS, ModelProviderId, ModelProviderPreset, OpenAiEndpoint, ProviderHeaders, ProviderModel, ProviderSmallJobs, agentDescriptor, providerUrlProblem, providerWireFor, sameModels,
   type ModelProvider, type ModelProviderInput, type ModelProviderModels, type ModelProviderModelsQuery, type ModelProviderProbe
 } from '@antumi/protocol'
 import { readJsonIfExists, writePrivateJson } from '@antumi/protocol/node'
@@ -26,6 +26,9 @@ const Saved = z.object({
   defaultModel: z.string().nullable(),
   smallModel: z.string().nullable(),
   agents: z.array(AgentKind),
+  // Absent in files written before them: none, and small jobs on the provider.
+  headers: ProviderHeaders.optional(),
+  smallJobs: ProviderSmallJobs.optional(),
   keyRef: z.string().nullable(),
   revision: z.number().int(),
   createdAt: z.number(),
@@ -105,7 +108,8 @@ export class ModelProviderStore {
     const endpoints = endpointsOf(query)
     checkEndpoints(endpoints)
     const apiKey = query.apiKey ?? this.keptKey(query.id, endpoints)
-    return fetchProviderModels(endpoints, apiKey)
+    const saved = query.id === null ? null : this.require(query.id)
+    return fetchProviderModels(endpoints, apiKey, { headers: query.headers ?? saved?.headers ?? {} })
   }
 
   save(input: ModelProviderInput): Promise<ModelProvider> {
@@ -142,6 +146,9 @@ export class ModelProviderStore {
         defaultModel: follows && input.defaultModel === preset.defaultModel ? null : input.defaultModel,
         smallModel: follows && input.smallModel === preset.smallModel ? null : input.smallModel,
         agents,
+        // An older client sends neither: what was saved stays.
+        headers: input.headers ?? previous?.headers ?? {},
+        smallJobs: input.smallJobs ?? previous?.smallJobs ?? 'provider',
         keyRef, revision, createdAt: previous?.createdAt ?? now, updatedAt: now
       }
       await this.write(previous ? this.providers.map((each) => (each.id === id ? saved : each)) : [...this.providers, saved])
@@ -173,6 +180,8 @@ export class ModelProviderStore {
       defaultModel: pick(saved.defaultModel, preset?.defaultModel),
       smallModel: pick(saved.smallModel, preset?.smallModel),
       modelsFromPreset: saved.models === null,
+      headers: saved.headers ?? {},
+      smallJobs: saved.smallJobs ?? 'provider',
       hasKey: this.keyOf(saved) !== null
     }
   }

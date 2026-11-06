@@ -3,11 +3,12 @@ import { getLocale, t } from '../i18n'
 import { useLayoutEffect, useId, useRef, useState, type FormEvent } from 'react'
 import {
   AGENT_KINDS, MODEL_PROVIDER_PRESETS, MODEL_PROVIDER_PRESET_IDS, agentDescriptor, providerUrlProblem, providerWireFor, sameModels,
-  type AgentKind, type ModelProvider, type ModelProviderInput, type ModelProviderModels, type ModelProviderPreset, type ModelProviderPresetId, type ModelProviderProbe, type ProviderModel, type ProviderWire
+  type AgentKind, type ModelProvider, type ModelProviderInput, type ModelProviderModels, type ProviderSmallJobs, type ModelProviderPreset, type ModelProviderPresetId, type ModelProviderProbe, type ProviderModel, type ProviderWire
 } from '@antumi/protocol'
 import { perform, setSettingsOpen, useAccountsSupported, useCore } from '../core-store'
 import { agentLabel } from '../labels'
 import { formatTokens, parseTokens, pickedIds, withListed } from '../provider-model-limits'
+import { formatProviderHeaders, parseProviderHeaders } from '../provider-headers'
 import { Segmented } from './SettingsControls'
 import { PRESET_VENDOR } from '../provider-vendors'
 import { SettingsEmptyState } from './SettingsEmptyState'
@@ -26,6 +27,9 @@ type Draft = {
   known: readonly ProviderModel[]
   // A model's context and output as typed, where edited; the rest read as known.
   limits: Readonly<Record<string, Limits>>
+  // Extra request headers, one `Name: value` a line, and where small jobs go.
+  headers: string
+  smallJobs: ProviderSmallJobs
   defaultModel: string
   smallModel: string
   agents: AgentKind[]
@@ -52,7 +56,7 @@ const presetName = (id: ModelProviderPresetId) => (getLocale() === 'en' ? MODEL_
 const presetNotes = (id: ModelProviderPresetId) => MODEL_PROVIDER_PRESETS[id].notes.map((note) => (getLocale() === 'en' ? note.en : note.zh))
 
 function draftOfPreset(preset: ModelProviderPreset): Draft {
-  const blank = { id: null, template: null, apiKey: '', hasKey: false, anthropicUrl: '', anthropicAuth: 'auth_token' as const, chatUrl: '', responsesUrl: '', limits: {} }
+  const blank = { id: null, template: null, apiKey: '', hasKey: false, anthropicUrl: '', anthropicAuth: 'auth_token' as const, chatUrl: '', responsesUrl: '', limits: {}, headers: '', smallJobs: 'provider' as const }
   if (preset === 'custom') return { ...blank, name: '', preset, models: '', known: [], defaultModel: '', smallModel: '', agents: [] }
   const entry = MODEL_PROVIDER_PRESETS[preset]
   return {
@@ -65,7 +69,8 @@ function draftOfPreset(preset: ModelProviderPreset): Draft {
 // are whatever accounts it holds, so they come from its list.
 function draftOfTemplate(template: ProviderTemplate): Draft {
   const draft: Draft = {
-    ...draftOfPreset('custom'), name: 'CLIProxyAPI', template,
+    // Its accounts are subscriptions: nothing goes to them but what an agent sends itself.
+    ...draftOfPreset('custom'), name: 'CLIProxyAPI', template, smallJobs: 'off',
     anthropicUrl: CLIPROXYAPI_URL, responsesUrl: `${CLIPROXYAPI_URL}/v1`, chatUrl: `${CLIPROXYAPI_URL}/v1`
   }
   const endpoints = endpointsOf(draft)
@@ -76,7 +81,7 @@ const draftOfChoice = (choice: Choice): Draft => (choice === 'cliproxyapi' ? dra
 
 function draftOf(provider: ModelProvider): Draft {
   return {
-    id: provider.id, template: null, name: provider.name, preset: provider.preset, apiKey: '', hasKey: provider.hasKey, limits: {},
+    id: provider.id, template: null, name: provider.name, preset: provider.preset, apiKey: '', hasKey: provider.hasKey, limits: {}, headers: formatProviderHeaders(provider.headers ?? {}), smallJobs: provider.smallJobs ?? 'provider',
     models: provider.models.map((model) => model.id).join('\n'), known: provider.models,
     defaultModel: provider.defaultModel, smallModel: provider.smallModel, agents: [...provider.agents],
     anthropicUrl: provider.anthropic?.baseUrl ?? '', anthropicAuth: provider.anthropic?.auth ?? 'auth_token',
@@ -118,9 +123,11 @@ function withModels(draft: Draft, text: string): Draft {
   return { ...draft, models: text, defaultModel: next.includes(draft.defaultModel) ? draft.defaultModel : next[0] ?? '', smallModel: next.includes(draft.smallModel) ? draft.smallModel : next[0] ?? '' }
 }
 
-function inputOf(draft: Draft): ModelProviderInput {
+// An older core keeps neither headers nor where small jobs go: they are sent only to one that does.
+function inputOf(draft: Draft, extras: boolean): ModelProviderInput {
   const endpoints = endpointsOf(draft)
   return {
+    ...(extras ? { headers: parseProviderHeaders(draft.headers).headers, smallJobs: draft.smallJobs } : {}),
     id: draft.id, name: draft.name.trim(), preset: draft.preset, ...(draft.preset === 'custom' ? endpoints : {}),
     models: modelsOf(draft), defaultModel: draft.defaultModel, smallModel: draft.smallModel,
     agents: draft.agents.filter((agent) => providerWireFor(endpoints, agent)), apiKey: draft.apiKey.trim() || null
@@ -226,6 +233,9 @@ function ModelListing({ listing, current, onChange, onTake }: { listing: Listing
   )
 }
 
+const SMALL_JOBS = ['provider', 'account', 'off'] as const satisfies readonly ProviderSmallJobs[]
+const SMALL_JOB_LABELS = { provider: 'ModelProviderSettings.smallJobsProvider', account: 'ModelProviderSettings.smallJobsAccount', off: 'ModelProviderSettings.smallJobsOff' } as const satisfies Record<ProviderSmallJobs, string>
+
 const ADDRESS_LABELS = { anthropic: 'ModelProviderSettings.anthropicUrl', 'openai-responses': 'ModelProviderSettings.responsesUrl', 'openai-chat': 'ModelProviderSettings.chatUrl' } as const satisfies Record<ProviderWire, string>
 
 // Why an agent can't be ticked: for a custom provider, the address it would need (any of those its
@@ -249,6 +259,7 @@ function ProviderForm({ initial, onDone }: { initial: Draft; onDone: (saved: str
   const [saving, setSaving] = useState(false)
   const [listing, setListing] = useState<Listing | 'running' | null>(null)
   const canList = useCore((s) => s.rpc?.features.includes('model-provider-models') ?? false)
+  const canExtras = useCore((s) => s.rpc?.features.includes('model-provider-headers') ?? false)
   const authId = useId()
   const keyHintId = useId()
   const form = useRef<HTMLFormElement>(null)
@@ -268,9 +279,10 @@ function ProviderForm({ initial, onDone }: { initial: Draft; onDone: (saved: str
   const badLimits = limitsInvalid(draft)
   const hasEndpoint = Boolean(endpoints.anthropic || endpoints.openai)
   const moved = draft.id !== null && addressesOf(draft) !== addressesOf(initial)
+  const { headers: typedHeaders, bad: badHeaders } = parseProviderHeaders(draft.headers)
   const keyReady = Boolean(draft.apiKey.trim() || (draft.hasKey && !moved))
   const ready = draft.name.trim() && keyReady && ids.includes(draft.defaultModel) && ids.includes(draft.smallModel)
-    && draft.agents.some((agent) => servable.includes(agent)) && badUrls.length === 0 && hasEndpoint && !badLimits && ids.length <= MODEL_LIMIT
+    && draft.agents.some((agent) => servable.includes(agent)) && badUrls.length === 0 && hasEndpoint && !badLimits && ids.length <= MODEL_LIMIT && !(canExtras && badHeaders.length)
   const canFetch = canList && hasEndpoint && badUrls.length === 0 && keyReady && listing !== 'running'
 
   // Picking a preset starts its form over; the key typed so far stays.
@@ -286,7 +298,7 @@ function ProviderForm({ initial, onDone }: { initial: Draft; onDone: (saved: str
   }, entry.models.map((model) => model.id).join('\n')))
   const fetchModels = async () => {
     setListing('running')
-    const result = await perform((rpc) => rpc.call('modelProviders.fetchModels', { id: draft.id, preset: draft.preset, ...endpoints, apiKey: draft.apiKey.trim() || null }))
+    const result = await perform((rpc) => rpc.call('modelProviders.fetchModels', { id: draft.id, preset: draft.preset, ...endpoints, apiKey: draft.apiKey.trim() || null, ...(canExtras ? { headers: typedHeaders } : {}) }))
     setListing(result ? { result, picked: new Set(result.models.filter((model) => ids.includes(model.id)).map((model) => model.id)), filter: '' } : null)
   }
   const takeListed = (taken: Listing) => {
@@ -306,7 +318,7 @@ function ProviderForm({ initial, onDone }: { initial: Draft; onDone: (saved: str
     event?.preventDefault()
     if (!ready || saving) return
     setSaving(true)
-    const saved = await perform((rpc) => rpc.call('modelProviders.save', inputOf(draft)))
+    const saved = await perform((rpc) => rpc.call('modelProviders.save', inputOf(draft, canExtras)))
     setSaving(false)
     if (saved) onDone(saved.id)
   }
@@ -394,7 +406,7 @@ function ProviderForm({ initial, onDone }: { initial: Draft; onDone: (saved: str
           <select className="input mono" value={draft.smallModel} onChange={(event) => set({ smallModel: event.target.value })}>
             {ids.map((id) => <option key={id} value={id}>{id}</option>)}
           </select>
-          <span className="chat-command-hint">{t('ModelProviderSettings.smallModelHint')}</span>
+          {(!canExtras || draft.smallJobs === 'provider') && <span className="chat-command-hint">{t('ModelProviderSettings.smallModelHint')}</span>}
         </label>
       </div>
       <div className="chat-command-field">
@@ -441,6 +453,24 @@ function ProviderForm({ initial, onDone }: { initial: Draft; onDone: (saved: str
             <span>{t('ModelProviderSettings.chatUrl')}</span>
             <input className="input mono" value={draft.chatUrl} onChange={(event) => set({ chatUrl: event.target.value })} placeholder="https://api.example.com/v1" spellCheck={false} />
             <span className="chat-command-hint">{badUrls.length ? t('ModelProviderSettings.badUrl') : t('ModelProviderSettings.openaiUrlHint')}</span>
+          </label>
+        </>
+      )}
+      {canExtras && (
+        <>
+          <label className="chat-command-field">
+            <span>{t('ModelProviderSettings.smallJobs')}</span>
+            <select className="input" value={draft.smallJobs} onChange={(event) => { const value = SMALL_JOBS.find((each) => each === event.target.value); if (value) set({ smallJobs: value }) }}>
+              {SMALL_JOBS.map((value) => <option key={value} value={value}>{t(SMALL_JOB_LABELS[value])}</option>)}
+            </select>
+            <span className="chat-command-hint">{t('ModelProviderSettings.smallJobsHint')}</span>
+          </label>
+          <label className="chat-command-field">
+            <span>{t('ModelProviderSettings.headers')}</span>
+            <textarea className="input mono mcp-args" rows={3} value={draft.headers} onChange={(event) => set({ headers: event.target.value })} spellCheck={false} placeholder="User-Agent: my-client/1.0" aria-invalid={badHeaders.length > 0} />
+            <span className="chat-command-hint">{badHeaders.length
+              ? <span className="warning">{t('ModelProviderSettings.headersInvalid', { value1: badHeaders.map((each) => each.line).join('、') })}</span>
+              : t('ModelProviderSettings.headersHint')}</span>
           </label>
         </>
       )}

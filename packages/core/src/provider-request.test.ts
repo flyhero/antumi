@@ -89,4 +89,11 @@ describe('probeModelProvider', () => {
     expect(probe.checks.map((check) => [check.wire, check.model, check.ok, check.status])).toEqual([['openai-chat', 'big', true, 200], ['openai-chat', 'small', false, 404]])
     expect(seen).toHaveLength(2)
   })
+
+  it('sends the provider\'s headers, and leaves out the small model where small jobs do not go to it', async () => {
+    const { base, seen } = await serve(() => ({ status: 200, body: { choices: [{ message: { content: 'ok' } }] } }))
+    const probe = await probeModelProvider({ anthropic: null, openai: { chatUrl: base, responsesUrl: null }, defaultModel: 'big', smallModel: 'small', headers: { 'User-Agent': 'proxy-client/1', 'Content-Type': 'text/plain' }, smallJobs: 'account' }, 'k')
+    expect(probe.checks.map((check) => check.model)).toEqual(['big'])
+    expect(seen[0]?.headers).toMatchObject({ 'user-agent': 'proxy-client/1', 'content-type': 'application/json', authorization: 'Bearer k' })
+  })
 })

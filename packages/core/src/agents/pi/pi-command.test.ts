@@ -8,6 +8,7 @@ const LAUNCH: AgentLaunch = { providerSessionId: null, resume: false, handoffPat
 const config = (launch: AgentLaunch) => JSON.parse(piCommand(launch).env?.[PI_CONFIG_ENV] ?? '{}')
 
 const PROVIDER: ProviderLaunch = {
+  headers: {},
   providerId: 'glm', apiKey: 'sk-secret',
   endpoint: { wire: 'openai-chat', baseUrl: 'https://open.bigmodel.cn/api/coding/paas/v4/', anthropic: null },
   models: [{ id: 'glm-5', label: 'GLM 5', contextWindow: 200_000, maxOutput: null, efforts: ['low', 'high', 'turbo'] }],
@@ -18,7 +19,7 @@ describe('Pi command', () => {
   it('hands a model provider to the extension, its key only in the environment', () => {
     const command = piCommand({ ...LAUNCH, provider: PROVIDER })
     expect(config({ ...LAUNCH, provider: PROVIDER }).provider).toEqual({
-      name: 'antumi-glm', baseUrl: 'https://open.bigmodel.cn/api/coding/paas/v4', api: 'openai-completions', bearer: false,
+      name: 'antumi-glm', baseUrl: 'https://open.bigmodel.cn/api/coding/paas/v4', api: 'openai-completions', bearer: false, headers: {},
       models: [{ id: 'glm-5', name: 'GLM 5', reasoning: true, input: ['text'], contextWindow: 200_000, maxTokens: 16_384, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, thinkingLevelMap: { off: null, minimal: null, low: 'low', medium: null, high: 'high', xhigh: null, max: null } }]
     })
     expect(command.env).toMatchObject({ ANTUMI_MODEL_PROVIDER_KEY: 'sk-secret', ANTUMI_MODEL_PROVIDER: 'glm' })

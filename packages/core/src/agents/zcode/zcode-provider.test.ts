@@ -7,6 +7,7 @@ import { zcodeProviderConfig, zcodeProviderLaunch, zcodeProviderModels } from '.
 
 const provider = (wire: ProviderLaunch['endpoint']['wire'], baseUrl: string): ProviderLaunch => ({
   providerId: 'zhipu-glm-coding',
+  headers: {},
   endpoint: { wire, baseUrl, anthropic: wire === 'anthropic' ? { baseUrl, auth: 'auth_token', env: {} } : null },
   models: [
     { id: 'glm-5.3', label: 'GLM-5.3', contextWindow: 1_000_000, maxOutput: 32_000, efforts: ['low', 'high'] },

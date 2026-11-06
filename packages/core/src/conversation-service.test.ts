@@ -1379,6 +1379,17 @@ describe('ConversationService', () => {
       expect(lastSpawn().args).toEqual(expect.arrayContaining(['--resume', first!.providerSessionId]))
     })
 
+    it('sends small jobs where the provider says: its small model with its headers, the agent\'s own account, or nowhere', async () => {
+      const saved = await providers.save(gateway({ headers: { 'User-Agent': 'proxy-client/1' } }))
+      const created = await service.create('claude', [root], undefined, { modelProvider: saved.id })
+      expect(service.quickProvider(created.id)).toMatchObject({ model: 'gw-small', headers: { 'User-Agent': 'proxy-client/1' } })
+      await providers.save(gateway({ id: saved.id, apiKey: null, smallJobs: 'account' }))
+      expect(service.quickProvider(created.id)).toBeUndefined()
+      await providers.save(gateway({ id: saved.id, apiKey: null, smallJobs: 'off' }))
+      expect(() => service.quickProvider(created.id)).toThrow(expect.objectContaining({ reason: 'model-provider-small-jobs-off' }))
+      expect(() => service.quickProviderFor(saved.id, 'claude')).toThrow(expect.objectContaining({ reason: 'model-provider-small-jobs-off' }))
+    })
+
     it('starts afresh from a handoff once the provider\'s address changed, and not at all once it is gone', async () => {
       const saved = await providers.save(gateway())
       const created = await service.create('claude', [root], undefined, { modelProvider: saved.id })

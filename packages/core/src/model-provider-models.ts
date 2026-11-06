@@ -1,5 +1,5 @@
 import type { ModelProvider, ModelProviderModels, ProviderModel, ProviderWire } from '@antumi/protocol'
-import { anthropicBaseUrl, failureText, trimmed } from './provider-request'
+import { anthropicBaseUrl, failureText, trimmed, withProviderHeaders } from './provider-request'
 
 // The models a provider's endpoints list (GET /models), with whatever each tells of a model's
 // context and output: most list ids alone, some (OpenRouter, vLLM, Kimi, Anthropic) say more under
@@ -43,17 +43,17 @@ export function listedModel(value: unknown, wire: ProviderWire): ProviderModel |
   return { id, label, contextWindow: firstTokens(item, CONTEXT_FIELDS) ?? tokens(record(item.top_provider)?.context_length), maxOutput: output, efforts: [] }
 }
 
-function listings(provider: Pick<ModelProvider, 'anthropic' | 'openai'>, apiKey: string): Listing[] {
+function listings(provider: Pick<ModelProvider, 'anthropic' | 'openai'>, apiKey: string, own: Readonly<Record<string, string>>): Listing[] {
   const found: Listing[] = []
   if (provider.anthropic) {
     const auth: Record<string, string> = provider.anthropic.auth === 'api_key' ? { 'x-api-key': apiKey } : { authorization: `Bearer ${apiKey}` }
-    found.push({ wire: 'anthropic', url: `${anthropicBaseUrl(provider.anthropic.baseUrl)}/v1/models`, headers: { ...auth, 'anthropic-version': '2023-06-01' }, paged: true })
+    found.push({ wire: 'anthropic', url: `${anthropicBaseUrl(provider.anthropic.baseUrl)}/v1/models`, headers: withProviderHeaders(own, { ...auth, 'anthropic-version': '2023-06-01' }), paged: true })
   }
   // Responses and chat completions mostly share one base, and so one list.
   const openai: [ProviderWire, string | null | undefined][] = [['openai-responses', provider.openai?.responsesUrl], ['openai-chat', provider.openai?.chatUrl]]
   for (const [wire, base] of openai) {
     const url = base ? `${trimmed(base)}/models` : null
-    if (url && !found.some((each) => each.url === url)) found.push({ wire, url, headers: { authorization: `Bearer ${apiKey}` }, paged: false })
+    if (url && !found.some((each) => each.url === url)) found.push({ wire, url, headers: withProviderHeaders(own, { authorization: `Bearer ${apiKey}` }), paged: false })
   }
   return found
 }
@@ -141,8 +141,8 @@ function merged(lists: ProviderModel[][]): ProviderModel[] {
   return [...byId.values()]
 }
 
-export async function fetchProviderModels(provider: Pick<ModelProvider, 'anthropic' | 'openai'>, apiKey: string, { fetchImpl = fetch, timeoutMs = 30_000 }: { fetchImpl?: typeof fetch; timeoutMs?: number } = {}): Promise<ModelProviderModels> {
-  const results = await Promise.all(listings(provider, apiKey).map(async (listing) => ({ wire: listing.wire, result: await list(listing, apiKey, fetchImpl, timeoutMs) })))
+export async function fetchProviderModels(provider: Pick<ModelProvider, 'anthropic' | 'openai'>, apiKey: string, { fetchImpl = fetch, timeoutMs = 30_000, headers = {} }: { fetchImpl?: typeof fetch; timeoutMs?: number; headers?: Readonly<Record<string, string>> } = {}): Promise<ModelProviderModels> {
+  const results = await Promise.all(listings(provider, apiKey, headers).map(async (listing) => ({ wire: listing.wire, result: await list(listing, apiKey, fetchImpl, timeoutMs) })))
   return {
     models: merged(results.flatMap(({ result }) => (result.ok ? [result.models] : []))),
     endpoints: results.map(({ wire, result }) => ({

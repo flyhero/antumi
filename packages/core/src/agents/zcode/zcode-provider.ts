@@ -59,7 +59,7 @@ export function zcodeProviderConfig(provider: ProviderLaunch): string {
           providerId: id,
           providerName: provider.providerId,
           enabled: true,
-          config: { group: 'standard-personal', access: { type: 'api-key', apiKey: provider.apiKey }, api: { ...api(provider), headers: {} }, personalModelIds: models, modelOrder: models, visibility: 'visible' }
+          config: { group: 'standard-personal', access: { type: 'api-key', apiKey: provider.apiKey }, api: { ...api(provider), headers: { ...provider.headers } }, personalModelIds: models, modelOrder: models, visibility: 'visible' }
         }]
       },
       modelConfigRules: { providerModelRules: provider.models.map((model) => modelRule(provider, model)), manualProviderModelRules: [] },

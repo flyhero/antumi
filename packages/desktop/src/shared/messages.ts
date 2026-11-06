@@ -6582,6 +6582,7 @@ export const MESSAGES = {
     "zh": "安装插件",
     "en": "Install plugin"
   },
+  "PluginSettings.notAgentPlugins": {"zh": "这里是 Antumi 的插件，用来从 GitHub、Jira 等导入任务。Agent 自己的插件不在这里，照常生效，在 Agent 里管理（Claude Code 用 /plugin）；它们的全局技能见「技能 → 本机技能」。", "en": "These are Antumi's plugins, which import tasks from GitHub, Jira and the like. An agent's own plugins are not here and work as ever; manage them in the agent (/plugin in Claude Code). Their global skills are under Skills → On this machine."},
   "PluginSettings.loadingPlugins": {
     "zh": "正在读取插件…",
     "en": "Loading plugins…"

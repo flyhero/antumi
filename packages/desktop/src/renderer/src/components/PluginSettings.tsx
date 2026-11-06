@@ -65,6 +65,7 @@ export function PluginSettings() {
 
   return (
     <div className="plugin-settings">
+      <p className="settings-note">{t('PluginSettings.notAgentPlugins')}</p>
       {status && <p className="settings-status" role="status">{status}</p>}
       {recommended.length > 0 && <SettingsGroup title={t('PluginSettings.recommended')}>
         {recommended.map((entry) => {

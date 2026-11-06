@@ -5664,6 +5664,13 @@ div.inspector-empty > p { margin: 0 0 8px; }
 
 .inbox-entry-count + .inbox-entry-alert { margin-left: 4px; }
 
+/* Filled while it holds issues the user has not looked over: news, not just a tally. */
+.inbox-entry-count[data-fresh] {
+  background: var(--accent);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
 /* A count that changed (CountBadge): the new number rises in, fading so it never shows outside
    the badge, and a rise sends one ring out. */
 .inbox-entry-count-digits { display: block; }

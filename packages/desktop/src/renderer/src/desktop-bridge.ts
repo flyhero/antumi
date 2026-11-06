@@ -171,7 +171,8 @@ export function setBadge(count: number): void {
 const Target = z.union([
   z.object({ kind: z.enum(['task', 'conversation']), id: z.string() }),
   z.object({ kind: z.literal('routines') }),
-  z.object({ kind: z.literal('usage'), agent: AgentKind })
+  z.object({ kind: z.literal('usage'), agent: AgentKind }),
+  z.object({ kind: z.literal('inbox'), key: z.string() })
 ])
 
 // Main hands back the target the renderer gave it; only a well-formed one is acted on.

@@ -5598,6 +5598,10 @@ export const MESSAGES = {
     "zh": "，{waiting} 个待处理",
     "en": ", {waiting} pending"
   },
+  "InboxEntry.pendingFresh": {
+    "zh": "，{waiting} 个待处理，有新的",
+    "en": ", {waiting} pending, some new"
+  },
   "InboxEntry.inbox_1125": {
     "zh": "收件箱",
     "en": "Inbox"
@@ -11729,6 +11733,10 @@ export const MESSAGES = {
   "routines.interrupted_2631": {
     "zh": "中断了",
     "en": "Interrupted"
+  },
+  "inboxNews.newIssues": {
+    "zh": "{issue} 等 {count} 个新 issue",
+    "en": "{count} new issues, including {issue}"
   },
   "routines.routine": {
     "zh": "定时任务「{value1}」",

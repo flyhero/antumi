@@ -109,6 +109,28 @@ describe('ModelProviderStore', () => {
     expect(store.list()).toEqual([])
   })
 
+  it('keeps a key only for the addresses it was saved with', async () => {
+    const saved = await store.save(custom())
+    const moved = { anthropic: { baseUrl: 'https://evil.example.com', auth: 'auth_token' as const, env: {} } }
+    await expect(store.save(custom({ id: saved.id, apiKey: null, ...moved }))).rejects.toMatchObject({ reason: 'model-provider-key-missing' })
+    await expect(store.fetchModels({ id: saved.id, preset: 'custom', ...moved, openai: null, apiKey: null })).rejects.toMatchObject({ reason: 'model-provider-key-missing' })
+    await expect(store.save(custom({ id: saved.id, apiKey: null, preset: 'volcengine-agent-plan' }))).rejects.toMatchObject({ reason: 'model-provider-key-missing' })
+    // A new key may go anywhere; the old one stays where it was.
+    expect(await store.save(custom({ id: saved.id, apiKey: 'sk-evil', ...moved }))).toMatchObject({ anthropic: { baseUrl: 'https://evil.example.com' } })
+    expect(store.resolve(saved.id)?.apiKey).toBe('sk-evil')
+    await expect(store.fetchModels({ id: null, preset: 'custom', anthropic: null, openai: null, apiKey: KEY })).rejects.toMatchObject({ reason: 'model-provider-endpoint-missing' })
+  })
+
+  it('keeps a preset\'s model with a context of the user\'s own as the user\'s', async () => {
+    const own = MODEL_PROVIDER_PRESETS['zhipu-glm-coding']
+    const sized = own.models.map((model, index) => (index === 0 ? { ...model, contextWindow: 64_000, maxOutput: 8_000 } : model))
+    const saved = await store.save(preset({ preset: 'zhipu-glm-coding', models: sized, defaultModel: own.defaultModel, smallModel: own.smallModel, agents: ['claude'] }))
+    expect(saved.modelsFromPreset).toBe(false)
+    expect(saved.models[0]).toMatchObject({ contextWindow: 64_000, maxOutput: 8_000, efforts: own.models[0]?.efforts })
+    const restored = await store.save(preset({ id: saved.id, apiKey: null, preset: 'zhipu-glm-coding', models: [...own.models], defaultModel: own.defaultModel, smallModel: own.smallModel, agents: ['claude'] }))
+    expect(restored.modelsFromPreset).toBe(true)
+  })
+
   it('takes a custom provider\'s own endpoints, and http on this machine', async () => {
     const saved = await store.save(custom())
     expect(saved).toMatchObject({ preset: 'custom', anthropic: { baseUrl: 'http://127.0.0.1:4000' }, agents: ['claude'] })

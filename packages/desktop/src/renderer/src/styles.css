@@ -5408,6 +5408,16 @@ div.inspector-empty > p { margin: 0 0 8px; }
 .provider-endpoints { margin: 0; padding: 0; list-style: none; font-size: 12px; line-height: 1.8; overflow-wrap: anywhere; }
 .provider-checks { margin: 0; padding: 4px 0 8px; list-style: none; font-size: 12px; line-height: 1.7; }
 .provider-check { overflow-wrap: anywhere; }
+.provider-settings-form .warning { color: var(--warning); }
+.provider-model-fetch { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.provider-model-listing { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-muted); }
+.provider-model-listed { max-height: 260px; margin: 0; padding: 0; overflow-y: auto; list-style: none; font-size: 12px; line-height: 1.8; }
+.provider-model-listed label { display: flex; align-items: baseline; gap: 6px; min-width: 0; overflow-wrap: anywhere; }
+.provider-model-limits { display: flex; flex-direction: column; gap: 4px; }
+.provider-model-limit, .provider-model-limit-head { display: grid; grid-template-columns: minmax(0, 1fr) 110px 110px; align-items: center; gap: 8px; font-size: 12px; }
+.provider-model-limit-head { color: var(--text-muted); }
+.provider-model-limit > .mono { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.provider-model-limit > .input[aria-invalid='true'] { border-color: var(--warning); }
 .provider-link { color: var(--accent); text-decoration: none; }
 .chat-draft-agent-provider { color: var(--text-muted); font-size: 12px; }
 .provider-link:hover { text-decoration: underline; }

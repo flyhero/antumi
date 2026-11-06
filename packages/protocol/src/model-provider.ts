@@ -75,6 +75,16 @@ export const ProviderModel = z.object({
 })
 export type ProviderModel = z.infer<typeof ProviderModel>
 
+// The same models in the same order, each as the preset has it: what the preset's list looks like
+// once edited back. A model given another context or output is the user's own.
+export function sameModels(models: readonly ProviderModel[], others: readonly ProviderModel[]): boolean {
+  return models.length === others.length && models.every((model, index) => {
+    const other = others[index]
+    return other !== undefined && model.id === other.id && model.label === other.label && model.contextWindow === other.contextWindow && model.maxOutput === other.maxOutput
+      && model.efforts.join('\n') === other.efforts.join('\n') && (model.reasoningSummaries ?? false) === (other.reasoningSummaries ?? false)
+  })
+}
+
 // As clients see one: endpoints already resolved (a preset's come from the preset table), never the
 // key. revision rises with each save, so whatever is kept by provider can tell an edit.
 export const ModelProvider = z.object({
@@ -127,6 +137,25 @@ export const ModelProviderCheck = z.object({
 })
 export const ModelProviderProbe = z.object({ ok: z.boolean(), checks: z.array(ModelProviderCheck), at: z.number() })
 export type ModelProviderProbe = z.infer<typeof ModelProviderProbe>
+
+// The models a provider's endpoints list, asked of the endpoints in a form not yet saved. apiKey null
+// takes the key of the provider saved as id, which goes only to the addresses it was saved with.
+export const ModelProviderModelsQuery = z.object({
+  id: ModelProviderId.nullable(),
+  preset: ModelProviderPreset,
+  anthropic: AnthropicEndpoint.nullable().optional(),
+  openai: OpenAiEndpoint.nullable().optional(),
+  apiKey: z.string().trim().min(1).max(4096).nullable()
+})
+export type ModelProviderModelsQuery = z.infer<typeof ModelProviderModelsQuery>
+
+// models: every endpoint's, by id, with what any of them told of a model's context and output;
+// most list only ids. One entry per endpoint asked, message as for a probe.
+export const ModelProviderModels = z.object({
+  models: z.array(ProviderModel),
+  endpoints: z.array(z.object({ wire: ProviderWire, ok: z.boolean(), count: z.number().int().nonnegative(), status: z.number().int().nullable(), message: z.string().nullable() }))
+})
+export type ModelProviderModels = z.infer<typeof ModelProviderModels>
 
 // The endpoint an agent reaches a provider at: the first wire, in the agent's order of preference,
 // that the provider serves.

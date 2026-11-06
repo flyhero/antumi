@@ -1385,7 +1385,7 @@ describe('ConversationService', () => {
       await service.send(created.id, 'Fix the build')
       await settle()
       await service.stop(created.id)
-      await providers.save(gateway({ id: saved.id, apiKey: null, anthropic: { baseUrl: 'http://127.0.0.1:4001', auth: 'auth_token', env: {} } }))
+      await providers.save(gateway({ id: saved.id, apiKey: 'sk-gateway-moved', anthropic: { baseUrl: 'http://127.0.0.1:4001', auth: 'auth_token', env: {} } }))
       const moved = await service.continue(created.id)
       expect(lastSpawn().args).not.toContain('--resume')
       expect(handoffFile(moved.sessionId!)).toContain('Fix the build')

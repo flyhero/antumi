@@ -13,7 +13,7 @@ export type ProviderReply =
 const MESSAGE_LIMIT = 300
 
 // Agents add the version segment themselves; one already on the address would go twice.
-function trimmed(baseUrl: string): string {
+export function trimmed(baseUrl: string): string {
   return baseUrl.replace(/\/+$/, '')
 }
 

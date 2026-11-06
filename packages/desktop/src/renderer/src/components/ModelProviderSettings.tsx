@@ -2,11 +2,12 @@ import { probeProvider, useProviderProbes } from '../provider-probes'
 import { getLocale, t } from '../i18n'
 import { useLayoutEffect, useId, useRef, useState, type FormEvent } from 'react'
 import {
-  AGENT_KINDS, MODEL_PROVIDER_PRESETS, MODEL_PROVIDER_PRESET_IDS, providerUrlProblem, providerWireFor,
-  type AgentKind, type ModelProvider, type ModelProviderInput, type ModelProviderPreset, type ModelProviderPresetId, type ModelProviderProbe, type ProviderModel, type ProviderWire
+  AGENT_KINDS, MODEL_PROVIDER_PRESETS, MODEL_PROVIDER_PRESET_IDS, providerUrlProblem, providerWireFor, sameModels,
+  type AgentKind, type ModelProvider, type ModelProviderInput, type ModelProviderModels, type ModelProviderPreset, type ModelProviderPresetId, type ModelProviderProbe, type ProviderModel, type ProviderWire
 } from '@antumi/protocol'
 import { perform, setSettingsOpen, useAccountsSupported, useCore } from '../core-store'
 import { agentLabel } from '../labels'
+import { formatTokens, parseTokens, pickedIds, withListed } from '../provider-model-limits'
 import { Segmented } from './SettingsControls'
 import { PRESET_VENDOR } from '../provider-vendors'
 import { SettingsEmptyState } from './SettingsEmptyState'
@@ -21,6 +22,8 @@ type Draft = {
   // One model id per line; known: what is known of each beyond its id (the preset's, or as saved).
   models: string
   known: readonly ProviderModel[]
+  // A model's context and output as typed, where edited; the rest read as known.
+  limits: Readonly<Record<string, Limits>>
   defaultModel: string
   smallModel: string
   agents: AgentKind[]
@@ -30,11 +33,17 @@ type Draft = {
   responsesUrl: string
 }
 
+type Limits = { context: string; output: string }
+type LimitField = keyof Limits
+
+// The most models a provider holds (ModelProvider.models).
+const MODEL_LIMIT = 100
+
 const presetName = (id: ModelProviderPresetId) => (getLocale() === 'en' ? MODEL_PROVIDER_PRESETS[id].translations.en.name : MODEL_PROVIDER_PRESETS[id].name)
 const presetNotes = (id: ModelProviderPresetId) => MODEL_PROVIDER_PRESETS[id].notes.map((note) => (getLocale() === 'en' ? note.en : note.zh))
 
 function draftOfPreset(preset: ModelProviderPreset): Draft {
-  const blank = { id: null, apiKey: '', hasKey: false, anthropicUrl: '', anthropicAuth: 'auth_token' as const, chatUrl: '', responsesUrl: '' }
+  const blank = { id: null, apiKey: '', hasKey: false, anthropicUrl: '', anthropicAuth: 'auth_token' as const, chatUrl: '', responsesUrl: '', limits: {} }
   if (preset === 'custom') return { ...blank, name: '', preset, models: '', known: [], defaultModel: '', smallModel: '', agents: [] }
   const entry = MODEL_PROVIDER_PRESETS[preset]
   return {
@@ -45,7 +54,7 @@ function draftOfPreset(preset: ModelProviderPreset): Draft {
 
 function draftOf(provider: ModelProvider): Draft {
   return {
-    id: provider.id, name: provider.name, preset: provider.preset, apiKey: '', hasKey: provider.hasKey,
+    id: provider.id, name: provider.name, preset: provider.preset, apiKey: '', hasKey: provider.hasKey, limits: {},
     models: provider.models.map((model) => model.id).join('\n'), known: provider.models,
     defaultModel: provider.defaultModel, smallModel: provider.smallModel, agents: [...provider.agents],
     anthropicUrl: provider.anthropic?.baseUrl ?? '', anthropicAuth: provider.anthropic?.auth ?? 'auth_token',
@@ -64,9 +73,27 @@ function endpointsOf(draft: Draft): Pick<ModelProvider, 'anthropic' | 'openai'> 
   }
 }
 
+const idsOf = (text: string) => [...new Set(text.split('\n').map((line) => line.trim()).filter(Boolean))]
+
+// Each model whole, as known (its efforts and label too), with only its context and output as typed.
 function modelsOf(draft: Draft): ProviderModel[] {
-  const ids = [...new Set(draft.models.split('\n').map((line) => line.trim()).filter(Boolean))]
-  return ids.map((id) => draft.known.find((model) => model.id === id) ?? { id, label: null, contextWindow: null, maxOutput: null, efforts: [] })
+  return idsOf(draft.models).map((id) => {
+    const known = draft.known.find((model) => model.id === id) ?? { id, label: null, contextWindow: null, maxOutput: null, efforts: [] }
+    const typed = draft.limits[id]
+    return typed ? { ...known, contextWindow: parseTokens(typed.context) ?? null, maxOutput: parseTokens(typed.output) ?? null } : known
+  })
+}
+
+function limitText(draft: Draft, model: ProviderModel, field: LimitField): string {
+  return draft.limits[model.id]?.[field] ?? formatTokens(field === 'context' ? model.contextWindow : model.maxOutput)
+}
+
+const limitsInvalid = (draft: Draft) => Object.entries(draft.limits).some(([id, typed]) => idsOf(draft.models).includes(id) && (parseTokens(typed.context) === undefined || parseTokens(typed.output) === undefined))
+
+// The model list as typed, the default and small model kept where they still are in it.
+function withModels(draft: Draft, text: string): Draft {
+  const next = idsOf(text)
+  return { ...draft, models: text, defaultModel: next.includes(draft.defaultModel) ? draft.defaultModel : next[0] ?? '', smallModel: next.includes(draft.smallModel) ? draft.smallModel : next[0] ?? '' }
 }
 
 function inputOf(draft: Draft): ModelProviderInput {
@@ -76,6 +103,12 @@ function inputOf(draft: Draft): ModelProviderInput {
     models: modelsOf(draft), defaultModel: draft.defaultModel, smallModel: draft.smallModel,
     agents: draft.agents.filter((agent) => providerWireFor(endpoints, agent)), apiKey: draft.apiKey.trim() || null
   }
+}
+
+// Where a key would go: a kept key goes only where it was saved to go (model-providers.ts in core).
+function addressesOf(draft: Draft): string {
+  const { anthropic, openai } = endpointsOf(draft)
+  return JSON.stringify([anthropic?.baseUrl ?? null, openai?.chatUrl ?? null, openai?.responsesUrl ?? null])
 }
 
 function urlProblems(draft: Draft): string[] {
@@ -116,9 +149,57 @@ function VerifiedBadge({ preset }: { preset: ModelProviderPresetId }) {
   return <span className="provider-badge" data-verified={verified}>{verified ? t('ModelProviderSettings.verified') : t('ModelProviderSettings.unverified')}</span>
 }
 
+type Listing = { result: ModelProviderModels; picked: ReadonlySet<string>; filter: string }
+
+// The models the endpoints listed, to pick from: those already in the list start picked.
+function ModelListing({ listing, current, onChange, onTake }: { listing: Listing; current: readonly string[]; onChange: (next: Listing | null) => void; onTake: (taken: Listing) => void }) {
+  const { result, picked, filter } = listing
+  const shown = result.models.filter((model) => !filter.trim() || `${model.id} ${model.label ?? ''}`.toLowerCase().includes(filter.trim().toLowerCase()))
+  const total = pickedIds(current, result.models.map((model) => model.id), picked).length
+  const toggle = (id: string, on: boolean) => {
+    const next = new Set(picked)
+    if (on) next.add(id)
+    else next.delete(id)
+    onChange({ ...listing, picked: next })
+  }
+  return (
+    <div className="provider-model-listing">
+      {result.models.length > 0 && <input className="input" value={filter} onChange={(event) => onChange({ ...listing, filter: event.target.value })} placeholder={t('ModelProviderSettings.listedSearch')} aria-label={t('ModelProviderSettings.listedSearch')} autoFocus />}
+      {result.models.length > 0
+        ? <ul className="provider-model-listed">
+          {shown.map((model) => (
+            <li key={model.id}><label>
+              <input type="checkbox" checked={picked.has(model.id)} onChange={(event) => toggle(model.id, event.target.checked)} />
+              <span className="mono">{model.id}</span>
+              {(model.label || model.contextWindow !== null) && <span className="muted">{[model.label, model.contextWindow !== null ? t('ModelProviderSettings.listedContext', { value1: formatTokens(model.contextWindow) }) : null].filter(Boolean).join(' · ')}</span>}
+            </label></li>
+          ))}
+        </ul>
+        : <p className="settings-note">{t('ModelProviderSettings.listedEmpty')}</p>}
+      {result.endpoints.some((endpoint) => !endpoint.ok) && (
+        <ul className="provider-checks" role="status">
+          {result.endpoints.map((endpoint) => (
+            <li key={endpoint.wire} className="provider-check" data-ok={endpoint.ok}>
+              <span>{endpoint.ok ? '✓' : '✗'} {WIRE_LABELS[endpoint.wire]}</span>
+              <span className="muted">{endpoint.ok ? ` · ${t('ModelProviderSettings.listedCount', { value1: endpoint.count })}` : ` · ${endpoint.status ?? t('ModelProviderSettings.noResponse')}${endpoint.message ? ` · ${endpoint.message}` : ''}`}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="plugin-actions">
+        {total > MODEL_LIMIT && <span className="settings-note warning">{t('ModelProviderSettings.tooManyModels', { value1: MODEL_LIMIT })}</span>}
+        <button type="button" className="button ghost" onClick={() => onChange(null)}>{t('ChatCommandSettings.cancel')}</button>
+        {result.models.length > 0 && <button type="button" className="button primary" disabled={total === 0 || total > MODEL_LIMIT} onClick={() => onTake(listing)}>{t('ModelProviderSettings.listedTake', { value1: total })}</button>}
+      </div>
+    </div>
+  )
+}
+
 function ProviderForm({ initial, onDone }: { initial: Draft; onDone: (saved: string | null) => void }) {
   const [draft, setDraft] = useState(initial)
   const [saving, setSaving] = useState(false)
+  const [listing, setListing] = useState<Listing | 'running' | null>(null)
+  const canList = useCore((s) => s.rpc?.features.includes('model-provider-models') ?? false)
   const authId = useId()
   const keyHintId = useId()
   const form = useRef<HTMLFormElement>(null)
@@ -132,15 +213,45 @@ function ProviderForm({ initial, onDone }: { initial: Draft; onDone: (saved: str
   const presetId = draft.preset === 'custom' ? null : draft.preset
   const preset = presetId ? MODEL_PROVIDER_PRESETS[presetId] : null
   // Saved as the preset's own list, core keeps it following the preset (model-providers.ts).
-  const followsPreset = preset !== null && ids.length === preset.models.length && preset.models.every((model, index) => ids[index] === model.id)
-  const ready = draft.name.trim() && (draft.apiKey.trim() || draft.hasKey) && ids.includes(draft.defaultModel) && ids.includes(draft.smallModel)
-    && draft.agents.some((agent) => servable.includes(agent)) && badUrls.length === 0 && (endpoints.anthropic || endpoints.openai)
+  const followsPreset = preset !== null && sameModels(models, preset.models)
+  // An older core keeps a preset's list by its ids alone, and would drop a context edited there.
+  const editsLimits = draft.preset === 'custom' || canList
+  const badLimits = limitsInvalid(draft)
+  const hasEndpoint = Boolean(endpoints.anthropic || endpoints.openai)
+  const moved = draft.id !== null && addressesOf(draft) !== addressesOf(initial)
+  const keyReady = Boolean(draft.apiKey.trim() || (draft.hasKey && !moved))
+  const ready = draft.name.trim() && keyReady && ids.includes(draft.defaultModel) && ids.includes(draft.smallModel)
+    && draft.agents.some((agent) => servable.includes(agent)) && badUrls.length === 0 && hasEndpoint && !badLimits && ids.length <= MODEL_LIMIT
+  const canFetch = canList && hasEndpoint && badUrls.length === 0 && keyReady && listing !== 'running'
 
   // Picking a preset starts its form over; the key typed so far stays.
   const pick = (next: ModelProviderPreset) => setDraft((current) => ({ ...draftOfPreset(next), apiKey: current.apiKey }))
-  const setModels = (text: string) => {
-    const next = [...new Set(text.split('\n').map((line) => line.trim()).filter(Boolean))]
-    set({ models: text, defaultModel: next.includes(draft.defaultModel) ? draft.defaultModel : next[0] ?? '', smallModel: next.includes(draft.smallModel) ? draft.smallModel : next[0] ?? '' })
+  const setModels = (text: string) => setDraft((current) => withModels(current, text))
+  const setLimit = (model: ProviderModel, field: LimitField, text: string) => setDraft((current) => ({
+    ...current,
+    limits: { ...current.limits, [model.id]: { context: limitText(current, model, 'context'), output: limitText(current, model, 'output'), [field]: text } }
+  }))
+  // The preset's models whole, their contexts too.
+  const restorePreset = (entry: NonNullable<typeof preset>) => setDraft((current) => withModels({
+    ...current, known: [...entry.models, ...current.known.filter((model) => !entry.models.some((each) => each.id === model.id))], limits: {}
+  }, entry.models.map((model) => model.id).join('\n')))
+  const fetchModels = async () => {
+    setListing('running')
+    const result = await perform((rpc) => rpc.call('modelProviders.fetchModels', { id: draft.id, preset: draft.preset, ...endpoints, apiKey: draft.apiKey.trim() || null }))
+    setListing(result ? { result, picked: new Set(result.models.filter((model) => ids.includes(model.id)).map((model) => model.id)), filter: '' } : null)
+  }
+  const takeListed = (taken: Listing) => {
+    setDraft((current) => {
+      const listed = taken.result.models
+      const next = pickedIds(idsOf(current.models), listed.map((model) => model.id), taken.picked)
+      // What the endpoint tells fills a context or output left empty, never one typed.
+      const limits = Object.fromEntries(Object.entries(current.limits).map(([id, typed]) => {
+        const found = listed.find((model) => model.id === id)
+        return [id, found ? { context: typed.context.trim() ? typed.context : formatTokens(found.contextWindow), output: typed.output.trim() ? typed.output : formatTokens(found.maxOutput) } : typed]
+      }))
+      return withModels({ ...current, known: withListed(current.known, listed), limits }, next.join('\n'))
+    })
+    setListing(null)
   }
   const save = async (event?: FormEvent) => {
     event?.preventDefault()
@@ -171,8 +282,9 @@ function ProviderForm({ initial, onDone }: { initial: Draft; onDone: (saved: str
       <label className="chat-command-field">
         <span>API Key</span>
         <input className="input mono" aria-label="API Key" aria-describedby={keyHintId} type="password" autoComplete="new-password" value={draft.apiKey} onChange={(event) => set({ apiKey: event.target.value })}
-          placeholder={draft.hasKey ? t('McpSettingsSection.alreadySetLeaveEmptyToKeep') : ''} />
+          placeholder={draft.hasKey && !moved ? t('McpSettingsSection.alreadySetLeaveEmptyToKeep') : ''} />
         <span id={keyHintId} className="chat-command-hint">
+          {draft.hasKey && moved && !draft.apiKey.trim() && <span className="warning">{t('ModelProviderSettings.keyAgain')} </span>}
           {t('ModelProviderSettings.keyHint')}
           {preset && <> <a className="provider-link" href={preset.keyUrl} target="_blank" rel="noreferrer">{t('ModelProviderSettings.getKey')}</a></>}
         </span>
@@ -189,9 +301,37 @@ function ProviderForm({ initial, onDone }: { initial: Draft; onDone: (saved: str
           {t('ModelProviderSettings.modelsHint')}
           {preset && (followsPreset
             ? <> {t('ModelProviderSettings.modelsFollowPreset')}</>
-            : <button type="button" className="link-button" onClick={() => setModels(preset.models.map((model) => model.id).join('\n'))}>{t('ModelProviderSettings.restorePresetModels')}</button>)}
+            : <button type="button" className="link-button" onClick={() => restorePreset(preset)}>{t('ModelProviderSettings.restorePresetModels')}</button>)}
+          {ids.length > MODEL_LIMIT && <span className="warning"> {t('ModelProviderSettings.tooManyModels', { value1: MODEL_LIMIT })}</span>}
         </span>
       </label>
+      {canList && (
+        <div className="provider-model-fetch">
+          <button type="button" className="button" disabled={!canFetch} onClick={() => void fetchModels()}>{listing === 'running' ? t('ModelProviderSettings.fetchingModels') : t('ModelProviderSettings.fetchModels')}</button>
+          {!canFetch && listing !== 'running' && <span className="chat-command-hint">{t('ModelProviderSettings.fetchModelsNeeds')}</span>}
+        </div>
+      )}
+      {listing && listing !== 'running' && <ModelListing listing={listing} current={ids} onChange={setListing} onTake={takeListed} />}
+      {editsLimits && models.length > 0 && (
+        <div className="chat-command-field">
+          <span>{t('ModelProviderSettings.limits')}</span>
+          <div className="provider-model-limits" role="group" aria-label={t('ModelProviderSettings.limits')}>
+            <span className="provider-model-limit-head" aria-hidden="true"><span /><span>{t('ModelProviderSettings.limitContext')}</span><span>{t('ModelProviderSettings.limitOutput')}</span></span>
+            {models.map((model) => (
+              <span key={model.id} className="provider-model-limit">
+                <span className="mono" title={model.id}>{model.id}</span>
+                {(['context', 'output'] as const).map((field) => {
+                  const text = limitText(draft, model, field)
+                  return <input key={field} className="input mono" value={text} onChange={(event) => setLimit(model, field, event.target.value)} spellCheck={false}
+                    aria-label={`${model.id} ${t(field === 'context' ? 'ModelProviderSettings.limitContext' : 'ModelProviderSettings.limitOutput')}`} aria-invalid={parseTokens(text) === undefined}
+                    placeholder={t('ModelProviderSettings.limitUnknown')} />
+                })}
+              </span>
+            ))}
+          </div>
+          <span className="chat-command-hint">{badLimits ? <span className="warning">{t('ModelProviderSettings.limitsInvalid')}</span> : t('ModelProviderSettings.limitsHint')}</span>
+        </div>
+      )}
       <div className="provider-model-pickers">
         <label className="chat-command-field">
           <span>{t('ModelProviderSettings.defaultModel')}</span>

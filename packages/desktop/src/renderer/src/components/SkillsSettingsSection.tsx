@@ -8,11 +8,12 @@ import { Segmented, SettingsGroup } from './SettingsControls'
 import { SkillActivationDialog } from './SkillActivationDialog'
 import { SkillRepoSettings } from './SkillRepoSettings'
 import { SettingsEmptyState } from './SettingsEmptyState'
+import { LocalSkillsList } from './LocalSkillsList'
 import { BoltIcon } from './icons'
 
 // Available installation routes, after the installed library.
 export type SkillAddTab = 'recommended' | 'search' | 'url'
-type SkillTab = 'installed' | SkillAddTab
+type SkillTab = 'installed' | 'local' | SkillAddTab
 
 export function skillAddTabs(options: { recommended: boolean; search: boolean }): SkillAddTab[] {
   return [...(options.recommended ? ['recommended' as const] : []), ...(options.search ? ['search' as const] : []), 'url' as const]
@@ -122,6 +123,7 @@ export function SkillsSettingsSection() {
   const connected = useCore((s) => s.connection === 'connected')
   const searchSupported = useCore((s) => s.rpc?.features.includes('skills-search') ?? false)
   const managed = useCore((s) => s.rpc?.features.includes('skills-activation') ?? false)
+  const localSupported = useCore((s) => s.rpc?.features.includes('skills-local') ?? false)
   const base = useCore((s) => s.chatSettings?.knowledgeBase ?? null)
   const repos = useCore((s) => s.skillRepos)
   const [recommended, setRecommended] = useState<RecommendedSkillRepo[] | null>(null)
@@ -157,7 +159,7 @@ export function SkillsSettingsSection() {
   const others = AGENT_KINDS.filter((kind) => !agentDescriptor(kind).capabilities.skills).map(agentLabel)
   const suggested = recommended ?? []
   const tabs = skillAddTabs({ recommended: suggested.length > 0, search: searchSupported })
-  const active = tab === 'installed' ? 'installed' : activeSkillAddTab(tabs, tab)
+  const active = tab === 'installed' || (tab === 'local' && localSupported) ? tab : activeSkillAddTab(tabs, tab === 'local' ? tabs[0] ?? 'url' : tab)
   const current = repos.find((repo) => repo.id === managing)
   const fallback = knowledgeBaseSkillRefs(base)
   const installedLabel = repos.length > 0 ? t('SkillsSettingsSection.installed', { value1: repos.length }) : t('InstalledAgentsSettings.installed')
@@ -170,7 +172,7 @@ export function SkillsSettingsSection() {
     <div className="skills-library">
       <div className="settings-skill-tabs">
         <span id={tabLabelId} hidden>{t('SkillsSettingsSection.skills')}</span>
-        <Segmented<SkillTab> labelId={tabLabelId} value={active} options={[{ value: 'installed', label: installedLabel }, ...tabOptions]} onChange={setTab} />
+        <Segmented<SkillTab> labelId={tabLabelId} value={active} options={[{ value: 'installed', label: installedLabel }, ...(localSupported ? [{ value: 'local' as const, label: t('SkillsSettingsSection.localTab') }] : []), ...tabOptions]} onChange={setTab} />
       </div>
       <div hidden={active !== 'installed'}>
       <SettingsGroup>
@@ -188,7 +190,8 @@ export function SkillsSettingsSection() {
         )}
       </SettingsGroup>
       </div>
-      <div hidden={active === 'installed'}>
+      {active === 'local' && <SettingsGroup><LocalSkillsList repos={repos} fallback={fallback} /></SettingsGroup>}
+      <div hidden={active === 'installed' || active === 'local'}>
       <SettingsGroup>
         {active === 'recommended' && (
           <ul className="settings-project-list">

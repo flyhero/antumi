@@ -17,6 +17,7 @@ import { ConversationFiles, fileScope } from './conversation-files'
 import { readCodexVisualization } from './agents/codex/codex-visualizations'
 import type { ProjectRegistry } from './project-registry'
 import { Rejection } from './rejection'
+import { localSkillFolders } from './local-skills'
 import type { PluginService } from './plugin-service'
 import type { PetLibrary } from './pet-library'
 import type { SourceService } from './source-service'
@@ -301,6 +302,7 @@ export function createRpcHandlers(
     'knowledge.inspect': ({ path }) => inspectKnowledgeFolder(path),
     'skills.list': () => [...skillsLibrary().list()],
     'skills.recommended': () => [...skillsLibrary().recommended()],
+    'skills.local': () => localSkillFolders(),
     'skills.search': ({ query }) => { skillsLibrary(); return searchSkills(query) },
     'skills.install': ({ url }) => skillsLibrary().install(url),
     'skills.setActivation': ({ id, activation }) => skillsLibrary().setActivation(id, activation),

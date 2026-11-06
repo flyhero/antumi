@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { parseClaudeQuick } from '../../model-metering'
 import type { AgentAdapter } from '../agent-adapter'
 import { claudeAccounts, claudeDefaultHome } from './claude-account'
@@ -21,6 +22,8 @@ export const claude: AgentAdapter = {
   signedIn: claudeSignedIn,
   usage: readClaudeUsage,
   accounts: claudeAccounts,
+  // Its plugins carry skills too, laid out by its own version: not read here.
+  globalSkillDirs: (env) => [path.join(claudeDefaultHome(env), 'skills')],
   transcripts: claudeTranscripts(),
   // Haiku, with no tools, no MCP servers, no skills, and no session left for --resume.
   quick: {

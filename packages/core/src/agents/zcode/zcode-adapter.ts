@@ -1,3 +1,5 @@
+import os from 'node:os'
+import path from 'node:path'
 import type { AgentAdapter } from '../agent-adapter'
 import { ZCodeAppServer } from './zcode-app-server'
 import { zcodeCatalog, zcodeInstallation, zcodeSignedIn } from './zcode-cli'
@@ -9,6 +11,8 @@ import { zcodeProviderLaunch, zcodeProviderModels } from './zcode-provider'
 
 export const zcode: AgentAdapter = {
   kind: 'zcode',
+  // Its own, winning a name, then the Agent Skills folder (adapters/src/skills/roots.ts in ZCode).
+  globalSkillDirs: () => [path.join(os.homedir(), '.zcode', 'skills'), path.join(os.homedir(), '.agents', 'skills')],
   maintenance: { packageName: 'zcode-app-cli' },
   createDriver: (stageId, options) => new ZCodeAppServer(stageId, options),
   command: zcodeCommand,

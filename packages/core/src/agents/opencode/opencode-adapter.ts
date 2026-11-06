@@ -1,3 +1,5 @@
+import os from 'node:os'
+import path from 'node:path'
 import { opencodeTranscripts } from './opencode-transcripts'
 import { Rejection } from '../../rejection'
 import type { AgentAdapter, AgentStage } from '../agent-adapter'
@@ -14,6 +16,13 @@ const MCP_SETTLE_MS = 1500
 
 export const opencode: AgentAdapter = {
   kind: 'opencode',
+  // Its config folder's skill and skills, the Agent Skills folder, and Claude Code's unless it is
+  // told to leave Claude Code alone (config/discovery.ts, server-process.ts in OpenCode 2.1).
+  globalSkillDirs: (env) => {
+    const config = env.OPENCODE_CONFIG_DIR || path.join(env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'opencode')
+    const claude = env.OPENCODE_DISABLE_CLAUDE_CODE || env.OPENCODE_DISABLE_CLAUDE_CODE_SKILLS ? [] : [path.join(os.homedir(), '.claude', 'skills')]
+    return [path.join(config, 'skill'), path.join(config, 'skills'), ...claude, path.join(os.homedir(), '.agents', 'skills')]
+  },
   transcripts: opencodeTranscripts(),
   maintenance: { packageName: '@opencode/cli', brew: { name: 'opencode', cask: false }, native: { roots: { darwin: ['.opencode/bin'], linux: ['.opencode/bin'] }, args: ['upgrade'], latestUrl: 'https://registry.npmjs.org/@opencode/cli/latest' } },
   createDriver: (stageId, options) => new OpenCodeAcp(stageId, options),

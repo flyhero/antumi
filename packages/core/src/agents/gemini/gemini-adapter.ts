@@ -1,3 +1,5 @@
+import os from 'node:os'
+import path from 'node:path'
 import { geminiTranscripts } from './gemini-transcripts'
 import type { AgentAdapter } from '../agent-adapter'
 import { AcpDriver } from '../acp/acp-driver'
@@ -11,6 +13,11 @@ const readyFile = (stage: Parameters<typeof mcpReadyFile>[0]) => mcpReadyFile(st
 
 export const gemini: AgentAdapter = {
   kind: 'gemini',
+  // Both under the home GEMINI_CLI_HOME moves, the Agent Skills folder winning a name (skillManager.ts).
+  globalSkillDirs: (env) => {
+    const home = env.GEMINI_CLI_HOME || os.homedir()
+    return [path.join(home, '.gemini', 'skills'), path.join(home, '.agents', 'skills')]
+  },
   transcripts: geminiTranscripts(),
   maintenance: { packageName: '@google/gemini-cli' },
   createDriver: (stageId, options) => new AcpDriver(geminiDialect, stageId, options),

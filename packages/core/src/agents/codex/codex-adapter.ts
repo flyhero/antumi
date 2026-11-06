@@ -1,3 +1,5 @@
+import os from 'node:os'
+import path from 'node:path'
 import { parseCodexQuick } from '../../model-metering'
 import { codexWarmupArgs } from './codex-warmup'
 import type { AgentAdapter } from '../agent-adapter'
@@ -26,6 +28,9 @@ export const codex: AgentAdapter = {
   usage: readCodexUsage,
   useResetCredit: useCodexResetCredit,
   accounts: codexAccounts,
+  // Its own skills under its home (.system holds the ones it ships), the Agent Skills folder, and an
+  // administrator's (capability_locations.rs in Codex).
+  globalSkillDirs: (env) => [path.join(codexDefaultHome(env), 'skills'), path.join(os.homedir(), '.agents', 'skills'), '/etc/codex/skills'],
   transcripts: codexTranscripts(),
   // At low effort, read-only, and not kept in its history. Its progress goes to stdout too, so the
   // answer comes from a file.

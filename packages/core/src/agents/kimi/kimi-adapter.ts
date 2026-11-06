@@ -1,3 +1,6 @@
+import { existsSync } from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import { kimiTranscripts } from './kimi-transcripts'
 import type { AgentAdapter } from '../agent-adapter'
 import { AcpDriver } from '../acp/acp-driver'
@@ -6,6 +9,12 @@ import { detectKimi, kimiCatalog, kimiInstallation, requireKimi } from './kimi-c
 
 export const kimi: AgentAdapter = {
   kind: 'kimi',
+  // Its own and Claude Code's and Codex's, all of them; of the two Agent Skills folders only the first
+  // that exists (skill/__init__.py in Kimi Code).
+  globalSkillDirs: () => {
+    const generic = [path.join(os.homedir(), '.config', 'agents', 'skills'), path.join(os.homedir(), '.agents', 'skills')].find((dir) => existsSync(dir))
+    return [...['.kimi', '.claude', '.codex'].map((folder) => path.join(os.homedir(), folder, 'skills')), ...(generic ? [generic] : [])]
+  },
   transcripts: kimiTranscripts(),
   maintenance: { packageName: '@moonshot-ai/kimi-code' },
   createDriver: (stageId, options) => new AcpDriver(kimiDialect, stageId, options),

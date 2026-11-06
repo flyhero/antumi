@@ -716,6 +716,7 @@ export function createRpcHandlers(
     'sources.refresh': ({ provider, instance }) => sources.refresh(provider, instance),
     'sources.import': ({ provider, instance, key, agent }) => sources.import(provider, instance, key, agent ?? null),
     'sources.investigate': ({ provider, instance, key, ...options }) => sources.investigate(provider, instance, key, options),
+    'sources.retryInvestigation': ({ id }) => sources.retryInvestigation(id),
     'sources.dismiss': ({ provider, instance, key }) => sources.dismiss(provider, instance, key),
     'sources.restore': ({ provider, instance, key }) => sources.restore(provider, instance, key),
     'sources.resync': ({ taskId }) => sources.resync(taskId)

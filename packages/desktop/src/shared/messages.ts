@@ -10270,6 +10270,17 @@ export const MESSAGES = {
     "zh": "{days} 天前",
     "en": "{days} {days, plural, one {day} other {days}} ago"
   },
+  "conversationState.fetchingIssue": {"zh": "拉取问题中", "en": "Fetching the issue"},
+  "conversationState.fetchingImages": {"zh": "下载附件中", "en": "Downloading attachments"},
+  "conversationState.agentStartsOnceTheIssueIsIn": {"zh": "问题拉取完后 Agent 会自动开始", "en": "The agent starts once the issue is in"},
+  "conversationState.issueNotFetched": {"zh": "问题没拉取到", "en": "Issue not fetched"},
+  "labels.theIssueIsStillBeingFetched": {"zh": "还在拉取问题，拉取完 Agent 会自动开始", "en": "The issue is still being fetched; the agent starts once it is in"},
+  "labels.theIssueFetchWasCutOff": {"zh": "问题没拉取完就中断了，可以重试", "en": "Fetching the issue was cut off; try again"},
+  "InvestigationPreparing.fetchingIssue": {"zh": "正在从 {source} 拉取 {key}，拉取完 Agent 会自动开始…", "en": "Fetching {key} from {source}; the agent starts once it is in…"},
+  "InvestigationPreparing.fetchingImages": {"zh": "{key} 的正文已拉取，正在下载附件图片，最多再等几秒…", "en": "Got the text of {key}; downloading its images, a few seconds at most…"},
+  "InvestigationPreparing.failed": {"zh": "{key} 没拉取到：{error}", "en": "Could not fetch {key}: {error}"},
+  "InvestigationPreparing.waitForTheIssue": {"zh": "等问题拉取完再发消息", "en": "Wait for the issue before sending"},
+  "InvestigationPreparing.retryFirst": {"zh": "先重试拉取问题", "en": "Retry fetching the issue first"},
   "conversationState.starting": {
     "zh": "启动中",
     "en": "Starting"

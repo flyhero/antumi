@@ -36,6 +36,6 @@ lines.on('line', (line) => {
     : method === 'normalizeSettings' ? behavior.changeSettings ? { query: 'changed' } : params.settings
     : method === 'normalizeKey' ? behavior.mode === 'environment' ? JSON.stringify(process.env) : params.key.trim()
     : method === 'list' ? []
-    : { key: params.key, title: 'Demo', url: 'https://example.test/1', status: 'open', statusCategory: 'todo', type: 'Issue', priority: null, updatedAt: null, markdown: 'Snapshot' }
+    : { key: params.key, title: 'Demo', url: 'https://example.test/1', status: 'open', statusCategory: 'todo', type: 'Issue', priority: null, updatedAt: null, markdown: 'Snapshot', ...(params.images === false ? { imagesDeferred: 1 } : {}) }
   send({ type: 'result', id, result })
 })

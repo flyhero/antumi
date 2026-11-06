@@ -59,7 +59,12 @@ export const pluginMethods = {
   envCredential: { params: z.object({ source: SourceId }), result: PluginCredential.nullable() },
   login: { params: z.object({ source: SourceId, settings: Settings }), result: z.object({ credential: PluginCredential, account: z.string().max(200) }) },
   list: { params: z.object({ source: SourceId, settings: Settings, credential: PluginCredential }), result: z.array(SourceIssue).max(200) },
-  fetch: { params: z.object({ source: SourceId, settings: Settings, credential: PluginCredential, key: z.string() }), result: SourceIssue.extend({ markdown: z.string().max(50_000), images: SourceImages.optional() }) }
+  // images false: the issue's text alone, its images fetched by a later call; a plugin that leaves
+  // them out says how many in imagesDeferred. Older plugins ignore it and send the images anyway.
+  fetch: {
+    params: z.object({ source: SourceId, settings: Settings, credential: PluginCredential, key: z.string(), images: z.boolean().optional() }),
+    result: SourceIssue.extend({ markdown: z.string().max(50_000), images: SourceImages.optional(), imagesDeferred: z.number().int().nonnegative().max(1000).optional() })
+  }
 } as const
 export type PluginMethod = keyof typeof pluginMethods
 type PluginSchemas = { [M in PluginMethod]: { params: z.ZodType<z.output<(typeof pluginMethods)[M]['params']>>; result: z.ZodType<z.output<(typeof pluginMethods)[M]['result']>> } }

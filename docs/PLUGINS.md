@@ -45,15 +45,15 @@ git clone https://github.com/flyhero/antumi.git
 cd antumi
 pnpm install --frozen-lockfile
 mkdir -p work
-pnpm --dir packages/plugin-sdk pack --out ../../work/antumi-plugin-sdk-0.1.1.tgz
+pnpm --dir packages/plugin-sdk pack --out ../../work/antumi-plugin-sdk-0.1.2.tgz
 cd ..
 
 cp -R antumi/templates/source-plugin antumi-plugin-acme
 cp antumi/LICENSE antumi-plugin-acme/LICENSE
 mkdir -p antumi-plugin-acme/vendor
-cp antumi/work/antumi-plugin-sdk-0.1.1.tgz antumi-plugin-acme/vendor/
+cp antumi/work/antumi-plugin-sdk-0.1.2.tgz antumi-plugin-acme/vendor/
 cd antumi-plugin-acme
-npm install ./vendor/antumi-plugin-sdk-0.1.1.tgz
+npm install ./vendor/antumi-plugin-sdk-0.1.2.tgz
 npm run check
 ```
 
@@ -111,7 +111,7 @@ runSourcePlugin({ manifest, sources: [source] })
 | `normalizeSettings(values)` | 校验地址、应用默认筛选，返回字符串字典 |
 | `login(session, settings, signal)` | 用 `await session.prompt(...)` 获取 Token 等凭据，调用平台验证后返回 `{ credential, account }` |
 | `list(settings, credential, signal)` | 分页读取和筛选平台事项，返回最多 200 条 `SourceIssue` |
-| `fetch(settings, credential, key, signal)` | 读取完整正文、评论，返回事项字段和 Markdown 原文快照 |
+| `fetch(settings, credential, key, signal, options)` | 读取完整正文、评论，返回事项字段和 Markdown 原文快照；`options.images === false` 时可先不下载图片，用 `imagesDeferred` 写明留下的张数（SDK 0.1.2） |
 | `normalizeKey(key)`，可选 | 规范化事项编号，例如去掉空格或统一大小写 |
 | `envCredential(env)`，可选 | 从获准传入的环境变量读取凭据，未配置时返回 `null` |
 

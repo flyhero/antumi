@@ -823,6 +823,8 @@ export const rpcMethods = {
     }),
     result: Conversation
   },
+  // Fetches the issue of a conversation whose fetch failed or was cut off, and starts its agent on it.
+  'sources.retryInvestigation': { params: z.object({ id: z.string().uuid() }), result: Conversation },
   'sources.dismiss': { params: IssueRef, result: SourceInbox },
   'sources.restore': { params: IssueRef, result: SourceInbox },
   // Fetches the task's issue again and replaces its snapshot.

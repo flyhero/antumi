@@ -96,6 +96,27 @@ describe('source SDK protocol runtime', () => {
     expect(JSON.stringify(other.messages)).not.toContain('token-secret')
   })
 
+  it('tells a plugin whether the images are wanted now, and passes on how many it left out', async () => {
+    const asked: unknown[] = []
+    const h = harness({ fetch: async (_settings, _credential, key, _signal, options) => {
+      asked.push(options)
+      return { key, title: 'Demo', url: 'https://example.test/1', status: 'open', statusCategory: 'todo', type: 'Issue', priority: null, updatedAt: null, markdown: 'Text', ...(options?.images === false ? { imagesDeferred: 2 } : {}) }
+    } })
+    await h.hello()
+    h.call('fetch', { source: 'demo', settings: {}, credential: { kind: 'token', payload: {} }, key: 'DEMO-1', images: false })
+    await h.tick()
+    expect(asked).toEqual([{ images: false }])
+    expect(h.messages[1]).toMatchObject({ type: 'result', result: { imagesDeferred: 2 } })
+    const other = harness({ fetch: async (_settings, _credential, key, _signal, options) => {
+      asked.push(options)
+      return { key, title: 'Demo', url: 'https://example.test/1', status: 'open', statusCategory: 'todo', type: 'Issue', priority: null, updatedAt: null, markdown: 'Text' }
+    } })
+    await other.hello()
+    other.call('fetch', { source: 'demo', settings: {}, credential: { kind: 'token', payload: {} }, key: 'DEMO-1' })
+    await other.tick()
+    expect(asked[1]).toEqual({ images: true })
+  })
+
   it('aborts a running operation when the host disconnects', async () => {
     let signal: AbortSignal | undefined
     const h = harness({ list: async (_settings, _credential, current) => { signal = current; return new Promise(() => {}) } })

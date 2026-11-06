@@ -44,12 +44,17 @@ describe('plugin process boundary', () => {
     await expect(runtime.call('normalizeKey', { source: 'demo', key: '1' })).rejects.toBeInstanceOf(Error)
   })
 
-  it("logs the plugin's stderr line by line", async () => {
+  it("logs the plugin's stderr line by line, and asks for the text alone when told to", async () => {
     const manifest = await pluginFixture(directory, { behavior: { stderr: '[demo] image a.png not fetched: timeout\n\u001b[31mred\u001b[0m\nlast without newline' } })
     const logged: string[] = []
     const runtime = new PluginProcess(manifest, path.join(directory, 'main.mjs'), process.env, (line) => logged.push(line))
-    await runtime.call('normalizeKey', { source: 'demo', key: 'D-1' })
-    expect(logged).toEqual(['[demo] image a.png not fetched: timeout', '[31mred[0m', 'last without newline'])
+    const [provider] = await runtime.providers()
+    const detail = await provider!.fetch({}, { kind: 'token', payload: {} }, 'DEMO-1', AbortSignal.timeout(10_000), { images: false })
+    expect(detail.imagesDeferred).toBe(1)
+    expect((await provider!.fetch({}, { kind: 'token', payload: {} }, 'DEMO-1', AbortSignal.timeout(10_000))).imagesDeferred).toBeUndefined()
+    expect(logged).toContain('[demo] image a.png not fetched: timeout')
+    expect(logged).toContain('[31mred[0m')
+    expect(logged).toContain('last without newline')
   })
 
   it('caps what one call can put in the log', () => {

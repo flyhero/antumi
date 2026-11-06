@@ -191,8 +191,8 @@ export class PluginProcess {
         normalizeKey: (key) => this.call('normalizeKey', { source: source.id, key }, timed()),
         login: (session, settings, signal) => this.call('login', { source: source.id, settings }, signal, session),
         list: (settings, credential, signal) => this.call('list', { source: source.id, settings, credential }, signal),
-        fetch: async (settings, credential, key, signal) => {
-          const detail = await this.call('fetch', { source: source.id, settings, credential, key }, signal)
+        fetch: async (settings, credential, key, signal, options) => {
+          const detail = await this.call('fetch', { source: source.id, settings, credential, key, ...(options?.images === false ? { images: false } : {}) }, signal)
           return { ...detail, images: detail.images?.map((image) => ({ name: image.name, bytes: Buffer.from(image.base64, 'base64') })) }
         }
       })

@@ -132,6 +132,8 @@ const REASON_TEXT: Record<string, string> = localized(() => ({
   'session-not-found': t('labels.conversationNoLongerExists'),
   'conversation-not-found': t('labels.conversationNotFound'),
   'conversation-running': t('labels.thisConversationSAgentIsStartingTryAgain'),
+  'conversation-preparing': t('labels.theIssueIsStillBeingFetched'),
+  'investigation-interrupted': t('labels.theIssueFetchWasCutOff'),
   'agent-capacity': t('labels.agentConcurrencyLimitReachedWaitForOtherConversations'),
   'conversation-same-agent': t('labels.chooseAnotherAgentForHandoff'),
   'invalid-workspace': t('labels.projectMustBeAnExistingAbsoluteDirectory'),

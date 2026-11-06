@@ -713,6 +713,60 @@ describe('ScheduleService', () => {
       await due()
       expect(continues(conversation.id)).toHaveLength(1)
     })
+
+    it('stops going on by itself after three resumes in a row each ran straight back into the limit', async () => {
+      limitTurns(5, null)
+      const conversation = await conversations.create('claude', [])
+      await conversations.send(conversation.id, 'go')
+      await settle()
+      // The first resume goes at once (no reset is known); the ones after it wait a while: sent now here.
+      for (let waiting = schedules.list().find((each) => each.status === 'waiting'), tries = 0; waiting && tries < 10; waiting = schedules.list().find((each) => each.status === 'waiting'), tries++) {
+        await schedules.runNow(waiting.id)
+        await settle()
+      }
+      expect(continues(conversation.id)).toHaveLength(3)
+      expect(schedules.list().filter((each) => each.status === 'waiting')).toEqual([])
+      const limited = conversations.chatPage(conversation.id).items.filter((each) => each.kind === 'usageLimit')
+      const last = limited.at(-1)
+      if (!last) throw new Error('no usage limit item')
+      expect(statusOf(last)).toMatchObject({ status: 'waiting', autoContinue: false, autoContinueStopped: true })
+      expect(statusOf(limited[0]!)).toMatchObject({ status: 'continued' })
+
+      // Retried by hand, it goes on now; ticked again, core goes on by itself as at first.
+      await limits.retry(conversation.id, last.stageId, last.id)
+      await settle()
+      expect(continues(conversation.id)).toHaveLength(4)
+      const next = conversations.chatPage(conversation.id).items.filter((each) => each.kind === 'usageLimit').at(-1)
+      if (!next || next.id === last.id) throw new Error('no new usage limit item')
+      expect(statusOf(next)).toMatchObject({ status: 'waiting', autoContinue: true })
+    })
+
+    it('retries an unticked card at once', async () => {
+      const { id, item } = await limitedChat(clock + HOUR)
+      limits.setAutoContinue(id, item.stageId, item.id, false)
+      await limits.retry(id, item.stageId, item.id)
+      await settle()
+      expect(continues(id)).toHaveLength(1)
+      expect(statusOf(item)).toMatchObject({ status: 'continued' })
+    })
+
+    it('counts limits in a row afresh once a turn finishes between them', async () => {
+      limitTurns(1, null)
+      const conversation = await conversations.create('claude', [])
+      for (let round = 0; round < 4; round++) {
+        await conversations.send(conversation.id, `go ${round}`)
+        await settle()
+        // The first message ran into the limit; its resume goes through and finishes the turn.
+        const waiting = schedules.list().find((each) => each.status === 'waiting')
+        if (waiting) {
+          await schedules.runNow(waiting.id)
+          await settle()
+        }
+        limitTurns(1, null)
+      }
+      const limited = conversations.chatPage(conversation.id).items.filter((each) => each.kind === 'usageLimit')
+      expect(limited.map((each) => statusOf(each)?.autoContinueStopped ?? false)).not.toContain(true)
+    })
   })
 
   describe("a routine's runs", () => {

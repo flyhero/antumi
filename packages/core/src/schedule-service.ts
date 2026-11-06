@@ -222,7 +222,9 @@ export class ScheduleService {
   // run already waits, that run takes the limit over instead. resetsAt is when the agent said the
   // limit lifts; without it the next pass asks the usage reading. switchedTo: the account the agent
   // was moved to, which has quota, so the run goes on at once.
-  createResume(conversationId: string, limit: LimitRef, resetsAt: number | null, switchedTo?: string): ScheduledRun {
+  // switchedTo: the account it goes on on; stopped: why core will not send it itself, kept settled
+  // for the card to say so; held: left for the caller to start with runNow.
+  createResume(conversationId: string, limit: LimitRef, resetsAt: number | null, { switchedTo, stopped, held = false }: { switchedTo?: string; stopped?: string; held?: boolean } = {}): ScheduledRun {
     const target: ScheduledTarget = { kind: 'resume', conversationId, ...limit, ...(switchedTo ? { switchedTo } : {}) }
     const { title, agent } = this.describe(target)
     checkUnattended(agent)
@@ -241,7 +243,13 @@ export class ScheduleService {
     const notBefore = switchedTo ? null : relimited ? this.now() + UNKNOWN_RESET_MS : resetsAt === null ? null : resetsAt + GRACE_MS
     const first = this.db.prepare(`SELECT MIN(position) AS position FROM scheduled_runs WHERE ${OPEN}`).get()
     const id = this.insert(target, title, agent, notBefore, Number(first?.position ?? 1) - 1, resetsAt)
-    void this.tick()
+    if (stopped) {
+      const run = this.found(id)
+      this.settle(run, { status: 'cancelled', error: stopped, settled_at: this.now() })
+      this.limitChanged(run)
+      return publicRun(this.found(id))
+    }
+    if (!held) void this.tick()
     return publicRun(this.found(id))
   }
 

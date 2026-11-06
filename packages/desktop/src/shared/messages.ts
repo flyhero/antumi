@@ -3065,6 +3065,10 @@ export const MESSAGES = {
     "zh": "会话额度已用完",
     "en": "Conversation quota exhausted"
   },
+  "ChatUsageLimit.autoResumeStopped": {
+    "zh": "连续 3 次自动续跑都又撞上额度，中间没有一轮跑完，已停止自动续跑。可以稍后手动重试，或重新勾选自动继续。",
+    "en": "Three automatic resumes in a row ran back into the limit with no turn finishing between them, so automatic resuming stopped. Retry later, or tick auto-resume again."
+  },
   "ChatUsageLimit.lastResumeFailed": {
     "zh": "上次没能继续：{value1}",
     "en": "Last resume failed: {value1}"

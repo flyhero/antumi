@@ -1,4 +1,4 @@
-import { probeProvider, useProviderProbes } from '../provider-probes'
+import { keepProbe, probeProvider, useProviderProbes } from '../provider-probes'
 import { getLocale, t } from '../i18n'
 import { useLayoutEffect, useId, useRef, useState, type FormEvent } from 'react'
 import {
@@ -258,7 +258,7 @@ function ModelRowCells({ row, problems, locked, images, focus, onChange, onRemov
   )
 }
 
-function ProviderForm({ initial, onDone }: { initial: Draft; onDone: (saved: string | null) => void }) {
+function ProviderForm({ initial, onDone }: { initial: Draft; onDone: (saved: ModelProvider | null, retest?: boolean) => void }) {
   const [draft, setDraft] = useState(initial)
   const [saving, setSaving] = useState(false)
   const [listing, setListing] = useState<Listing | 'running' | null>(null)
@@ -318,7 +318,10 @@ function ProviderForm({ initial, onDone }: { initial: Draft; onDone: (saved: str
     setSaving(true)
     const saved = await perform((rpc) => rpc.call('modelProviders.save', inputOf(draft, canExtras, canImages)))
     setSaving(false)
-    if (saved) onDone(saved.id)
+    // Tested again only where a test could answer differently: each test is requests the provider sees.
+    const retest = draft.id === null || Boolean(draft.apiKey.trim()) || addressesOf(draft) !== addressesOf(initial) || draft.anthropicAuth !== initial.anthropicAuth
+      || draft.defaultModel !== initial.defaultModel || draft.smallModel !== initial.smallModel || draft.headers !== initial.headers || draft.smallJobs !== initial.smallJobs
+    if (saved) onDone(saved, retest)
   }
 
   return (
@@ -549,7 +552,7 @@ export function ModelProviderSettings() {
   const probes = useProviderProbes((state) => state.probes)
 
   if (!connected) return <SettingsEmptyState icon={<CloudIcon />} title={t('SettingsPage.providersDisconnected')}>{t('ChatCommandSettings.connectToAntumiCoreToView')}</SettingsEmptyState>
-  if (draft) return <ProviderForm key={draft.id ?? 'new'} initial={draft} onDone={(saved) => { setDraft(null); if (saved) void probeProvider(saved) }} />
+  if (draft) return <ProviderForm key={draft.id ?? 'new'} initial={draft} onDone={(saved, retest) => { setDraft(null); if (saved && retest) void probeProvider(saved.id); else if (saved) keepProbe(saved.id, saved.revision - 1, saved.revision) }} />
   return (
     <div className="provider-settings">
       {providers.length === 0 ? <>

@@ -12275,7 +12275,7 @@ export const MESSAGES = {
   "ModelProviderSettings.smallJobsProvider": { "zh": "用服务商的小模型", "en": "On the provider's small model" },
   "ModelProviderSettings.smallJobsAccount": { "zh": "用 Agent 自己的账号", "en": "On the agent's own account" },
   "ModelProviderSettings.smallJobsOff": { "zh": "不做", "en": "Not done" },
-  "ModelProviderSettings.smallJobsHint": { "zh": "这些是 Antumi 自己发的小请求，不经过 Agent。服务商背后是订阅账号时，建议不让它们走服务商。", "en": "Antumi sends these small requests itself, not through the agent. Keep them off a provider that fronts subscription accounts." },
+  "ModelProviderSettings.smallJobsHint": { "zh": "这些是 Antumi 自己发的小请求，不经过 Agent。服务商背后是订阅账号时，建议不让它们走服务商。Agent 自己的辅助请求不受这一项控制，比如 OpenCode 每个新会话会自己发一个请求生成标题。", "en": "Antumi sends these small requests itself, not through the agent. Keep them off a provider that fronts subscription accounts. An agent's own side requests are not covered: OpenCode, for one, asks for a title in each new conversation." },
   "ModelProviderSettings.headers": { "zh": "额外请求头", "en": "Extra request headers" },
   "ModelProviderSettings.headersHint": { "zh": "每行一个「名称: 值」，Agent 和 Antumi 发往这个服务商的请求都会带上。不能改 Authorization、x-api-key 这类放 Key 的头；不要在这里放密钥。", "en": "One “Name: value” a line, sent on every request agents and Antumi make to this provider. Headers that carry the key, such as Authorization or x-api-key, cannot be set; keep secrets out of here." },
   "ModelProviderSettings.headersInvalid": { "zh": "第 {value1} 行不对：要写成「名称: 值」，不能是放 Key 的头，名称不能重复，最多 20 个。", "en": "Line {value1} is wrong: write “Name: value”, not a header that carries the key, each name once, at most 20." },

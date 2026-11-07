@@ -10028,11 +10028,13 @@ summary.agent-group-head:focus-visible { outline: 2px solid var(--focus); outlin
 .pr-merge-reason { font-size: 12px; }
 /* Opening a pull request: branch → base, then the title and description drafted for editing. */
 .pr-dialog { width: min(640px, calc(100vw - 32px)); }
+.pr-dialog > .modal-body { max-height: calc(100vh - 40px); overflow-y: auto; }
 .pr-section { display: flex; flex-direction: column; gap: 8px; }
 .pr-section + .pr-section { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); }
 .pr-section h3 { margin: 0; font-size: 13px; }
 .pr-route { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; }
-.pr-base { width: 180px; }
+.pr-base { width: 220px; min-width: 0; max-width: 100%; }
+.pr-base .chat-picker-value { font-family: var(--mono); }
 .pr-body { min-height: 180px; resize: vertical; font-family: inherit; }
 .pr-note { margin: 0; font-size: 13px; }
 .pr-draft-toggle { display: inline-flex; align-items: center; gap: 6px; margin-right: auto; font-size: 13px; }

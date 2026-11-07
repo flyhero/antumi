@@ -98,6 +98,34 @@ describe('PullRequestService', () => {
     expect((await service.check(task.id))[0]).toMatchObject({ blocker: 'no-commits' })
   })
 
+  it('lists current remote base branches without relying on tracking refs or changing the checkout', async () => {
+    git(repo, 'branch', 'local-only', 'main')
+    git(repo, 'tag', 'v1')
+    git(repo, 'push', '-q', 'origin', 'main:refs/heads/removed', 'refs/tags/v1')
+    git(repo, 'fetch', '-q', 'origin')
+    git(remote, 'branch', '-D', 'removed')
+    git(remote, 'branch', 'release/next', 'main')
+    expect(git(repo, 'branch', '-r')).toContain('origin/removed')
+    expect(git(repo, 'branch', '-r')).not.toContain('origin/release/next')
+
+    expect(await service.baseBranches(task.id, repo)).toEqual(['main', 'release/next'])
+    expect(await service.baseBranches(task.id, worktree)).toEqual(['main', 'release/next'])
+    expect(git(worktree, 'branch', '--show-current')).toBe('antumi/abc')
+    expect(git(repo, 'branch', '-r')).toContain('origin/removed')
+  })
+
+  it('refuses base branch requests for unrelated or reference projects', async () => {
+    await expect(service.baseBranches(task.id, root)).rejects.toMatchObject({ reason: 'repo-not-found' })
+    setTask({ repos: [{ ...task.repos[0]!, reference: true }] })
+    await expect(service.baseBranches(task.id, repo)).rejects.toMatchObject({ reason: 'repo-not-found' })
+  })
+
+  it('reports a failed remote branch lookup instead of returning an empty list', async () => {
+    git(repo, 'config', '--unset', `url.${remote}.insteadOf`)
+    git(repo, 'config', `url.${path.join(root, 'missing.git')}.insteadOf`, 'git@github.com:flyhero/antumi.git')
+    await expect(service.baseBranches(task.id, repo)).rejects.toMatchObject({ reason: 'pull-request-branches-failed' })
+  })
+
   it('refuses the default branch itself, and has no credential to ask with', async () => {
     const main = path.join(root, 'main-wt')
     git(repo, 'worktree', 'add', '-q', '--detach', main)

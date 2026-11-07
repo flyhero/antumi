@@ -249,6 +249,7 @@ export function createRpcHandlers(
     'support.starStatus': () => projectStar?.check() ?? { state: 'unavailable' },
     'support.star': ({ identity }) => projectStar?.star(identity) ?? { ok: false, problem: 'unavailable' },
     'pullRequests.check': ({ taskId, repoPath }) => requirePullRequests().check(taskId, repoPath),
+    'pullRequests.baseBranches': ({ taskId, repoPath }) => requirePullRequests().baseBranches(taskId, repoPath),
     'pullRequests.draft': async ({ taskId, repoPath, base }) => {
       const task = service.get(taskId)
       if (!task.agent) throw new Rejection('missing-agent')

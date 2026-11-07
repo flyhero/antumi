@@ -61,7 +61,8 @@ export function ContextMenu({ at, align = 'start', above = false, trigger, scrol
       setPlace({ x, y })
     }
     place()
-    element.querySelector<HTMLElement>(ITEMS)?.focus()
+    const first = element.querySelector<HTMLElement>('[data-menu-search]') ?? element.querySelector<HTMLElement>(ITEMS)
+    first?.focus()
     const observer = new ResizeObserver(place)
     observer.observe(element)
     return () => observer.disconnect()
@@ -86,7 +87,8 @@ export function ContextMenu({ at, align = 'start', above = false, trigger, scrol
         const items = focusedMenuItems(panel.current)
         const current = items.findIndex((item) => item === document.activeElement)
         const step = event.key === 'ArrowDown' ? 1 : -1
-        items[(current + step + items.length) % items.length]?.focus()
+        const next = current < 0 ? (step > 0 ? 0 : items.length - 1) : (current + step + items.length) % items.length
+        items[next]?.focus()
       }
     }
     document.addEventListener('pointerdown', onPointerDown, true)

@@ -216,6 +216,25 @@ export class PullRequestService {
     return Promise.all(this.writableRepos(task, repoPath).map((repo) => this.checkRepo(task, repo)))
   }
 
+  // Ask origin directly: tracking refs may omit new branches or still hold deleted ones.
+  async baseBranches(taskId: string, repoPath: string): Promise<string[]> {
+    const task = this.tasks.get(taskId)
+    const repo = this.writableRepos(task, repoPath)[0]
+    if (!repo?.worktreePath) throw new Rejection('git-no-worktree')
+    if (!(await githubRemote(repo.worktreePath))) throw new Rejection('pull-request-not-github')
+    try {
+      const { stdout } = await execFileAsync('git', ['-C', repo.worktreePath, 'ls-remote', '--heads', '--', 'origin'], {
+        timeout: REMOTE_TIMEOUT_MS, maxBuffer: 4 * 1024 * 1024, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' }
+      })
+      return stdout.split('\n').flatMap((line) => {
+        const ref = line.split('\t')[1]
+        return ref?.startsWith('refs/heads/') ? [ref.slice('refs/heads/'.length)] : []
+      })
+    } catch {
+      throw new Rejection('pull-request-branches-failed', '无法读取 origin 的分支，请重试。')
+    }
+  }
+
   // byAgent: the task's own agent asked, through Antumi's tools, from within its turn.
   async create(fields: CreateFields, { byAgent = false }: { byAgent?: boolean } = {}): Promise<PullRequestLink> {
     const task = this.tasks.get(fields.taskId)

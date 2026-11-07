@@ -78,7 +78,7 @@ export function PickerItem({ option, checked, onSelect }: { option: PickerOption
     >
       {option.icon && <span className="chat-picker-icon" aria-hidden="true">{option.icon}</span>}
       <span className="chat-picker-item-text">
-        <span className="chat-picker-item-label">{option.label}</span>
+        <span className="chat-picker-item-label" title={option.label}>{option.label}</span>
         {option.description && <span className="chat-picker-item-description" title={option.description}>{option.description}</span>}
       </span>
       {checked && <span className="menu-check"><CheckIcon /></span>}
@@ -87,7 +87,7 @@ export function PickerItem({ option, checked, onSelect }: { option: PickerOption
 }
 
 // One setting: its options listed with what each means, the current one checked.
-export function ChatPicker({ label, value, placeholder, options, onChange, disabled = false, title, tone, align = 'start', placement, size, iconOnly = false, footer }: {
+export function ChatPicker({ label, value, placeholder, options, onChange, disabled = false, title, tone, align = 'start', placement, size, iconOnly = false, search, footer }: {
   label: string
   value: string | null
   placeholder: string
@@ -102,6 +102,7 @@ export function ChatPicker({ label, value, placeholder, options, onChange, disab
   size?: PickerSize
   // Only the picked option's icon on the button; every option then needs one.
   iconOnly?: boolean
+  search?: { label: string; empty: string }
   // What else the menu offers below the choices, as a folder picker beside recent projects.
   footer?: (close: () => void) => ReactNode
 }) {
@@ -113,22 +114,44 @@ export function ChatPicker({ label, value, placeholder, options, onChange, disab
       {(close) => (
         <>
           <div className="chat-picker-heading">{label}</div>
-          {options.map((option) => (
-            <PickerItem
-              key={option.value}
-              option={option}
-              checked={option.value === value}
-              onSelect={() => {
-                close()
-                if (option.value !== value) onChange(option.value)
-              }}
-            />
-          ))}
+          <PickerChoices options={options} value={value} search={search} onSelect={(next) => {
+            close()
+            if (next !== value) onChange(next)
+          }} />
           {footer && <><div className="menu-separator" role="separator" />{footer(close)}</>}
         </>
       )}
     </PickerShell>
   )
+}
+
+function PickerChoices({ options, value, search, onSelect }: {
+  options: readonly PickerOption[]
+  value: string | null
+  search?: { label: string; empty: string }
+  onSelect: (value: string) => void
+}) {
+  const [query, setQuery] = useState('')
+  const needle = query.trim().toLowerCase()
+  const shown = search && needle ? options.filter((option) => option.label.toLowerCase().includes(needle)) : options
+  return <>
+    {search && <input
+      className="input menu-search"
+      data-menu-search
+      aria-label={search.label}
+      placeholder={search.label}
+      value={query}
+      onChange={(event) => setQuery(event.target.value)}
+      onKeyDown={(event) => {
+        if (event.key !== 'Enter' || event.nativeEvent.isComposing) return
+        event.preventDefault()
+        const first = shown.find((option) => !option.disabled)
+        if (first) onSelect(first.value)
+      }}
+    />}
+    {shown.map((option) => <PickerItem key={option.value} option={option} checked={option.value === value} onSelect={() => onSelect(option.value)} />)}
+    {search && shown.length === 0 && <p className="menu-note">{search.empty}</p>}
+  </>
 }
 
 export type ModelOption = PickerOption & { efforts: readonly PickerOption[] }

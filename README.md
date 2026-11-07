@@ -36,8 +36,6 @@ https://github.com/user-attachments/assets/74747188-10e9-4d1d-b444-86c867f25c58
 
 </div>
 
-目前是开发版（0.21.x），主要在 macOS 上开发和测试。Windows 和 Linux 可以安装和打包。视频和演示用的是示例数据。
-
 ## 适合谁
 
 你已经在终端里用 Claude Code、Codex 或其他 Agent CLI，想让它们一起把一件事从计划做到验收，而不是在几个窗口之间复制粘贴。

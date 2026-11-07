@@ -36,8 +36,6 @@ https://github.com/user-attachments/assets/74747188-10e9-4d1d-b444-86c867f25c58
 
 </div>
 
-This is a development release (0.21.x), built and tested mainly on macOS. Windows and Linux can be installed and packaged. The interface can be English or Simplified Chinese. The launch video (narrated in Chinese) and the demos use sample data, with the interface in Chinese.
-
 ## Who it's for
 
 You already use Claude Code, Codex or another agent CLI in a terminal, and you want them to take a piece of work from a plan through to review, without copying between windows.

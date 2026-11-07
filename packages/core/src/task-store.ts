@@ -392,7 +392,15 @@ export const MIGRATIONS = [
    CREATE TABLE source_comments(sequence INTEGER PRIMARY KEY AUTOINCREMENT, item_id TEXT NOT NULL, external_id TEXT NOT NULL, data TEXT NOT NULL, UNIQUE(item_id,external_id));
    CREATE INDEX source_comments_item ON source_comments(item_id,sequence);
    CREATE TABLE source_deliveries(id TEXT PRIMARY KEY, data TEXT NOT NULL);
-   CREATE TABLE source_delivery_comments(delivery_id TEXT NOT NULL, comment_id TEXT NOT NULL, PRIMARY KEY(delivery_id,comment_id));`
+   CREATE TABLE source_delivery_comments(delivery_id TEXT NOT NULL, comment_id TEXT NOT NULL, PRIMARY KEY(delivery_id,comment_id));`,
+  // A task's pull request in each of its repos, and the numbers the user cut loose from it.
+  `CREATE TABLE pull_requests(
+     task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+     repo_path TEXT NOT NULL,
+     data TEXT NOT NULL,
+     suppressed TEXT NOT NULL DEFAULT '[]',
+     PRIMARY KEY(task_id, repo_path)
+   );`
 ]
 
 

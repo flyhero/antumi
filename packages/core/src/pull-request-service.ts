@@ -25,6 +25,8 @@ const MIN_REFRESH_MS = 10_000
 const WATCH_MIN_MS = 30_000
 const WATCH_MAX_MS = 120_000
 const SWEEP_MS = 5 * 60_000
+// How often a task's branch is looked up for a pull request opened elsewhere.
+const DISCOVER_MS = 2 * 60_000
 const FAIL_MIN_MS = 60_000
 const FAIL_MAX_MS = 30 * 60_000
 
@@ -93,6 +95,7 @@ export class PullRequestService {
   private readonly refreshing = new Map<string, Promise<PullRequestLink>>()
   private readonly watchers = new Map<string, Set<Watcher>>()
   private readonly cadence = new Map<string, Cadence>()
+  private readonly discovered = new Map<string, number>()
   private timer: ReturnType<typeof setTimeout> | null = null
   private started = false
 
@@ -374,6 +377,23 @@ export class PullRequestService {
       return blocked('base-missing')
     }
     return result
+  }
+
+  // A task changed, as it does each time its agent's turn ends: an agent may have opened a pull
+  // request for its branch itself (gh pr create), which the task should show without the user
+  // going to create one. Asked of the host at most every DISCOVER_MS per task, only for a task at
+  // work or handed in whose branch has no pull request yet; any trouble is left for next time.
+  taskChanged(task: Task): void {
+    if (task.status !== 'running' && task.status !== 'review') return
+    const repos = task.repos.filter((repo) => !repo.reference && repo.worktreePath && repo.branch && !this.store.get(task.id, repo.path))
+    if (repos.length === 0) return
+    const last = this.discovered.get(task.id) ?? -Infinity
+    if (this.now() - last < DISCOVER_MS) return
+    this.discovered.set(task.id, this.now())
+    void Promise.all(repos.map(async (repo) => {
+      const host = repo.worktreePath ? await githubRemote(repo.worktreePath) : null
+      if (host && repo.branch) await this.lookup(task.id, repo.path, host, repo.branch)
+    })).catch(() => {})
   }
 
   // The pull request the host has for the branch, open before merged, never closed nor one the

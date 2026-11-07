@@ -228,6 +228,7 @@ const service = new TaskService(
   (event) => {
     if (event.type === 'changed') {
       server?.broadcast('tasks.changed', { task: event.task })
+      pullRequests.current?.taskChanged(event.task)
       queueMicrotask(() => sourceUpdates?.changed())
       if (!event.sourceOnly) schedules.taskChanged(event.task)
       refreshAwake()

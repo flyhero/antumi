@@ -125,6 +125,37 @@ describe('PullRequestService', () => {
     expect((await service.check(task.id))[0]).toMatchObject({ blocker: null, base: 'develop' })
   })
 
+  it('finds a pull request the agent opened itself when the task changes, now and then', async () => {
+    const lookups = () => calls.filter((call) => call.path.startsWith('/repos/flyhero/antumi/pulls?')).length
+    reply = (call) => Response.json(call.path.startsWith('/repos/flyhero/antumi/pulls?') ? [pull({ number: 11 })] : pull())
+    service.taskChanged(task)
+    await vi.waitFor(() => expect(store.get(task.id, repo)?.number).toBe(11))
+    expect(changed).toHaveBeenCalledWith(task.id, [expect.objectContaining({ number: 11 })])
+    // Linked now: nothing more to find.
+    now += 10 * 60_000
+    service.taskChanged(task)
+    expect(lookups()).toBe(1)
+  })
+
+  it('asks the host at most every two minutes per task, and only for a task at work', async () => {
+    const lookups = () => calls.filter((call) => call.path.startsWith('/repos/flyhero/antumi/pulls?')).length
+    service.taskChanged(task)
+    await vi.waitFor(() => expect(lookups()).toBe(1))
+    service.taskChanged(task)
+    now += 60_000
+    service.taskChanged(task)
+    expect(lookups()).toBe(1)
+    now += 61_000
+    service.taskChanged(task)
+    await vi.waitFor(() => expect(lookups()).toBe(2))
+    now += 10 * 60_000
+    service.taskChanged(Task.parse({ ...task, status: 'done' }))
+    service.taskChanged(Task.parse({ ...task, status: 'pending' }))
+    service.taskChanged(Task.parse({ ...task, repos: [{ ...task.repos[0]!, branch: null }] }))
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(lookups()).toBe(2)
+  })
+
   it('recognizes a pull request opened elsewhere for the branch and keeps it', async () => {
     reply = (call) => Response.json(call.path.startsWith('/repos/flyhero/antumi/pulls?') ? [pull({ number: 3, state: 'closed' }), pull({ number: 5, state: 'closed', merged_at: '2026-11-07T11:00:00Z' }), pull({ number: 7 })] : pull())
     const [result] = await service.check(task.id)

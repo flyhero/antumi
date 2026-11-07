@@ -68,9 +68,10 @@ const keyOf = (entry: BrowserHistoryEntry) => `${entry.conversationId ?? ''} ${e
 // globe for an address with no name to take a letter from.
 function SiteIcon({ url }: { url: string }) {
   const site = siteOf(url)
-  const [failed, setFailed] = useState(false)
-  useEffect(() => setFailed(false), [site?.origin])
-  if (site && !failed) return <img className="browser-site-icon" src={`${site.origin}/favicon.ico`} alt="" onError={() => setFailed(true)} />
+  // Which origin failed, not whether: a reset run after mount could land after the error and
+  // leave the broken image showing.
+  const [failed, setFailed] = useState<string | null>(null)
+  if (site && failed !== site.origin) return <img className="browser-site-icon" src={`${site.origin}/favicon.ico`} alt="" onError={() => setFailed(site.origin)} />
   const host = site?.host ?? url
   if (!/^\p{L}/u.test(host)) return <span className="browser-site-icon" data-globe><GlobeIcon /></span>
   let hash = 0

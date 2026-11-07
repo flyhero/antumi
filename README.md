@@ -6,7 +6,7 @@
 
 本地桌面应用。它驱动你登录好的 Agent CLI：一个实现，另一个审查，在内置浏览器里自己验证，结果由你合并。配置和登录都不用重来。
 
-多 Agent 协作 · 从 issue 开工 · 自己验证 · 额度用完接着跑
+从 issue 开工 · 多 Agent 协作 · 自己验证 · 额度用完接着跑
 
 [![Release](https://img.shields.io/github/v/release/flyhero/antumi?include_prereleases&label=release&color=blue)](https://github.com/flyhero/antumi/releases)
 [![Downloads](https://img.shields.io/github/downloads/flyhero/antumi/total?color=blue)](https://github.com/flyhero/antumi/releases)
@@ -30,13 +30,13 @@
   <a href="#支持的-agent" title="Gemini CLI"><img src="docs/assets/agents/gemini.svg" alt="Gemini CLI" width="32" height="32" /></a>
 </p>
 
-<img src="docs/assets/hero.png" alt="Antumi 工作台：主会话里 @ 代码审查员委派审查，委派卡片显示进度，审查结果自动回到主会话" width="100%" />
+**一分钟看完：** 三个 bug，从收件箱一路做到合并。
 
 https://github.com/user-attachments/assets/74747188-10e9-4d1d-b444-86c867f25c58
 
 </div>
 
-目前是开发版（0.21.x），主要在 macOS 上开发和测试。Windows 和 Linux 可以安装和打包。
+目前是开发版（0.21.x），主要在 macOS 上开发和测试。Windows 和 Linux 可以安装和打包。视频和演示用的是示例数据。
 
 ## 适合谁
 
@@ -48,16 +48,6 @@ Antumi 不替换这些 CLI，也不要求重新登录。终端里聊到一半的
 
 下面四段是从接到任务到交出结果的整条路径。其余能力见[还能做什么](#还能做什么)，细节在[使用指南](docs/GETTING-STARTED.md)。
 
-### 多个 Agent 一起做
-
-五个窗口里谁在等批准、谁已经做完，得挨个切过去看。在 Antumi 里，输入框打 `@` 就能把活交给本机另一个已就绪的 Agent，或交给存好的角色（代码审查员、测试验证专员）。子会话独立工作，结果回到主会话。只读分析和独立 worktree 里的开发可以同时进行。
-
-每个任务一个 worktree，代码互不干扰。等你批准、回答、验收的事集中在总览里，做完或在等你时会发系统通知。
-
-[委派](docs/ARCHITECTURE.md#智能体与委派) · [移交](docs/GETTING-STARTED.md#无缝移交)
-
-<img src="docs/assets/features/delegate.webp" alt="委派演示：在输入框 @ 代码审查员，主 Agent 委派后卡片显示工作中，审查结果自动回到主会话" width="100%" />
-
 ### 从 issue 开工
 
 GitHub、Jira、Linear、禅道的 issue 同步进侧栏「收件箱」，一键导入成任务。开始后自动建好 worktree 和带 issue 编号的分支。Agent 先读代码、拿出计划，你批准后才改代码。原因还不清楚的 bug 可以先排查再动手。任务之间可设前置依赖，前一个验收通过才解锁下一个。
@@ -65,6 +55,18 @@ GitHub、Jira、Linear、禅道的 issue 同步进侧栏「收件箱」，一键
 [接入来源](docs/GETTING-STARTED.md#任务来源) · [任务怎么流转](docs/ARCHITECTURE.md#2-任务模型)
 
 <img src="docs/assets/features/intake.webp" alt="任务演示：在收件箱把 GitHub issue 导入成任务，打开后点「开始执行」，Agent 读完代码拿出计划等你批准" width="100%" />
+
+### 多个 Agent 一起做
+
+五个窗口里谁在等批准、谁已经做完，得挨个切过去看。在 Antumi 里，输入框打 `@` 就能把活交给本机另一个已就绪的 Agent，或交给存好的角色（代码审查员、测试验证专员）。子会话独立工作，结果回到主会话。只读分析和独立 worktree 里的开发可以同时进行。
+
+复杂一点的活可以交给团队：队长拆分任务，开发实现，评审把关。
+
+每个任务一个 worktree，代码互不干扰。等你批准、回答、验收的事集中在总览里，做完或在等你时会发系统通知。
+
+[委派](docs/ARCHITECTURE.md#智能体与委派) · [团队](docs/ARCHITECTURE.md#团队) · [移交](docs/GETTING-STARTED.md#无缝移交)
+
+<img src="docs/assets/features/delegate.webp" alt="委派演示：在输入框 @ 代码审查员，主 Agent 委派后卡片显示工作中，审查结果自动回到主会话" width="100%" />
 
 ### 它先验证，你再验收
 
@@ -76,9 +78,9 @@ Agent 在内置浏览器里打开页面、点击、读控制台和网络请求�
 
 ### 额度用完，接着跑
 
-配了多个 Claude Code 或 Codex 账号时，额度用完会自动换号，在原会话里继续。没有可换的号，就等额度恢复后自动继续，也可以移交给另一个 Agent。底部状态栏显示各 Agent 的用量和恢复时间。
+配了多个 Claude Code 或 Codex 账号时，额度用完会自动换号，在原会话里继续。没有可换的号，就等额度恢复后自动继续，也可以移交给另一个 Agent。下一条消息还能预约到额度恢复后或指定时间再发。底部状态栏显示各 Agent 的用量和恢复时间。
 
-[多个账号](docs/GETTING-STARTED.md#多个账号) · [额度节奏](docs/ARCHITECTURE.md#额度节奏与建议)
+[多个账号](docs/GETTING-STARTED.md#多个账号) · [预约](docs/GETTING-STARTED.md#预约额度恢复后或到点再发) · [额度节奏](docs/ARCHITECTURE.md#额度节奏与建议)
 
 <img src="docs/assets/features/handoff.webp" alt="无缝移交演示：在输入框把 Claude Code 换成 Codex，写下补充说明，Codex 接着补测试" width="100%" />
 

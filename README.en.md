@@ -6,7 +6,7 @@
 
 A local desktop app. It drives the agent CLIs you are signed in to: one implements, another reviews, the work is checked in the built-in browser, and you merge the result. No setup or login to redo.
 
-Agents working together · Issues straight to work · Self-verification · Keeps going when quota runs out
+Issues straight to work · Agents working together · Self-verification · Keeps going when quota runs out
 
 [![Release](https://img.shields.io/github/v/release/flyhero/antumi?include_prereleases&label=release&color=blue)](https://github.com/flyhero/antumi/releases)
 [![Downloads](https://img.shields.io/github/downloads/flyhero/antumi/total?color=blue)](https://github.com/flyhero/antumi/releases)
@@ -30,13 +30,13 @@ Agents working together · Issues straight to work · Self-verification · Keeps
   <a href="#supported-agents" title="Gemini CLI"><img src="docs/assets/agents/gemini.svg" alt="Gemini CLI" width="32" height="32" /></a>
 </p>
 
-<img src="docs/assets/hero.png" alt="The Antumi workspace: the main conversation delegates a review to the code reviewer with @, the delegation card shows progress, and the review comes back to the main conversation" width="100%" />
+**One minute:** three bugs, from the inbox all the way to a merge.
 
 https://github.com/user-attachments/assets/74747188-10e9-4d1d-b444-86c867f25c58
 
 </div>
 
-This is a development release (0.21.x), built and tested mainly on macOS. Windows and Linux can be installed and packaged. The interface can be English or Simplified Chinese. The screenshot, launch video and demos were recorded with sample data, with the interface in Chinese.
+This is a development release (0.21.x), built and tested mainly on macOS. Windows and Linux can be installed and packaged. The interface can be English or Simplified Chinese. The launch video (narrated in Chinese) and the demos use sample data, with the interface in Chinese.
 
 ## Who it's for
 
@@ -48,16 +48,6 @@ Antumi does not replace those CLIs, and it does not ask you to sign in again. A 
 
 The four sections below are the path from a task to finished work. Everything else is under [Also included](#also-included). Details are in the [user guide](docs/GETTING-STARTED.en.md).
 
-### Several agents on one job
-
-Five windows means switching between them to see who is waiting for approval and who is done. In Antumi, type `@` in the composer to hand work to another agent that is ready on this machine, or to a saved role (a code reviewer, a test verifier). The sub-session works on its own, and the result comes back to the main conversation. Read-only analysis, and development in its own worktree, can run at the same time.
-
-Each task gets its own worktree, so the code does not collide. Approvals, questions and reviews sit together in the overview. You get a system notification when an agent finishes or is waiting for you.
-
-[Delegation](docs/ARCHITECTURE.md#智能体与委派) · [Handoff](docs/GETTING-STARTED.en.md#handoff)
-
-<img src="docs/assets/features/delegate.webp" alt="Delegation: type @ to name the code reviewer, the card shows it working, and the review comes back to the main conversation" width="100%" />
-
 ### Start from an issue
 
 Issues from GitHub, Jira, Linear and ZenTao sync into the sidebar inbox and import as tasks in one step. Starting creates a worktree and a branch named with the issue number. The agent reads the code and proposes a plan; it changes code only after you approve. A bug whose cause is still unclear can be investigated first. Tasks can depend on each other: the next one unlocks when the previous one passes review.
@@ -65,6 +55,18 @@ Issues from GitHub, Jira, Linear and ZenTao sync into the sidebar inbox and impo
 [Connect a source](docs/GETTING-STARTED.en.md#task-sources) · [How tasks flow](docs/ARCHITECTURE.md#2-任务模型)
 
 <img src="docs/assets/features/intake.webp" alt="Intake: import a GitHub issue from the inbox as a task, start it, and the agent reads the code and proposes a plan for you to approve" width="100%" />
+
+### Several agents on one job
+
+Five windows means switching between them to see who is waiting for approval and who is done. In Antumi, type `@` in the composer to hand work to another agent that is ready on this machine, or to a saved role (a code reviewer, a test verifier). The sub-session works on its own, and the result comes back to the main conversation. Read-only analysis, and development in its own worktree, can run at the same time.
+
+Bigger work can go to a team: a lead splits it up, a developer builds it, a reviewer checks it.
+
+Each task gets its own worktree, so the code does not collide. Approvals, questions and reviews sit together in the overview. You get a system notification when an agent finishes or is waiting for you.
+
+[Delegation](docs/ARCHITECTURE.md#智能体与委派) · [Teams](docs/ARCHITECTURE.md#团队) · [Handoff](docs/GETTING-STARTED.en.md#handoff)
+
+<img src="docs/assets/features/delegate.webp" alt="Delegation: type @ to name the code reviewer, the card shows it working, and the review comes back to the main conversation" width="100%" />
 
 ### It checks first, then you review
 
@@ -76,9 +78,9 @@ The agent opens the page in the built-in browser, clicks, reads the console and 
 
 ### When quota runs out, it continues
 
-With more than one Claude Code or Codex account, a used-up quota switches to the next account and the same conversation keeps going. With no account left to switch to, it waits for the quota to reset and then continues, or you hand the conversation to another agent. The status bar shows each agent's usage and when it resets.
+With more than one Claude Code or Codex account, a used-up quota switches to the next account and the same conversation keeps going. With no account left to switch to, it waits for the quota to reset and then continues, or you hand the conversation to another agent. You can also hold the next message until quota resets or until a set time. The status bar shows each agent's usage and when it resets.
 
-[Several accounts](docs/GETTING-STARTED.en.md#multiple-accounts) · [Quota pacing](docs/ARCHITECTURE.md#额度节奏与建议)
+[Several accounts](docs/GETTING-STARTED.en.md#multiple-accounts) · [Scheduling](docs/GETTING-STARTED.en.md#scheduling-send-when-quota-resets-or-at-a-set-time) · [Quota pacing](docs/ARCHITECTURE.md#额度节奏与建议)
 
 <img src="docs/assets/features/handoff.webp" alt="Handoff: switch the composer from Claude Code to Codex, add a note, and Codex continues with tests" width="100%" />
 

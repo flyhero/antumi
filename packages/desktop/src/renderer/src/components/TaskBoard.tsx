@@ -160,7 +160,7 @@ function TaskCard({ task, tasks, now, fresh, renaming, menuOpen, onRenamed, onMe
   const activity = useTaskActivity(task)
   const pullRequests = livePullRequests(usePullRequests(task.id))
   const dependencies = task.dependsOn.map((id) => tasks[id]).filter((dependency) => dependency !== undefined)
-  const action = cardAction(task, dependencies, turn)
+  const action = cardAction(task, dependencies, turn, pullRequests)
   // A chat task that has not started its work: planning, or holding the plan it saved.
   const planning = task.status === 'pending' && task.conversationId !== null
   const agent = task.agent ? agentLabel(task.agent) : 'Agent'
@@ -208,7 +208,7 @@ function TaskCard({ task, tasks, now, fresh, renaming, menuOpen, onRenamed, onMe
             type="button"
             className="button"
             aria-disabled={action.reason !== null}
-            data-tooltip={action.reason ? t('TaskBoard.cannotYet', { value1: action.label, value2: action.reason }) : undefined}
+            data-tooltip={action.reason ? t('TaskBoard.cannotYet', { value1: action.label, value2: action.reason }) : action.hint}
             onClick={() => {
               if (!action.reason) action.run()
             }}

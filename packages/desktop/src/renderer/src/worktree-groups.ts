@@ -62,6 +62,8 @@ export function worktreeState({ worktree }: Pick<WorktreeRow, 'worktree'>): { te
   if (worktree.alone) return { text: t('worktreeGroups.hasCommitsThatExistOnlyHere'), warn: true }
   if (worktree.locked) return { text: t('labels.lockedWithGitWorktreeLock'), warn: true }
   if (worktree.planning) return { text: t('worktreeGroups.readOnlyPlanningCheckout'), warn: false }
+  // Merged on the host, by squash or rebase, its commits still read as unmerged below.
+  if (worktree.pullRequest?.state === 'merged') return { text: t('PullRequest.worktreeMerged', { number: worktree.pullRequest.number }), warn: false }
   if (!worktree.unmerged) return { text: t('ConversationInspector.noUncommittedChanges'), warn: false }
   const { count, into } = worktree.unmerged
   return { text: count > 0 ? t('worktreeGroups.commitsNotMergedInto', { count: count, into: into }) : t('worktreeGroups.mergedInto', { into: into }), warn: false }

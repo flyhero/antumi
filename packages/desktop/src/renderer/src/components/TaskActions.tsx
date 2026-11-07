@@ -4,7 +4,9 @@ import { useAgentCalls, useAgentCallsSupported } from '../agent-calls'
 import { useCallback, useState, type ReactElement } from 'react'
 import {
   type Conversation,
+  type PullRequestLink,
   agentDescriptor,
+  checkAcceptOnMerge,
   checkCancel,
   checkMove,
   checkScheduleTask,
@@ -177,9 +179,14 @@ export function useChatTurn(task: Task) {
 
 // The one step a task's card on the board offers, under the toolbar's rules: what moves the task
 // on from where it stands, or the chat where its agent waits for an answer.
-export type CardAction = { label: string; reason: string | null; run: () => void }
+// hint: why this is the step, when it is not the status's own: the pull request merged.
+export type CardAction = { label: string; reason: string | null; run: () => void; hint?: string }
 
-export function cardAction(task: Task, dependencies: readonly Task[], turn: ChatTurnActivity | null): CardAction | null {
+export function cardAction(task: Task, dependencies: readonly Task[], turn: ChatTurnActivity | null, pullRequests: readonly PullRequestLink[] = []): CardAction | null {
+  // Work merged on the host is done as far as the host is concerned; accepting it is the user's say.
+  if (checkAcceptOnMerge(task, pullRequests) === null && checkMove(task, 'done') === null) {
+    return { label: t('TaskActions.accept'), reason: moveBlocker(task, 'done'), run: () => void moveTask(task.id, 'done'), hint: t('PullRequest.mergedHint') }
+  }
   switch (task.status) {
     case 'pending': {
       const blocker = checkStart(task, dependencies)

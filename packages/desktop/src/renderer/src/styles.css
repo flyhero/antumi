@@ -10013,6 +10013,9 @@ summary.agent-group-head:focus-visible { outline: 2px solid var(--focus); outlin
 .pr-review-state[data-state='approved'] { color: var(--status-done); }
 .pr-review-body { margin-top: 2px; white-space: pre-wrap; }
 .pr-panel-actions { display: flex; justify-content: flex-end; }
+.pr-merge-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 4px; }
+.pr-merge-method { width: auto; }
+.pr-merge-reason { font-size: 12px; }
 /* Opening a pull request: branch → base, then the title and description drafted for editing. */
 .pr-dialog { width: min(640px, calc(100vw - 32px)); }
 .pr-section { display: flex; flex-direction: column; gap: 8px; }

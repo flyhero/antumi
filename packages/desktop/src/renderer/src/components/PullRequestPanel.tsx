@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import type { PullRequestCheck, PullRequestComment, PullRequestLink, PullRequestReview, Task } from '@antumi/protocol'
+import { PULL_REQUEST_MERGE_METHODS, type PullRequestCheck, type PullRequestComment, type PullRequestLink, type PullRequestMergeMethod, type PullRequestReview, type Task } from '@antumi/protocol'
+import { askConfirm } from '../confirm-dialog'
 import { timeAgo } from '../conversation-state'
 import { perform, useCore } from '../core-store'
 import { t } from '../i18n'
 import { pullRequestProblemText } from '../labels'
-import { openPullRequest, pullRequestState, refreshPullRequests, usePullRequests } from '../pull-requests'
+import { checksSummary, openPullRequest, pullRequestState, refreshPullRequests, usePullRequests } from '../pull-requests'
 import { projectName } from './ProjectPicker'
 import { PullRequestChip } from './PullRequestChip'
 
@@ -69,6 +70,7 @@ function LinkSection({ task, link, named }: { task: Task; link: PullRequestLink;
         {!link.refreshing && <>{' '}<button type="button" className="link-button" onClick={() => void refreshPullRequests(task.id)}>{t('PullRequest.refreshNow')}</button></>}
       </p>
       {link.problem && <p className="pr-panel-problem" role="alert">{pullRequestProblemText(link.problem)}</p>}
+      {status && status.state === 'open' && !status.draft && <MergeRow task={task} link={link} />}
 
       <h4 className="pr-panel-heading">{t('PullRequest.checksHeading')}</h4>
       {!status || status.checks.length === 0 ? <p className="muted pr-panel-empty">{t('PullRequest.noChecks')}</p> : (
@@ -114,6 +116,40 @@ function LinkSection({ task, link, named }: { task: Task; link: PullRequestLink;
         </div>
       )}
     </section>
+  )
+}
+
+const METHOD_LABEL: Record<PullRequestMergeMethod, () => string> = {
+  squash: () => t('PullRequest.mergeMethod.squash'),
+  merge: () => t('PullRequest.mergeMethod.merge'),
+  rebase: () => t('PullRequest.mergeMethod.rebase')
+}
+
+// Merging on the host, by the method chosen, squash first. What the host would refuse is said
+// beside the button rather than found out by pressing it; the host still has the last word.
+function MergeRow({ task, link }: { task: Task; link: PullRequestLink }) {
+  const [method, setMethod] = useState<PullRequestMergeMethod>('squash')
+  const [busy, setBusy] = useState(false)
+  const status = link.status
+  if (!status) return null
+  const reason = status.mergeable === 'conflicting' ? t('PullRequest.mergeable.conflicting', { base: link.base })
+    : checksSummary(status) === 'failure' ? t('PullRequest.checks.failure')
+    : status.reviews.some((review) => review.state === 'changes_requested') ? t('PullRequest.review.changesRequested')
+    : null
+  const merge = async () => {
+    if (!(await askConfirm({ message: t('PullRequest.mergeConfirm', { number: link.number, base: link.base, method: METHOD_LABEL[method]() }), confirm: t('PullRequest.merge') }))) return
+    setBusy(true)
+    await perform((rpc) => rpc.call('pullRequests.merge', { taskId: task.id, repoPath: link.repoPath, method, expectedHeadSha: status.headSha }))
+    setBusy(false)
+  }
+  return (
+    <div className="pr-merge-row">
+      <select className="input pr-merge-method" aria-label={t('PullRequest.mergeMethodLabel')} value={method} onChange={(event) => setMethod(event.target.value as PullRequestMergeMethod)}>
+        {PULL_REQUEST_MERGE_METHODS.map((each) => <option key={each} value={each}>{METHOD_LABEL[each]()}</option>)}
+      </select>
+      <button type="button" className="button primary" disabled={busy || link.refreshing} data-tooltip={reason ?? undefined} onClick={() => void merge()}>{busy ? t('PullRequest.merging') : t('PullRequest.merge')}</button>
+      {reason && <span className="pr-merge-reason muted">{reason}</span>}
+    </div>
   )
 }
 

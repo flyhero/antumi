@@ -58,7 +58,7 @@
 
 - 客户端 ↔ core：JSON-RPC 2.0 over WebSocket，只绑定 `127.0.0.1`，并要求 `core.json` 里的 token，因为任何网页都能连本机的 WebSocket。
 - core ↔ daemon：NDJSON over Unix socket（Windows 上是 named pipe）。只有连接被拒绝才说明 daemon 的 socket 已失效，超时或 EPERM 不能证明什么。
-- `packages/protocol` 是唯一的类型来源：RPC 方法和通知都先在这里定义 zod schema，再在 `core/src/rpc-handlers.ts` 实现。客户端和 core 可以是不同版本；增加可选字段是安全的，破坏性改动要提升 `PROTOCOL_VERSION`（daemon 线路是 `DAEMON_PROTOCOL_VERSION`）。当前 core RPC 协议版本为 14，daemon 协议版本为 3，浏览器宿主协议版本为 3。桌面端和 core 跨越 RPC 版本时应一起升级。
+- `packages/protocol` 是唯一的类型来源：RPC 方法和通知都先在这里定义 zod schema，再在 `core/src/rpc-handlers.ts` 实现。客户端和 core 可以是不同版本；增加可选字段是安全的，破坏性改动要提升 `PROTOCOL_VERSION`（daemon 线路是 `DAEMON_PROTOCOL_VERSION`）。当前 core RPC 协议版本为 18，daemon 协议版本为 3，浏览器宿主协议版本为 3。桌面端和 core 跨越 RPC 版本时应一起升级。
 - 启动 Agent 用 argv 数组，prompt 前加 `--`，从不经过 shell。
 
 ## 2. 任务模型
@@ -95,6 +95,22 @@
 - **重做**：把这个任务标记为「已废弃」（worktree 保留），自动新建一个继承标题、详情、项目、Agent 和依赖的任务，从干净的分支开始；依赖原任务的任务改为依赖新任务。可以填一句废弃原因，规划和执行新任务时会告诉 Agent，让它参考但不照搬上次的尝试。
 
 「已完成」的任务也可以接着改或重做。执行过的任务不会回到「未执行」。
+
+### Pull Request
+
+执行过的任务在头部有「创建 PR」（core 声明 `pull-requests`），把任务分支在 github.com 上开成 pull request；v1 只支持 github.com，`PullRequestRepo.host` 是以后接其他托管的接缝。所有 GitHub 访问都在 core（`pull-request-service.ts`、`github-client.ts`），渲染进程只看 `PullRequestLink`；凭据照「项目 Star」的办法复用：先 `gh auth token`，再 GitHub 来源插件存的 token，token 不出 RPC。请求固定发往 `api.github.com`，不跟随重定向，15 秒超时；小时额度剩不到 50 次时停止读取，直到窗口重置。
+
+**创建**（`pullRequests.check` → `draft` → `create`）：先按序检查 origin 是否在 GitHub、是否检出分支、有没有凭据、分支是否就是默认分支、分支是否已有 PR、有没有未提交的改动、有没有新提交、起点分支在不在远端（依赖任务的分支没推送时改为合入默认分支并说明）。base 取任务分支的起点（`TaskRepo.start.ref` 去掉 `origin/`），项目的 `.antumi/project.json` 可用 `pullRequest.base`、`pullRequest.draft` 改默认值（不算进信任哈希）。标题和说明由小模型拟（`pull-request-draft.ts`，用量记为 `pullRequest`）：读分支提交、diffstat、任务标题/详情/方案、`.github/pull_request_template.md` 和 AGENTS/CONTRIBUTING 里关于 PR 的一节，全部围在标签里当作要描述的内容而不是指令；从同一仓库的 GitHub issue 导入的任务，说明末尾加 `Fixes owner/repo#n`。创建前远端没有分支的提交就先推送（走 `pushBranch`，带仓库锁和 Agent 空闲检查），对话框里看到的分支和当前不符会拒绝（`git-branch-changed`）。多项目任务每个仓库各开一个，说明里互相链接。
+
+**识别**：Agent 用 `gh pr create` 自己开的、或者手动开的 PR，按 `head=owner:branch` 查到后同样记为任务的；用户「移除 PR 关联」后那个编号进 `suppressed`，不再自动关联。PR 存在 SQLite 的 `pull_requests` 表（每个任务每个仓库一行，随任务删除），客户端连上时 `pullRequests.listAll` 取一次，之后由 `pullRequests.changed` 推送。
+
+**跟踪**：检查器的「PR」页打开时客户端 `pullRequests.watch`，core 每 30 秒问一次，没变化就翻倍到 120 秒；其他还开着的 PR 每 5 分钟扫一遍；都没有就不设定时器。读取失败保留上次的状态并写 `problem`，退避 1 分钟到 30 分钟。桌面端在窗口不在前面时对检查失败、被要求修改、已合并发系统通知。
+
+**交回 Agent**（`pullRequests.handoff`）：勾选失败的检查或评审意见，照 `checkFailedPrompt` 的办法发进任务的聊天，包在 `<untrusted-source>` 里；要求 Agent 判断失败是否本分支引起、只处理选中的意见、提交但不 push 也不在 GitHub 上回复。待验收或已完成的任务先 `resumeChat` 回到执行中；执行中的只在回合之间接受（`chat-busy`）。超过 12k 字符走附件文件。GitHub Actions 的日志不下载（那个接口要跟随到别的域名），prompt 里给出 `gh run view <id> --log-failed`。
+
+**合并与验收**（`pullRequests.merge`）：可选 squash、merge、rebase，带 `expectedHeadSha`，PR 有新提交就拒绝；不删远端分支，worktree 还占着它。每个仓库的 PR 都合并后（`checkAcceptOnMerge`，规则在 protocol），任务卡片和头部直接给「接受」；设置里「PR 合并后自动接受任务」（`ChatSettings.pullRequestAutoAccept`，默认关）让 core 在刷新发现合并时自己 `move` 到已完成。worktree 清理页用 `ManagedWorktree.pullRequest` 标出「PR 已合并」，squash 合并后 `unmerged` 仍会计数，清理规则本身不变。
+
+**Agent 的工具**：`antumi_pull_request_status`（只读）和 `antumi_pull_request_create`；创建走 `pullRequests.agentCreate`，不自己询问 MCP 权限的 Agent（`mcpApproval === 'antumi'`）由 Antumi 在聊天里先问（`AgentPullRequests`，和终端命令的确认一样，20 秒没答复返回「等待用户确认」，之后再调一次即可）。
 
 ### 智能体与委派
 

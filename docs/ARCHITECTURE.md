@@ -102,7 +102,7 @@
 
 **创建**（`pullRequests.check` → `draft` → `create`）：先按序检查 origin 是否在 GitHub、是否检出分支、有没有凭据、分支是否就是默认分支、分支是否已有 PR、有没有未提交的改动、有没有新提交、起点分支在不在远端（依赖任务的分支没推送时改为合入默认分支并说明）。base 取任务分支的起点（`TaskRepo.start.ref` 去掉 `origin/`），项目的 `.antumi/project.json` 可用 `pullRequest.base`、`pullRequest.draft` 改默认值（不算进信任哈希）。标题和说明由小模型拟（`pull-request-draft.ts`，用量记为 `pullRequest`）：读分支提交、diffstat、任务标题/详情/方案、`.github/pull_request_template.md` 和 AGENTS/CONTRIBUTING 里关于 PR 的一节，全部围在标签里当作要描述的内容而不是指令；从同一仓库的 GitHub issue 导入的任务，说明末尾加 `Fixes owner/repo#n`。创建前远端没有分支的提交就先推送（走 `pushBranch`，带仓库锁和 Agent 空闲检查），对话框里看到的分支和当前不符会拒绝（`git-branch-changed`）。多项目任务每个仓库各开一个，说明里互相链接。
 
-**识别**：Agent 用 `gh pr create` 自己开的、或者手动开的 PR，按 `head=owner:branch` 查到后同样记为任务的；用户「移除 PR 关联」后那个编号进 `suppressed`，不再自动关联。分支领先 PR 时，PR 页提示还没推送的提交并给出「推送」，推完显式刷新。PR 存在 SQLite 的 `pull_requests` 表（每个任务每个仓库一行，随任务删除），客户端连上时 `pullRequests.listAll` 取一次，之后由 `pullRequests.changed` 推送。
+**识别**：Agent 用 `gh pr create` 自己开的、或者手动开的 PR，按 `head=owner:branch` 查到后同样记为任务的：执行中或待验收的任务每次变化（Agent 每轮结束都会）时，分支还没有 PR 就查一次，每个任务两分钟最多一次；用户「移除 PR 关联」后那个编号进 `suppressed`，不再自动关联。分支领先 PR 时，PR 页提示还没推送的提交并给出「推送」，推完显式刷新。PR 存在 SQLite 的 `pull_requests` 表（每个任务每个仓库一行，随任务删除），客户端连上时 `pullRequests.listAll` 取一次，之后由 `pullRequests.changed` 推送。
 
 **跟踪**：检查器的「PR」页打开时客户端 `pullRequests.watch`，core 每 30 秒问一次，没变化就翻倍到 120 秒；其他还开着的 PR 每 5 分钟扫一遍；都没有就不设定时器。读取失败保留上次的状态并写 `problem`，退避 1 分钟到 30 分钟。用户显式刷新（比如推送之后）把节奏重置回 30 秒。桌面端在窗口不在前面时对检查失败、被要求修改、已合并发系统通知。
 
@@ -110,7 +110,7 @@
 
 **合并与验收**（`pullRequests.merge`）：可选 squash、merge、rebase，带 `expectedHeadSha`，PR 有新提交就拒绝；不删远端分支，worktree 还占着它。每个仓库的 PR 都合并后（`checkAcceptOnMerge`，规则在 protocol），任务卡片和头部直接给「接受」；设置里「PR 合并后自动接受任务」（`ChatSettings.pullRequestAutoAccept`，默认关）让 core 在刷新发现合并时自己 `move` 到已完成。worktree 清理页用 `ManagedWorktree.pullRequest` 标出「PR 已合并」，squash 合并后 `unmerged` 仍会计数，清理规则本身不变。
 
-**Agent 的工具**：`antumi_pull_request_status`（只读）和 `antumi_pull_request_create`；创建走 `pullRequests.agentCreate`，不自己询问 MCP 权限的 Agent（`mcpApproval === 'antumi'`）由 Antumi 在聊天里先问（`AgentPullRequests`，和终端命令的确认一样，20 秒没答复返回「等待用户确认」，之后再调一次即可）。
+**Agent 的工具**：`antumi_pull_request_status`（只读）和 `antumi_pull_request_create`（`repoPath` 可以是项目路径或它的 worktree，按真实路径比较；创建时的推送不等 Agent 空闲，因为发起的正是这一轮的 Agent）；创建走 `pullRequests.agentCreate`，不自己询问 MCP 权限的 Agent（`mcpApproval === 'antumi'`）由 Antumi 在聊天里先问（`AgentPullRequests`，和终端命令的确认一样，20 秒没答复返回「等待用户确认」，之后再调一次即可）。
 
 ### 智能体与委派
 

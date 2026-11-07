@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
+import { z } from 'zod'
 import type { PullRequestLink, PullRequestRepo, Task, TaskRepo } from '@antumi/protocol'
 import { clipMiddle, RULE_FILES, rulesSection } from './commit-message'
 import { git, gitOrNull } from './git-changes'
@@ -92,10 +93,11 @@ export function pullRequestPrompt(context: PullRequestContext): string {
   ].join('\n')
 }
 
+const DraftShape = z.object({ title: z.string().trim().min(1), body: z.string().catch('').default('') })
+
 const Draft = (value: unknown): PullRequestDraft | null => {
-  if (!value || typeof value !== 'object') return null
-  const { title, body } = value as { title?: unknown; body?: unknown }
-  return typeof title === 'string' && title.trim() ? { title: title.trim(), body: typeof body === 'string' ? body.trim() : '' } : null
+  const parsed = DraftShape.safeParse(value)
+  return parsed.success ? { title: parsed.data.title, body: parsed.data.body.trim() } : null
 }
 
 // What a model gave, as the JSON asked for, or failing that its first line and the rest; `fixes`

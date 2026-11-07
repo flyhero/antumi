@@ -176,7 +176,7 @@ function MergeRow({ task, link }: { task: Task; link: PullRequestLink }) {
   }
   return (
     <div className="pr-merge-row">
-      <select className="input pr-merge-method" aria-label={t('PullRequest.mergeMethodLabel')} value={method} onChange={(event) => setMethod(event.target.value as PullRequestMergeMethod)}>
+      <select className="input pr-merge-method" aria-label={t('PullRequest.mergeMethodLabel')} value={method} onChange={(event) => setMethod(PULL_REQUEST_MERGE_METHODS.find((each) => each === event.target.value) ?? 'squash')}>
         {PULL_REQUEST_MERGE_METHODS.map((each) => <option key={each} value={each}>{METHOD_LABEL[each]()}</option>)}
       </select>
       <button type="button" className="button primary" disabled={busy || link.refreshing} data-tooltip={reason ?? undefined} onClick={() => void merge()}>{busy ? t('PullRequest.merging') : t('PullRequest.merge')}</button>

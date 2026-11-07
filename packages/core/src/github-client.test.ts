@@ -16,7 +16,9 @@ const pull = (overrides: Record<string, unknown> = {}) => ({
 // Who may push: by token, as GitHub would answer the repository's permissions.
 const pushers = new Set(['Bearer gh-secret', 'Bearer personal-secret', 'Bearer plugin-secret'])
 
-function harness(reply: Reply = () => Response.json(pull()), { plugin = true, accounts = [{ login: 'flyhero', token: 'gh-secret' }] as GhAccount[] } = {}) {
+const FLYHERO: GhAccount[] = [{ login: 'flyhero', token: 'gh-secret' }]
+
+function harness(reply: Reply = () => Response.json(pull()), { plugin = true, accounts = FLYHERO }: { plugin?: boolean; accounts?: GhAccount[] } = {}) {
   const calls: Call[] = []
   const sources = { credentialsFor: vi.fn(() => (plugin ? [{ instance: 'default', credential: credential('plugin-secret') }] : [])) }
   const ghAccounts = vi.fn(async (_signal: AbortSignal): Promise<GhAccount[]> => accounts)
@@ -99,10 +101,10 @@ describe('GitHubClient', () => {
     for (const [status, code, message] of cases) {
       const h = harness(() => new Response(JSON.stringify({ message }), { status }))
       const error = await h.client.pull(repo, 7).catch((error: unknown) => error)
-      expect(error).toBeInstanceOf(GitHubError)
+      if (!(error instanceof GitHubError)) throw new Error(`expected a GitHubError, got ${String(error)}`)
       expect(error).toMatchObject({ code })
-      if (message) expect((error as GitHubError).message).toContain(message)
-      expect((error as GitHubError).message).not.toContain('secret')
+      if (message) expect(error.message).toContain(message)
+      expect(error.message).not.toContain('secret')
     }
   })
 

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { PullRequestRepo } from '@antumi/protocol'
 import type { SourceCredential } from './source-provider'
-import { GitHubClient, GitHubError, logTail, type GhAccount } from './github-client'
+import { GitHubClient, GitHubError, failureDetail, logTail, type GhAccount } from './github-client'
 
 type Call = { path: string; method: string; token: string; body: unknown; signal: AbortSignal | null | undefined; redirect: string | undefined }
 type Reply = (call: Call) => Response
@@ -106,6 +106,13 @@ describe('GitHubClient', () => {
       if (message) expect(error.message).toContain(message)
       expect(error.message).not.toContain('secret')
     }
+  })
+
+  it('reads what a 422 says failed, not only that validation failed', () => {
+    expect(failureDetail(JSON.stringify({ message: 'Validation Failed', errors: [{ resource: 'PullRequest', code: 'custom', message: 'A pull request already exists for o:b.' }] }))).toBe('Validation Failed：A pull request already exists for o:b.')
+    expect(failureDetail(JSON.stringify({ message: 'Not Found' }))).toBe('Not Found')
+    expect(failureDetail(JSON.stringify({ message: 'Validation Failed', errors: [{ code: 'invalid' }] }))).toBe('Validation Failed')
+    expect(failureDetail('not json')).toBe('')
   })
 
   it('says the repo is not found when no account can see it', async () => {

@@ -92,7 +92,17 @@ const CombinedStatus = z.object({
 const Review = z.object({ id: z.number(), user: z.object({ login: z.string() }).nullable(), state: z.string(), body: z.string().nullable(), submitted_at: z.string().nullable() })
 const ReviewComment = z.object({ id: z.number(), user: z.object({ login: z.string() }).nullable(), path: z.string(), line: z.number().nullable().optional(), body: z.string(), html_url: z.string(), created_at: z.string() })
 const IssueComment = z.object({ id: z.number(), user: z.object({ login: z.string() }).nullable(), body: z.string().nullable(), html_url: z.string(), created_at: z.string() })
-const Failure = z.object({ message: z.string().optional() })
+// GitHub's error body: a summary (Validation Failed), and for a 422 what failed, one by one.
+const Failure = z.object({ message: z.string().optional(), errors: z.array(z.object({ message: z.string().optional() }).catch({})).optional().catch(undefined) })
+
+export function failureDetail(text: string): string {
+  try {
+    const failure = Failure.parse(JSON.parse(text))
+    return [failure.message, ...(failure.errors ?? []).map((entry) => entry.message)].filter((part) => part?.trim()).join('：')
+  } catch {
+    return ''
+  }
+}
 
 const at = (iso: string | null | undefined): number | null => {
   const ms = iso ? Date.parse(iso) : NaN
@@ -372,7 +382,7 @@ export class GitHubClient {
     this.noteRateLimit(credential, response)
     if (response.ok) return response.status === 204 ? null : await response.json()
     const text = await response.text().catch(() => '')
-    const detail = ((): string => { try { return Failure.parse(JSON.parse(text)).message ?? '' } catch { return '' } })()
+    const detail = failureDetail(text)
     throw this.failure(credential, response, detail)
   }
 

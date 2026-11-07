@@ -13,7 +13,8 @@ const CREDENTIAL_MS = 5 * 60_000
 // Below this many calls left in the hour, reads stop until the window resets, so that a poll
 // never spends what the user's own gh and editor need; GitHub says when it resets.
 const RATE_LIMIT_FLOOR = 50
-const DEFAULT_BRANCH_MS = 60 * 60_000
+// Which account a repo goes by, and its default branch, are asked again this long on.
+const CHOICE_MS = 60 * 60_000
 const PAGE = 100
 
 // What GitHub refused or failed, in terms every client can explain.
@@ -49,14 +50,17 @@ export type GitHubPull = {
   updatedAt: number
 }
 
-type Credential = { source: 'gh' | 'github-plugin'; instance: string | null; token: string }
-type Dependencies = { ghToken?: (signal: AbortSignal) => Promise<string | null>; fetch?: typeof fetch; now?: () => number }
+// An account the GitHub CLI is signed in to; login is null when gh is too old to say.
+export type GhAccount = { login: string | null; token: string }
+type Credential = { source: 'gh' | 'github-plugin'; instance: string | null; login: string | null; token: string }
+type Dependencies = { ghAccounts?: (signal: AbortSignal) => Promise<GhAccount[]>; fetch?: typeof fetch; now?: () => number }
 type Method = 'GET' | 'POST' | 'PUT'
 
 // The official GitHub source plugin stores a token credential in this form.
 const TokenCredential = z.object({ kind: z.literal('token'), payload: z.object({ token: z.string().min(1).max(16_384).regex(/^[^\s\x00-\x1f\x7f]+$/) }) })
-const Viewer = z.object({ login: z.string().min(1).max(100) })
-const Repository = z.object({ default_branch: z.string().min(1) })
+const Token = TokenCredential.shape.payload.shape.token
+const GhStatus = z.object({ hosts: z.record(z.string(), z.array(z.object({ login: z.string().min(1).max(100), active: z.boolean().optional(), state: z.string().optional() }))) })
+const Repository = z.object({ default_branch: z.string().min(1), permissions: z.object({ push: z.boolean() }).partial().optional() })
 const Pull = z.object({
   number: z.number().int().positive(),
   html_url: z.string(),
@@ -127,12 +131,12 @@ function statusState(state: string): PullRequestCheck['state'] {
   }
 }
 
-async function ghToken(signal: AbortSignal): Promise<string | null> {
+async function ghRun(args: string[], signal: AbortSignal): Promise<string | null> {
   try {
     const env = { ...process.env, GH_PROMPT_DISABLED: '1', GIT_TERMINAL_PROMPT: '0' }
-    const launch = planLaunch('gh', ['auth', 'token', '--hostname', 'github.com'], process.cwd(), env)
+    const launch = planLaunch('gh', args, process.cwd(), env)
     const { stdout } = await execFileAsync(launch.file, launch.args, {
-      env: launch.env, encoding: 'utf8', windowsHide: true, timeout: 5_000, maxBuffer: 16 * 1024, signal
+      env: launch.env, encoding: 'utf8', windowsHide: true, timeout: 5_000, maxBuffer: 64 * 1024, signal
     })
     return stdout.trim() || null
   } catch {
@@ -140,69 +144,81 @@ async function ghToken(signal: AbortSignal): Promise<string | null> {
   }
 }
 
-// GitHub's REST API with the credential this machine has: the GitHub CLI's, else the one the
-// GitHub source plugin signed in with. Every request is pinned to api.github.com, follows no
-// redirect, and gives up after TIMEOUT_MS; the token never leaves this class.
+// Every account gh is signed in to on github.com, the active one first, each with its token: a
+// person often has a work and a personal one, and a repo may take only one of them. A gh too old
+// to list them gives the active account's token alone.
+async function ghAccounts(signal: AbortSignal): Promise<GhAccount[]> {
+  const status = GhStatus.safeParse(JSON.parse(await ghRun(['auth', 'status', '--hostname', 'github.com', '--json', 'hosts'], signal) ?? 'null'))
+  const logins = status.success
+    ? (status.data.hosts['github.com'] ?? []).filter((entry) => !entry.state || entry.state === 'success').sort((a, b) => Number(b.active ?? false) - Number(a.active ?? false)).map((entry) => entry.login)
+    : []
+  if (logins.length === 0) {
+    const token = Token.safeParse(await ghRun(['auth', 'token', '--hostname', 'github.com'], signal))
+    return token.success ? [{ login: null, token: token.data }] : []
+  }
+  const accounts = await Promise.all(logins.map(async (login) => {
+    const token = Token.safeParse(await ghRun(['auth', 'token', '--hostname', 'github.com', '--user', login], signal))
+    return token.success ? { login, token: token.data } : null
+  }))
+  return accounts.filter((account) => account !== null)
+}
+
+// GitHub's REST API with the credentials this machine has: every account the GitHub CLI is signed
+// in to, then the ones the GitHub source plugin signed in with. Each repo goes by the first that
+// may push to it, the one named like its owner tried first, else the first that can read it; so
+// a personal repo is never written to as a work account that can only read it. Every request is
+// pinned to api.github.com, follows no redirect, and gives up after TIMEOUT_MS; tokens never leave
+// this class.
 export class GitHubClient {
-  private readonly readGhToken: NonNullable<Dependencies['ghToken']>
+  private readonly readGhAccounts: NonNullable<Dependencies['ghAccounts']>
   private readonly fetch: typeof fetch
   private readonly now: () => number
-  private credential: { value: Credential; account: string | null; at: number } | null = null
-  private resolving: Promise<Credential | null> | null = null
-  private limitedUntil = 0
-  private readonly defaultBranches = new Map<string, { name: string; at: number }>()
+  private credentials: { list: Credential[]; at: number } | null = null
+  private resolving: Promise<Credential[]> | null = null
+  private readonly chosen = new Map<string, { credential: Credential; defaultBranch: string; at: number }>()
+  private readonly choosing = new Map<string, Promise<{ credential: Credential; defaultBranch: string }>>()
+  private readonly limitedUntil = new Map<string, number>()
 
   constructor(private readonly sources: Pick<SourceService, 'credentialsFor'>, dependencies: Dependencies = {}) {
-    this.readGhToken = dependencies.ghToken ?? ghToken
+    this.readGhAccounts = dependencies.ghAccounts ?? ghAccounts
     this.fetch = dependencies.fetch ?? fetch
     this.now = dependencies.now ?? Date.now
   }
 
   // Whether any credential is at hand, without asking GitHub; the `auth` blocker.
   async available(): Promise<boolean> {
-    return (await this.resolve()) !== null
+    return (await this.resolve()).length > 0
   }
 
-  // The login the credential belongs to; null when it has not been checked yet or does not work.
-  async account(): Promise<string | null> {
-    const credential = await this.resolve()
-    if (!credential) return null
-    if (this.credential?.account) return this.credential.account
-    const data = Viewer.safeParse(await this.json('GET', '/user'))
-    const account = data.success ? data.data.login : null
-    if (this.credential?.value === credential) this.credential.account = account
-    return account
+  // The account a repo goes by, once chosen; null before.
+  accountFor(repo: PullRequestRepo): string | null {
+    return this.chosen.get(repoKey(repo))?.credential.login ?? null
   }
 
   async defaultBranch(repo: PullRequestRepo): Promise<string> {
-    const key = `${repo.owner}/${repo.name}`
-    const cached = this.defaultBranches.get(key)
-    if (cached && this.now() - cached.at < DEFAULT_BRANCH_MS) return cached.name
-    const data = Repository.parse(await this.json('GET', `/repos/${key}`))
-    this.defaultBranches.set(key, { name: data.default_branch, at: this.now() })
-    return data.default_branch
+    return (await this.choose(repo)).defaultBranch
   }
 
   async pull(repo: PullRequestRepo, number: number): Promise<GitHubPull> {
-    return pullOf(Pull.parse(await this.json('GET', `/repos/${repo.owner}/${repo.name}/pulls/${number}`)))
+    return pullOf(Pull.parse(await this.call(repo, 'GET', `/repos/${repo.owner}/${repo.name}/pulls/${number}`)))
   }
 
   // Every pull request whose head is the branch in this repo (not a fork's), open or not, newest first.
   async pullsByHead(repo: PullRequestRepo, branch: string): Promise<GitHubPull[]> {
     const query = new URLSearchParams({ head: `${repo.owner}:${branch}`, state: 'all', sort: 'updated', direction: 'desc', per_page: '10' })
-    return z.array(Pull).parse(await this.json('GET', `/repos/${repo.owner}/${repo.name}/pulls?${query}`)).map(pullOf)
+    return z.array(Pull).parse(await this.call(repo, 'GET', `/repos/${repo.owner}/${repo.name}/pulls?${query}`)).map(pullOf)
   }
 
   async createPull(repo: PullRequestRepo, fields: { title: string; body: string; head: string; base: string; draft: boolean }): Promise<GitHubPull> {
-    return pullOf(Pull.parse(await this.json('POST', `/repos/${repo.owner}/${repo.name}/pulls`, fields)))
+    return pullOf(Pull.parse(await this.call(repo, 'POST', `/repos/${repo.owner}/${repo.name}/pulls`, fields)))
   }
 
   // Check runs and the older commit statuses on a commit, as one list.
   async checks(repo: PullRequestRepo, sha: string): Promise<PullRequestCheck[]> {
     const path = `/repos/${repo.owner}/${repo.name}/commits/${sha}`
     const [runs, statuses] = await Promise.all([
-      this.json('GET', `${path}/check-runs?per_page=${PAGE}`).then((data) => CheckRuns.parse(data).check_runs),
-      this.json('GET', `${path}/status?per_page=${PAGE}`).then((data) => CombinedStatus.parse(data).statuses)
+      this.call(repo, 'GET', `${path}/check-runs?per_page=${PAGE}`).then((data) => CheckRuns.parse(data).check_runs),
+      this.call(repo, 'GET', `${path}/status?per_page=${PAGE}`).then((data) => CombinedStatus.parse(data).statuses)
     ])
     return [
       ...runs.map((run) => ({ id: `run:${run.id}`, name: run.name, state: checkState(run.status, run.conclusion), url: run.html_url, completedAt: at(run.completed_at) })),
@@ -211,7 +227,7 @@ export class GitHubClient {
   }
 
   async reviews(repo: PullRequestRepo, number: number): Promise<PullRequestReview[]> {
-    const data = z.array(Review).parse(await this.json('GET', `/repos/${repo.owner}/${repo.name}/pulls/${number}/reviews?per_page=${PAGE}`))
+    const data = z.array(Review).parse(await this.call(repo, 'GET', `/repos/${repo.owner}/${repo.name}/pulls/${number}/reviews?per_page=${PAGE}`))
     return data.flatMap((review) => {
       const state = review.state === 'APPROVED' ? 'approved' : review.state === 'CHANGES_REQUESTED' ? 'changes_requested' : review.state === 'COMMENTED' ? 'commented' : null
       return state ? [{ id: `review:${review.id}`, author: review.user?.login ?? '', state, body: review.body ?? '', submittedAt: at(review.submitted_at) ?? 0 }] : []
@@ -223,8 +239,8 @@ export class GitHubClient {
   async comments(repo: PullRequestRepo, number: number): Promise<PullRequestComment[]> {
     const base = `/repos/${repo.owner}/${repo.name}`
     const [onDiff, onIssue] = await Promise.all([
-      this.json('GET', `${base}/pulls/${number}/comments?per_page=${PAGE}`).then((data) => z.array(ReviewComment).parse(data)),
-      this.json('GET', `${base}/issues/${number}/comments?per_page=${PAGE}`).then((data) => z.array(IssueComment).parse(data))
+      this.call(repo, 'GET', `${base}/pulls/${number}/comments?per_page=${PAGE}`).then((data) => z.array(ReviewComment).parse(data)),
+      this.call(repo, 'GET', `${base}/issues/${number}/comments?per_page=${PAGE}`).then((data) => z.array(IssueComment).parse(data))
     ])
     return [
       ...onDiff.map((comment) => ({ id: `diff:${comment.id}`, author: comment.user?.login ?? '', path: comment.path, line: comment.line ?? null, body: comment.body, url: comment.html_url, resolved: null, createdAt: at(comment.created_at) ?? 0 })),
@@ -234,32 +250,82 @@ export class GitHubClient {
 
   // Merges only while the head is still `sha`; GitHub refuses (409) when it moved.
   async merge(repo: PullRequestRepo, number: number, method: PullRequestMergeMethod, sha: string): Promise<void> {
-    await this.json('PUT', `/repos/${repo.owner}/${repo.name}/pulls/${number}/merge`, { merge_method: method, sha })
+    await this.call(repo, 'PUT', `/repos/${repo.owner}/${repo.name}/pulls/${number}/merge`, { merge_method: method, sha })
   }
 
-  private async resolve(): Promise<Credential | null> {
-    if (this.credential && this.now() - this.credential.at < CREDENTIAL_MS) return this.credential.value
+  private async resolve(): Promise<Credential[]> {
+    if (this.credentials && this.now() - this.credentials.at < CREDENTIAL_MS) return this.credentials.list
     this.resolving ??= this.resolveInner().finally(() => { this.resolving = null })
     return this.resolving
   }
 
-  private async resolveInner(): Promise<Credential | null> {
-    const signal = AbortSignal.timeout(TIMEOUT_MS)
-    const token = await this.readGhToken(signal).catch(() => null)
-    const value: Credential | null = token
-      ? { source: 'gh', instance: null, token }
-      : this.sources.credentialsFor('github').flatMap(({ instance, credential }) => {
+  private async resolveInner(): Promise<Credential[]> {
+    const accounts = await this.readGhAccounts(AbortSignal.timeout(TIMEOUT_MS)).catch(() => [])
+    const list: Credential[] = [
+      ...accounts.map(({ login, token }) => ({ source: 'gh' as const, instance: null, login, token })),
+      ...this.sources.credentialsFor('github').flatMap(({ instance, credential }) => {
         const parsed = TokenCredential.safeParse(credential)
-        return parsed.success ? [{ source: 'github-plugin' as const, instance, token: parsed.data.payload.token }] : []
-      })[0] ?? null
-    this.credential = value ? { value, account: null, at: this.now() } : null
-    return value
+        return parsed.success ? [{ source: 'github-plugin' as const, instance, login: null, token: parsed.data.payload.token }] : []
+      })
+    ].filter((credential, index, all) => all.findIndex((other) => other.token === credential.token) === index)
+    this.credentials = { list, at: this.now() }
+    return list
   }
 
-  private async json(method: Method, path: string, body?: unknown): Promise<unknown> {
-    if (this.now() < this.limitedUntil) throw new GitHubError('rate-limited', `GitHub 的请求额度用完了，${new Date(this.limitedUntil).toLocaleTimeString()} 后恢复。`)
-    const credential = await this.resolve()
-    if (!credential) throw new GitHubError('auth-failed', '这台电脑上没有 GitHub 凭据：登录 gh，或在 设置 → 集成 → GitHub 登录。')
+  private async choose(repo: PullRequestRepo): Promise<{ credential: Credential; defaultBranch: string }> {
+    const key = repoKey(repo)
+    const cached = this.chosen.get(key)
+    if (cached && this.now() - cached.at < CHOICE_MS) return cached
+    const running = this.choosing.get(key)
+    if (running) return running
+    const work = this.chooseInner(repo).finally(() => this.choosing.delete(key))
+    this.choosing.set(key, work)
+    return work
+  }
+
+  private async chooseInner(repo: PullRequestRepo): Promise<{ credential: Credential; defaultBranch: string }> {
+    const list = await this.resolve()
+    if (list.length === 0) throw new GitHubError('auth-failed', '这台电脑上没有 GitHub 凭据：登录 gh，或在 设置 → 集成 → GitHub 登录。')
+    const owner = repo.owner.toLowerCase()
+    const ordered = [...list].sort((a, b) => Number(b.login?.toLowerCase() === owner) - Number(a.login?.toLowerCase() === owner))
+    let readable: { credential: Credential; defaultBranch: string } | null = null
+    let failure: unknown = null
+    for (const credential of ordered) {
+      try {
+        const data = Repository.parse(await this.json(credential, 'GET', `/repos/${repo.owner}/${repo.name}`))
+        const found = { credential, defaultBranch: data.default_branch }
+        if (data.permissions?.push) return this.keepChoice(repo, found)
+        readable ??= found
+      } catch (error) {
+        // Out of calls is no answer about access: say so rather than settle for another account.
+        if (error instanceof GitHubError && error.code === 'rate-limited') throw error
+        failure ??= error
+      }
+    }
+    if (readable) return this.keepChoice(repo, readable)
+    throw failure ?? new GitHubError('not-found', 'GitHub 上没有这个仓库，或凭据看不到它。')
+  }
+
+  private keepChoice(repo: PullRequestRepo, found: { credential: Credential; defaultBranch: string }): { credential: Credential; defaultBranch: string } {
+    this.chosen.set(repoKey(repo), { ...found, at: this.now() })
+    return found
+  }
+
+  // A request about the repo, as the account it goes by. One that account is refused for drops
+  // the choice, so the next call chooses again.
+  private async call(repo: PullRequestRepo, method: Method, path: string, body?: unknown): Promise<unknown> {
+    const { credential } = await this.choose(repo)
+    try {
+      return await this.json(credential, method, path, body)
+    } catch (error) {
+      if (error instanceof GitHubError && error.code === 'auth-failed') this.chosen.delete(repoKey(repo))
+      throw error
+    }
+  }
+
+  private async json(credential: Credential, method: Method, path: string, body?: unknown): Promise<unknown> {
+    const limited = this.limitedUntil.get(credential.token) ?? 0
+    if (this.now() < limited) throw new GitHubError('rate-limited', `GitHub 的请求额度用完了，${new Date(limited).toLocaleTimeString()} 后恢复。`)
     let response: Response
     try {
       response = await this.fetch(`${API}${path}`, {
@@ -270,28 +336,32 @@ export class GitHubClient {
     } catch (error) {
       throw new GitHubError('request-failed', error instanceof Error ? error.message : String(error))
     }
-    this.noteRateLimit(response)
+    this.noteRateLimit(credential, response)
     if (response.ok) return response.status === 204 ? null : await response.json()
     const text = await response.text().catch(() => '')
     const detail = ((): string => { try { return Failure.parse(JSON.parse(text)).message ?? '' } catch { return '' } })()
-    throw this.failure(response, detail)
+    throw this.failure(credential, response, detail)
   }
 
-  private noteRateLimit(response: Response): void {
+  private limit(credential: Credential, until: number): void {
+    this.limitedUntil.set(credential.token, Math.max(this.limitedUntil.get(credential.token) ?? 0, until))
+  }
+
+  private noteRateLimit(credential: Credential, response: Response): void {
     const remaining = Number(response.headers.get('x-ratelimit-remaining'))
     const reset = Number(response.headers.get('x-ratelimit-reset'))
-    if (Number.isFinite(remaining) && remaining < RATE_LIMIT_FLOOR && reset > 0) this.limitedUntil = Math.max(this.limitedUntil, reset * 1000)
+    if (Number.isFinite(remaining) && response.headers.has('x-ratelimit-remaining') && remaining < RATE_LIMIT_FLOOR && reset > 0) this.limit(credential, reset * 1000)
   }
 
-  private failure(response: Response, detail: string): GitHubError {
+  private failure(credential: Credential, response: Response, detail: string): GitHubError {
     const { status } = response
     if (status === 401) {
-      this.credential = null
+      this.credentials = null
       return new GitHubError('auth-failed', detail || 'GitHub 不认这个凭据，请重新登录。')
     }
     if (status === 429 || (status === 403 && (response.headers.get('x-ratelimit-remaining') === '0' || /rate limit/i.test(detail)))) {
       const retry = Number(response.headers.get('retry-after'))
-      if (retry > 0) this.limitedUntil = Math.max(this.limitedUntil, this.now() + retry * 1000)
+      if (retry > 0) this.limit(credential, this.now() + retry * 1000)
       return new GitHubError('rate-limited', detail || 'GitHub 的请求额度用完了，稍后再试。')
     }
     if (status === 403) return new GitHubError('forbidden', detail ? `GitHub 拒绝了：${detail}` : 'GitHub 拒绝了：这个凭据没有这个仓库 Pull requests 的权限。')
@@ -299,3 +369,5 @@ export class GitHubClient {
     return new GitHubError('request-failed', detail ? `GitHub 返回 ${status}：${detail}` : `GitHub 返回 ${status}。`)
   }
 }
+
+const repoKey = (repo: PullRequestRepo) => `${repo.owner}/${repo.name}`.toLowerCase()

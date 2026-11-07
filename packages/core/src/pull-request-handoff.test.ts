@@ -69,7 +69,7 @@ describe('PullRequestService.handoff', () => {
     store = new PullRequestStore(path.join(dir, 'antumi.db'))
     task = Task.parse({ ...tasks.create('A'), status: 'running', conversationId: '11111111-1111-4111-8111-111111111111', repos: [{ path: '/repo', worktreePath: '/repo-wt', branch: 'antumi/abc', startRef: null, start: null }] })
     chat = { turnOver: vi.fn<PullRequestChat['turnOver']>(() => true), resumeChat: vi.fn<PullRequestChat['resumeChat']>(async () => {}), send: vi.fn<PullRequestChat['send']>(async () => {}), putText: vi.fn<PullRequestChat['putText']>(async () => '/tmp/text.md') }
-    const client = new GitHubClient({ credentialsFor: () => [] }, { ghToken: async () => null, fetch: async () => { throw new Error('offline') } })
+    const client = new GitHubClient({ credentialsFor: () => [] }, { ghAccounts: async () => [], fetch: async () => { throw new Error('offline') } })
     service = new PullRequestService({ get: () => task }, { status: async () => { throw new Error('unused') }, execute: async () => { throw new Error('unused') } }, store, client, { chat })
     store.put(stored())
   })

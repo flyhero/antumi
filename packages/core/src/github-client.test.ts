@@ -1,52 +1,78 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { PullRequestRepo } from '@antumi/protocol'
 import type { SourceCredential } from './source-provider'
-import { GitHubClient, GitHubError } from './github-client'
+import { GitHubClient, GitHubError, type GhAccount } from './github-client'
 
 type Call = { path: string; method: string; token: string; body: unknown; signal: AbortSignal | null | undefined; redirect: string | undefined }
 type Reply = (call: Call) => Response
 const repo: PullRequestRepo = { host: 'github', owner: 'flyhero', name: 'antumi' }
+const REPO_PATH = '/repos/flyhero/antumi'
 const credential = (token: string): SourceCredential => ({ kind: 'token', payload: { token } })
 const pull = (overrides: Record<string, unknown> = {}) => ({
   number: 7, html_url: 'https://github.com/flyhero/antumi/pull/7', state: 'open', draft: true, title: 'Add PRs',
   head: { sha: 'a'.repeat(40), ref: 'antumi/abc', repo: { owner: { login: 'flyhero' } } }, base: { ref: 'main' },
   mergeable: null, merged_at: null, updated_at: '2026-11-07T10:00:00Z', ...overrides
 })
+// Who may push: by token, as GitHub would answer the repository's permissions.
+const pushers = new Set(['Bearer gh-secret', 'Bearer personal-secret', 'Bearer plugin-secret'])
 
-function harness(reply: Reply = () => Response.json(pull()), { plugin = true } = {}) {
+function harness(reply: Reply = () => Response.json(pull()), { plugin = true, accounts = [{ login: 'flyhero', token: 'gh-secret' }] as GhAccount[] } = {}) {
   const calls: Call[] = []
   const sources = { credentialsFor: vi.fn(() => (plugin ? [{ instance: 'default', credential: credential('plugin-secret') }] : [])) }
-  const ghToken = vi.fn(async (_signal: AbortSignal): Promise<string | null> => 'gh-secret')
+  const ghAccounts = vi.fn(async (_signal: AbortSignal): Promise<GhAccount[]> => accounts)
   let now = 1_000_000
   const fetch: typeof globalThis.fetch = async (input, init) => {
-    const call = { path: new URL(String(input)).pathname + new URL(String(input)).search, method: init?.method ?? 'GET', token: new Headers(init?.headers).get('authorization') ?? '', body: init?.body ? JSON.parse(String(init.body)) : undefined, signal: init?.signal, redirect: init?.redirect }
+    const url = new URL(String(input))
+    const call = { path: url.pathname + url.search, method: init?.method ?? 'GET', token: new Headers(init?.headers).get('authorization') ?? '', body: init?.body ? JSON.parse(String(init.body)) : undefined, signal: init?.signal, redirect: init?.redirect }
     calls.push(call)
+    if (call.path === REPO_PATH) return Response.json({ default_branch: 'main', permissions: { push: pushers.has(call.token), pull: true } })
     return reply(call)
   }
-  const client = new GitHubClient(sources, { ghToken, fetch, now: () => now })
-  return { client, sources, ghToken, calls, advance: (ms: number) => { now += ms } }
+  const client = new GitHubClient(sources, { ghAccounts, fetch, now: () => now })
+  const asked = () => calls.filter((call) => call.path !== REPO_PATH)
+  return { client, sources, ghAccounts, calls, asked, advance: (ms: number) => { now += ms } }
 }
 
 describe('GitHubClient', () => {
-  it('uses the gh token first and sends every request pinned and signed', async () => {
+  it('uses the gh account first and sends every request pinned and signed', async () => {
     const h = harness()
     const result = await h.client.pull(repo, 7)
     expect(result).toMatchObject({ number: 7, state: 'open', draft: true, headRef: 'antumi/abc', headOwner: 'flyhero', base: 'main', mergeable: 'unknown', mergedAt: null })
-    expect(h.calls).toEqual([expect.objectContaining({ path: '/repos/flyhero/antumi/pulls/7', method: 'GET', token: 'Bearer gh-secret', redirect: 'error' })])
-    expect(h.calls[0]?.signal).toBeTruthy()
-    expect(h.sources.credentialsFor).not.toHaveBeenCalled()
+    expect(h.calls.map((call) => [call.path, call.token])).toEqual([[REPO_PATH, 'Bearer gh-secret'], ['/repos/flyhero/antumi/pulls/7', 'Bearer gh-secret']])
+    expect(h.calls.every((call) => call.signal && call.redirect === 'error')).toBe(true)
+    expect(h.client.accountFor(repo)).toBe('flyhero')
+  })
+
+  it('goes by the account that may push to the repo, not the active one that can only read it', async () => {
+    const h = harness(() => Response.json(pull()), { accounts: [{ login: 'work-account', token: 'work-secret' }, { login: 'personal', token: 'personal-secret' }] })
+    await h.client.pull(repo, 7)
+    expect(h.asked().map((call) => call.token)).toEqual(['Bearer personal-secret'])
+    expect(h.client.accountFor(repo)).toBe('personal')
+    // Chosen once, kept for the repo.
+    await h.client.pull(repo, 7)
+    expect(h.calls.filter((call) => call.path === REPO_PATH)).toHaveLength(2)
+  })
+
+  it('tries the account named like the owner first', async () => {
+    const h = harness(() => Response.json(pull()), { accounts: [{ login: 'other', token: 'personal-secret' }, { login: 'FlyHero', token: 'gh-secret' }] })
+    await h.client.pull(repo, 7)
+    expect(h.calls[0]?.token).toBe('Bearer gh-secret')
+  })
+
+  it('settles for an account that can read when none may push', async () => {
+    const h = harness(() => Response.json(pull()), { plugin: false, accounts: [{ login: 'work-account', token: 'work-secret' }] })
+    await h.client.pull(repo, 7)
+    expect(h.asked()[0]?.token).toBe('Bearer work-secret')
   })
 
   it('falls back to the GitHub plugin, and has no credential without either', async () => {
-    const h = harness()
-    h.ghToken.mockResolvedValue(null)
+    const h = harness(undefined, { accounts: [] })
     expect(await h.client.available()).toBe(true)
     await h.client.pull(repo, 7)
-    expect(h.calls[0]?.token).toBe('Bearer plugin-secret')
+    expect(h.asked()[0]?.token).toBe('Bearer plugin-secret')
     expect(h.sources.credentialsFor).toHaveBeenCalledWith('github')
 
-    const none = harness(undefined, { plugin: false })
-    none.ghToken.mockResolvedValue(null)
+    const none = harness(undefined, { plugin: false, accounts: [] })
     expect(await none.client.available()).toBe(false)
     await expect(none.client.pull(repo, 7)).rejects.toMatchObject({ code: 'auth-failed' })
     expect(none.calls).toEqual([])
@@ -59,13 +85,13 @@ describe('GitHubClient', () => {
     expect((await h.client.pull(repo, 7)).mergeable).toBe('conflicting')
     const listed = await h.client.pullsByHead(repo, 'antumi/abc')
     expect(listed).toEqual([expect.objectContaining({ state: 'merged', mergedAt: Date.parse('2026-11-07T12:00:00Z'), headOwner: null })])
-    expect(h.calls[1]?.path).toBe('/repos/flyhero/antumi/pulls?head=flyhero%3Aantumi%2Fabc&state=all&sort=updated&direction=desc&per_page=10')
+    expect(h.asked()[1]?.path).toBe('/repos/flyhero/antumi/pulls?head=flyhero%3Aantumi%2Fabc&state=all&sort=updated&direction=desc&per_page=10')
   })
 
   it('creates a pull request with the fields as given', async () => {
     const h = harness()
     await h.client.createPull(repo, { title: 'Add PRs', body: 'Why.', head: 'antumi/abc', base: 'main', draft: true })
-    expect(h.calls[0]).toMatchObject({ method: 'POST', path: '/repos/flyhero/antumi/pulls', body: { title: 'Add PRs', body: 'Why.', head: 'antumi/abc', base: 'main', draft: true } })
+    expect(h.asked()[0]).toMatchObject({ method: 'POST', path: '/repos/flyhero/antumi/pulls', body: { title: 'Add PRs', body: 'Why.', head: 'antumi/abc', base: 'main', draft: true } })
   })
 
   it('tells auth, permission, missing and other failures apart, without the token in any', async () => {
@@ -80,28 +106,35 @@ describe('GitHubClient', () => {
     }
   })
 
-  it('stops calling GitHub once the rate limit is nearly spent, until it resets', async () => {
+  it('says the repo is not found when no account can see it', async () => {
+    const h = harness(undefined, { plugin: false })
+    const fetch: typeof globalThis.fetch = async () => new Response(JSON.stringify({ message: 'Not Found' }), { status: 404 })
+    const client = new GitHubClient(h.sources, { ghAccounts: h.ghAccounts, fetch })
+    await expect(client.pull(repo, 7)).rejects.toMatchObject({ code: 'not-found' })
+  })
+
+  it('stops calling GitHub as an account once its rate limit is nearly spent, until it resets', async () => {
     const h = harness((call) => Response.json(pull(), { headers: call.path.endsWith('/7') ? { 'x-ratelimit-remaining': '10', 'x-ratelimit-reset': '1800' } : {} }))
     await h.client.pull(repo, 7)
     await expect(h.client.pull(repo, 8)).rejects.toMatchObject({ code: 'rate-limited' })
-    expect(h.calls).toHaveLength(1)
+    expect(h.asked()).toHaveLength(1)
     h.advance(1_000_000)
     await h.client.pull(repo, 8)
-    expect(h.calls).toHaveLength(2)
+    expect(h.asked()).toHaveLength(2)
   })
 
   it('reads a 403 with no calls left as the rate limit, not as a permission problem', async () => {
     const h = harness(() => new Response(JSON.stringify({ message: 'API rate limit exceeded for user' }), { status: 403, headers: { 'x-ratelimit-remaining': '0', 'retry-after': '60' } }))
     await expect(h.client.pull(repo, 7)).rejects.toMatchObject({ code: 'rate-limited' })
     await expect(h.client.pull(repo, 7)).rejects.toMatchObject({ code: 'rate-limited' })
-    expect(h.calls).toHaveLength(1)
+    expect(h.asked()).toHaveLength(1)
   })
 
-  it('looks the credential up again after it is refused', async () => {
+  it('looks the credentials up again after one is refused', async () => {
     const h = harness(() => new Response(JSON.stringify({ message: 'Bad credentials' }), { status: 401 }))
     await expect(h.client.pull(repo, 7)).rejects.toMatchObject({ code: 'auth-failed' })
     await expect(h.client.pull(repo, 7)).rejects.toMatchObject({ code: 'auth-failed' })
-    expect(h.ghToken).toHaveBeenCalledTimes(2)
+    expect(h.ghAccounts).toHaveBeenCalledTimes(2)
   })
 
   it('merges check runs and commit statuses into one list', async () => {
@@ -122,10 +155,13 @@ describe('GitHubClient', () => {
     expect((await h.client.comments(repo, 7)).map(({ id, path, line }) => [id, path, line])).toEqual([['diff:3', 'src/a.ts', 12], ['issue:4', null, null]])
   })
 
-  it('caches a repository default branch for an hour', async () => {
-    const h = harness(() => Response.json({ default_branch: 'develop' }))
-    expect(await h.client.defaultBranch(repo)).toBe('develop')
-    expect(await h.client.defaultBranch(repo)).toBe('develop')
+  it('keeps a repository default branch with its account for an hour', async () => {
+    const h = harness()
+    expect(await h.client.defaultBranch(repo)).toBe('main')
+    expect(await h.client.defaultBranch(repo)).toBe('main')
     expect(h.calls).toHaveLength(1)
+    h.advance(61 * 60_000)
+    await h.client.defaultBranch(repo)
+    expect(h.calls).toHaveLength(2)
   })
 })

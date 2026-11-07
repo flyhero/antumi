@@ -35,8 +35,8 @@ describe('PullRequestService merging and accepting', () => {
     task = Task.parse({ ...tasks.create('A'), status: 'review', repos: [{ path: '/repo', worktreePath: '/repo-wt', branch: 'antumi/abc', startRef: null, start: null }] })
     calls = []
     reply = (path) => Response.json(path.endsWith('/pulls/7') ? pull() : path.includes('/check-runs') ? { check_runs: [] } : path.includes('/status') ? { statuses: [] } : [])
-    const fetch: typeof globalThis.fetch = async (input, init) => { const call = { path: new URL(String(input)).pathname, method: init?.method ?? 'GET', body: init?.body ? JSON.parse(String(init.body)) : undefined }; calls.push(call); return reply(call.path, call.method) }
-    const client = new GitHubClient({ credentialsFor: () => [] }, { ghToken: async () => 'gh-secret', fetch })
+    const fetch: typeof globalThis.fetch = async (input, init) => { const call = { path: new URL(String(input)).pathname, method: init?.method ?? 'GET', body: init?.body ? JSON.parse(String(init.body)) : undefined }; calls.push(call); return call.path === '/repos/flyhero/antumi' ? Response.json({ default_branch: 'main', permissions: { push: true } }) : reply(call.path, call.method) }
+    const client = new GitHubClient({ credentialsFor: () => [] }, { ghAccounts: async () => [{ login: null, token: 'gh-secret' }], fetch })
     accepting = { enabled: vi.fn<PullRequestAccepting['enabled']>(() => true), accept: vi.fn<PullRequestAccepting['accept']>(() => {}) }
     service = new PullRequestService({ get: () => task }, { status: async () => { throw new Error('unused') }, execute: async () => { throw new Error('unused') } }, store, client, { accepting })
   })

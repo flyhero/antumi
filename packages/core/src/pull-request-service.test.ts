@@ -69,7 +69,7 @@ describe('PullRequestService', () => {
       if (call.path === '/repos/flyhero/antumi') return Response.json({ default_branch: 'main' })
       return reply(call)
     }
-    const client = new GitHubClient({ credentialsFor: () => [] }, { ghToken: async () => 'gh-secret', fetch, now: () => now })
+    const client = new GitHubClient({ credentialsFor: () => [] }, { ghAccounts: async () => [{ login: null, token: 'gh-secret' }], fetch, now: () => now })
     changed.mockClear()
     service = new PullRequestService(taskService, gitService, store, client, { now: () => now, changed })
   })
@@ -105,7 +105,7 @@ describe('PullRequestService', () => {
     git(main, 'branch', '-q', '-m', 'main2', 'main-copy')
     setTask({ repos: [{ ...task.repos[0]!, worktreePath: worktree, branch: 'antumi/abc' }] })
 
-    const noAuth = new PullRequestService({ get: () => task }, { status: async () => ({ git: true, directory: worktree, branch: 'antumi/abc', head: SHA, upstream: null, ahead: 1, behind: 0, changes: 0, branches: [], remotes: ['origin'], blocker: null, operation: null, conflicts: [] }), execute: async () => ({ state: 'done' }) }, store, new GitHubClient({ credentialsFor: () => [] }, { ghToken: async () => null, fetch: async () => { throw new Error('offline') } }))
+    const noAuth = new PullRequestService({ get: () => task }, { status: async () => ({ git: true, directory: worktree, branch: 'antumi/abc', head: SHA, upstream: null, ahead: 1, behind: 0, changes: 0, branches: [], remotes: ['origin'], blocker: null, operation: null, conflicts: [] }), execute: async () => ({ state: 'done' }) }, store, new GitHubClient({ credentialsFor: () => [] }, { ghAccounts: async () => [], fetch: async () => { throw new Error('offline') } }))
     expect((await noAuth.check(task.id))[0]).toMatchObject({ blocker: 'auth', needsPush: true })
   })
 

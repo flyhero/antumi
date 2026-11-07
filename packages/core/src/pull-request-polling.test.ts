@@ -41,8 +41,8 @@ describe('PullRequestService polling', () => {
     store = new PullRequestStore(path.join(dir, 'antumi.db'))
     fetches = []
     reply = (path) => Response.json(path.endsWith('/pulls/7') ? pull() : path.includes('/check-runs') ? { check_runs: [] } : path.includes('/status') ? { statuses: [] } : [])
-    const fetch: typeof globalThis.fetch = async (input) => { const path = new URL(String(input)).pathname; fetches.push(path); return reply(path) }
-    const client = new GitHubClient({ credentialsFor: () => [] }, { ghToken: async () => 'gh-secret', fetch, now: () => Date.now() })
+    const fetch: typeof globalThis.fetch = async (input) => { const path = new URL(String(input)).pathname; fetches.push(path); return path === '/repos/flyhero/antumi' ? Response.json({ default_branch: 'main', permissions: { push: true } }) : reply(path) }
+    const client = new GitHubClient({ credentialsFor: () => [] }, { ghAccounts: async () => [{ login: null, token: 'gh-secret' }], fetch, now: () => Date.now() })
     const task = Task.parse({ ...tasks.create('A'), status: 'running', repos: [{ path: '/repo', worktreePath: '/repo-wt', branch: 'antumi/abc', startRef: null, start: null }] })
     taskId = task.id
     service = new PullRequestService({ get: () => task }, { status: async () => { throw new Error('unused') }, execute: async () => { throw new Error('unused') } }, store, client, { now: () => Date.now() })

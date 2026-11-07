@@ -20,6 +20,8 @@ const pull = (overrides: Record<string, unknown> = {}) => ({
 })
 
 type Call = { path: string; method: string; body: unknown }
+// What GitHub answers to a second pull request for the same branch, as it really does.
+const ALREADY_EXISTS = { message: 'Validation Failed', errors: [{ resource: 'PullRequest', code: 'custom', message: 'A pull request already exists for flyhero:antumi/abc.' }] }
 
 describe('PullRequestService', () => {
   let root: string
@@ -204,7 +206,7 @@ describe('PullRequestService', () => {
     store.put({ taskId: task.id, repoPath: repo, repo: { host: 'github', owner: 'flyhero', name: 'antumi' }, number: 2, url: 'https://github.com/flyhero/antumi/pull/2', headBranch: 'antumi/abc', base: 'main', status: null, problem: null, fetchedAt: null, refreshing: false })
     store.unlink(task.id, repo)
     reply = (call) => call.method === 'POST'
-      ? new Response(JSON.stringify({ message: 'A pull request already exists for flyhero:antumi/abc.' }), { status: 422 })
+      ? new Response(JSON.stringify(ALREADY_EXISTS), { status: 422 })
       : Response.json(call.path.startsWith('/repos/flyhero/antumi/pulls?') ? [pull({ number: 2, html_url: 'https://github.com/flyhero/antumi/pull/2' })] : [])
     await expect(service.create({ taskId: task.id, repoPath: repo, base: 'main', title: 'T', body: '', draft: false, from: 'antumi/abc' }))
       .rejects.toMatchObject({ reason: 'pull-request-cut-loose-open', message: '#2 https://github.com/flyhero/antumi/pull/2' })
@@ -213,7 +215,7 @@ describe('PullRequestService', () => {
   it('takes the pull request GitHub says already exists rather than failing', async () => {
     let listed = false
     reply = (call) => {
-      if (call.method === 'POST') return new Response(JSON.stringify({ message: 'A pull request already exists for flyhero:antumi/abc.' }), { status: 422 })
+      if (call.method === 'POST') return new Response(JSON.stringify(ALREADY_EXISTS), { status: 422 })
       if (call.path.startsWith('/repos/flyhero/antumi/pulls?')) { const found = listed; listed = true; return Response.json(found ? [pull({ number: 4 })] : []) }
       return Response.json(pull())
     }

@@ -1695,8 +1695,16 @@ button.task-tag:hover {
   opacity: 0.8;
 }
 
-.launch-button[aria-busy='true'] svg {
-  animation: pulse 1s ease-in-out infinite;
+.launch-button > .chat-spinner {
+  width: 18px;
+  height: 18px;
+  border-color: color-mix(in srgb, currentColor 25%, transparent);
+  border-top-color: currentColor;
+}
+
+.launch-button.button > .chat-spinner {
+  width: 16px;
+  height: 16px;
 }
 
 .menu-item-icon { display: grid; flex-shrink: 0; color: var(--text-muted); }
@@ -10913,7 +10921,6 @@ button.squad-member-main { cursor: pointer; }
   .conversation-status[data-glyph='awaiting'],
   .working-summary[data-state='running'] .working-label,
   .status-icon .spin,
-  .launch-button[aria-busy='true'] svg,
   .connection[data-state='connecting'] .connection-dot,
   .tool-button[aria-busy='true'] svg,
   .chat-tool-icon[data-status='running'] *,

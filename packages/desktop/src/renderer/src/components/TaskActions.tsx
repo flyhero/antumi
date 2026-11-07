@@ -49,6 +49,7 @@ import { launchOptions, TaskModelPicker, useEditsInPlace, useTaskLaunch, type Ta
 import { createSchedule, openRunForTask, scheduleState } from '../schedules'
 import { useOpenTodoCount, useTodosShown } from '../conversation-todos'
 import { askConfirm } from '../confirm-dialog'
+import { Spinner } from './Spinner'
 
 function blockerText(blocker: string, waitingOn: readonly Task[]): string {
   if (blocker === 'blocked' && waitingOn.length > 0) {
@@ -118,12 +119,15 @@ function LaunchButton({
             setExplaining((open) => !open)
           } else if (!starting) {
             setStarting(true)
-            await launch()
-            setStarting(false)
+            try {
+              await launch()
+            } finally {
+              setStarting(false)
+            }
           }
         }}
       >
-        <Icon />
+        {starting ? <Spinner /> : <Icon />}
         {labelled && label}
       </button>
       {explaining && reason && (

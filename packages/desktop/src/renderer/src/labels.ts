@@ -277,6 +277,7 @@ const REASON_TEXT: Record<string, string> = localized(() => ({
 
 // Reasons whose message says what went wrong in the agent's own words, kept after the summary.
 const REASON_WITH_DETAIL: Record<string, string> = localized(() => ({
+  'pull-request-cut-loose-open': t('PullRequest.cutLooseOpen'),
   'skills-none-found': t('labels.noUsableSkillsFoundSkillsNameSkillMd'),
   'skills-name-conflict': t('labels.twoRepositoriesContainSkillsWithTheSameName'),
   'skills-invalid-selection': t('labels.skillSelectionInvalid'),

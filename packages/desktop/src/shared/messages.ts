@@ -12979,6 +12979,7 @@ export const MESSAGES = {
   "PullRequest.mergeMethod.merge": {"zh": "合并提交", "en": "Merge commit"},
   "PullRequest.mergeMethod.rebase": {"zh": "变基合并", "en": "Rebase and merge"},
   "PullRequest.mergeConfirm": {"zh": "把 PR #{number} 以「{method}」合入 {base}？远端分支会保留。", "en": "Merge PR #{number} into {base} with “{method}”? The remote branch stays."},
+  "PullRequest.cutLooseOpen": {"zh": "这个分支在 GitHub 上还有一个开着的 PR，你移除过它的关联，GitHub 不让同一个分支再开一个。先在 GitHub 上关掉它再创建", "en": "The branch still has an open PR on GitHub, one you removed the link to, and GitHub allows one per branch. Close it on GitHub first, then create"},
   "antumiTools.pullRequestStatus": {"zh": "查看 PR 状态", "en": "Check PR status"},
   "antumiTools.pullRequestCreate": {"zh": "创建 PR", "en": "Create PR"},
 } as const

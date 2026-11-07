@@ -200,6 +200,16 @@ describe('PullRequestService', () => {
     execute.mockRestore()
   })
 
+  it('says which pull request stands in the way when the one cut loose is still open', async () => {
+    store.put({ taskId: task.id, repoPath: repo, repo: { host: 'github', owner: 'flyhero', name: 'antumi' }, number: 2, url: 'https://github.com/flyhero/antumi/pull/2', headBranch: 'antumi/abc', base: 'main', status: null, problem: null, fetchedAt: null, refreshing: false })
+    store.unlink(task.id, repo)
+    reply = (call) => call.method === 'POST'
+      ? new Response(JSON.stringify({ message: 'A pull request already exists for flyhero:antumi/abc.' }), { status: 422 })
+      : Response.json(call.path.startsWith('/repos/flyhero/antumi/pulls?') ? [pull({ number: 2, html_url: 'https://github.com/flyhero/antumi/pull/2' })] : [])
+    await expect(service.create({ taskId: task.id, repoPath: repo, base: 'main', title: 'T', body: '', draft: false, from: 'antumi/abc' }))
+      .rejects.toMatchObject({ reason: 'pull-request-cut-loose-open', message: '#2 https://github.com/flyhero/antumi/pull/2' })
+  })
+
   it('takes the pull request GitHub says already exists rather than failing', async () => {
     let listed = false
     reply = (call) => {

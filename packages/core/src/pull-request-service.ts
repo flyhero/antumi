@@ -232,9 +232,16 @@ export class PullRequestService {
     try {
       pull = await this.client.createPull(eligibility.repo, { title: fields.title, body: fields.body, head: eligibility.headBranch, base: eligibility.base, draft: fields.draft })
     } catch (error) {
-      // Opened meanwhile, by the agent or by hand: that one is the task's.
-      const found = error instanceof GitHubError && /already exists/i.test(error.message) ? await this.lookup(task.id, repo.path, eligibility.repo, eligibility.headBranch) : null
+      // Opened meanwhile, by the agent or by hand: that one is the task's. Or the one the user cut
+      // loose is still open, and GitHub takes one per branch: they have to close it there first.
+      const exists = error instanceof GitHubError && /already exists/i.test(error.message)
+      const found = exists ? await this.lookup(task.id, repo.path, eligibility.repo, eligibility.headBranch) : null
       if (found) return found
+      if (exists) {
+        const suppressed = new Set(this.store.suppressed(task.id, repo.path))
+        const cut = (await this.client.pullsByHead(eligibility.repo, eligibility.headBranch).catch(() => [])).find((pull) => pull.state === 'open' && suppressed.has(pull.number))
+        if (cut) throw new Rejection('pull-request-cut-loose-open', `#${cut.number} ${cut.url}`)
+      }
       throw this.rejection(error)
     }
     // A closed pull request the branch had before is left behind, never to be picked up again.

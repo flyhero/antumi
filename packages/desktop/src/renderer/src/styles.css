@@ -9991,6 +9991,28 @@ summary.agent-group-head:focus-visible { outline: 2px solid var(--focus); outlin
 .pr-chip-checks[data-checks='failure'] { color: var(--danger); font-weight: 600; }
 .pr-chip-checks[data-checks='running'] { color: var(--warning); }
 .task-row-meta .pr-chip { line-height: 16px; vertical-align: middle; }
+/* The inspector's PR tab: each pull request with its checks and reviews, picked to hand over. */
+.pr-panel { display: flex; flex-direction: column; gap: 20px; padding: 12px; }
+.pr-panel-link { display: flex; flex-direction: column; gap: 6px; }
+.pr-panel-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.pr-panel-project { font-size: 12px; color: var(--text-muted); }
+.pr-panel-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; text-align: left; }
+.pr-panel-route, .pr-panel-refresh, .pr-panel-empty { margin: 0; font-size: 12px; }
+.pr-panel-conflict { color: var(--danger); }
+.pr-panel-problem { margin: 0; font-size: 12px; color: var(--danger); }
+.pr-panel-heading { margin: 10px 0 0; font-size: 12px; font-weight: 600; color: var(--text-muted); }
+.pr-list { margin: 0; padding: 0; list-style: none; }
+.pr-item { display: flex; align-items: flex-start; gap: 8px; padding: 4px 0; font-size: 13px; }
+.pr-item-mark { width: 13px; text-align: center; color: var(--text-muted); }
+.pr-item[data-state='success'] .pr-item-mark { color: var(--status-done); }
+.pr-item[data-state='running'] .pr-item-mark, .pr-item[data-state='queued'] .pr-item-mark { color: var(--warning); }
+.pr-item-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.pr-item-state { font-size: 12px; color: var(--danger); }
+.pr-review-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; font-size: 12px; }
+.pr-review-state[data-state='changes_requested'] { color: var(--danger); }
+.pr-review-state[data-state='approved'] { color: var(--status-done); }
+.pr-review-body { margin-top: 2px; white-space: pre-wrap; }
+.pr-panel-actions { display: flex; justify-content: flex-end; }
 /* Opening a pull request: branch → base, then the title and description drafted for editing. */
 .pr-dialog { width: min(640px, calc(100vw - 32px)); }
 .pr-section { display: flex; flex-direction: column; gap: 8px; }

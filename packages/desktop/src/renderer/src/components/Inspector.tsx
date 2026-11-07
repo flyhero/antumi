@@ -57,9 +57,9 @@ export function useChangedFiles(target: BranchTarget | null, updatedAt: number, 
   return files?.key === key ? files.files : null
 }
 
-export type InspectorTab = 'changes' | 'branch' | 'plan' | 'todos' | 'wire' | 'squad' | 'helper' | 'delegation'
+export type InspectorTab = 'changes' | 'branch' | 'pullRequest' | 'plan' | 'todos' | 'wire' | 'squad' | 'helper' | 'delegation'
 
-const TAB_LABEL: Record<InspectorTab, string> = localized(() => ({ changes: t('Inspector.changes'), branch: t('GitInspector.branches_1030'), plan: t('chatTools.plan'), todos: t('chatTools.toDos'), wire: t('Inspector.rawData'), squad: t('ChatPlan.squad'), helper: t('HelperPanel.helper'), delegation: t('AgentProfiles.calls') }))
+const TAB_LABEL: Record<InspectorTab, string> = localized(() => ({ changes: t('Inspector.changes'), branch: t('GitInspector.branches_1030'), pullRequest: t('PullRequest.tab'), plan: t('chatTools.plan'), todos: t('chatTools.toDos'), wire: t('Inspector.rawData'), squad: t('ChatPlan.squad'), helper: t('HelperPanel.helper'), delegation: t('AgentProfiles.calls') }))
 export const GIT_TABS: readonly InspectorTab[] = ['changes', 'branch']
 
 export function InspectorPanel({ label, ratio, onRatioChange, tabs = GIT_TABS, tab, onTab, fileCount, todoCount = 0, helperAwaiting = false, onRefresh, onClose, maximized = false, owner, children }: {

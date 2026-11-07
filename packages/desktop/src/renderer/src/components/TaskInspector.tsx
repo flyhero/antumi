@@ -13,6 +13,8 @@ import { ProjectGroups, ProjectRow, useProjectHeads } from './BranchStatus'
 import { ChatPlanView } from './ChatPlan'
 import { ChangedFiles, CommitList, FileDiffView, GIT_TABS, InspectorPanel, useFocusCount, type InspectorTab } from './Inspector'
 import { TodoPanel } from './TodoPanel'
+import { PullRequestPanel } from './PullRequestPanel'
+import { usePullRequests } from '../pull-requests'
 import { useConversationTodos, useTodosShown } from '../conversation-todos'
 import { projectName } from './ProjectPicker'
 import { WireLogView } from './WireLogView'
@@ -90,7 +92,8 @@ export function TaskInspector({ task, widthRatio, onWidthRatioChange, plans = []
   const worktree = task.repos.some((repo) => repo.worktreePath !== null)
   const todosShown = useTodosShown() && task.conversationId !== null
   const todos = useConversationTodos(todosShown ? task.conversationId : null)
-  const tabs: InspectorTab[] = [...(helper ? ['helper' as const] : []), ...(calls?.length ? ['delegation' as const] : []),...(squadRuns.length ? ['squad' as const] : []),...(worktree ? GIT_TABS : []), ...(plans.length > 0 ? ['plan' as const] : []), ...(todosShown ? ['todos' as const] : []), ...(wire && task.conversationId ? ['wire' as const] : [])]
+  const pullRequests = usePullRequests(task.id)
+  const tabs: InspectorTab[] = [...(helper ? ['helper' as const] : []), ...(calls?.length ? ['delegation' as const] : []),...(squadRuns.length ? ['squad' as const] : []),...(worktree ? GIT_TABS : []), ...(pullRequests.length > 0 ? ['pullRequest' as const] : []), ...(plans.length > 0 ? ['plan' as const] : []), ...(todosShown ? ['todos' as const] : []), ...(wire && task.conversationId ? ['wire' as const] : [])]
   const tab = tabs.includes(wanted) ? wanted : (tabs[0] ?? 'changes')
   const [refreshCount, setRefreshCount] = useState(0)
   const [gitMaximized, setGitMaximized] = useState(false)
@@ -127,6 +130,8 @@ export function TaskInspector({ task, widthRatio, onWidthRatioChange, plans = []
           <TodoPanel conversationId={task.conversationId} />
         ) : tab === 'wire' && task.conversationId ? (
           <WireLogView conversationId={task.conversationId} />
+        ) : tab === 'pullRequest' ? (
+          <PullRequestPanel task={task} />
         ) : tab === 'plan' ? (
           <ChatPlanView conversationId={task.conversationId ?? null} plans={plans} selected={selectedPlan} onSelect={showTaskPlan} note={planNote} />
         ) : tab === 'branch' ? (

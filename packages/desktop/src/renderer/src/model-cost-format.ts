@@ -1,7 +1,7 @@
 import { localized, t } from './i18n'
 import { ratesAt, type SmallModelCost, type SmallModelKind, type SmallModelTotals } from '@antumi/protocol'
 
-export const SMALL_MODEL_LABELS: Record<SmallModelKind, string> = localized(() => ({ translation: t('ChatContextMenu.translate'), commitMessage: t('modelCostFormat.commitMessage'), helper: t('HelperPanel.helper'), title: t('ConversationList.conversationTitle') }))
+export const SMALL_MODEL_LABELS: Record<SmallModelKind, string> = localized(() => ({ translation: t('ChatContextMenu.translate'), commitMessage: t('modelCostFormat.commitMessage'), pullRequest: t('modelCostFormat.pullRequest'), helper: t('HelperPanel.helper'), title: t('ConversationList.conversationTitle') }))
 
 const USD = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const WHOLE_USD = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })

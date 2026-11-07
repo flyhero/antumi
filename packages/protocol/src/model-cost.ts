@@ -41,7 +41,7 @@ export type ModelPrice = z.infer<typeof ModelPrice>
 export const CostBaseline = z.object({ model: z.string().nullable(), context: tokens.nullable(), price: ModelPrice.nullable() })
 export type CostBaseline = z.infer<typeof CostBaseline>
 
-export const SmallModelKind = z.enum(['translation', 'commitMessage', 'helper', 'title'])
+export const SmallModelKind = z.enum(['translation', 'commitMessage', 'helper', 'title', 'pullRequest'])
 export type SmallModelKind = z.infer<typeof SmallModelKind>
 export const SmallModelCost = z.object({
   costUsd: dollars.nullable(),

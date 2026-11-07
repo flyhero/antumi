@@ -58,7 +58,7 @@ export function summarizeDashboard(runs: readonly AgentRun[], turns: readonly Tu
     models: byModel(now.runs, now.turns, now.quick),
     ...(jobs ? { smallModels: {
       current: smallModelTotals(now.jobs), previous: smallModelTotals(before.jobs),
-      kinds: (['translation', 'commitMessage', 'helper', ...options.includeTitleCosts ? ['title'] as const : []] as const).map((kind) => ({ kind, ...smallModelTotals(now.jobs.filter((job) => job.kind === kind)) }))
+      kinds: (['translation', 'commitMessage', 'pullRequest', 'helper', ...options.includeTitleCosts ? ['title'] as const : []] as const).map((kind) => ({ kind, ...smallModelTotals(now.jobs.filter((job) => job.kind === kind)) }))
     } } : {})
   }
 }

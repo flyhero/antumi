@@ -10,25 +10,30 @@ const MAX_NEW_FILES = 20
 const NEW_FILE_LINES = 60
 const MAX_NEW_FILE_BYTES = 200_000
 const MAX_RULES = 4_000
-const RULE_FILES = ['AGENTS.md', 'CLAUDE.md', 'CONTRIBUTING.md']
+export const RULE_FILES = ['AGENTS.md', 'CLAUDE.md', 'CONTRIBUTING.md']
 
 export type CommitContext = { changes: string; rules: string | null; recent: string[] }
 
-function clipMiddle(text: string, max: number): string {
+export function clipMiddle(text: string, max: number): string {
   if (text.length <= max) return text
   const half = Math.floor(max / 2)
   return `${text.slice(0, half)}\n\n……（中间省略 ${text.length - half * 2} 字）……\n\n${text.slice(-half)}`
 }
 
-// The section of a project's notes on commits: from a heading that names them to the next heading
-// as high or higher.
-export function commitRules(markdown: string): string | null {
+// The section of a project's notes whose heading matches: from that heading to the next as high
+// or higher.
+export function rulesSection(markdown: string, heading: RegExp): string | null {
   const lines = markdown.split('\n')
-  const start = lines.findIndex((line) => /^#{1,6}\s.*(commit|提交)/i.test(line))
+  const start = lines.findIndex((line) => /^#{1,6}\s/.test(line) && heading.test(line))
   if (start < 0) return null
   const level = /^#+/.exec(lines[start] ?? '')?.[0].length ?? 1
   const end = lines.findIndex((line, index) => index > start && new RegExp(`^#{1,${level}}\\s`).test(line))
   return lines.slice(start, end < 0 ? undefined : end).join('\n').trim().slice(0, MAX_RULES)
+}
+
+// The section of a project's notes on commits.
+export function commitRules(markdown: string): string | null {
+  return rulesSection(markdown, /commit|提交/i)
 }
 
 async function newFileOpening(root: string, file: string): Promise<string> {

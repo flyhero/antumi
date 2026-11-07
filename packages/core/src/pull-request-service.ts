@@ -6,6 +6,7 @@ import type { GitService } from './git-service'
 import { GitHubClient, GitHubError, pullRequestProblem, type GitHubPull } from './github-client'
 import { githubRemote } from './github-remote'
 import { readProjectConfig } from './project-config'
+import { pullRequestContext, type PullRequestContext } from './pull-request-draft'
 import type { PullRequestStore } from './pull-request-store'
 import { Rejection } from './rejection'
 import type { TaskService } from './task-service'
@@ -108,6 +109,19 @@ export class PullRequestService {
     const task = this.tasks.get(taskId)
     const links = this.store.list(task.id).filter((link) => !repoPath || link.repoPath === repoPath)
     return Promise.all(links.map((link) => this.refreshLink(link, force)))
+  }
+
+  // What a title and description for the repo's pull request are written from.
+  async draftContext(taskId: string, repoPath: string, base: string): Promise<PullRequestContext> {
+    const task = this.tasks.get(taskId)
+    const repo = this.writableRepos(task, repoPath)[0]
+    if (!repo?.worktreePath) throw new Rejection('git-no-worktree', '任务 worktree 不存在，请先开始执行任务。')
+    const host = await githubRemote(repo.worktreePath)
+    if (!host) throw new Rejection('pull-request-not-github')
+    const branch = (await this.git.status({ kind: 'task', id: task.id, project: repo.path })).branch
+    if (!branch) throw new Rejection('pull-request-detached-head')
+    const related = this.store.list(task.id).filter((link) => link.repoPath !== repo.path && link.status?.state !== 'closed')
+    return pullRequestContext(repo.worktreePath, task, repo, branch, base, host, related)
   }
 
   unlink(taskId: string, repoPath: string): void {

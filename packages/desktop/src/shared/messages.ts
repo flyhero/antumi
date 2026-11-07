@@ -11335,6 +11335,10 @@ export const MESSAGES = {
     "zh": "提交说明",
     "en": "Commit message"
   },
+  "modelCostFormat.pullRequest": {
+    "zh": "PR 说明",
+    "en": "Pull request description"
+  },
   "modelCostFormat.totalPricedEstimable": {
     "zh": "共 {value1} 次 · 可计价 {value2} 次 · 可估算 {value3} 次",
     "en": "{value1} total · {value2} priced · {value3} estimable"

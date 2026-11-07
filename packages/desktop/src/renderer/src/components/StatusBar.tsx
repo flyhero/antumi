@@ -118,7 +118,8 @@ function BrowserButton() {
       onClick={toggleBrowserPanel}
     >
       <GlobeIcon />
-      {count > 0 && <span className="count">{count}</span>}
+      {/* The count stands in for the name once there is one, so the bar stays short. */}
+      {count > 0 ? <span className="count">{count}</span> : <span>{t('BrowserSidePanel.browser')}</span>}
     </button>
   )
 }
@@ -201,7 +202,7 @@ function TerminalButton() {
       onClick={() => void toggleTerminalPanel()}
     >
       <TerminalIcon />
-      {count > 0 && <span className="count">{count}</span>}
+      {count > 0 ? <span className="count">{count}</span> : <span>{t('SettingsPage.terminal')}</span>}
     </button>
   )
 }

@@ -17,8 +17,18 @@ const REMOTE_TIMEOUT_MS = 20_000
 // The host is asked about a pull request at most this often; a stuck refresh button should not
 // spend the hourly quota.
 const MIN_REFRESH_MS = 10_000
+// A pull request a client has on screen is followed every half minute, less often as long as
+// nothing changes; any other still open, every few minutes. A fetch that fails waits longer each
+// time, so an outage or a spent quota is not hammered.
+const WATCH_MIN_MS = 30_000
+const WATCH_MAX_MS = 120_000
+const SWEEP_MS = 5 * 60_000
+const FAIL_MIN_MS = 60_000
+const FAIL_MAX_MS = 30 * 60_000
 
 type Dependencies = { now?: () => number; changed?: (taskId: string, links: PullRequestLink[]) => void }
+type Watcher = { onClose(listener: () => void): () => void }
+type Cadence = { interval: number; dueAt: number; failures: number }
 type CreateFields = { taskId: string; repoPath: string; base: string; title: string; body: string; draft: boolean; from: string }
 
 // What a pull request's status looks like straight from the pull request itself, before its
@@ -56,6 +66,10 @@ export class PullRequestService {
   private readonly now: () => number
   private readonly changed: NonNullable<Dependencies['changed']>
   private readonly refreshing = new Map<string, Promise<PullRequestLink>>()
+  private readonly watchers = new Map<string, Set<Watcher>>()
+  private readonly cadence = new Map<string, Cadence>()
+  private timer: ReturnType<typeof setTimeout> | null = null
+  private started = false
 
   constructor(
     private readonly tasks: Pick<TaskService, 'get'>,
@@ -66,6 +80,38 @@ export class PullRequestService {
   ) {
     this.now = dependencies.now ?? Date.now
     this.changed = dependencies.changed ?? (() => {})
+  }
+
+  // Follows the pull requests still open from now on.
+  start(): void {
+    this.started = true
+    this.schedule()
+  }
+
+  stop(): void {
+    this.started = false
+    if (this.timer) clearTimeout(this.timer)
+    this.timer = null
+  }
+
+  // A client has the task's pull requests on screen, or no longer; one that goes away takes its
+  // interest with it.
+  watch(taskId: string, open: boolean, watcher: Watcher): void {
+    const task = this.tasks.get(taskId)
+    const watching = this.watchers.get(task.id) ?? new Set<Watcher>()
+    if (open) {
+      if (!watching.has(watcher)) {
+        watching.add(watcher)
+        this.watchers.set(task.id, watching)
+        watcher.onClose(() => this.watch(task.id, false, watcher))
+      }
+      // Fresh at once, and often from here on.
+      for (const link of this.store.list(task.id)) this.cadence.set(this.keyOf(link), { interval: WATCH_MIN_MS, dueAt: this.now(), failures: 0 })
+    } else {
+      watching.delete(watcher)
+      if (watching.size === 0) this.watchers.delete(task.id)
+    }
+    this.schedule()
   }
 
   list(taskId: string): PullRequestLink[] {
@@ -131,7 +177,62 @@ export class PullRequestService {
   unlink(taskId: string, repoPath: string): void {
     const task = this.tasks.get(taskId)
     this.store.unlink(task.id, repoPath)
+    this.cadence.delete(`${task.id}\0${repoPath}`)
     this.changed(task.id, this.store.list(task.id))
+    this.schedule()
+  }
+
+  private keyOf(link: Pick<PullRequestLink, 'taskId' | 'repoPath'>): string {
+    return `${link.taskId}\0${link.repoPath}`
+  }
+
+  // Sets the timer for the next pull request due, if any is still open; none due means none open.
+  private schedule(): void {
+    if (this.timer) clearTimeout(this.timer)
+    this.timer = null
+    if (!this.started) return
+    const open = this.store.open()
+    const keys = new Set(open.map((link) => this.keyOf(link)))
+    for (const key of this.cadence.keys()) if (!keys.has(key)) this.cadence.delete(key)
+    if (open.length === 0) return
+    const now = this.now()
+    let dueAt = Infinity
+    for (const link of open) {
+      const cadence = this.cadence.get(this.keyOf(link)) ?? this.firstCadence(link)
+      this.cadence.set(this.keyOf(link), cadence)
+      dueAt = Math.min(dueAt, cadence.dueAt)
+    }
+    this.timer = setTimeout(() => void this.tick(), Math.max(0, dueAt - now))
+    this.timer.unref()
+  }
+
+  // A link first followed is due by when it was last fetched, so a restart does not fetch all at once.
+  private firstCadence(link: PullRequestLink): Cadence {
+    const interval = this.watchers.has(link.taskId) ? WATCH_MIN_MS : SWEEP_MS
+    return { interval, dueAt: (link.fetchedAt ?? 0) + interval, failures: 0 }
+  }
+
+  private async tick(): Promise<void> {
+    this.timer = null
+    const now = this.now()
+    const due = this.store.open().filter((link) => (this.cadence.get(this.keyOf(link))?.dueAt ?? 0) <= now)
+    await Promise.all(due.map(async (link) => {
+      const before = JSON.stringify(link.status)
+      const after = await this.refreshLink(link, true)
+      const watched = this.watchers.has(link.taskId)
+      const cadence = this.cadence.get(this.keyOf(link)) ?? this.firstCadence(link)
+      let next: Cadence
+      if (after.problem) {
+        next = { interval: Math.min(Math.max(FAIL_MIN_MS, cadence.interval * 2), FAIL_MAX_MS), dueAt: 0, failures: cadence.failures + 1 }
+      } else if (!watched) {
+        next = { interval: SWEEP_MS, dueAt: 0, failures: 0 }
+      } else {
+        next = { interval: JSON.stringify(after.status) === before ? Math.min(cadence.interval * 2, WATCH_MAX_MS) : WATCH_MIN_MS, dueAt: 0, failures: 0 }
+      }
+      next.dueAt = this.now() + next.interval
+      this.cadence.set(this.keyOf(link), next)
+    }))
+    this.schedule()
   }
 
   private writableRepos(task: Task, repoPath?: string): TaskRepo[] {
@@ -210,8 +311,11 @@ export class PullRequestService {
   }
 
   private keep(link: PullRequestLink): PullRequestLink {
+    const known = this.cadence.has(this.keyOf(link))
     this.store.put(link)
     this.changed(link.taskId, this.store.list(link.taskId))
+    // One just found or opened is followed from now; one merged or closed drops out on the next round.
+    if (!known && !link.refreshing) this.schedule()
     return link
   }
 

@@ -24,6 +24,7 @@ import { DaemonClient } from './daemon-client'
 import { PluginService } from './plugin-service'
 import { ProjectStar } from './project-star'
 import { PullRequestStore } from './pull-request-store'
+import type { PullRequestService } from './pull-request-service'
 import { PetLibrary } from './pet-library'
 import { createRpcHandlers } from './rpc-handlers'
 import { SessionImports } from './session-imports'
@@ -109,6 +110,8 @@ const attachments = new AttachmentStore(paths.attachments)
 let sourceUpdates: SourceUpdates | undefined
 let server: RpcServer | null = null
 let awake: ComputerAwakeService | null = null
+// Built with the RPC handlers, which own the Git service it reads branches through.
+const pullRequests: { current: PullRequestService | null } = { current: null }
 const refreshAwake = () => awake?.refresh(conversations.workingCount(), schedules.openCount())
 
 const notifyChatItems = (conversationId: string, items: ChatItem[], replaceStage?: string) =>
@@ -609,13 +612,14 @@ server = await startRpcServer({
     store: attachments,
     uploads: new AttachmentUploads(attachments)
   }, terminals, worktrees, browser, awake, terminalCommands, limits, runs, turns, chatSettings, environment, schedules, chatCommands, routines, discussions, wire, () => { server?.broadcast('git.changed', {}); profiles.tick() }, squads, todos, plugins, skills, mcpServers, smallModels, projectConfigs, modelProviders, sessionImports, accounts, cliMaintenance, analytics, automation, pets, new ProjectStar(sources), profiles, bookmarks, browserHistory, sourceUpdates,
-    { store: pullRequestStore, changed: (taskId, links) => server?.broadcast('pullRequests.changed', { taskId, links }) })
+    { store: pullRequestStore, changed: (taskId, links) => server?.broadcast('pullRequests.changed', { taskId, links }), ready: (service) => { pullRequests.current = service } })
 })
 await writeCoreEndpoint({ port: server.port, token, pid: process.pid, protocolVersion: PROTOCOL_VERSION, version: packageJson.version })
 daemon.start()
 await awake.start()
 refreshAwake()
 usage.start()
+pullRequests.current?.start()
 analytics.start()
 automation.start()
 announcements.start()
@@ -656,6 +660,7 @@ async function shutdown(): Promise<void> {
   await squads.close()
   discussions.close()
   sourceUpdates?.stop()
+  pullRequests.current?.stop()
   sources.stop()
   await plugins.close()
   await pets.close()

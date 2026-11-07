@@ -113,7 +113,7 @@ export function createRpcHandlers(
   bookmarks?: BookmarkStore,
   browserHistory?: BrowserHistoryStore,
   sourceUpdates?: SourceUpdates,
-  pullRequestStore?: { store: PullRequestStore; changed: (taskId: string, links: PullRequestLink[]) => void }
+  pullRequestStore?: { store: PullRequestStore; changed: (taskId: string, links: PullRequestLink[]) => void; ready?: (service: PullRequestService) => void }
 ): RpcHandlers {
   const profileService = () => {
     if (!profiles) throw new Rejection('profile-unavailable')
@@ -137,6 +137,7 @@ export function createRpcHandlers(
   }
   const git = new GitService(service, conversations, gitFavorites, gitChanged)
   const pullRequests = pullRequestStore ? new PullRequestService(service, git, pullRequestStore.store, new GitHubClient(sources), { changed: pullRequestStore.changed }) : undefined
+  if (pullRequests) pullRequestStore?.ready?.(pullRequests)
   const requirePullRequests = (): PullRequestService => {
     if (!pullRequests) throw new Rejection('pull-requests-unavailable')
     return pullRequests
@@ -243,6 +244,7 @@ export function createRpcHandlers(
     'pullRequests.listAll': () => requirePullRequests().listAll(),
     'pullRequests.refresh': ({ taskId, repoPath }) => requirePullRequests().refresh(taskId, repoPath, true),
     'pullRequests.unlink': ({ taskId, repoPath }) => { requirePullRequests().unlink(taskId, repoPath); return OK },
+    'pullRequests.watch': ({ taskId, open }, connection) => { requirePullRequests().watch(taskId, open, connection); return OK },
     'plugins.recommended': () => pluginService().recommended(),
     'plugins.installRecommended': ({ id }) => pluginService().installRecommended(id),
     'plugins.list': () => pluginService().list(),

@@ -860,7 +860,10 @@ export const rpcMethods = {
   // Every task's, for a client just connected.
   'pullRequests.listAll': { params: z.object({}), result: z.array(PullRequestLink) },
   'pullRequests.refresh': { params: PullRequestTaskParams.extend({ repoPath: z.string().min(1).optional() }), result: z.array(PullRequestLink) },
-  'pullRequests.unlink': { params: PullRequestRepoParams, result: Ok }
+  'pullRequests.unlink': { params: PullRequestRepoParams, result: Ok },
+  // This client has the task's pull requests on screen, or no longer; core follows those often,
+  // and any other still open, now and then.
+  'pullRequests.watch': { params: PullRequestTaskParams.extend({ open: z.boolean() }), result: Ok }
 } as const
 
 export const rpcNotifications = {

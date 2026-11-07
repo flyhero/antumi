@@ -25,6 +25,9 @@ export const ManagedWorktree = z.object({
   changes: z.number().int().nullable(),
   // Commits on it that origin's default branch lacks; null when the repo has no such branch.
   unmerged: z.object({ count: z.number().int(), into: z.string() }).nullable(),
+  // Its task's pull request on the host (feature pull-requests): merged by squash, its commits
+  // still read as unmerged above. Older cores leave it out.
+  pullRequest: z.object({ number: z.number().int(), url: z.string(), state: z.enum(['open', 'merged', 'closed']) }).nullable().optional(),
   // Checked out at a commit no branch or other ref has, which only this worktree still holds.
   alone: z.boolean(),
   // Its task's or conversation's agent is open in it: a terminal still running, or a chat mid-turn.

@@ -1,6 +1,6 @@
 import { readdir, realpath, rmdir, stat } from 'node:fs/promises'
 import path from 'node:path'
-import { checkCleanWorktree, shortTaskId, type Conversation, type ManagedWorktree, type Task, type WorktreeCleanResult } from '@antumi/protocol'
+import { checkCleanWorktree, shortTaskId, type Conversation, type ManagedWorktree, type PullRequestLink, type Task, type WorktreeCleanResult } from '@antumi/protocol'
 import { gitOrNull } from './git-changes'
 import { Rejection } from './rejection'
 import { originDefault } from './task-start'
@@ -131,7 +131,9 @@ export class WorktreeService {
     private readonly tasks: WorktreeTasks,
     private readonly changed: () => void,
     private readonly conversations: WorktreeConversations = { list: () => [] },
-    private readonly now: () => number = Date.now
+    private readonly now: () => number = Date.now,
+    // The task's pull requests, for a worktree whose branch was merged on the host.
+    private readonly pullRequests: (taskId: string) => readonly PullRequestLink[] = () => []
   ) {}
 
   // What git says of each worktree now; sizes are the last counted, and any missing or stale are
@@ -261,14 +263,17 @@ export class WorktreeService {
       mtime(dir)
     ])
     const count = into ? await gitOrNull(dir, ['rev-list', '--count', `${into}..HEAD`]) : null
+    const repo = commonDir ? (path.basename(commonDir) === '.git' ? path.dirname(commonDir) : commonDir) : null
+    const pull = taskId && branch ? this.pullRequests(taskId).find((link) => link.headBranch === branch && link.status) : undefined
     return {
       path: dir,
-      repo: commonDir ? (path.basename(commonDir) === '.git' ? path.dirname(commonDir) : commonDir) : null,
+      repo,
       branch,
       taskId,
       planning,
       changes: status === null ? null : lines.filter((line) => line && !line.startsWith('#')).length,
       unmerged: into && count !== null ? { count: Number(count), into: into.replace(/^refs\/remotes\//, '') } : null,
+      pullRequest: pull?.status ? { number: pull.number, url: pull.url, state: pull.status.state } : null,
       alone: status !== null && contained === null,
       inUse: false,
       locked,

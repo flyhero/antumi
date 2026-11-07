@@ -143,7 +143,8 @@ export function createRpcHandlers(
       resumeChat: (taskId) => service.resumeChat(taskId).then(() => {}),
       send: (id, text) => conversations.send(id, text),
       putText: (id, text) => attachments.store.putText(id, Buffer.from(text, 'utf8'))
-    }
+    },
+    accepting: { enabled: () => chatSettings.current().pullRequestAutoAccept ?? false, accept: (taskId) => { service.move(taskId, 'done') } }
   }) : undefined
   if (pullRequests) pullRequestStore?.ready?.(pullRequests)
   const requirePullRequests = (): PullRequestService => {
@@ -253,6 +254,7 @@ export function createRpcHandlers(
     'pullRequests.refresh': ({ taskId, repoPath }) => requirePullRequests().refresh(taskId, repoPath, true),
     'pullRequests.unlink': ({ taskId, repoPath }) => { requirePullRequests().unlink(taskId, repoPath); return OK },
     'pullRequests.watch': ({ taskId, open }, connection) => { requirePullRequests().watch(taskId, open, connection); return OK },
+    'pullRequests.merge': ({ taskId, repoPath, method, expectedHeadSha }) => requirePullRequests().merge(taskId, repoPath, method, expectedHeadSha),
     'pullRequests.handoff': ({ taskId, repoPath, kind, ids }) => {
       const { conversationId } = service.get(taskId)
       const run = () => requirePullRequests().handoff(taskId, repoPath, kind, ids)

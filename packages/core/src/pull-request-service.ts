@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import type { GitTarget, PullRequestBlocker, PullRequestCheck, PullRequestComment, PullRequestEligibility, PullRequestHandoffKind, PullRequestLink, PullRequestRepo, PullRequestReview, PullRequestStatus, Task, TaskRepo } from '@antumi/protocol'
+import { checkAcceptOnMerge, type GitTarget, type PullRequestBlocker, type PullRequestCheck, type PullRequestComment, type PullRequestEligibility, type PullRequestHandoffKind, type PullRequestLink, type PullRequestMergeMethod, type PullRequestRepo, type PullRequestReview, type PullRequestStatus, type Task, type TaskRepo } from '@antumi/protocol'
 import { gitOrNull } from './git-changes'
 import type { GitService } from './git-service'
 import { GitHubClient, GitHubError, pullRequestProblem, type GitHubPull } from './github-client'
@@ -36,7 +36,9 @@ export type PullRequestChat = {
   send(conversationId: string, text: string): Promise<void>
   putText(conversationId: string, text: string): Promise<string>
 }
-type Dependencies = { now?: () => number; changed?: (taskId: string, links: PullRequestLink[]) => void; chat?: PullRequestChat }
+// Accepting a task on the user's behalf once its pull requests are merged, when they turned that on.
+export type PullRequestAccepting = { enabled(): boolean; accept(taskId: string): void }
+type Dependencies = { now?: () => number; changed?: (taskId: string, links: PullRequestLink[]) => void; chat?: PullRequestChat; accepting?: PullRequestAccepting }
 type Watcher = { onClose(listener: () => void): () => void }
 // Past this, the message goes as a file the agent reads, as a flood of issue comments does.
 const MAX_MESSAGE = 12_000
@@ -78,6 +80,7 @@ export class PullRequestService {
   private readonly now: () => number
   private readonly changed: NonNullable<Dependencies['changed']>
   private readonly chat: PullRequestChat | null
+  private readonly accepting: PullRequestAccepting | null
   private readonly refreshing = new Map<string, Promise<PullRequestLink>>()
   private readonly watchers = new Map<string, Set<Watcher>>()
   private readonly cadence = new Map<string, Cadence>()
@@ -94,6 +97,34 @@ export class PullRequestService {
     this.now = dependencies.now ?? Date.now
     this.changed = dependencies.changed ?? (() => {})
     this.chat = dependencies.chat ?? null
+    this.accepting = dependencies.accepting ?? null
+  }
+
+  // Merges on the host, only while its head is still what the client saw (GitHub refuses
+  // otherwise). The remote branch stays: the worktree holds it, and cleaning is the user's.
+  async merge(taskId: string, repoPath: string, method: PullRequestMergeMethod, expectedHeadSha: string): Promise<PullRequestLink> {
+    const task = this.tasks.get(taskId)
+    const link = this.store.get(task.id, repoPath)
+    if (!link?.status) throw new Rejection('pull-request-not-found', '任务在这个项目里没有 PR，或还没读到它的状态。')
+    if (link.status.state !== 'open') throw new Rejection('pull-request-not-open', 'PR 已经合并或关闭了。')
+    if (link.status.headSha !== expectedHeadSha) throw new Rejection('pull-request-head-moved', 'PR 有了新的提交，请刷新后再看。')
+    try {
+      await this.client.merge(link.repo, link.number, method, expectedHeadSha)
+    } catch (error) {
+      throw this.rejection(error)
+    }
+    const [merged] = await Promise.all([this.refreshLink(link, true)])
+    return merged ?? link
+  }
+
+  // Core accepts the task for the user once every repo's pull request is merged, if they asked
+  // for that; a task that cannot be moved just then is left for them.
+  private acceptIfMerged(taskId: string): void {
+    if (!this.accepting?.enabled()) return
+    let task: Task
+    try { task = this.tasks.get(taskId) } catch { return }
+    if (checkAcceptOnMerge(task, this.store.list(task.id)) !== null) return
+    try { this.accepting.accept(task.id) } catch { /* busy or already moved: the user's to do */ }
   }
 
   // Sends the failed checks or review comments named into the task's chat. A task handed in or
@@ -341,7 +372,9 @@ export class PullRequestService {
       const [checks, reviews, comments] = await Promise.all([
         this.client.checks(link.repo, pull.headSha), this.client.reviews(link.repo, link.number), this.client.comments(link.repo, link.number)
       ])
-      return this.keep({ ...link, headBranch: pull.headRef, base: pull.base, url: pull.url, status: statusOf(pull, { checks, reviews, comments }), problem: null, fetchedAt: this.now(), refreshing: false })
+      const fresh = this.keep({ ...link, headBranch: pull.headRef, base: pull.base, url: pull.url, status: statusOf(pull, { checks, reviews, comments }), problem: null, fetchedAt: this.now(), refreshing: false })
+      if (pull.state === 'merged' && link.status?.state !== 'merged') this.acceptIfMerged(link.taskId)
+      return fresh
     } catch (error) {
       return this.keep({ ...link, problem: pullRequestProblem(error), refreshing: false })
     }

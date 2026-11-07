@@ -507,7 +507,7 @@ const worktrees = new WorktreeService(paths.worktrees, service, () => server?.br
       if (conversation.archivedAt != null && conversation.projectPaths.includes(worktree.dir)) conversationsStore.addCleanedWorktree(conversation.id, worktree)
     }
   }
-})
+}, Date.now, (taskId) => pullRequestStore.list(taskId))
 awake = new ComputerAwakeService(daemon, new AwakeConfigStore(paths.awakeConfig), (status) =>
   server?.broadcast('system.awakeChanged', { status })
 )

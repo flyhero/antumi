@@ -26,7 +26,8 @@ const DEFAULTS = {
   autoArchiveDays: null,
   worktreeCleanDays: DEFAULT_WORKTREE_CLEAN_DAYS,
   resetAnnouncements: true,
-  disabledAgents: []
+  disabledAgents: [],
+  pullRequestAutoAccept: false
 } satisfies Required<ChatSettings>
 // A run nobody watches is meant to go on without them: a new install lets it. Written at once, so
 // it is what that install keeps; one from before keeps what it had, even with no file yet.
@@ -46,7 +47,8 @@ const Saved = z.object({
   autoArchiveDays: ChatSettings.shape.autoArchiveDays.unwrap().catch(DEFAULTS.autoArchiveDays),
   worktreeCleanDays: ChatSettings.shape.worktreeCleanDays.unwrap().catch(DEFAULTS.worktreeCleanDays),
   resetAnnouncements: z.boolean().catch(DEFAULTS.resetAnnouncements),
-  disabledAgents: ChatSettings.shape.disabledAgents.unwrap().catch(DEFAULTS.disabledAgents)
+  disabledAgents: ChatSettings.shape.disabledAgents.unwrap().catch(DEFAULTS.disabledAgents),
+  pullRequestAutoAccept: z.boolean().catch(DEFAULTS.pullRequestAutoAccept)
 }).catch(DEFAULTS)
 
 // Machine-level, like keeping the computer awake: every window and every chat goes by the same.
@@ -101,7 +103,8 @@ export class ChatSettingsStore {
       autoArchiveDays: patch.autoArchiveDays === undefined ? this.settings.autoArchiveDays : patch.autoArchiveDays,
       worktreeCleanDays: patch.worktreeCleanDays === undefined ? this.settings.worktreeCleanDays : patch.worktreeCleanDays,
       resetAnnouncements: patch.resetAnnouncements ?? this.settings.resetAnnouncements,
-      disabledAgents: patch.disabledAgents ?? this.settings.disabledAgents
+      disabledAgents: patch.disabledAgents ?? this.settings.disabledAgents,
+      pullRequestAutoAccept: patch.pullRequestAutoAccept ?? this.settings.pullRequestAutoAccept
     }
     await writePrivateJson(this.file, { version: 1, ...next })
     this.settings = next

@@ -62,7 +62,10 @@ export const ChatSettings = z.object({
   resetAnnouncements: z.boolean().optional(),
   // The agents the user turned off on the desktop, mirrored so that core delegates to none of them.
   // Older cores omit it.
-  disabledAgents: z.array(AgentKind).optional()
+  disabledAgents: z.array(AgentKind).optional(),
+  // Whether core accepts a task on the user's behalf once every pull request of its branches is
+  // merged (checkAcceptOnMerge). Off by default. Older cores omit it.
+  pullRequestAutoAccept: z.boolean().optional()
 })
 export type ChatSettings = z.infer<typeof ChatSettings>
 

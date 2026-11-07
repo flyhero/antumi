@@ -43,7 +43,7 @@ import { ModelProvider, ModelProviderId, ModelProviderInput, ModelProviderModels
 import { AgentAccount, AgentAccountId, AgentAccounts } from './agent-account'
 import { ExternalSession, ExternalSessionRef } from './session-import'
 import { ProjectStarIdentity, ProjectStarResult, ProjectStarStatus } from './project-star'
-import { PullRequestDraft, PullRequestEligibility, PullRequestHandoffKind, PullRequestLink } from './pull-request'
+import { PullRequestDraft, PullRequestEligibility, PullRequestHandoffKind, PullRequestLink, PullRequestMergeMethod } from './pull-request'
 import { Bookmark, BookmarkFields, BookmarkImport, MAX_BOOKMARKS } from './bookmarks'
 import { BrowserHistoryEntry, BrowserHistorySearch } from './browser-history'
 
@@ -867,7 +867,10 @@ export const rpcMethods = {
   // Sends the failed checks or the review comments named into the task's chat for its agent to
   // work on; a task handed in goes back to running, as any message to it does. Refused while the
   // agent is mid-turn (chat-busy).
-  'pullRequests.handoff': { params: PullRequestRepoParams.extend({ kind: PullRequestHandoffKind, ids: z.array(z.string().min(1).max(200)).min(1).max(50) }), result: Task }
+  'pullRequests.handoff': { params: PullRequestRepoParams.extend({ kind: PullRequestHandoffKind, ids: z.array(z.string().min(1).max(200)).min(1).max(50) }), result: Task },
+  // Merges on the host, only while its head is still the commit the client saw; the remote branch
+  // stays, as the worktree holds it.
+  'pullRequests.merge': { params: PullRequestRepoParams.extend({ method: PullRequestMergeMethod, expectedHeadSha: z.string().regex(/^[0-9a-f]{40}$/) }), result: PullRequestLink }
 } as const
 
 export const rpcNotifications = {

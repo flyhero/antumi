@@ -43,7 +43,7 @@ import { ModelProvider, ModelProviderId, ModelProviderInput, ModelProviderModels
 import { AgentAccount, AgentAccountId, AgentAccounts } from './agent-account'
 import { ExternalSession, ExternalSessionRef } from './session-import'
 import { ProjectStarIdentity, ProjectStarResult, ProjectStarStatus } from './project-star'
-import { PullRequestDraft, PullRequestEligibility, PullRequestHandoffKind, PullRequestLink, PullRequestMergeMethod } from './pull-request'
+import { AgentPullRequestRun, PullRequestDraft, PullRequestEligibility, PullRequestHandoffKind, PullRequestLink, PullRequestMergeMethod } from './pull-request'
 import { Bookmark, BookmarkFields, BookmarkImport, MAX_BOOKMARKS } from './bookmarks'
 import { BrowserHistoryEntry, BrowserHistorySearch } from './browser-history'
 
@@ -870,7 +870,13 @@ export const rpcMethods = {
   'pullRequests.handoff': { params: PullRequestRepoParams.extend({ kind: PullRequestHandoffKind, ids: z.array(z.string().min(1).max(200)).min(1).max(50) }), result: Task },
   // Merges on the host, only while its head is still the commit the client saw; the remote branch
   // stays, as the worktree holds it.
-  'pullRequests.merge': { params: PullRequestRepoParams.extend({ method: PullRequestMergeMethod, expectedHeadSha: z.string().regex(/^[0-9a-f]{40}$/) }), result: PullRequestLink }
+  'pullRequests.merge': { params: PullRequestRepoParams.extend({ method: PullRequestMergeMethod, expectedHeadSha: z.string().regex(/^[0-9a-f]{40}$/) }), result: PullRequestLink },
+  // An agent opening a pull request for its task, called by Antumi's MCP server for the
+  // conversation it serves; the user confirms in the chat where the agent asks nothing itself.
+  'pullRequests.agentCreate': {
+    params: z.object({ conversationId: z.string().uuid(), repoPath: z.string().min(1).optional(), base: PullRequestBase.optional(), title: z.string().trim().min(1).max(256), body: z.string().max(65_536), draft: z.boolean() }),
+    result: AgentPullRequestRun
+  }
 } as const
 
 export const rpcNotifications = {

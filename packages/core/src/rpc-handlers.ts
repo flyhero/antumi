@@ -63,6 +63,7 @@ import type { UsageAnalytics } from './usage-analytics'
 import type { UsageAutomation } from './usage-automation'
 import type { ProjectStar } from './project-star'
 import { GitHubClient } from './github-client'
+import { AgentPullRequests } from './agent-pull-requests'
 import { parsePullRequestDraft, pullRequestPrompt } from './pull-request-draft'
 import { PullRequestService } from './pull-request-service'
 import type { PullRequestStore } from './pull-request-store'
@@ -150,6 +151,16 @@ export function createRpcHandlers(
   const requirePullRequests = (): PullRequestService => {
     if (!pullRequests) throw new Rejection('pull-requests-unavailable')
     return pullRequests
+  }
+  // An agent's own pull requests, asked about in the chat where the agent asks nothing for MCP tools.
+  const agentPullRequests = pullRequests ? new AgentPullRequests(
+    (id) => { const conversation = conversations.get(id); return { agent: conversation.agent, taskId: conversation.taskId ?? null, readOnly: conversation.workspaceReadOnly ?? false } },
+    pullRequests,
+    (id, title, detail) => conversations.askPullRequest(id, title, detail)
+  ) : undefined
+  const requireAgentPullRequests = (): AgentPullRequests => {
+    if (!agentPullRequests) throw new Rejection('pull-requests-unavailable')
+    return agentPullRequests
   }
   const requireProjectConfigs = (): ProjectConfigStore => {
     if (!projectConfigs) throw new Rejection('project-config-unavailable')
@@ -255,6 +266,7 @@ export function createRpcHandlers(
     'pullRequests.unlink': ({ taskId, repoPath }) => { requirePullRequests().unlink(taskId, repoPath); return OK },
     'pullRequests.watch': ({ taskId, open }, connection) => { requirePullRequests().watch(taskId, open, connection); return OK },
     'pullRequests.merge': ({ taskId, repoPath, method, expectedHeadSha }) => requirePullRequests().merge(taskId, repoPath, method, expectedHeadSha),
+    'pullRequests.agentCreate': ({ conversationId, ...fields }) => requireAgentPullRequests().run(conversationId, fields),
     'pullRequests.handoff': ({ taskId, repoPath, kind, ids }) => {
       const { conversationId } = service.get(taskId)
       const run = () => requirePullRequests().handoff(taskId, repoPath, kind, ids)

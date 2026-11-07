@@ -2,6 +2,7 @@ import { agentToolsOverCore } from './mcp-agent-tools'
 import { bookmarkToolsOverCore } from './mcp-bookmark-tools'
 import { squadToolsOverCore, type SquadTools } from './mcp-squad-tools'
 import { todoToolsOverCore } from './mcp-todo-tools'
+import { pullRequestToolsOverCore } from './mcp-pull-request-tools'
 import { managementToolsOverCore } from './mcp-management-tools'
 import readline from 'node:readline'
 import { stat } from 'node:fs/promises'
@@ -91,6 +92,8 @@ export type McpTools = {
   management?: Awaited<ReturnType<typeof managementToolsOverCore>>
   // The conversation's to-dos, there when the server was started for one.
   todo?: ReturnType<typeof todoToolsOverCore>
+  // The task's pull requests, there when core has them and the server serves a conversation.
+  pullRequests?: ReturnType<typeof pullRequestToolsOverCore>
 }
 
 export type McpResponse = {
@@ -119,7 +122,7 @@ const describe = (error: unknown) => (error instanceof Error ? error.message : S
 // arguments are the model's to fix, so they come back as a tool error it can read.
 type ToolEntry = { spec: object & { name: string }; run(args: Record<string, unknown>): Promise<McpResult> }
 
-function toolTable({ preview, browser, bookmarks, terminal, history, squad, agents, management, todo, planOnly }: McpTools): ToolEntry[] {
+function toolTable({ preview, browser, bookmarks, terminal, history, squad, agents, management, todo, pullRequests, planOnly }: McpTools): ToolEntry[] {
   const entries: ToolEntry[] = [
     {
       spec: PREVIEW_TOOL,
@@ -191,6 +194,7 @@ function toolTable({ preview, browser, bookmarks, terminal, history, squad, agen
   if (management) entries.push(...management.filter((entry) => !planOnly || entry.spec.annotations.readOnlyHint))
   // Antumi's list, not the checkout: a planning agent writes to it too.
   if (todo) entries.push(...todo)
+  if (pullRequests) entries.push(...pullRequests.filter((entry) => !planOnly || entry.spec.annotations.readOnlyHint))
   return entries
 }
 
@@ -294,7 +298,8 @@ export async function serveMcp(home: string | undefined, conversationId?: string
       browser: browserToolsOverCore(withCore, conversationId, new AttachmentStore(antumiPaths(home).attachments)),
       bookmarks: bookmarkToolsOverCore(withCore),
       terminal: terminalToolsOverCore(withCore, conversationId),
-      ...(todos && scope?.todos !== false ? { todo: todoToolsOverCore(withCore, conversationId) } : {})
+      ...(todos && scope?.todos !== false ? { todo: todoToolsOverCore(withCore, conversationId) } : {}),
+      ...(scope?.features.includes('pull-requests') ? { pullRequests: pullRequestToolsOverCore(withCore, conversationId) } : {})
     } : {}),
     ...(history ? { history: historyToolsOverCore(withCore, conversationId ?? null) } : {})
   })

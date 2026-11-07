@@ -1,8 +1,9 @@
-import { AGENT_CALL_TOOLS, MANAGEMENT_TOOLS, SQUAD_TOOL_NAMES, antumiToolName, type ChatItem } from '@antumi/protocol'
+import { AGENT_CALL_TOOLS, MANAGEMENT_TOOLS, PULL_REQUEST_TOOLS, SQUAD_TOOL_NAMES, antumiToolName, type ChatItem } from '@antumi/protocol'
 import { t, type MessageKey } from './i18n'
 
 type ToolName = typeof MANAGEMENT_TOOLS[keyof typeof MANAGEMENT_TOOLS]
   | typeof AGENT_CALL_TOOLS[keyof typeof AGENT_CALL_TOOLS] | typeof SQUAD_TOOL_NAMES[keyof typeof SQUAD_TOOL_NAMES]
+  | typeof PULL_REQUEST_TOOLS[keyof typeof PULL_REQUEST_TOOLS]
 type Definition = { label: MessageKey; icon: 'agent' | 'list' | 'edit' | 'search'; subject: 'name' | 'title' | 'id' | 'query' | 'url' | 'delegation' | 'member' | 'schedule' | 'summary' | null }
 
 const definitions = {
@@ -32,7 +33,9 @@ const definitions = {
   [AGENT_CALL_TOOLS.resume]: { label: 'antumiTools.agentResume', icon: 'agent', subject: 'delegation' },
   [SQUAD_TOOL_NAMES.roster]: { label: 'antumiTools.squadRoster', icon: 'agent', subject: null },
   [SQUAD_TOOL_NAMES.dispatch]: { label: 'antumiTools.squadDispatch', icon: 'agent', subject: 'member' },
-  [SQUAD_TOOL_NAMES.finish]: { label: 'antumiTools.squadFinish', icon: 'agent', subject: 'summary' }
+  [SQUAD_TOOL_NAMES.finish]: { label: 'antumiTools.squadFinish', icon: 'agent', subject: 'summary' },
+  [PULL_REQUEST_TOOLS.status]: { label: 'antumiTools.pullRequestStatus', icon: 'list', subject: null },
+  [PULL_REQUEST_TOOLS.create]: { label: 'antumiTools.pullRequestCreate', icon: 'edit', subject: 'title' }
 } as const satisfies Record<ToolName, Definition>
 
 const tools = new Map(Object.entries(definitions))

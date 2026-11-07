@@ -31,7 +31,8 @@ const LogLine = z.discriminatedUnion('dir', [
     requestId: z.string(),
     ask: z.discriminatedUnion('kind', [
       z.object({ kind: z.literal('browser-host'), host: z.string(), url: z.string() }),
-      z.object({ kind: z.literal('terminal-run'), command: z.string(), cwd: z.string() })
+      z.object({ kind: z.literal('terminal-run'), command: z.string(), cwd: z.string() }),
+      z.object({ kind: z.literal('pull-request'), title: z.string(), detail: z.string() })
     ])
   }),
   z.object({

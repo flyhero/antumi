@@ -1,4 +1,4 @@
-import { BROWSER_HOST_TOOL, TERMINAL_RUN_TOOL } from '@antumi/protocol'
+import { BROWSER_HOST_TOOL, PULL_REQUEST_TOOLS, TERMINAL_RUN_TOOL } from '@antumi/protocol'
 import type { ChatRecord } from './chat-driver'
 import type { ChatItems } from './chat-items'
 
@@ -27,9 +27,9 @@ export class AntumiRequests {
         id,
         kind: 'approval',
         requestId: record.requestId,
-        tool: ask.kind === 'terminal-run' ? TERMINAL_RUN_TOOL : BROWSER_HOST_TOOL,
-        title: ask.kind === 'terminal-run' ? ask.command : ask.host,
-        detail: ask.kind === 'terminal-run' ? ask.cwd : ask.url,
+        tool: ask.kind === 'terminal-run' ? TERMINAL_RUN_TOOL : ask.kind === 'pull-request' ? PULL_REQUEST_TOOLS.create : BROWSER_HOST_TOOL,
+        title: ask.kind === 'terminal-run' ? ask.command : ask.kind === 'pull-request' ? ask.title : ask.host,
+        detail: ask.kind === 'terminal-run' ? ask.cwd : ask.kind === 'pull-request' ? ask.detail : ask.url,
         toolItemId: null,
         decisions: ['allow', 'allowForSession', 'deny'],
         resolution: null

@@ -1739,6 +1739,13 @@ export class ConversationService {
     return new Promise((resolve, reject) => this.asks.set(requestId, { resolve, reject }))
   }
 
+  // Asks the user, in the running chat, whether the agent may open the pull request it drafted
+  // (its title, and branch → base); the same card and answers again.
+  askPullRequest(id: string, title: string, detail: string): Promise<ChatDecision> {
+    const requestId = this.chats.ask(id, { kind: 'pull-request', title, detail })
+    return new Promise((resolve, reject) => this.asks.set(requestId, { resolve, reject }))
+  }
+
   // A question of Antumi's answered as cancelled (the agent went, the stage was replayed) has
   // nobody left to tell; its waiter learns so here.
   private settleAsks(items: readonly ChatItem[]): void {

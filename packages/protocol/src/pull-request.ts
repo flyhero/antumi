@@ -121,6 +121,22 @@ export type PullRequestMergeMethod = z.infer<typeof PullRequestMergeMethod>
 export const PullRequestHandoffKind = z.enum(['checks', 'reviews'])
 export type PullRequestHandoffKind = z.infer<typeof PullRequestHandoffKind>
 
+// Antumi's MCP tools for the agent of a task: what its pull requests stand at, and opening one,
+// which the user confirms in the chat first where the agent asks nothing for MCP tools.
+export const PULL_REQUEST_TOOLS = {
+  status: 'antumi_pull_request_status',
+  create: 'antumi_pull_request_create'
+} as const
+
+// How an agent's request to open a pull request went: opened (or found already open), waiting on
+// the user, or refused by them.
+export const AgentPullRequestRun = z.discriminatedUnion('outcome', [
+  z.object({ outcome: z.literal('created'), link: PullRequestLink }),
+  z.object({ outcome: z.literal('awaiting') }),
+  z.object({ outcome: z.literal('denied') })
+])
+export type AgentPullRequestRun = z.infer<typeof AgentPullRequestRun>
+
 export type AcceptOnMergeBlocker = 'not-finished' | 'not-merged'
 
 // A task whose work is merged on the host can be accepted on the strength of that: it is still the

@@ -12974,4 +12974,6 @@ export const MESSAGES = {
   "PullRequest.mergeMethod.merge": {"zh": "合并提交", "en": "Merge commit"},
   "PullRequest.mergeMethod.rebase": {"zh": "变基合并", "en": "Rebase and merge"},
   "PullRequest.mergeConfirm": {"zh": "把 PR #{number} 以「{method}」合入 {base}？远端分支会保留。", "en": "Merge PR #{number} into {base} with “{method}”? The remote branch stays."},
+  "antumiTools.pullRequestStatus": {"zh": "查看 PR 状态", "en": "Check PR status"},
+  "antumiTools.pullRequestCreate": {"zh": "创建 PR", "en": "Create PR"},
 } as const

@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process'
+import { realpathSync } from 'node:fs'
 import { promisify } from 'node:util'
 import { checkAcceptOnMerge, type GitTarget, type PullRequestBlocker, type PullRequestCheck, type PullRequestComment, type PullRequestEligibility, type PullRequestHandoffKind, type PullRequestLink, type PullRequestMergeMethod, type PullRequestRepo, type PullRequestReview, type PullRequestStatus, type Task, type TaskRepo } from '@antumi/protocol'
 import { gitOrNull } from './git-changes'
@@ -52,6 +53,14 @@ function statusOf(pull: GitHubPull, parts: { checks: PullRequestCheck[]; reviews
 }
 
 const EMPTY_PARTS = { checks: [], reviews: [], comments: [] }
+
+function realPath(folder: string): string {
+  try {
+    return realpathSync.native(folder)
+  } catch {
+    return folder
+  }
+}
 
 // The base a task's branch would go into, as the host names it: the branch it started from, with
 // the remote's name taken off. A start at a commit or at HEAD names no branch.
@@ -204,7 +213,8 @@ export class PullRequestService {
     return Promise.all(this.writableRepos(task, repoPath).map((repo) => this.checkRepo(task, repo)))
   }
 
-  async create(fields: CreateFields): Promise<PullRequestLink> {
+  // byAgent: the task's own agent asked, through Antumi's tools, from within its turn.
+  async create(fields: CreateFields, { byAgent = false }: { byAgent?: boolean } = {}): Promise<PullRequestLink> {
     const task = this.tasks.get(fields.taskId)
     const repo = this.writableRepos(task, fields.repoPath)[0]
     if (!repo) throw new Rejection('repo-not-found')
@@ -214,7 +224,7 @@ export class PullRequestService {
     if (!eligibility.repo || !eligibility.headBranch || !eligibility.base) throw new Rejection('pull-request-not-github')
     if (eligibility.headBranch !== fields.from) throw new Rejection('git-branch-changed', `当前分支已经是 ${eligibility.headBranch}，不是对话框里的 ${fields.from}。请刷新后再试。`)
     const target: GitTarget = { kind: 'task', id: task.id, project: repo.path }
-    if (eligibility.needsPush) await this.git.execute(target, { kind: 'push', from: fields.from })
+    if (eligibility.needsPush) await this.git.execute(target, { kind: 'push', from: fields.from }, { ownTurn: byAgent })
     let pull: GitHubPull
     try {
       pull = await this.client.createPull(eligibility.repo, { title: fields.title, body: fields.body, head: eligibility.headBranch, base: eligibility.base, draft: fields.draft })
@@ -323,7 +333,9 @@ export class PullRequestService {
   }
 
   private writableRepos(task: Task, repoPath?: string): TaskRepo[] {
-    const repos = task.repos.filter((repo) => !repo.reference && (!repoPath || repo.path === repoPath))
+    const named = repoPath ? realPath(repoPath) : null
+    // An agent names the folder it works in: the worktree, often by its real path (/private/tmp).
+    const repos = task.repos.filter((repo) => !repo.reference && (!named || [repo.path, repo.worktreePath].some((folder) => folder !== null && (folder === repoPath || realPath(folder) === named))))
     if (repoPath && repos.length === 0) throw new Rejection('repo-not-found')
     return repos
   }

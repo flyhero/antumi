@@ -21,7 +21,7 @@ describe('AgentPullRequests', () => {
     const h = harness('claude')
     expect(await h.gate.run('c1', fields)).toEqual({ outcome: 'created', link })
     expect(h.ask).not.toHaveBeenCalled()
-    expect(h.create).toHaveBeenCalledWith({ taskId: 'task', repoPath: '/repo', base: 'main', title: 'Add PRs', body: 'Why.', draft: false, from: 'antumi/abc' })
+    expect(h.create).toHaveBeenCalledWith({ taskId: 'task', repoPath: '/repo', base: 'main', title: 'Add PRs', body: 'Why.', draft: false, from: 'antumi/abc' }, { byAgent: true })
   })
 
   it('asks in the chat for one that asks nothing, and opens once the user says yes', async () => {
@@ -63,7 +63,7 @@ describe('AgentPullRequests', () => {
     await expect(dirty.gate.run('c1', fields)).rejects.toMatchObject({ reason: 'pull-request-dirty' })
     const fallback = harness('claude', { ...ready, blocker: 'base-missing', base: 'antumi/dep', baseFallback: 'main' })
     await fallback.gate.run('c1', fields)
-    expect(fallback.create).toHaveBeenCalledWith(expect.objectContaining({ base: 'main' }))
+    expect(fallback.create).toHaveBeenCalledWith(expect.objectContaining({ base: 'main' }), { byAgent: true })
   })
 
   it('needs a task conversation', async () => {

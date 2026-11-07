@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -149,6 +149,24 @@ describe('PullRequestService', () => {
     expect(link).toMatchObject({ number: 9, url: 'https://github.com/flyhero/antumi/pull/9', headBranch: 'antumi/abc', base: 'main', fetchedAt: now, status: expect.objectContaining({ state: 'open', draft: false }) })
     expect(store.get(task.id, repo)?.number).toBe(9)
     expect((await service.check(task.id))[0]).toMatchObject({ blocker: 'existing-pr', existing: expect.objectContaining({ number: 9 }) })
+  })
+
+  it('knows the project by its worktree, as an agent names the folder it works in', async () => {
+    expect((await service.check(task.id, worktree))[0]?.repoPath).toBe(repo)
+    // The real path, as the agent sees it, of a worktree core knows by another.
+    const linked = path.join(root, 'link-to-wt')
+    symlinkSync(worktree, linked)
+    task = Task.parse({ ...task, repos: [{ ...task.repos[0]!, worktreePath: linked }] })
+    expect((await service.check(task.id, worktree))[0]?.repoPath).toBe(repo)
+    await expect(service.check(task.id, path.join(root, 'elsewhere'))).rejects.toMatchObject({ reason: 'repo-not-found' })
+  })
+
+  it('pushes for the agent that asked from within its turn, not for anyone else', async () => {
+    reply = (call) => call.method === 'POST' ? Response.json(pull({ number: 9 })) : Response.json([])
+    const execute = vi.spyOn(GitService.prototype, 'execute')
+    await service.create({ taskId: task.id, repoPath: repo, base: 'main', title: 'T', body: '', draft: false, from: 'antumi/abc' }, { byAgent: true })
+    expect(execute).toHaveBeenCalledWith(expect.objectContaining({ kind: 'task' }), { kind: 'push', from: 'antumi/abc' }, { ownTurn: true })
+    execute.mockRestore()
   })
 
   it('takes the pull request GitHub says already exists rather than failing', async () => {

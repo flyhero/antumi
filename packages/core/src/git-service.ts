@@ -260,7 +260,9 @@ export class GitService {
     return outgoingCommits(dir, status, remote, name, { remoteAt: remoteIn(status), validName: validBranchName(dir) })
   }
 
-  async execute(target: GitTarget, action: GitAction): Promise<GitResult> {
+  // ownTurn: the agent of this checkout asked for it from within its turn (opening a pull request
+  // through Antumi's tools) and waits on it, so its turn running is no reason to refuse.
+  async execute(target: GitTarget, action: GitAction, { ownTurn = false }: { ownTurn?: boolean } = {}): Promise<GitResult> {
     const dir = this.directory(target)
     const key = await repositoryKey(dir)
     if (!key) throw new Rejection('repo-not-git')
@@ -269,7 +271,7 @@ export class GitService {
     this.changed()
     try {
       const status = await this.status(target)
-      const blocker = checkGitOperation(target.kind, action, await this.busy(dir), status)
+      const blocker = checkGitOperation(target.kind, action, !ownTurn && await this.busy(dir), status)
       if (blocker) throw new Rejection(blocker)
       const binding = await this.taskAt(dir)
       const expectedBranch = target.kind === 'task' ? this.tasks.get(target.id).repos.find((repo) => repo.path === target.project)?.branch : binding?.repo.branch

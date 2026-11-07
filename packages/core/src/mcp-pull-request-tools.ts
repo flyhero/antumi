@@ -57,7 +57,7 @@ export function pullRequestToolsOverCore(withCore: WithCore, conversationId: str
     {
       spec: {
         name: PULL_REQUEST_TOOLS.create,
-        description: '为这个任务的分支在 GitHub 上开 pull request：先提交全部改动，Antumi 会推送分支再创建。title 是标题，body 是说明（写为什么改、行为有什么不同），base 不给就用分支的起点或仓库默认分支，draft 为 true 开草稿。' +
+        description: '为这个任务的分支在 GitHub 上开 pull request：先提交全部改动，Antumi 会推送分支再创建。title 是标题，body 是说明（写为什么改、行为有什么不同），base 不给就用分支的起点或仓库默认分支，draft 为 true 开草稿；repoPath 只在任务有多个项目时才需要，填项目路径或你所在的工作目录都行。' +
           '可能要用户先在对话里确认：返回「等待用户确认」时先停下，等用户同意后再用同样的参数调用一次。分支已经有 PR 时返回那个。',
         inputSchema: z.toJSONSchema(CreateInput),
         annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true }

@@ -58,7 +58,7 @@ export class AgentPullRequests {
       if (decision === 'deny') return { outcome: 'denied' }
       this.takeOnce(conversationId, key)
     }
-    const link = await this.pullRequests.create({ taskId: owner.taskId, repoPath: eligibility.repoPath, base, title: fields.title, body: fields.body, draft: fields.draft, from: headBranch })
+    const link = await this.pullRequests.create({ taskId: owner.taskId, repoPath: eligibility.repoPath, base, title: fields.title, body: fields.body, draft: fields.draft, from: headBranch }, { byAgent: true })
     return { outcome: 'created', link }
   }
 

@@ -1,10 +1,11 @@
 import { t, tr } from '../i18n'
 import { agentLabel } from '../labels'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { ListeningPort } from '@antumi/protocol'
 import { setPortsMaximized, showTerminal, togglePortsPanel, useCore } from '../core-store'
 import { openPort, portGroups, portKey, stopPort, usePorts } from '../port-state'
 import { ChatPicker } from './ChatPicker'
+import { Popover } from './Popover'
 import { AgentIcon, CloseIcon, GlobeIcon, MaximizeIcon, PortsIcon, RestoreIcon, TerminalIcon } from './icons'
 import './ports-panel.css'
 
@@ -15,6 +16,8 @@ function PortRow({ port }: { port: ListeningPort }) {
   const connected = useCore((s) => s.connection === 'connected')
   const processName = port.command.split(/[\\/]/).at(-1) ?? port.command
   const terminalExists = useCore((s) => s.terminals.some((each) => each.id === port.terminalId))
+  // Stable, as Popover re-binds its outside-click listener whenever onClose changes.
+  const closeConfirm = useCallback(() => setConfirm(false), [])
   const stop = async () => {
     setBusy(true)
     try { if (await stopPort(port)) setConfirm(false) } finally { setBusy(false) }
@@ -26,9 +29,11 @@ function PortRow({ port }: { port: ListeningPort }) {
       <div className="port-actions">
         {browserSupported && <button type="button" className="link-button" disabled={busy || !connected} onClick={() => void openPort(port)}>{tr('PortsPanel.openPage', { value1: <GlobeIcon /> })}</button>}
         {port.terminalId && <button type="button" className="link-button" disabled={busy || !terminalExists} onClick={() => port.terminalId && showTerminal(port.terminalId)}>{tr('PortsPanel.terminal', { value1: <TerminalIcon /> })}</button>}
-        <button type="button" className="link-button port-stop" disabled={busy || !connected || !port.canStop} data-tooltip={!port.canStop ? t('PortsPanel.thisIsAnAgentProcessAndCannotBe') : undefined} onClick={() => setConfirm(!confirm)}>{busy ? t('ConversationChat.stopping') : t('DiscussionView.stop')}</button>
+        <span className="menu-anchor">
+          <button type="button" className="link-button port-stop" aria-haspopup="dialog" aria-expanded={confirm} disabled={busy || !connected || !port.canStop} data-tooltip={!port.canStop ? t('PortsPanel.thisIsAnAgentProcessAndCannotBe') : undefined} onClick={() => setConfirm(!confirm)}>{busy ? t('ConversationChat.stopping') : t('DiscussionView.stop')}</button>
+          {confirm && <Popover label={t('PortsPanel.stopServiceOnPort', { value1: port.port })} onClose={closeConfirm} side="above"><div className="port-confirm"><span>{tr('PortsPanel.stop', { value1: port.label ?? t('PortsPanel.service'), value2: port.port })}</span><span className="muted">{t('PortsPanel.theTerminalTabWillBeKept')}</span><div><button type="button" className="button danger small" disabled={busy} onClick={() => void stop()}>{t('PortsPanel.stopService')}</button><button type="button" className="button ghost small" disabled={busy} onClick={closeConfirm}>{t('ChatCommandSettings.cancel')}</button></div></div></Popover>}
+        </span>
       </div>
-      {confirm && <div className="port-confirm" role="group" aria-label={t('PortsPanel.stopServiceOnPort', { value1: port.port })}><span>{tr('PortsPanel.stop', { value1: port.label ?? t('PortsPanel.service'), value2: port.port })}</span><span className="muted">{t('PortsPanel.theTerminalTabWillBeKept')}</span><div><button type="button" className="button danger small" disabled={busy} onClick={() => void stop()}>{t('PortsPanel.stopService')}</button><button type="button" className="button ghost small" disabled={busy} onClick={() => setConfirm(false)}>{t('ChatCommandSettings.cancel')}</button></div></div>}
     </div>
   )
 }

@@ -6,8 +6,9 @@ import { useOccludesBrowser } from '../browser-occlusion'
 // the stylesheet puts it beside the trigger, then lifted into the top layer at that spot, so no
 // pane that clips or panel that overlaps can hide it; there it follows the trigger as the page
 // scrolls, and keeps within the window as it grows. `align="end"` puts its right edge on the
-// trigger's, as for a trigger at the end of a row.
-export function Popover({ label, onClose, align = 'start', children }: { label: string; onClose: () => void; align?: 'start' | 'end'; children: ReactNode }) {
+// trigger's, as for a trigger at the end of a row; `side="above"` opens it over the trigger, so it
+// covers the row it acts on rather than the ones below.
+export function Popover({ label, onClose, align = 'start', side = 'below', children }: { label: string; onClose: () => void; align?: 'start' | 'end'; side?: 'below' | 'above'; children: ReactNode }) {
   useOccludesBrowser()
   const panel = useRef<HTMLDivElement>(null)
 
@@ -16,11 +17,12 @@ export function Popover({ label, onClose, align = 'start', children }: { label: 
     const trigger = element?.parentElement
     if (!element || !trigger) return
     const { clientWidth, clientHeight } = document.documentElement
-    // Flip when the trigger sits too close to the right or bottom edge.
+    // Flip when the trigger sits too close to the right edge, or to the edge it opens towards.
     let box = element.getBoundingClientRect()
     if (box.right > clientWidth - 8) element.classList.add('menu-end')
     box = element.getBoundingClientRect()
-    if (box.bottom > clientHeight - 8 && box.top > box.height + 8) element.classList.add('menu-up')
+    if (side === 'below' && box.bottom > clientHeight - 8 && box.top > box.height + 8) element.classList.add('menu-up')
+    if (side === 'above' && box.top < 8 && box.bottom + box.height + 8 < clientHeight) element.classList.remove('menu-up')
     box = element.getBoundingClientRect()
     const anchor = trigger.getBoundingClientRect()
     // Where it sits against the trigger, kept as the trigger moves: over or under it, and how far.
@@ -67,7 +69,8 @@ export function Popover({ label, onClose, align = 'start', children }: { label: 
       // Back where the stylesheet puts it, should the effect run again on the same element.
       element.hidePopover()
       element.popover = null
-      element.classList.remove('menu-lifted', 'menu-up')
+      element.classList.remove('menu-lifted')
+      element.classList.toggle('menu-up', side === 'above')
       if (align !== 'end') element.classList.remove('menu-end')
       for (const side of ['left', 'top', 'right', 'bottom'] as const) element.style[side] = ''
     }
@@ -100,7 +103,7 @@ export function Popover({ label, onClose, align = 'start', children }: { label: 
   }, [onClose])
 
   return (
-    <div className={align === 'end' ? 'menu menu-end' : 'menu'} ref={panel} role="dialog" aria-label={label}>
+    <div className={['menu', align === 'end' ? 'menu-end' : '', side === 'above' ? 'menu-up' : ''].filter(Boolean).join(' ')} ref={panel} role="dialog" aria-label={label}>
       {children}
     </div>
   )

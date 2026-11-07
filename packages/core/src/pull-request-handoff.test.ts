@@ -22,6 +22,17 @@ describe('checksPrompt', () => {
     expect(prompt).toContain('不要 push')
   })
 
+  it('puts the end of a log core read under its check, and names the repo for gh otherwise', () => {
+    const withRepo = { ...link, repo: { owner: 'flyhero', name: 'antumi-pr-test' } }
+    const prompt = checksPrompt(withRepo, [
+      { id: 'run:1', name: 'ok-file', state: 'failure', url: 'https://github.com/flyhero/antumi-pr-test/actions/runs/9/job/8', completedAt: null, log: 'ok.txt is missing\nError: Process completed with exit code 1.' },
+      { id: 'run:2', name: 'lint', state: 'failure', url: 'https://github.com/flyhero/antumi-pr-test/actions/runs/9/job/7', completedAt: null, log: null }
+    ])
+    expect(prompt).toContain('- ok-file：https://github.com/flyhero/antumi-pr-test/actions/runs/9/job/8\n  日志末尾：\n    ok.txt is missing\n    Error: Process completed with exit code 1.')
+    expect(prompt).toContain('gh run view 9 -R flyhero/antumi-pr-test --log-failed')
+    expect(prompt.indexOf('日志末尾')).toBeLessThan(prompt.indexOf('</untrusted-source>'))
+  })
+
   it('reads the run out of an Actions URL only', () => {
     expect(actionsRun('https://github.com/o/r/actions/runs/99/job/1')).toBe('99')
     expect(actionsRun('https://ci.example.com/build/99')).toBeNull()

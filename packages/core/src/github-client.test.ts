@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { PullRequestRepo } from '@antumi/protocol'
 import type { SourceCredential } from './source-provider'
-import { GitHubClient, GitHubError, type GhAccount } from './github-client'
+import { GitHubClient, GitHubError, logTail, type GhAccount } from './github-client'
 
 type Call = { path: string; method: string; token: string; body: unknown; signal: AbortSignal | null | undefined; redirect: string | undefined }
 type Reply = (call: Call) => Response
@@ -153,6 +153,38 @@ describe('GitHubClient', () => {
         : Response.json([{ id: 4, user: { login: 'bob' }, body: 'LGTM', html_url: 'https://github.com/c/4', created_at: '2026-11-07T11:00:00Z' }]))
     expect(await h.client.reviews(repo, 7)).toEqual([{ id: 'review:1', author: 'ann', state: 'changes_requested', body: 'Fix it', submittedAt: Date.parse('2026-11-07T10:00:00Z') }])
     expect((await h.client.comments(repo, 7)).map(({ id, path, line }) => [id, path, line])).toEqual([['diff:3', 'src/a.ts', 12], ['issue:4', null, null]])
+  })
+
+  it('reads the end of an Actions job log from GitHub log storage, without the token', async () => {
+    const storage = 'https://productionresultssa7.blob.core.windows.net/actions-results/x/job-logs.txt?sig=abc'
+    const lines = Array.from({ length: 200 }, (_, index) => `2026-11-07T10:51:22.1234567Z \x1b[36mline ${index}\x1b[0m`)
+    const h = harness((call) => call.path.endsWith('/actions/jobs/42/logs')
+      ? new Response(null, { status: 302, headers: { location: storage } })
+      : call.path.startsWith('/actions-results/')
+        ? new Response(`${lines.join('\n')}\n\n`)
+        : Response.json(pull()))
+    const tail = await h.client.jobLogTail(repo, '42', 3)
+    expect(tail).toBe('line 197\nline 198\nline 199')
+    const logCall = h.calls.find((call) => call.path.startsWith('/actions-results/'))
+    expect(logCall).toMatchObject({ token: '', redirect: 'error' })
+    expect(h.calls.find((call) => call.path.endsWith('/logs'))).toMatchObject({ token: 'Bearer gh-secret', redirect: 'manual' })
+  })
+
+  it('keeps the lines up to the failure GitHub marked, not the cleanup after it', () => {
+    const log = ['##[group]Run test -f ok.txt', 'ok.txt is missing', '##[error]Process completed with exit code 1.', 'Post job cleanup.', 'Cleaning up orphan processes'].join('\n')
+    expect(logTail(log, 2)).toBe('ok.txt is missing\n##[error]Process completed with exit code 1.')
+    expect(logTail('a\nb\nc\n', 2)).toBe('b\nc')
+  })
+
+  it('follows a log redirect nowhere but GitHub log storage', async () => {
+    for (const location of ['https://evil.example.com/log.txt', 'http://x.blob.core.windows.net/log.txt', 'not a url']) {
+      const h = harness((call) => call.path.endsWith('/logs') ? new Response(null, { status: 302, headers: { location } }) : Response.json(pull()))
+      expect(await h.client.jobLogTail(repo, '42')).toBeNull()
+      expect(h.asked()).toHaveLength(1)
+    }
+    const gone = harness(() => new Response(null, { status: 410 }))
+    expect(await gone.client.jobLogTail(repo, '42')).toBeNull()
+    expect(await gone.client.jobLogTail(repo, '../42')).toBeNull()
   })
 
   it('keeps a repository default branch with its account for an hour', async () => {

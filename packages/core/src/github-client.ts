@@ -16,6 +16,9 @@ const RATE_LIMIT_FLOOR = 50
 // Which account a repo goes by, and its default branch, are asked again this long on.
 const CHOICE_MS = 60 * 60_000
 const PAGE = 100
+// What of a failed job's log goes to the agent: its end, where the failure is.
+const LOG_LINES = 150
+const MAX_LOG_BYTES = 256 * 1024
 
 // What GitHub refused or failed, in terms every client can explain.
 export class GitHubError extends Error {
@@ -248,6 +251,36 @@ export class GitHubClient {
     ]
   }
 
+  // The end of a GitHub Actions job's log, as plain lines, or null when there is none to read.
+  // GitHub answers with a redirect to a signed, short-lived URL in its log storage: that one
+  // redirect is followed by hand, only to that storage, and without the token.
+  async jobLogTail(repo: PullRequestRepo, jobId: string, lines = LOG_LINES): Promise<string | null> {
+    if (!/^\d{1,20}$/.test(jobId)) return null
+    const { credential } = await this.choose(repo)
+    const limited = this.limitedUntil.get(credential.token) ?? 0
+    if (this.now() < limited) return null
+    let response: Response
+    try {
+      response = await this.fetch(`${API}/repos/${repo.owner}/${repo.name}/actions/jobs/${jobId}/logs`, {
+        method: 'GET', redirect: 'manual', signal: AbortSignal.timeout(TIMEOUT_MS),
+        headers: { accept: 'application/vnd.github+json', authorization: `Bearer ${credential.token}`, 'x-github-api-version': '2022-11-28', 'user-agent': 'Antumi' }
+      })
+    } catch {
+      return null
+    }
+    this.noteRateLimit(credential, response)
+    await response.body?.cancel()
+    const location = logLocation(response)
+    if (!location) return null
+    try {
+      const log = await this.fetch(location, { method: 'GET', redirect: 'error', signal: AbortSignal.timeout(TIMEOUT_MS), headers: { 'user-agent': 'Antumi' } })
+      if (!log.ok || !log.body) { await log.body?.cancel(); return null }
+      return logTail(await readTail(log.body, MAX_LOG_BYTES), lines)
+    } catch {
+      return null
+    }
+  }
+
   // Merges only while the head is still `sha`; GitHub refuses (409) when it moved.
   async merge(repo: PullRequestRepo, number: number, method: PullRequestMergeMethod, sha: string): Promise<void> {
     await this.call(repo, 'PUT', `/repos/${repo.owner}/${repo.name}/pulls/${number}/merge`, { merge_method: method, sha })
@@ -371,3 +404,45 @@ export class GitHubClient {
 }
 
 const repoKey = (repo: PullRequestRepo) => `${repo.owner}/${repo.name}`.toLowerCase()
+
+// Where GitHub keeps Actions logs; a redirect anywhere else is not followed.
+const LOG_HOSTS = ['.blob.core.windows.net', '.actions.githubusercontent.com']
+
+function logLocation(response: Response): string | null {
+  if (response.status !== 302 && response.status !== 301 && response.status !== 307) return null
+  try {
+    const url = new URL(response.headers.get('location') ?? '')
+    return url.protocol === 'https:' && LOG_HOSTS.some((suffix) => url.hostname.endsWith(suffix)) ? url.href : null
+  } catch {
+    return null
+  }
+}
+
+// The last `max` bytes of a stream, so a huge log is never held whole.
+async function readTail(body: ReadableStream<Uint8Array>, max: number): Promise<string> {
+  const reader = body.getReader()
+  let chunks: Uint8Array[] = []
+  let size = 0
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    chunks.push(value)
+    size += value.byteLength
+    while (size - (chunks[0]?.byteLength ?? 0) >= max && chunks.length > 1) size -= chunks.shift()?.byteLength ?? 0
+  }
+  const bytes = Buffer.concat(chunks)
+  chunks = []
+  return bytes.subarray(Math.max(0, bytes.byteLength - max)).toString('utf8')
+}
+
+// The lines as a person reads them: no timestamps GitHub puts in front, no terminal colours. A
+// job's log ends with cleanup after the step that failed; GitHub marks the failure `##[error]`,
+// so the lines leading up to the last mark are kept, not the cleanup.
+export function logTail(text: string, lines: number): string {
+  const clean = text.split(/\r?\n/)
+    .map((line) => line.replace(/^﻿?\d{4}-\d\d-\d\dT[\d:.]+Z ?/, '').replace(/\x1b\[[0-9;]*[A-Za-z]/g, ''))
+  const lastError = clean.findLastIndex((line) => line.startsWith('##[error]'))
+  const upTo = lastError >= 0 ? clean.slice(0, lastError + 1) : clean
+  while (upTo.length > 0 && upTo[upTo.length - 1]?.trim() === '') upTo.pop()
+  return upTo.slice(-lines).join('\n')
+}

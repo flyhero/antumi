@@ -73,6 +73,19 @@ describe('PullRequestService polling', () => {
     expect(pullFetches()).toBe(7)
   })
 
+  it('follows closely again after the user refreshes, as after a push', async () => {
+    store.put(link())
+    service.start()
+    service.watch(taskId, true, watcher())
+    await vi.advanceTimersByTimeAsync(0)
+    await vi.advanceTimersByTimeAsync(30_000 + 60_000 + 120_000)
+    expect(pullFetches()).toBe(4)
+    await service.refresh(taskId, undefined, true)
+    expect(pullFetches()).toBe(5)
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(pullFetches()).toBe(6)
+  })
+
   it('sweeps open pull requests nobody watches every five minutes, and stops once none is open', async () => {
     store.put(link({ fetchedAt: Date.now() }))
     service.start()

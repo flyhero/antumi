@@ -7,7 +7,7 @@ import { GitHubClient, GitHubError, pullRequestProblem, type GitHubPull } from '
 import { githubRemote } from './github-remote'
 import { readProjectConfig } from './project-config'
 import { pullRequestContext, type PullRequestContext } from './pull-request-draft'
-import { checksPrompt, reviewsPrompt } from './pull-request-handoff'
+import { actionsJob, checksPrompt, reviewsPrompt } from './pull-request-handoff'
 import type { PullRequestStore } from './pull-request-store'
 import { Rejection } from './rejection'
 import type { TaskService } from './task-service'
@@ -135,8 +135,16 @@ export class PullRequestService {
     const link = this.store.get(task.id, repoPath)
     if (!link?.status) throw new Rejection('pull-request-not-found', '任务在这个项目里没有 PR，或还没读到它的状态。')
     const wanted = new Set(ids)
+    // Each failed Actions job's log, read as the account the repo goes by: the agent's own gh may
+    // be signed in as one that cannot see the repo. A log that cannot be read is left to the agent.
+    const failed = kind === 'checks'
+      ? await Promise.all(link.status.checks.filter((check) => wanted.has(check.id)).map(async (check) => {
+        const job = actionsJob(check.url)
+        return { ...check, log: job ? await this.client.jobLogTail(link.repo, job).catch(() => null) : null }
+      }))
+      : []
     const text = kind === 'checks'
-      ? checksPrompt(link, link.status.checks.filter((check) => wanted.has(check.id)))
+      ? checksPrompt(link, failed)
       : reviewsPrompt(link, [...link.status.reviews, ...link.status.comments].filter((item) => wanted.has(item.id)))
     const chosen = kind === 'checks' ? link.status.checks.filter((check) => wanted.has(check.id)).length : [...link.status.reviews, ...link.status.comments].filter((item) => wanted.has(item.id)).length
     if (chosen === 0) throw new Rejection('pull-request-nothing-chosen', '选中的检查或意见已经不在 PR 上了，请刷新。')
@@ -226,7 +234,18 @@ export class PullRequestService {
   async refresh(taskId: string, repoPath?: string, force = false): Promise<PullRequestLink[]> {
     const task = this.tasks.get(taskId)
     const links = this.store.list(task.id).filter((link) => !repoPath || link.repoPath === repoPath)
-    return Promise.all(links.map((link) => this.refreshLink(link, force)))
+    const fresh = await Promise.all(links.map((link) => this.refreshLink(link, force)))
+    // Asked for by the user, as after a push: what they wait on (checks rerunning) is about to
+    // change, so a pull request they look at is followed closely again rather than at the pace
+    // it had slowed to.
+    if (force) {
+      for (const link of fresh) {
+        const interval = this.watchers.has(link.taskId) ? WATCH_MIN_MS : SWEEP_MS
+        this.cadence.set(this.keyOf(link), { interval, dueAt: this.now() + interval, failures: 0 })
+      }
+      this.schedule()
+    }
+    return fresh
   }
 
   // What a title and description for the repo's pull request are written from.

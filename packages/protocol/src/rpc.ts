@@ -43,7 +43,7 @@ import { ModelProvider, ModelProviderId, ModelProviderInput, ModelProviderModels
 import { AgentAccount, AgentAccountId, AgentAccounts } from './agent-account'
 import { ExternalSession, ExternalSessionRef } from './session-import'
 import { ProjectStarIdentity, ProjectStarResult, ProjectStarStatus } from './project-star'
-import { PullRequestDraft, PullRequestEligibility, PullRequestLink } from './pull-request'
+import { PullRequestDraft, PullRequestEligibility, PullRequestHandoffKind, PullRequestLink } from './pull-request'
 import { Bookmark, BookmarkFields, BookmarkImport, MAX_BOOKMARKS } from './bookmarks'
 import { BrowserHistoryEntry, BrowserHistorySearch } from './browser-history'
 
@@ -863,7 +863,11 @@ export const rpcMethods = {
   'pullRequests.unlink': { params: PullRequestRepoParams, result: Ok },
   // This client has the task's pull requests on screen, or no longer; core follows those often,
   // and any other still open, now and then.
-  'pullRequests.watch': { params: PullRequestTaskParams.extend({ open: z.boolean() }), result: Ok }
+  'pullRequests.watch': { params: PullRequestTaskParams.extend({ open: z.boolean() }), result: Ok },
+  // Sends the failed checks or the review comments named into the task's chat for its agent to
+  // work on; a task handed in goes back to running, as any message to it does. Refused while the
+  // agent is mid-turn (chat-busy).
+  'pullRequests.handoff': { params: PullRequestRepoParams.extend({ kind: PullRequestHandoffKind, ids: z.array(z.string().min(1).max(200)).min(1).max(50) }), result: Task }
 } as const
 
 export const rpcNotifications = {

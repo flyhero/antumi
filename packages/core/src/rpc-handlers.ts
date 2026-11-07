@@ -136,7 +136,15 @@ export function createRpcHandlers(
     return cliMaintenance
   }
   const git = new GitService(service, conversations, gitFavorites, gitChanged)
-  const pullRequests = pullRequestStore ? new PullRequestService(service, git, pullRequestStore.store, new GitHubClient(sources), { changed: pullRequestStore.changed }) : undefined
+  const pullRequests = pullRequestStore ? new PullRequestService(service, git, pullRequestStore.store, new GitHubClient(sources), {
+    changed: pullRequestStore.changed,
+    chat: {
+      turnOver: (id) => conversations.turnOver(id),
+      resumeChat: (taskId) => service.resumeChat(taskId).then(() => {}),
+      send: (id, text) => conversations.send(id, text),
+      putText: (id, text) => attachments.store.putText(id, Buffer.from(text, 'utf8'))
+    }
+  }) : undefined
   if (pullRequests) pullRequestStore?.ready?.(pullRequests)
   const requirePullRequests = (): PullRequestService => {
     if (!pullRequests) throw new Rejection('pull-requests-unavailable')
@@ -245,6 +253,11 @@ export function createRpcHandlers(
     'pullRequests.refresh': ({ taskId, repoPath }) => requirePullRequests().refresh(taskId, repoPath, true),
     'pullRequests.unlink': ({ taskId, repoPath }) => { requirePullRequests().unlink(taskId, repoPath); return OK },
     'pullRequests.watch': ({ taskId, open }, connection) => { requirePullRequests().watch(taskId, open, connection); return OK },
+    'pullRequests.handoff': ({ taskId, repoPath, kind, ids }) => {
+      const { conversationId } = service.get(taskId)
+      const run = () => requirePullRequests().handoff(taskId, repoPath, kind, ids)
+      return conversationId ? userActed(conversationId, run) : run()
+    },
     'plugins.recommended': () => pluginService().recommended(),
     'plugins.installRecommended': ({ id }) => pluginService().installRecommended(id),
     'plugins.list': () => pluginService().list(),

@@ -833,14 +833,15 @@ export function SettingsPage() {
   const run = useRunSettingsShown()
   const permissions = usePermissionSettingsShown()
   const sections = useMemo(() => {
-    const information = SECTIONS.filter((section) => section.id === 'support' || section.id === 'about')
+    // 更新 then 支持; 调试 sits last, after every section a user visits by choice.
+    const information = ['about', 'support'].flatMap((id) => SECTIONS.filter((section) => section.id === id))
     const own = SECTIONS.filter((section) => section.id !== 'about' && section.id !== 'support' && (section.id !== 'notifications' || canNotify() || canShowRequestPopup()))
       .flatMap((section) => (section.id === 'agents' ? [
         section, ...(accounts ? [ACCOUNTS_SECTION] : []), ...(modelProviders ? [MODEL_PROVIDERS_SECTION] : []), ...(run ? [RUN_SECTION] : []), ...(permissions ? [PERMISSIONS_SECTION] : []),
         CONVERSATION_SECTION, ...(chatCommands ? [CHAT_COMMANDS_SECTION] : []), ...(sessionImport ? [SESSION_IMPORT_SECTION] : []),
         ...(skills ? [SKILLS_SECTION] : []), ...(mcp ? [MCP_SECTION] : [])
       ] : [section]))
-    return [...own, ...(plugins ? [PLUGINS_SECTION] : []), ...sourceSections(sources ?? []), ...(knowledge ? [KNOWLEDGE_SECTION] : []), ...(browser ? [BROWSER_SECTION] : []), ...(wireLog ? [DEBUG_SECTION] : []), ...information]
+    return [...own, ...(plugins ? [PLUGINS_SECTION] : []), ...sourceSections(sources ?? []), ...(knowledge ? [KNOWLEDGE_SECTION] : []), ...(browser ? [BROWSER_SECTION] : []), ...information, ...(wireLog ? [DEBUG_SECTION] : [])]
   }, [sources, browser, knowledge, skills, mcp, sessionImport, accounts, modelProviders, chatCommands, wireLog, plugins, run, permissions, locale])
   const activeId = useCore((state) => state.settingsSection) ?? SECTIONS[0]?.id ?? ''
   const [query, setQuery] = useState('')

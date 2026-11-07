@@ -70,6 +70,7 @@ function LinkSection({ task, link, named }: { task: Task; link: PullRequestLink;
         {!link.refreshing && <>{' '}<button type="button" className="link-button" onClick={() => void refreshPullRequests(task.id)}>{t('PullRequest.refreshNow')}</button></>}
       </p>
       {link.problem && <p className="pr-panel-problem" role="alert">{pullRequestProblemText(link.problem)}</p>}
+      {status?.state === 'open' && <PushRow task={task} link={link} />}
       {status && status.state === 'open' && !status.draft && <MergeRow task={task} link={link} />}
 
       <h4 className="pr-panel-heading">{t('PullRequest.checksHeading')}</h4>
@@ -88,7 +89,7 @@ function LinkSection({ task, link, named }: { task: Task; link: PullRequestLink;
       )}
       {failed.length > 0 && (
         <div className="pr-panel-actions">
-          <button type="button" className="button" disabled={busy || chosenChecks.size === 0} onClick={() => void handoff('checks', chosenChecks)}>{t('PullRequest.handoffChecks', { count: chosenChecks.size })}</button>
+          <button type="button" className="button" disabled={busy || chosenChecks.size === 0} onClick={() => void handoff('checks', chosenChecks)}>{chosenChecks.size > 0 ? t('PullRequest.handoffChecksCount', { count: chosenChecks.size }) : t('PullRequest.handoffChecks')}</button>
         </div>
       )}
 
@@ -112,10 +113,41 @@ function LinkSection({ task, link, named }: { task: Task; link: PullRequestLink;
       )}
       {reviews.length > 0 && (
         <div className="pr-panel-actions">
-          <button type="button" className="button" disabled={busy || chosenReviews.size === 0} onClick={() => void handoff('reviews', chosenReviews)}>{t('PullRequest.handoffReviews', { count: chosenReviews.size })}</button>
+          <button type="button" className="button" disabled={busy || chosenReviews.size === 0} onClick={() => void handoff('reviews', chosenReviews)}>{chosenReviews.size > 0 ? t('PullRequest.handoffReviewsCount', { count: chosenReviews.size }) : t('PullRequest.handoffReviews')}</button>
         </div>
       )}
     </section>
+  )
+}
+
+// The branch has commits its pull request does not, as after the agent fixed what was handed to
+// it: pushing them is what updates the pull request, so the step is offered here.
+function PushRow({ task, link }: { task: Task; link: PullRequestLink }) {
+  const rpc = useCore((state) => state.rpc)
+  const gitRevision = useCore((state) => state.gitRevision)
+  const [ahead, setAhead] = useState<{ count: number; branch: string } | null>(null)
+  const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    if (!rpc) return
+    let live = true
+    void rpc.call('git.status', { kind: 'task', id: task.id, project: link.repoPath }).then(
+      (status) => { if (live) setAhead(status.branch === link.headBranch && status.upstream && status.ahead > 0 ? { count: status.ahead, branch: status.branch } : null) },
+      () => { if (live) setAhead(null) }
+    )
+    return () => { live = false }
+  }, [rpc, task.id, task.updatedAt, link.repoPath, link.headBranch, link.status?.headSha, gitRevision])
+  if (!ahead) return null
+  const push = async () => {
+    setBusy(true)
+    const done = await perform((rpc) => rpc.call('git.execute', { kind: 'task', id: task.id, project: link.repoPath, action: { kind: 'push', from: ahead.branch } }))
+    setBusy(false)
+    if (done) await refreshPullRequests(task.id)
+  }
+  return (
+    <div className="pr-push-row">
+      <span className="pr-push-note">{t('PullRequest.unpushed', { count: ahead.count })}</span>
+      <button type="button" className="button" disabled={busy} onClick={() => void push()}>{busy ? t('PullRequest.pushing') : t('PullRequest.push')}</button>
+    </div>
   )
 }
 

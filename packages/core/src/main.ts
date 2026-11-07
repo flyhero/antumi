@@ -23,6 +23,7 @@ import { CredentialStore } from './credential-store'
 import { DaemonClient } from './daemon-client'
 import { PluginService } from './plugin-service'
 import { ProjectStar } from './project-star'
+import { PullRequestStore } from './pull-request-store'
 import { PetLibrary } from './pet-library'
 import { createRpcHandlers } from './rpc-handlers'
 import { SessionImports } from './session-imports'
@@ -92,6 +93,7 @@ const freshInstall = (await stat(paths.database).catch(() => null)) === null
 const store = new TaskStore(paths.database)
 const projects = new ProjectRegistry(paths.database)
 const gitFavorites = new GitFavoriteStore(paths.database)
+const pullRequestStore = new PullRequestStore(paths.database)
 const daemon = new DaemonClient(paths.daemonSocket)
 const conversationsStore = new ConversationStore(paths.database)
 const runs = new AgentRunStore(paths.database)
@@ -606,7 +608,8 @@ server = await startRpcServer({
   handlers: createRpcHandlers(service, conversations, projects, gitFavorites, daemon, usage, sources, {
     store: attachments,
     uploads: new AttachmentUploads(attachments)
-  }, terminals, worktrees, browser, awake, terminalCommands, limits, runs, turns, chatSettings, environment, schedules, chatCommands, routines, discussions, wire, () => { server?.broadcast('git.changed', {}); profiles.tick() }, squads, todos, plugins, skills, mcpServers, smallModels, projectConfigs, modelProviders, sessionImports, accounts, cliMaintenance, analytics, automation, pets, new ProjectStar(sources), profiles, bookmarks, browserHistory, sourceUpdates)
+  }, terminals, worktrees, browser, awake, terminalCommands, limits, runs, turns, chatSettings, environment, schedules, chatCommands, routines, discussions, wire, () => { server?.broadcast('git.changed', {}); profiles.tick() }, squads, todos, plugins, skills, mcpServers, smallModels, projectConfigs, modelProviders, sessionImports, accounts, cliMaintenance, analytics, automation, pets, new ProjectStar(sources), profiles, bookmarks, browserHistory, sourceUpdates,
+    { store: pullRequestStore, changed: (taskId, links) => server?.broadcast('pullRequests.changed', { taskId, links }) })
 })
 await writeCoreEndpoint({ port: server.port, token, pid: process.pid, protocolVersion: PROTOCOL_VERSION, version: packageJson.version })
 daemon.start()
@@ -671,6 +674,7 @@ async function shutdown(): Promise<void> {
   smallModels.close()
   projects.close()
   gitFavorites.close()
+  pullRequestStore.close()
   bookmarks.close()
   browserHistory.close()
   process.exit(0)

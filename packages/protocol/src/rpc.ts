@@ -43,6 +43,7 @@ import { ModelProvider, ModelProviderId, ModelProviderInput, ModelProviderModels
 import { AgentAccount, AgentAccountId, AgentAccounts } from './agent-account'
 import { ExternalSession, ExternalSessionRef } from './session-import'
 import { ProjectStarIdentity, ProjectStarResult, ProjectStarStatus } from './project-star'
+import { PullRequestDraft, PullRequestEligibility, PullRequestLink } from './pull-request'
 import { Bookmark, BookmarkFields, BookmarkImport, MAX_BOOKMARKS } from './bookmarks'
 import { BrowserHistoryEntry, BrowserHistorySearch } from './browser-history'
 
@@ -68,6 +69,9 @@ const IssueRef = InstanceRef.extend({ key: z.string().trim().min(1).max(160) })
 const FlowRef = z.object({ flowId: z.string().min(1).max(64) })
 const Ok = z.object({ ok: z.literal(true) })
 const AccountRef = z.object({ agent: AgentKind, id: AgentAccountId })
+const PullRequestTaskParams = z.object({ taskId: z.string().min(1) })
+const PullRequestRepoParams = PullRequestTaskParams.extend({ repoPath: z.string().min(1) })
+const PullRequestBase = z.string().trim().min(1).max(500)
 const ConversationRef = z.object({ id: z.string().uuid() })
 const DiscussionRef = z.object({ id: z.string().uuid() })
 const FileScopeParams = z.object({ conversationId: z.string().uuid().optional(), roots: z.array(z.string().min(1).max(32_768)).min(1).max(20).optional() })
@@ -119,7 +123,7 @@ const UsageParams = z.object({ windowKinds: z.array(z.string()).optional() })
 // chat-references: user messages and queues retain the composer's explicit reference targets.
 // pasted-text: a long paste is uploaded as an attachment and kept as a text file the conversation's
 //   agent reads without asking (attachments.commitText).
-export const CORE_FEATURES = ['chat-references', 'conversation-references', 'agent-profiles', 'pets', 'plugins', 'plugin-recommendations', 'chat-options', 'chat-images', 'task-start', 'worktrees', 'conversation-branches', 'conversation-commit-push', 'find-file', 'conversation-projects', 'browser', 'browser-collaboration', 'browser-file-transfers', 'keep-awake', 'terminal-commands', 'bookmarks', 'browser-history', 'usage-limit', 'agent-stats', 'conversation-stats', 'prompt-suggestions', 'environment', 'conversation-pin', 'schedules', 'chat-commands', 'file-mentions', 'plan-modes', 'agent-terminals', 'schedule-images', 'dashboard', 'task-conversation-summaries', 'routines', 'ports', 'conversation-fork', 'conversation-configuration', 'conversation-commit-steps', 'conversation-worktrees', 'conversation-start-branch', 'wire-log', 'file-preview', 'deferred-conversation-start', 'agent-cli-installation', 'agent-cli-maintenance', 'task-launch-options', 'git-management', 'git-commit-branches', 'task-handoff', 'handoff-model', 'handoff-mode', 'task-launch', 'discussions', 'discussion-members', 'discussion-projects', 'discussion-topics', 'discussion-requirements', 'task-cancel', 'task-redo-in-place', 'conversation-archive', 'discussion-archive', 'translate', 'commit-message', 'squads', 'squad-leader-planning', 'conversation-todos', 'knowledge-base', 'knowledge-base-kind', 'skills-library', 'skills-search', 'skills-activation', 'mcp-servers', 'source-investigate', 'todo-overview', 'conversation-helper', 'small-model-stats', 'terminal-color-prompt', 'git-commit-actions', 'file-editor', 'project-config', 'project-config-edit', 'model-providers', 'git-update', 'git-push-target', 'git-cherry-pick', 'git-amend', 'git-force-push', 'task-auto-run', 'session-import', 'agent-accounts', 'usage-analytics', 'task-references', 'release-idle-chats', 'project-star', 'git-favorites', 'project-files', 'git-projects', 'git-branch-browser', 'git-rebase', 'direct-agent-calls', 'discussion-formats', 'discussion-format-suggest', 'agent-call-resume', 'delegation-worktree', 'pasted-text', 'task-conversation-rows', 'inline-visualizations', 'archived-worktrees', 'model-provider-models', 'skills-local', 'model-provider-headers', 'provider-model-images', 'source-comments-v1'] as const
+export const CORE_FEATURES = ['chat-references', 'conversation-references', 'agent-profiles', 'pets', 'plugins', 'plugin-recommendations', 'chat-options', 'chat-images', 'task-start', 'worktrees', 'conversation-branches', 'conversation-commit-push', 'find-file', 'conversation-projects', 'browser', 'browser-collaboration', 'browser-file-transfers', 'keep-awake', 'terminal-commands', 'bookmarks', 'browser-history', 'usage-limit', 'agent-stats', 'conversation-stats', 'prompt-suggestions', 'environment', 'conversation-pin', 'schedules', 'chat-commands', 'file-mentions', 'plan-modes', 'agent-terminals', 'schedule-images', 'dashboard', 'task-conversation-summaries', 'routines', 'ports', 'conversation-fork', 'conversation-configuration', 'conversation-commit-steps', 'conversation-worktrees', 'conversation-start-branch', 'wire-log', 'file-preview', 'deferred-conversation-start', 'agent-cli-installation', 'agent-cli-maintenance', 'task-launch-options', 'git-management', 'git-commit-branches', 'task-handoff', 'handoff-model', 'handoff-mode', 'task-launch', 'discussions', 'discussion-members', 'discussion-projects', 'discussion-topics', 'discussion-requirements', 'task-cancel', 'task-redo-in-place', 'conversation-archive', 'discussion-archive', 'translate', 'commit-message', 'squads', 'squad-leader-planning', 'conversation-todos', 'knowledge-base', 'knowledge-base-kind', 'skills-library', 'skills-search', 'skills-activation', 'mcp-servers', 'source-investigate', 'todo-overview', 'conversation-helper', 'small-model-stats', 'terminal-color-prompt', 'git-commit-actions', 'file-editor', 'project-config', 'project-config-edit', 'model-providers', 'git-update', 'git-push-target', 'git-cherry-pick', 'git-amend', 'git-force-push', 'task-auto-run', 'session-import', 'agent-accounts', 'usage-analytics', 'task-references', 'release-idle-chats', 'project-star', 'git-favorites', 'project-files', 'git-projects', 'git-branch-browser', 'git-rebase', 'direct-agent-calls', 'discussion-formats', 'discussion-format-suggest', 'agent-call-resume', 'delegation-worktree', 'pasted-text', 'task-conversation-rows', 'inline-visualizations', 'archived-worktrees', 'model-provider-models', 'skills-local', 'model-provider-headers', 'provider-model-images', 'source-comments-v1', 'pull-requests'] as const
 // session-import: core lists the sessions agents ran outside Antumi and imports them as conversations (sessionImports.*).
 // agent-accounts: Claude and Codex sign in to several accounts, one active each, and a usage limit
 // moves the agent to the next with quota (accounts.*); usage readings name their account.
@@ -839,11 +843,28 @@ export const rpcMethods = {
   'sources.dismiss': { params: IssueRef, result: SourceInbox },
   'sources.restore': { params: IssueRef, result: SourceInbox },
   // Fetches the task's issue again and replaces its snapshot.
-  'sources.resync': { params: z.object({ taskId: z.string().min(1) }), result: Task }
+  'sources.resync': { params: z.object({ taskId: z.string().min(1) }), result: Task },
+  // Pull requests for a task's branches (feature pull-requests): one per repo the task writes to.
+  // check: whether each can have one opened, and the one it has. draft: a title and description
+  // from the small model. create: pushes the branch when the remote lacks its commits, then opens
+  // it; `from` is the branch the client saw, refused (git-branch-changed) when the worktree is on
+  // another by now. refresh: asks the host again now. unlink: forgets the pull request, and never
+  // attaches that one to the task again by its branch.
+  'pullRequests.check': { params: PullRequestTaskParams.extend({ repoPath: z.string().min(1).optional() }), result: z.array(PullRequestEligibility) },
+  'pullRequests.draft': { params: PullRequestRepoParams.extend({ base: PullRequestBase }), result: PullRequestDraft },
+  'pullRequests.create': {
+    params: PullRequestRepoParams.extend({ base: PullRequestBase, title: z.string().trim().min(1).max(256), body: z.string().max(65_536), draft: z.boolean(), from: z.string().min(1).max(500) }),
+    result: PullRequestLink
+  },
+  'pullRequests.list': { params: PullRequestTaskParams, result: z.array(PullRequestLink) },
+  'pullRequests.refresh': { params: PullRequestTaskParams.extend({ repoPath: z.string().min(1).optional() }), result: z.array(PullRequestLink) },
+  'pullRequests.unlink': { params: PullRequestRepoParams, result: Ok }
 } as const
 
 export const rpcNotifications = {
   'usage.analyticsChanged': z.object({}),
+  // Every pull request of the task (pullRequests.list) after one is opened, refreshed or forgotten.
+  'pullRequests.changed': z.object({ taskId: z.string(), links: z.array(PullRequestLink) }),
   'git.changed': z.object({}),
   'system.awakeChanged': z.object({ status: ComputerAwakeStatus }),
   'system.chatSettingsChanged': z.object({ settings: ChatSettings }),

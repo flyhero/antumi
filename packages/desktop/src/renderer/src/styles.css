@@ -9983,6 +9983,24 @@ summary.agent-group-head:focus-visible { outline: 2px solid var(--focus); outlin
 .git-branch-row:hover > .git-branch-star[aria-pressed='false'] svg, .git-branch-row:focus-within > .git-branch-star[aria-pressed='false'] svg { opacity: 1; }
 .git-branch-row:hover, .git-tree-filter:hover { background: var(--fill); }
 .git-branch-row[data-selected], .git-tree-filter[aria-pressed='true'] { background: var(--fill-2); }
+/* A pull request as a tag: number, where it stands, how its checks went. Never by colour alone. */
+.pr-chip { display: inline-flex; align-items: center; gap: 4px; background: color-mix(in srgb, var(--info) 14%, transparent); color: var(--info); }
+.pr-chip[data-state='merged'] { background: color-mix(in srgb, var(--status-done) 14%, transparent); color: var(--status-done); }
+.pr-chip[data-state='closed'] { background: color-mix(in srgb, var(--text-muted) 14%, transparent); color: var(--text-muted); }
+.pr-chip-checks[data-checks='success'] { color: var(--status-done); }
+.pr-chip-checks[data-checks='failure'] { color: var(--danger); font-weight: 600; }
+.pr-chip-checks[data-checks='running'] { color: var(--warning); }
+.task-row-meta .pr-chip { line-height: 16px; vertical-align: middle; }
+/* Opening a pull request: branch → base, then the title and description drafted for editing. */
+.pr-dialog { width: min(640px, calc(100vw - 32px)); }
+.pr-section { display: flex; flex-direction: column; gap: 8px; }
+.pr-section + .pr-section { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); }
+.pr-section h3 { margin: 0; font-size: 13px; }
+.pr-route { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; }
+.pr-base { width: 180px; }
+.pr-body { min-height: 180px; resize: vertical; font-family: inherit; }
+.pr-note { margin: 0; font-size: 13px; }
+.pr-draft-toggle { display: inline-flex; align-items: center; gap: 6px; margin-right: auto; font-size: 13px; }
 /* A push as IntelliJ shows it: branch → remote : target, then what goes. */
 .git-push-dialog { width: min(540px, calc(100vw - 32px)); }
 .git-push-route { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; }

@@ -44,7 +44,8 @@ import {
   type DiscussionFormat,
   type Squad,
   type SquadRun,
-  type SquadPlanRef
+  type SquadPlanRef,
+  type PullRequestLink
 } from '@antumi/protocol'
 import { receiveChatDelta, receiveChatItems } from './chat-state'
 import { forgetDiscussionPosts, receiveDiscussionPosts } from './discussions'
@@ -206,6 +207,8 @@ export type CoreState = {
   // null until core answers sources.list.
   sources: SourceDescriptor[] | null
   sourceUpdates: Record<string, SourceUpdateSummary>
+  // Each task's pull requests (feature pull-requests), every repo's, as core last told.
+  pullRequests: Record<string, PullRequestLink[]>
   inboxes: Record<string, SourceInbox>
   // Shells in the app's terminal panel, oldest first. The panel only hides them; they keep running.
   terminals: Terminal[]
@@ -321,6 +324,7 @@ export const useCore = create<CoreState>()(() => ({
   usageCardAgent: null,
   sources: null,
   sourceUpdates: {},
+  pullRequests: {},
   inboxes: {},
   terminals: [],
   terminalPanelOpen: false,
@@ -1597,6 +1601,7 @@ export function startCoreConnection(scope: 'app' | 'requests' = 'app'): void {
         })
         rpc.on('discussions.posts', ({ discussionId, posts }) => receiveDiscussionPosts(discussionId, posts))
         rpc.on('todos.changed', ({ conversationId, groups }) => receiveTodos(conversationId, groups))
+        rpc.on('pullRequests.changed', ({ taskId, links }) => useCore.setState((s) => ({ pullRequests: { ...s.pullRequests, [taskId]: links } })))
         rpc.on('sources.updatesChanged', ({ summaries }) => { sourceUpdateChanges = summaries; useCore.setState({ sourceUpdates: Object.fromEntries(summaries.map((summary) => [`${summary.target.kind}:${summary.target.id}`, summary])) }) })
         rpc.on('sources.inboxChanged', ({ inbox }) =>
           useCore.setState((s) => ({ inboxes: { ...s.inboxes, [inboxKey(inbox)]: inbox } }))
@@ -1619,6 +1624,9 @@ export function startCoreConnection(scope: 'app' | 'requests' = 'app'): void {
         const modelProviders = full && rpc.features.includes('model-providers') ? await rpc.call('modelProviders.list', {}) : []
         const sourceUpdates = full && rpc.features.includes('source-comments-v1') ? await rpc.call('sources.updateSummaries', {}) : []
         const inboxes = full ? await rpc.call('sources.inbox', {}) : []
+        const pullRequestLinks = full && rpc.features.includes('pull-requests') ? await rpc.call('pullRequests.listAll', {}).catch(() => []) : []
+        const pullRequests: Record<string, PullRequestLink[]> = {}
+        for (const link of pullRequestLinks) (pullRequests[link.taskId] ??= []).push(link)
         const terminals = full ? await rpc.call('terminals.list', {}).catch(() => []) : []
         const terminalCommands = full && rpc.features.includes('terminal-commands') ? await rpc.call('terminalCommands.list', {}).catch(() => []) : []
         // Asked only of a core that has one, and never waited for: it starts the host when it is down.
@@ -1656,6 +1664,7 @@ export function startCoreConnection(scope: 'app' | 'requests' = 'app'): void {
           accounts,
           ...(usage ? withUsage(usage, accounts) : { usage: null, accountUsage: [] }),
           sources,
+          pullRequests,
           modelProviders,
           sourceUpdates: Object.fromEntries((sourceUpdateChanges ?? sourceUpdates).map((summary) => [`${summary.target.kind}:${summary.target.id}`, summary])),
           inboxes: Object.fromEntries(inboxes.map((inbox) => [inboxKey(inbox), inbox])),

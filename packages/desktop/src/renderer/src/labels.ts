@@ -1,5 +1,5 @@
 import { getLocale, localized, t } from './i18n'
-import { agentDescriptor, type AgentKind, type SourceFailure, type SourceProblem, type TaskStatus } from '@antumi/protocol'
+import { agentDescriptor, type AgentKind, type PullRequestBlocker, type PullRequestEligibility, type PullRequestFailure, type PullRequestProblem, type SourceFailure, type SourceProblem, type TaskStatus } from '@antumi/protocol'
 
 export const STATUS_LABEL: Record<TaskStatus, string> = localized(() => ({
   pending: t('labels.pending'),
@@ -41,6 +41,38 @@ export function sourceProblemText(problem: SourceProblem): string {
   return specific ? `${text}（${problem.message}）` : text
 }
 
+const PULL_REQUEST_FAILURE_TEXT: Record<PullRequestFailure, string> = localized(() => ({
+  'auth-failed': t('PullRequest.problem.authFailed'),
+  forbidden: t('PullRequest.problem.forbidden'),
+  'not-found': t('PullRequest.problem.notFound'),
+  'rate-limited': t('PullRequest.problem.rateLimited'),
+  'request-failed': t('PullRequest.problem.requestFailed')
+}))
+
+// GitHub's own words say what it refused; what the network did stands on its own.
+export function pullRequestProblemText(problem: PullRequestProblem): string {
+  const text = PULL_REQUEST_FAILURE_TEXT[problem.code]
+  return problem.code === 'forbidden' || problem.code === 'request-failed' ? `${text}（${problem.message}）` : text
+}
+
+const PULL_REQUEST_BLOCKER_TEXT: Record<Exclude<PullRequestBlocker, 'base-missing'>, string> = localized(() => ({
+  'not-github': t('PullRequest.blocker.notGithub'),
+  'detached-head': t('PullRequest.blocker.detachedHead'),
+  auth: t('PullRequest.blocker.auth'),
+  'head-is-default': t('PullRequest.blocker.headIsDefault'),
+  'existing-pr': t('PullRequest.blocker.existingPr'),
+  dirty: t('PullRequest.blocker.dirty'),
+  'no-commits': t('PullRequest.blocker.noCommits')
+}))
+
+// Why the branch cannot have a pull request opened, or what is done instead: a start branch
+// missing from the remote names the default branch taken in its place.
+export function pullRequestBlockerText(eligibility: Pick<PullRequestEligibility, 'blocker' | 'base' | 'baseFallback'>): string {
+  if (eligibility.blocker === null) return ''
+  if (eligibility.blocker === 'base-missing') return t('PullRequest.blocker.baseMissing', { base: eligibility.base ?? '', fallback: eligibility.baseFallback ?? '' })
+  return PULL_REQUEST_BLOCKER_TEXT[eligibility.blocker]
+}
+
 const REASON_TEXT: Record<string, string> = localized(() => ({
   'squad-leader-read-only': t('squad.leaderReadOnly'),
   'squad-developer-required': t('squad.developerRequired'),
@@ -56,6 +88,10 @@ const REASON_TEXT: Record<string, string> = localized(() => ({
   'read-only-workspace': t('labels.thisMemberCanOnlyReadTheWorkspaceAssign'),
 
   ...Object.fromEntries(Object.entries(SOURCE_FAILURE_TEXT).map(([code, text]) => [`source-${code}`, text])),
+  ...Object.fromEntries(Object.entries(PULL_REQUEST_FAILURE_TEXT).map(([code, text]) => [`pull-request-${code}`, text])),
+  ...Object.fromEntries(Object.entries(PULL_REQUEST_BLOCKER_TEXT).map(([code, text]) => [`pull-request-${code}`, text])),
+  'pull-request-base-missing': t('PullRequest.blocker.baseMissingShort'),
+  'pull-requests-unavailable': t('PullRequest.unavailable'),
   'source-already-imported': t('labels.thisIssueHasAlreadyBeenImportedAsA'),
   'attachment-not-image': t('labels.onlyPngJpegGifAndWebpImagesAre'),
   'attachment-too-many-pixels': t('labels.imageDimensionsExceed40MillionPixelsOr16384'),

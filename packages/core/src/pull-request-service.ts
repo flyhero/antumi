@@ -72,6 +72,10 @@ export class PullRequestService {
     return this.store.list(this.tasks.get(taskId).id)
   }
 
+  listAll(): PullRequestLink[] {
+    return this.store.all()
+  }
+
   // Whether each repo the task writes to can have a pull request opened, and the one it has.
   async check(taskId: string, repoPath?: string): Promise<PullRequestEligibility[]> {
     const task = this.tasks.get(taskId)
@@ -160,6 +164,7 @@ export class PullRequestService {
     result.existing = existing
     if (existing) return blocked('existing-pr')
     const config = await readProjectConfig(repo.path).catch(() => null)
+    if (config?.config.pullRequest?.draft !== undefined) result.draftDefault = config.config.pullRequest.draft
     result.base = baseOverride ?? config?.config.pullRequest?.base ?? baseOfStart(repo.start) ?? defaultBranch
     if (status.changes > 0) return blocked('dirty')
     const since = repo.start?.commit ? await gitOrNull(dir, ['rev-list', '--count', `${repo.start.commit}..HEAD`]) : null

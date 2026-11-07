@@ -32,7 +32,9 @@ import { OtherProjectsHint } from './OtherProjectsHint'
 import { PickerItem } from './ChatPicker'
 import { effortLabel, modeLabel, modeOptions } from './ChatOptionsBar'
 import { ContextMenu, MenuItem, type MenuPoint } from './ContextMenu'
-import { ChatIcon, CheckIcon, ChevronDownIcon, ClockIcon, CloseIcon, CopyIcon, DocumentIcon, FolderRemoveIcon, InspectorIcon, MoreIcon, PencilIcon, PinIcon, PlayIcon, ReopenIcon, SubmitIcon, TrashIcon } from './icons'
+import { ChatIcon, CheckIcon, ChevronDownIcon, ClockIcon, CloseIcon, CopyIcon, DocumentIcon, FolderRemoveIcon, InspectorIcon, LinkIcon, MergeIcon, MoreIcon, PencilIcon, PinIcon, PlayIcon, RefreshIcon, ReopenIcon, SubmitIcon, TrashIcon } from './icons'
+import { CreatePullRequestDialog } from './CreatePullRequestDialog'
+import { livePullRequests, openPullRequest, refreshPullRequests, unlinkPullRequests, usePullRequests, usePullRequestsSupported } from '../pull-requests'
 import { pinConversation } from './ConversationActions'
 import { taskArchived } from '../conversation-list-items'
 import { Popover } from './Popover'
@@ -521,6 +523,7 @@ function MoreMenu({ task }: { task: Task }) {
   const close = useCallback(() => setOpen(false), [])
   const clean = useWorktreeCleaning(task)
   const cancelling = useCancelling(task)
+  const pullRequests = usePullRequests(task.id)
   return (
     <span className="menu-anchor">
       <button
@@ -566,6 +569,17 @@ function MoreMenu({ task }: { task: Task }) {
               <span className="menu-item-icon"><cancelling.Icon /></span>
               {cancelling.label}
             </button>
+          )}
+          {pullRequests.length > 0 && (
+            <>
+              <button type="button" className="menu-item" onClick={() => { close(); void refreshPullRequests(task.id) }}>
+                <span className="menu-item-icon"><RefreshIcon /></span>
+                {t('PullRequest.refresh')}
+              </button>
+              <button type="button" className="menu-item" onClick={() => { close(); void unlinkPullRequests(task.id, pullRequests.map((link) => link.repoPath)) }}>
+                {tr('PullRequest.unlinkItem', { value1: <span className="menu-item-icon"><LinkIcon /></span>, value2: <span className="menu-item-path">{t('PullRequest.unlinkNote')}</span> })}
+              </button>
+            </>
           )}
           <div className="menu-separator" />
           <button
@@ -656,12 +670,14 @@ export function TaskSteps({ task, labelled = false }: { task: Task; labelled?: b
   // A finished task goes on by a message in its chat.
   const redo = isFinished(task.status) && <RedoButton task={task} labelled={labelled} />
   const schedule = task.status === 'pending' && <ScheduleButton task={task} dependencies={dependencies} labelled={labelled} />
+  const pullRequest = task.status !== 'pending' && task.status !== 'abandoned' && <PullRequestButton task={task} labelled={labelled} />
   return labelled ? (
     <>
       {start}
       {submit}
       {moveButtons}
       {redo}
+      {pullRequest}
       {agent}
       {launch && <TaskModelPicker task={task} launch={launch} />}
       {schedule}
@@ -674,6 +690,35 @@ export function TaskSteps({ task, labelled = false }: { task: Task; labelled?: b
       {submit}
       {moveButtons}
       {redo}
+      {pullRequest}
+    </>
+  )
+}
+
+// Opens the task's pull request on the host, or the dialog that creates one, once the task has a
+// worktree on a branch to open it for. The first repo's is opened; the others are on the card.
+function PullRequestButton({ task, labelled }: { task: Task; labelled: boolean }) {
+  const supported = usePullRequestsSupported()
+  const links = usePullRequests(task.id)
+  const [open, setOpen] = useState(false)
+  const close = useCallback(() => setOpen(false), [])
+  if (!supported || !task.repos.some((repo) => repo.worktreePath !== null && !repo.reference)) return null
+  const live = livePullRequests(links)
+  const first = live[0]
+  const label = first ? t('PullRequest.viewNumber', { number: first.number }) : t('PullRequest.create')
+  return (
+    <>
+      <button
+        type="button"
+        className={labelled ? 'button' : 'tool-button'}
+        aria-label={label}
+        data-tooltip={labelled ? undefined : label}
+        onClick={() => { if (first) openPullRequest(first); else setOpen(true) }}
+      >
+        <MergeIcon />
+        {labelled && (first ? t('PullRequest.view') : t('PullRequest.create'))}
+      </button>
+      {open && <CreatePullRequestDialog task={task} close={close} />}
     </>
   )
 }

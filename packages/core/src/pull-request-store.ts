@@ -29,11 +29,14 @@ export class PullRequestStore {
       .map((row) => PullRequestLink.parse(JSON.parse(LinkRow.parse(row).data)))
   }
 
+  all(): PullRequestLink[] {
+    return this.db.prepare("SELECT data FROM pull_requests WHERE data <> '' ORDER BY task_id, repo_path").all()
+      .map((row) => PullRequestLink.parse(JSON.parse(LinkRow.parse(row).data)))
+  }
+
   // Every link whose pull request the host still has open, for the sweep that follows them.
   open(): PullRequestLink[] {
-    return this.db.prepare("SELECT data FROM pull_requests WHERE data <> ''").all()
-      .map((row) => PullRequestLink.parse(JSON.parse(LinkRow.parse(row).data)))
-      .filter((link) => link.status === null || link.status.state === 'open')
+    return this.all().filter((link) => link.status === null || link.status.state === 'open')
   }
 
   put(link: PullRequestLink): void {

@@ -104,7 +104,9 @@ export const PullRequestEligibility = z.object({
   // The branch has commits the remote lacks, or no upstream yet; creating pushes first.
   needsPush: z.boolean(),
   blocker: PullRequestBlocker.nullable(),
-  existing: PullRequestLink.nullable()
+  existing: PullRequestLink.nullable(),
+  // Whether the project's config asks for drafts (ProjectConfig.pullRequest.draft).
+  draftDefault: z.boolean().optional()
 })
 export type PullRequestEligibility = z.infer<typeof PullRequestEligibility>
 

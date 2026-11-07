@@ -240,6 +240,7 @@ export function createRpcHandlers(
     },
     'pullRequests.create': (fields) => requirePullRequests().create(fields),
     'pullRequests.list': ({ taskId }) => requirePullRequests().list(taskId),
+    'pullRequests.listAll': () => requirePullRequests().listAll(),
     'pullRequests.refresh': ({ taskId, repoPath }) => requirePullRequests().refresh(taskId, repoPath, true),
     'pullRequests.unlink': ({ taskId, repoPath }) => { requirePullRequests().unlink(taskId, repoPath); return OK },
     'plugins.recommended': () => pluginService().recommended(),

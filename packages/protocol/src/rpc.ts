@@ -857,6 +857,8 @@ export const rpcMethods = {
     result: PullRequestLink
   },
   'pullRequests.list': { params: PullRequestTaskParams, result: z.array(PullRequestLink) },
+  // Every task's, for a client just connected.
+  'pullRequests.listAll': { params: z.object({}), result: z.array(PullRequestLink) },
   'pullRequests.refresh': { params: PullRequestTaskParams.extend({ repoPath: z.string().min(1).optional() }), result: z.array(PullRequestLink) },
   'pullRequests.unlink': { params: PullRequestRepoParams, result: Ok }
 } as const

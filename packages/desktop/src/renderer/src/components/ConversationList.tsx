@@ -1,4 +1,6 @@
 import { SourceUpdatesPanel, SourceCommentBadge } from './SourceUpdatesPanel'
+import { PullRequestChip } from './PullRequestChip'
+import { livePullRequests, usePullRequests } from '../pull-requests'
 import { localized, t, tr } from '../i18n'
 import { useCallback, useEffect, useRef, useState, type MouseEvent } from 'react'
 import type { Conversation, Discussion, Task } from '@antumi/protocol'
@@ -147,11 +149,13 @@ function TaskMeta({ task, conversation, heading = 'none' }: { task: Task; conver
   const activity = conversationActivity(conversation, conversation.agent)
   const state = activity?.detail ?? conversationState(conversation).label
   const projects = metaProjects(task.repos.map((repo) => repo.path), heading === 'project')
+  const pullRequest = livePullRequests(usePullRequests(task.id))[0]
   return (
     <>
       {heading !== 'agent' && <span className="conversation-agent" role="img" aria-label={agent} title={agent}><AgentIcon agent={conversation.agent} /></span>}
       {projects !== null && <>{projects}{' · '}</>}
       <span className="status-pill conversation-task-status" data-status={task.status}>{STATUS_LABEL[task.status]}</span>{' · '}
+      {pullRequest && <><PullRequestChip link={pullRequest} />{' · '}</>}
       <span className="conversation-live" data-state={activity?.state}>{state}</span>
     </>
   )

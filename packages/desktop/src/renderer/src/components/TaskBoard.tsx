@@ -23,6 +23,8 @@ import { TitleEditor } from './TitleEditor'
 import { TaskActivity } from './TaskActivity'
 import { TaskDependencies } from './TaskDependencies'
 import { useTaskActivity } from '../work-activity'
+import { PullRequestChip } from './PullRequestChip'
+import { livePullRequests, usePullRequests } from '../pull-requests'
 
 // The way back from a task to the board, at the start of its header; Esc goes there too.
 export function BoardCrumb() {
@@ -156,6 +158,7 @@ function TaskCard({ task, tasks, now, fresh, renaming, menuOpen, onRenamed, onMe
 }) {
   const turn = useChatTurn(task)
   const activity = useTaskActivity(task)
+  const pullRequests = livePullRequests(usePullRequests(task.id))
   const dependencies = task.dependsOn.map((id) => tasks[id]).filter((dependency) => dependency !== undefined)
   const action = cardAction(task, dependencies, turn)
   // A chat task that has not started its work: planning, or holding the plan it saved.
@@ -184,9 +187,10 @@ function TaskCard({ task, tasks, now, fresh, renaming, menuOpen, onRenamed, onMe
           {dependencies.length > 0 && <span className="visually-hidden">{t('TaskBoard.dependencies', { titles: dependencies.map((dependency) => dependency.title).join(getLocale() === 'en' ? ', ' : '、') })}</span>}
         </button>
       )}
-      {(planning || task.source || waitingOn(task, tasks) > 0) && (
+      {(planning || task.source || pullRequests.length > 0 || waitingOn(task, tasks) > 0) && (
         <span className="task-card-tags">
           {task.source && <><span className="task-tag mono">{task.source.key}</span><SourceCommentBadge target={{ kind: 'task', id: task.id }} /></>}
+          {pullRequests.map((link) => <PullRequestChip key={link.repoPath} link={link} />)}
           {planning && <span className="task-tag task-tag-refining">{task.plan && !task.plan.approved ? t('TaskBoard.planSaved') : t('TaskBoard.planning')}</span>}
           {waitingOn(task, tasks) > 0 && <span className="task-tag">{t('TaskBoard.waitingForDependencies')}</span>}
         </span>

@@ -1,5 +1,6 @@
 import { attentionCount, noticesBetween, unseenConversations } from './attention'
-import { openConversationTarget, openUsageCard, selectTask, setInboxOpen, setInboxTab, setRoutinesOpen, useCore } from './core-store'
+import { openConversationTarget, openUsageCard, selectTask, setInboxOpen, setInboxTab, setInspectorOpen, setRoutinesOpen, setTaskInspectorTab, useCore } from './core-store'
+import { prNoticesBetween } from './pr-notices'
 import { canNotify, canShowIsland, canShowRequestPopup, notify, onNotificationClick, setBadge, setRequestPopupMode, tellRequestPopupAttention, wantRequestPopup } from './desktop-bridge'
 import { inboxNoticesBetween } from './inbox-news'
 import { currentInstalledAgents } from './installed-agents'
@@ -40,6 +41,9 @@ export function startNotifications(): void {
     if (next.inboxes !== prev.inboxes && away) {
       inboxNoticesBetween(prev.inboxes, activeInboxes(next.sources, next.inboxes)).forEach(notify)
     }
+    if (next.pullRequests !== prev.pullRequests && away) {
+      prNoticesBetween(prev.pullRequests, next.pullRequests, next.tasks).forEach(notify)
+    }
     // Advice seen while the window is in front counts as told: the usage bar shows it there.
     if (next.usage !== prev.usage && usePreferences.getState().quotaAdvice) {
       const notices = quotaNoticesBetween(prev.usage, next.usage, Date.now(), sentAdvice, currentInstalledAgents())
@@ -50,6 +54,7 @@ export function startNotifications(): void {
   })
   onNotificationClick((target) => {
     if (target.kind === 'task') selectTask(target.id)
+    else if (target.kind === 'pullRequest') { selectTask(target.taskId); setInspectorOpen(true); setTaskInspectorTab('pullRequest') }
     else if (target.kind === 'conversation') openConversationTarget(target.id)
     else if (target.kind === 'usage') openUsageCard(target.agent)
     else if (target.kind === 'inbox') {

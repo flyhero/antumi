@@ -7,10 +7,10 @@ export type ActionableTarget = { kind: 'task' | 'conversation'; id: string }
 // Where a notification leads when clicked: one of those, the page of routines (for a routine's
 // run that has no conversation to show), an agent's usage card (for quota advice), or an inbox's
 // tab (for issues it synced).
-export type AttentionTarget = ActionableTarget | { kind: 'routines' } | { kind: 'usage'; agent: AgentKind } | { kind: 'inbox'; key: string }
+export type AttentionTarget = ActionableTarget | { kind: 'routines' } | { kind: 'usage'; agent: AgentKind } | { kind: 'inbox'; key: string } | { kind: 'pullRequest'; taskId: string }
 
 export const targetKey = (target: AttentionTarget): string =>
-  target.kind === 'routines' ? 'routines' : target.kind === 'usage' ? `usage:${target.agent}` : target.kind === 'inbox' ? `inbox:${target.key}` : `${target.kind}:${target.id}`
+  target.kind === 'routines' ? 'routines' : target.kind === 'usage' ? `usage:${target.agent}` : target.kind === 'inbox' ? `inbox:${target.key}` : target.kind === 'pullRequest' ? `pullRequest:${target.taskId}` : `${target.kind}:${target.id}`
 
 export type Notice = { title: string; body: string; target: AttentionTarget }
 

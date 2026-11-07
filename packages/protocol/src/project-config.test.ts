@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ProjectConfig, projectRunsCommands } from './project-config'
+import { ProjectConfig, projectRunsCommands, tidyProjectConfig } from './project-config'
 
 describe('ProjectConfig', () => {
   it('takes every field as optional', () => {
@@ -10,6 +10,13 @@ describe('ProjectConfig', () => {
   it('refuses empty commands and paths', () => {
     expect(ProjectConfig.safeParse({ setup: '  ' }).success).toBe(false)
     expect(ProjectConfig.safeParse({ copy: [''] }).success).toBe(false)
+  })
+
+  it('keeps pull request defaults, and drops them when empty', () => {
+    expect(ProjectConfig.parse({ pullRequest: { base: 'develop', draft: true } })).toEqual({ pullRequest: { base: 'develop', draft: true } })
+    expect(tidyProjectConfig({ check: 'pnpm test', pullRequest: { base: '  ' } })).toEqual({ check: 'pnpm test' })
+    expect(tidyProjectConfig({ pullRequest: { base: ' develop ', draft: false } })).toEqual({ pullRequest: { base: 'develop', draft: false } })
+    expect(projectRunsCommands({ pullRequest: { draft: true } })).toBe(false)
   })
 
   it('needs trust only for commands', () => {

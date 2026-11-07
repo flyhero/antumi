@@ -196,7 +196,7 @@ export function manualMoves(from: TaskStatus): readonly TaskStatus[] {
 
 export type MoveBlocker = 'invalid-transition'
 
-export function checkMove(task: Task, to: TaskStatus): MoveBlocker | null {
+export function checkMove(task: Pick<Task, 'status'>, to: TaskStatus): MoveBlocker | null {
   return MANUAL_MOVES[task.status].includes(to) ? null : 'invalid-transition'
 }
 

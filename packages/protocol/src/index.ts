@@ -59,5 +59,6 @@ export * from './agent-cli'
 export * from './usage-analytics'
 export * from './project-star'
 export * from './agent-profile'
+export * from './pull-request'
 
 export * from './source-comments'

@@ -1,6 +1,5 @@
 import type { AgentProfile } from '@antumi/protocol'
 import type { SearchCategory } from './search-palette'
-import type { AppearanceSection } from './appearance-preferences'
 import { mergeCliStatuses } from './agent-cli-state'
 import { getLocale, t } from './i18n'
 import { accountsSupported, activeAccount, isHelper, usageAccount, type AgentAccounts } from '@antumi/protocol'
@@ -165,8 +164,6 @@ export type CoreState = {
   settingsOpen: boolean
   // Which settings section to show when settings open; null keeps the first.
   settingsSection: string | null
-  // The appearance tab settings opens on once, when something asked for one.
-  appearanceTab: AppearanceSection | null
   // The source inbox takes the right-hand pane instead of a task.
   inboxOpen: boolean
   // The inbox tab last shown, as an inboxKey; the tabs appear once two sources are signed in.
@@ -299,7 +296,6 @@ export const useCore = create<CoreState>()(() => ({
   startingTasks: [],
   settingsOpen: false,
   settingsSection: null,
-  appearanceTab: null,
   inboxOpen: false,
   inboxTab: null,
   gitOpen: false,
@@ -995,12 +991,6 @@ export type NewTaskDraft = { title: string; repos: readonly string[]; agent: Age
 
 export function setNewTaskOpen(open: boolean, draft: NewTaskDraft | null = null): void {
   useCore.setState({ newTaskOpen: open, newTaskDraft: open ? draft : null })
-}
-
-// Settings → Appearance → Sidebar: where the sidebar's optional entries are shown or hidden.
-export function openSidebarSettings(): void {
-  useCore.setState({ appearanceTab: 'sidebar' })
-  setSettingsOpen(true, 'appearance')
 }
 
 export function setSettingsOpen(open: boolean, section: string | null = null): void {

@@ -14,12 +14,18 @@
 .file-selection-send:disabled { opacity: 0.5; cursor: default; }
 
 
-/* Its status bar button, before the browser in the right-hand group: first of the group
-   it takes the auto margin, and the one after it gives that up. */
+/* 文件, then Git, before the browser in the right-hand group. The first of the group
+   takes the auto margin, and each one after it gives that up. */
 .statusbar .statusbar-files { display: inline-flex; align-items: center; gap: 4px; width: auto; height: 24px; margin-left: auto; padding: 0 6px; }
 .statusbar .statusbar-files svg { width: 15px; height: 15px; }
 .statusbar .statusbar-schedules + .statusbar-files,
 .statusbar .statusbar-worktrees + .statusbar-files,
 .statusbar .statusbar-files + .statusbar-browser,
-.statusbar .statusbar-files + .statusbar-terminal { margin-left: 0; }
+.statusbar .statusbar-files + .statusbar-terminal,
+.statusbar .statusbar-files + .statusbar-git { margin-left: 0; }
 .statusbar .statusbar-files[aria-pressed='true'] { background: var(--fill); color: var(--text); }
+.statusbar .statusbar-git { display: inline-flex; align-items: center; gap: 4px; width: auto; height: 24px; margin-left: auto; padding: 0 6px; }
+.statusbar .statusbar-git svg { width: 15px; height: 15px; }
+.statusbar .statusbar-git + .statusbar-browser,
+.statusbar .statusbar-git + .statusbar-terminal { margin-left: 0; }
+.statusbar .statusbar-git[aria-pressed='true'] { background: var(--fill); color: var(--text); }

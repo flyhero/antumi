@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useId, useState } from 'react'
 import { t } from '../i18n'
 import { useCore } from '../core-store'
 import { DEFAULT_PREFERENCES, setPreference, usePreferences } from '../preferences'
@@ -18,8 +18,7 @@ import { MarkdownThemePicker } from './MarkdownThemePicker'
 import { MarkdownThemePreview } from './MarkdownThemePreview'
 import { resolveMarkdownTheme, type MarkdownThemePack } from '../markdown-theme-packs'
 import { MarkdownThemeLibrary } from './MarkdownThemeLibrary'
-import { ArrowUpIcon, BoardIcon, CheckIcon, ChatIcon, ChevronDownIcon, ClockIcon, GitIcon, InboxIcon, RobotIcon, RotateLeftIcon, TerminalIcon } from './icons'
-import { inboxLocked, SIDEBAR_ENTRIES, SIDEBAR_PREFERENCE, sidebarShows, type SidebarEntry } from '../sidebar-entries'
+import { ArrowUpIcon, CheckIcon, ChatIcon, ChevronDownIcon, RobotIcon, RotateLeftIcon, TerminalIcon } from './icons'
 
 function ThemeMiniature({ scheme }: { scheme: 'light' | 'dark' }) {
   return (
@@ -58,45 +57,6 @@ function ThemePicker() {
   )
 }
 
-const SIDEBAR_ENTRY: Record<SidebarEntry, { label: () => string; hint: () => string; icon: () => ReactNode }> = {
-  inbox: { label: () => t('InboxEntry.inbox_1125'), hint: () => t('SettingsPage.sidebarInboxHint'), icon: () => <InboxIcon /> },
-  routines: { label: () => t('RoutinesEntry.scheduled'), hint: () => t('SettingsPage.sidebarRoutinesHint'), icon: () => <ClockIcon /> },
-  git: { label: () => 'Git', hint: () => t('SettingsPage.sidebarGitHint'), icon: () => <GitIcon /> }
-}
-
-// What the sidebar's top would show: the fixed entries, and the optional ones left on.
-function SidebarPreview({ preferences }: { preferences: Parameters<typeof sidebarShows>[1] }) {
-  const sources = useCore((s) => s.sources)
-  return (
-    <nav className="appearance-preview-sidebar" aria-hidden="true">
-      <span><BoardIcon />{t('OverviewEntry.overview_1276')}</span>
-      {SIDEBAR_ENTRIES.filter((entry) => sidebarShows(entry, preferences, sources)).map((entry) => <span key={entry}>{SIDEBAR_ENTRY[entry].icon()}{SIDEBAR_ENTRY[entry].label()}</span>)}
-      <span><RobotIcon />{t('AgentProfiles.title')}</span>
-      <span><BoardIcon />{t('SearchPalette.tasks')}</span>
-      <span><ChatIcon />{t('SearchPalette.conversations')}</span>
-    </nav>
-  )
-}
-
-function SidebarSettings() {
-  const preferences = usePreferences()
-  const sources = useCore((s) => s.sources)
-  const locked = inboxLocked(sources)
-  return (
-    <>
-    <SettingsGroup title={t('SettingsPage.sidebarEntries')}>
-      {SIDEBAR_ENTRIES.map((entry) => {
-        const key = SIDEBAR_PREFERENCE[entry]
-        const fixed = entry === 'inbox' && locked
-        return <SettingsRow key={entry} label={SIDEBAR_ENTRY[entry].label()} description={fixed ? t('SettingsPage.sidebarInboxLocked') : SIDEBAR_ENTRY[entry].hint()}
-          control={(labelId) => <Toggle labelId={labelId} checked={fixed || preferences[key]} disabled={fixed} onChange={(next) => setPreference(key, next)} />} />
-      })}
-    </SettingsGroup>
-    <p className="settings-note">{t('SettingsPage.sidebarEntriesHint')}</p>
-    </>
-  )
-}
-
 function AppearancePreview({ section, comparing, onCompare, draft }: { section: AppearanceSection; comparing: boolean; onCompare: () => void; draft: MarkdownThemePack | null }) {
   const typeface = useChatTypeface()
   const current = usePreferences()
@@ -123,7 +83,6 @@ function AppearancePreview({ section, comparing, onCompare, draft }: { section: 
       <div className="appearance-preview-window" data-palette={palette} data-backdrop={backdrop === 'none' ? undefined : backdrop} data-section={section} data-comparing={comparing || undefined} style={{ colorScheme: scheme, ...{ '--md-color-scheme': scheme } }}>
         <div className="appearance-preview-toolbar"><ChatIcon /><span>Antumi</span><span className="appearance-preview-sample">{t('SettingsPage.sample')}</span></div>
         {section === 'markdown' ? <MarkdownThemePreview theme={markdownSelection} packs={markdownPacks} reading={preview} /> : <>
-        {section === 'sidebar' && <SidebarPreview preferences={preview} />}
         <div className="appearance-preview-chat chat-view" {...previewTypeface}>
           <div className="appearance-preview-thread" data-width={chatWidth} style={readingStyle(preview)}>
             <p className="appearance-preview-user">{t('SettingsPage.previewPrompt')}</p>
@@ -152,9 +111,7 @@ function AppearancePreview({ section, comparing, onCompare, draft }: { section: 
 
 export function AppearanceSettings() {
   const sectionLabelId = useId()
-  // A way in that asked for a tab (the sidebar's menu) gets it once.
-  const [section, setSection] = useState<AppearanceSection>(() => useCore.getState().appearanceTab ?? 'colors')
-  useEffect(() => { useCore.setState({ appearanceTab: null }) }, [])
+  const [section, setSection] = useState<AppearanceSection>('colors')
   const [comparing, setComparing] = useState(false)
   const [markdownDraft, setMarkdownDraft] = useState<MarkdownThemePack | null>(null)
   const previewMarkdownDraft = useCallback((pack: MarkdownThemePack | null) => { setMarkdownDraft(pack); setComparing(false) }, [])
@@ -185,7 +142,6 @@ export function AppearanceSettings() {
           { value: 'chat', label: t('MarkdownTheme.reading') },
           { value: 'markdown', label: 'Markdown' },
           { value: 'terminal', label: t('SettingsPage.terminal') },
-          { value: 'sidebar', label: t('SettingsPage.sidebar') },
           { value: 'language', label: t('SettingsPage.language') }
         ]} />
       </div>
@@ -337,9 +293,6 @@ export function AppearanceSettings() {
             />
           )}
         </SettingsGroup>
-        </div>
-        <div hidden={section !== 'sidebar'}>
-        <SidebarSettings />
         </div>
         <div hidden={section !== 'language'}>
         <SettingsGroup title={t('language.interfaceLanguage')}>

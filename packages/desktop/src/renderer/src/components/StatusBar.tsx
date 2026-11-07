@@ -1,12 +1,12 @@
 import { localized, t, tr } from '../i18n'
 import { useEffect, useRef, useState } from 'react'
-import { openGuide, setAwakeMode, setSchedulesOpen, setSettingsOpen, setWorktreesOpen, toggleBrowserPanel, toggleFilesPanel, togglePortsPanel, toggleTerminalPanel, useAwakeSupported, useFilesScope, useBrowserSupported, useCore, useSchedulesOpen, useSchedulesSupported, useWorktreesSupported, type ConnectionState } from '../core-store'
+import { openGit, openGuide, openOverview, setAwakeMode, setSchedulesOpen, setSettingsOpen, setWorktreesOpen, toggleBrowserPanel, toggleFilesPanel, togglePortsPanel, toggleTerminalPanel, useAwakeSupported, useFilesScope, useBrowserSupported, useCore, useSchedulesOpen, useSchedulesSupported, useWorktreesSupported, type ConnectionState } from '../core-store'
 import { ALL_TABS, useBrowserTabs } from '../browser-state'
 import { formatBytes, worktreeRows, worktreeSummary } from '../worktree-groups'
 import { useWorktrees } from '../worktree-store'
 import { useShortcutLabel } from '../keyboard-shortcuts'
 import { usePanelShortcut } from '../panel-shortcuts'
-import { BoltIcon, BookIcon, WorktreeIcon, ChatIcon, CheckIcon, ClockIcon, CoffeeIcon, FilesIcon, GearIcon, GlobeIcon, HelpIcon, PortsIcon, PulseIcon, TerminalIcon } from './icons'
+import { BoltIcon, BookIcon, WorktreeIcon, ChatIcon, CheckIcon, ClockIcon, CoffeeIcon, FilesIcon, GearIcon, GitIcon, GlobeIcon, HelpIcon, PortsIcon, PulseIcon, TerminalIcon } from './icons'
 import { usePorts } from '../port-state'
 import { UsageBar } from './UsageBar'
 import { useFolderChanges } from './ConversationInspector'
@@ -162,6 +162,28 @@ function FilesButton() {
   )
 }
 
+// Beside 文件: the project Git page, the same one the sidebar used to open.
+function GitButton() {
+  const supported = useCore((s) => s.rpc?.features.includes('git-projects') ?? false)
+  const open = useCore((s) => s.gitOpen)
+  if (!supported) return null
+  return (
+    <button
+      type="button"
+      className="tool-button statusbar-git"
+      aria-label="Git"
+      aria-pressed={open}
+      data-active={open}
+      data-tooltip={open ? t('GitPage.close') : 'Git'}
+      data-tooltip-side="top-end"
+      onClick={() => open ? openOverview() : openGit()}
+    >
+      <GitIcon />
+      <span>Git</span>
+    </button>
+  )
+}
+
 function TerminalButton() {
   const shortcut = usePanelShortcut('toggle-terminal')
   const open = useCore((s) => s.terminalPanelOpen || s.panelWindows.includes('terminal'))
@@ -301,6 +323,7 @@ export function StatusBar() {
       <ScheduleButton />
       <WorktreeButton />
       <FilesButton />
+      <GitButton />
       <BrowserButton />
       <TerminalButton />
       <PortsButton />

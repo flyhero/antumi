@@ -1,4 +1,4 @@
-import { GitPage, GitEntry } from './components/GitPage'
+import { GitPage } from './components/GitPage'
 import { AgentsView } from './components/AgentProfiles'
 import { t, useLocale } from './i18n'
 import { useEffect } from 'react'
@@ -23,7 +23,6 @@ import { EnvironmentNotice } from './components/EnvironmentNotice'
 import { StatusBar } from './components/StatusBar'
 import { UtilityPanelDock } from './components/UtilityPanelDock'
 import { SearchPalette } from './components/SearchPalette'
-import { useSidebarShows } from './sidebar-entries'
 import { WorktreeManager } from './components/WorktreeManager'
 import { RoutinesView } from './components/RoutinesView'
 import { RoutinesEntry } from './components/RoutinesEntry'
@@ -89,7 +88,6 @@ export function App() {
   const filesPanelOpen = useCore((s) => s.filesPanelOpen)
   const filesMaximized = useCore((s) => s.filesMaximized)
   const search = useCore((s) => s.search)
-  const sidebar = { routines: useSidebarShows('routines'), git: useSidebarShows('git') }
   const utilityPanelOrder = useCore((s) => s.utilityPanelOrder)
   const sidebarHidden = usePreferences((s) => s.sidebarHidden)
   const maximizedUtility = browserPanelOpen && browserMaximized
@@ -140,8 +138,7 @@ export function App() {
             <Sidebar hidden={sidebarHidden}>
               <OverviewEntry />
               <InboxEntry />
-              {sidebar.routines && <RoutinesEntry />}
-              {sidebar.git && <GitEntry />}
+              <RoutinesEntry />
               <SquadsEntry />
               <EnvironmentNotice />
               <SidebarTasks />

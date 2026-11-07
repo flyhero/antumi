@@ -85,11 +85,12 @@ export const PullRequestLink = z.object({
 export type PullRequestLink = z.infer<typeof PullRequestLink>
 
 // Why a branch cannot have a pull request opened for it, the first that applies, in this order.
+// auth: no GitHub credential on this machine, which asking the host for the rest would need.
 // existing-pr: one is open or merged for the branch already, given in `existing`. dirty: changes
 // not committed, which the pull request would not carry. base-missing: the branch it started from
 // is not on the remote, as a dependency's branch is not until pushed; `baseFallback` is the
-// remote's default branch, offered instead. auth: no GitHub credential on this machine.
-export const PULL_REQUEST_BLOCKERS = ['not-github', 'detached-head', 'head-is-default', 'existing-pr', 'dirty', 'no-commits', 'base-missing', 'auth'] as const
+// remote's default branch, offered instead.
+export const PULL_REQUEST_BLOCKERS = ['not-github', 'detached-head', 'auth', 'head-is-default', 'existing-pr', 'dirty', 'no-commits', 'base-missing'] as const
 export const PullRequestBlocker = z.enum(PULL_REQUEST_BLOCKERS)
 export type PullRequestBlocker = z.infer<typeof PullRequestBlocker>
 

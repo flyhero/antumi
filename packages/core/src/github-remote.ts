@@ -24,8 +24,9 @@ export function parseGitHubRemote(url: string): PullRequestRepo | null {
   return null
 }
 
-// What `remote` of the repo at `dir` points to, when that is github.com.
+// What `remote` of the repo at `dir` points to, when that is github.com: the URL as configured,
+// before any `url.<base>.insteadOf` rewrites it for fetching, which may point at a mirror.
 export async function githubRemote(dir: string, remote = 'origin'): Promise<PullRequestRepo | null> {
-  const url = await gitOrNull(dir, ['remote', 'get-url', remote])
+  const url = await gitOrNull(dir, ['config', '--get', `remote.${remote}.url`])
   return url ? parseGitHubRemote(url) : null
 }

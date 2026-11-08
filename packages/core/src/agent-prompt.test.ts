@@ -25,7 +25,7 @@ describe('knowledge base instructions', () => {
     expect(note).toContain('普通 Markdown')
     expect(note).toContain('相对路径链接')
     expect(note).toContain('遵循已有笔记格式')
-    expect(note).toContain('仅在用户要求时写入；只新建或追加，不删除、不改名')
+    expect(note).toContain('仅在用户要求时写入；用户明确要求修改已有笔记时可以改，否则只新建或追加；不删除、不改名')
     expect(note).not.toMatch(/Obsidian|双链|frontmatter/)
   })
 })

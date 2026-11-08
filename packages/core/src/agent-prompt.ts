@@ -224,7 +224,7 @@ export function knowledgeBaseNote(base: KnowledgeBase): string {
   const format = obsidian
     ? '用 Obsidian Markdown（双链、frontmatter）。'
     : '用普通 Markdown，笔记之间使用相对路径链接，遵循已有笔记格式。'
-  return `用户的 ${obsidian ? 'Obsidian' : 'Markdown'} 知识库在 ${base.path}。仅在用户要求时写入；只新建或追加，不删除、不改名；${format}`
+  return `用户的 ${obsidian ? 'Obsidian' : 'Markdown'} 知识库在 ${base.path}。仅在用户要求时写入；用户明确要求修改已有笔记时可以改，否则只新建或追加；不删除、不改名；${format}`
 }
 
 // What a scheduled run is told first: it starts with nobody there to answer.

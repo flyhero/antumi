@@ -542,9 +542,9 @@ Agent 可用之后、任务来源之前是「接着聊」一步：从零用一�
 
 设置 → 集成 → 知识库 支持「Markdown 文件夹」和「Obsidian」两种模式，存在聊天设置的 `knowledgeBase`（路径、是否允许写入和可选的 `kind`）。新选择默认 Markdown 文件夹，用普通 Markdown 和相对路径链接，遵循已有笔记格式；Obsidian 模式用双链和 frontmatter，core 读 Obsidian 自己的注册表列出它打开过的库，也可以选任意文件夹。旧配置缺少 `kind` 时继续按 Obsidian 工作；旧客户端更新同一路径的写入权限时保留已保存的模式。core 用 `knowledge-base-kind` 声明支持两种模式，新客户端连接旧 core 时只显示原来的 Obsidian 入口。切换模式保留路径和写入权限，从下次启动 Agent 生效。
 
-每次启动 Agent，core 都把知识库的**原目录**交给它：不算项目，不进 `projectPaths`，任务里也不建 worktree，所以 Agent 写进去的笔记其他笔记应用立刻能看到。仅在用户要求时写入，只新建或追加，不删除、不改名。只在普通阶段可写：规划、只读和群聊阶段只读。各家 adapter 自己决定怎么交（`AgentLaunch.knowledgeBase`）：
+每次启动 Agent，core 都把知识库的**原目录**交给它：不算项目，不进 `projectPaths`，任务里也不建 worktree，所以 Agent 写进去的笔记其他笔记应用立刻能看到。仅在用户要求时写入；用户明确要求修改已有笔记时可以改，否则只新建或追加；不删除、不改名。这些规则只写在提示词里，可写时 Agent 实际能改动整个目录。只在普通阶段可写：规划、只读和群聊阶段只读。各家 adapter 自己决定怎么交（`AgentLaunch.knowledgeBase`）：
 
-- Claude Code：可写时 `--add-dir`，只读时加一条 `Read(//库/**)` 允许规则（不作为工作目录，就不会连带加载库里的 `.claude/skills`）；路径、所选笔记格式和「只新建或追加、不删除、不改名」的规则用 `--append-system-prompt` 告诉它。
+- Claude Code：可写时 `--add-dir`，只读时加一条 `Read(//库/**)` 允许规则（不作为工作目录，就不会连带加载库里的 `.claude/skills`）；路径、所选笔记格式和写入规则用 `--append-system-prompt` 告诉它。
 - Codex：可写时作为每个回合 `sandboxPolicy` 的可写根；只读沙箱不收可写根，所以规划和只读阶段写不了。规则用 `-c developer_instructions=…` 传入。
 - Cursor：可写时 `--add-dir`；ACP 没有系统提示词，规则拼在进程第一条提示的 `wire` 上，`logged` 不带，聊天记录、搜索和移交都看不到。
 

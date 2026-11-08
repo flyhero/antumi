@@ -1462,7 +1462,8 @@ export class CodexAppServer implements ChatDriver {
     const call = this.mcpCalls.get(request.serverName)
     const tool = call?.tool ?? /"([^"]+)"/.exec(request.message)?.[1] ?? null
     const name = tool ? `${request.serverName}.${tool}` : request.serverName
-    const shown = request._meta.tool_params_display.map((param) => `${param.display_name ?? param.name ?? ''}: ${typeof param.value === 'string' ? param.value : JSON.stringify(param.value)}`)
+    // The call's card already shows its arguments; listed again they made the headline the whole input.
+    const shown = call ? [] : request._meta.tool_params_display.map((param) => `${param.display_name ?? param.name ?? ''}: ${typeof param.value === 'string' ? param.value : JSON.stringify(param.value)}`)
     const choices: CodexChoice[] = [
       { id: 'allow', decision: 'allow', grants: [], raw: { action: 'accept', content: null, _meta: null } },
       ...(request._meta.persist.includes('session') ? [{ id: 'allowForSession', decision: 'allowForSession' as const, grants: [{ kind: 'rules' as const, values: [name], scope: 'run' as const, behavior: 'allow' as const }], raw: { action: 'accept', content: null, _meta: { persist: 'session' } } }] : []),

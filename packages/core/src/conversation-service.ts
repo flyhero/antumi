@@ -933,7 +933,7 @@ export class ConversationService {
     if (!this.capacityAvailable(agent)) throw new Rejection('agent-capacity', 'Agent 运行数量已达到上限，请等待其他会话结束，或预约稍后执行')
     const { id } = await this.create(agent, projectPaths, allowBypass, { ...start, deferStart: true })
     this.fetchingIssues.set(id, { step: 'issue', error: null })
-    this.store.setSource(id, issue.source)
+    this.store.setSource(id, { ...issue.source, title: issue.title })
     return this.changed(this.store.update(id, { title: issue.title, titleLocked: true }))
   }
 
@@ -951,6 +951,7 @@ export class ConversationService {
     const current = this.get(id)
     this.fetchingIssues.delete(id)
     try {
+      if (current.source) this.store.setSource(id, { ...current.source, title: issue.title })
       this.store.update(id, { title: issue.title, titleLocked: true })
       const directory = path.join(this.sessionsRoot, id, 'handoffs')
       await mkdir(directory, { recursive: true, mode: 0o700 })

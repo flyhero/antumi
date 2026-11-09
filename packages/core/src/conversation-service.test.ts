@@ -884,6 +884,8 @@ describe('ConversationService', () => {
 
     const started = await service.beginInvestigation(opened.id, { title: 'Login fails on Safari', brief: '# 待排查的问题\nthe brief', readable: [] }, '排查 Demo D-1：Login fails')
     expect(started).toMatchObject({ title: 'Login fails on Safari', sessionId: expect.any(String) })
+    expect(started.source).toEqual({ ...source, title: 'Login fails on Safari' })
+    expect(service.rename(opened.id, 'My investigation').source?.title).toBe('Login fails on Safari')
     expect(started.preparing).toBeUndefined()
     expect(handoffFile(started.sessionId!)).toBe('# 待排查的问题\nthe brief')
     await settle()

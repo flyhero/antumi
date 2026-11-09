@@ -24,6 +24,8 @@ export const TaskSource = z.object({
   // The provider's display name when the task was imported, so it still reads right if the provider goes away.
   name: z.string().max(64),
   key: SourceKey,
+  // Captured separately from an editable task or conversation title.
+  title: z.string().max(MAX_ISSUE_TITLE_LENGTH).optional(),
   url: z.string().max(2000)
 })
 export type TaskSource = z.infer<typeof TaskSource>

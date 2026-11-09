@@ -1,5 +1,6 @@
 // Application-owned text. Values and external content are passed separately.
 export const MESSAGES = {
+  "ConversationChat.referencedIssue": {"zh": "引用问题", "en": "Referenced issue"},
   "SourceUpdates.title": {"zh": "来源更新", "en": "Issue updates"},
   "SourceUpdates.tab": {"zh": "来源", "en": "Source"},
   "SourceUpdates.noPending": {"zh": "没有待处理评论", "en": "No comments pending"},

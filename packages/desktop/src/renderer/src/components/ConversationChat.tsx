@@ -49,6 +49,7 @@ import { freshKeys, useJustFinished } from '../chat-motion'
 import { acknowledgeInitialMessage, sendInitialMessage, useInitialMessages, type InitialMessage } from '../initial-messages'
 import { Spinner } from './Spinner'
 import { InvestigationPreparing } from './InvestigationPreparing'
+import { InvestigationReference } from './InvestigationReference'
 import { TranslateButton, useTranslated } from './TranslateButton'
 import { ChatFind, useChatFindState, type ChatHistoryResult } from './ChatFind'
 import { ArrowDownIcon, ChevronDownIcon, ChevronRightIcon, FileChangesIcon, AgentIcon, ForkIcon } from './icons'
@@ -58,6 +59,7 @@ import { ChatActivityStep } from './ChatActivityStep'
 
 type ToolItem = Extract<ChatItem, { kind: 'tool' }>
 const NO_ITEMS: ChatItem[] = []
+const InvestigationPrompt = createContext<{ source: NonNullable<Conversation['source']>; title: string; messageKey: string } | null>(null)
 // Within this many pixels of the bottom, new output keeps the list scrolled to the end.
 const PINNED_SLACK = 48
 // Scrolled back further than this, the list offers a way down to the latest.
@@ -222,12 +224,15 @@ function UserQuotes({ quotes }: { quotes: ReturnType<typeof parseQuotes>['quotes
 function UserMessage({ item, pending = false }: { item: UserItem; pending?: boolean }) {
   const [open, setOpen] = useDisclosure(`message:${itemKey(item)}`)
   const { byStage, current } = useContext(ChatAgent)
+  const investigation = useContext(InvestigationPrompt)
+  const reference = investigation?.messageKey === itemKey(item) ? <InvestigationReference source={investigation.source} title={investigation.title} /> : null
   const handoff = parseHandoffMessage(item.text)
   const { quotes, body } = parseQuotes(saidText(item.text))
   // A handoff the user added nothing to: a line saying so, where the agent's head still goes under.
   if (handoff && !body && quotes.length === 0 && item.images.length === 0) {
     return (
       <>
+        {reference}
         <div className="chat-user-handoff">{tr('ConversationChat.handedOffToWithNoAdditionalInstructions', { value1: agentLabel((byStage.get(item.stageId) ?? current).agent) })}</div>
         {!pending && <UserMessageFooter item={item} />}
       </>
@@ -236,6 +241,7 @@ function UserMessage({ item, pending = false }: { item: UserItem; pending?: bool
   const long = body.split('\n').length > 12 || body.length > 1200
   return (
     <>
+      {reference}
       <div className="chat-user" data-clipped={(long && !open) || undefined} data-steer={item.steer || undefined}>
         {item.steer && <span className="chat-user-steer" title={t('ConversationChat.messageInsertedDuringTheTurn')}>{t('ConversationChat.additionalInstructions')}</span>}
         <ChatImageStrip images={item.images} />
@@ -635,6 +641,13 @@ export function ConversationChat({ conversation, surface, onHandoff, variant = '
   }, [rpc, id, conversation.sessionId])
 
   const items = page?.items ?? NO_ITEMS
+  // A partial history must not label a later message as the original investigation prompt.
+  const firstPrompt = !page?.before ? items.find((item) => item.kind === 'user' && !isAgentCallResult(item)) : undefined
+  const investigation = conversation.source && !page?.before ? {
+    source: conversation.source,
+    title: conversation.title,
+    messageKey: firstPrompt ? itemKey(firstPrompt) : initialMessage ? itemKey({ stageId: 'pending', id: `u:${initialMessage.ref}` }) : ''
+  } : null
   const browserTabs = useWatchBrowserTabs(items.some((item) => item.kind === 'tool' && isBrowserTool(item.name)) ? id : null)
   useEffect(() => acknowledgeInitialMessage(id, items), [id, items])
   // A task's redos, each starting its chat over.
@@ -882,6 +895,7 @@ export function ConversationChat({ conversation, surface, onHandoff, variant = '
   const stopBackground = useCallback(async (tool: { id: string }) => (await perform((rpc) => rpc.call('conversations.stopBackground', { id, itemId: tool.id }))) !== null, [id])
   return (
     <ChatVariant.Provider value={variant}>
+    <InvestigationPrompt.Provider value={investigation}>
     <FoldedTurns.Provider value={foldedTurns}>
     <ChatSurfaceContext.Provider value={shown}>
     <ChatAgent.Provider value={agentInfo}>
@@ -994,6 +1008,7 @@ export function ConversationChat({ conversation, surface, onHandoff, variant = '
     </ChatAgent.Provider>
     </ChatSurfaceContext.Provider>
     </FoldedTurns.Provider>
+    </InvestigationPrompt.Provider>
     </ChatVariant.Provider>
   )
 }

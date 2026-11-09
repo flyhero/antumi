@@ -5,6 +5,7 @@ import { describeBrowserPage, type ChatItem } from '@antumi/protocol'
 import { ChatBrowserCard, ChatBrowserRun } from './ChatBrowserCard'
 
 const opened = vi.hoisted(() => new Set<string>())
+vi.mock('../appearance', () => ({ isDarkTheme: () => false, onThemeChange: () => () => {} }))
 vi.mock('../chat-disclosure', async (original) => ({ ...await original<typeof import('../chat-disclosure')>(), useDisclosure: (key: string) => [opened.has(key), () => {}] }))
 vi.mock('../core-store', () => ({
   useCore: () => false, showBrowserTab: vi.fn(), showTerminal: vi.fn()

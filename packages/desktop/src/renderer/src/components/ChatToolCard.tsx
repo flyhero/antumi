@@ -1,5 +1,5 @@
 import { localized, t, tr } from '../i18n'
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useState, useSyncExternalStore } from 'react'
 import { terminalToolKind, type ChatDiff, type ChatItem, type ChatToolStatus } from '@antumi/protocol'
 import { ChatFindExpansion, useDisclosure } from '../chat-disclosure'
 import { itemKey } from '../chat-state'
@@ -17,19 +17,17 @@ import { fileReference } from '../file-links'
 import { canStop, isBackgroundCommand, limitAt, limitText, stoppedAtLimitText } from '../background-work'
 import { BackgroundStopButton } from './BackgroundStopButton'
 import { antumiToolTitle } from '../antumi-tool-presentation'
+import { isDarkTheme, onThemeChange } from '../appearance'
+import { FileTypeIcon } from './FileTypeIcon'
 
 type ToolItem = Extract<ChatItem, { kind: 'tool' }>
 
 // Turns the conversation's project paths in a title or diff header into short, relative ones.
 export const ChatPaths = createContext<(text: string) => string>((text) => text)
 
-// A file's type as a small badge: its extension, coloured by the stylesheet for the common ones.
-export function FileExt({ path }: { path: string }) {
-  const name = path.split(/[\\/]/).pop() ?? path
-  const dot = name.lastIndexOf('.')
-  const ext = dot > 0 ? name.slice(dot + 1).toLowerCase() : ''
-  if (!ext || ext.length > 4) return null
-  return <span className="chat-file-ext" data-ext={ext} aria-hidden="true">{ext.slice(0, 3)}</span>
+function ChatFileIcon({ path }: { path: string }) {
+  const dark = useSyncExternalStore(onThemeChange, isDarkTheme, () => false)
+  return <FileTypeIcon path={path} dark={dark} />
 }
 
 
@@ -137,7 +135,7 @@ export function ChatEditsCard({ path, tools }: { path: string; tools: readonly T
       <button type="button" className="chat-tool-header" aria-expanded={open} onClick={() => setOpen(!open)}>
         <ChatToolIcon name="Edit" status={tools.find((tool) => tool.status === 'running')?.status ?? tools.find((tool) => tool.status !== 'done')?.status ?? 'done'} />
         <span className="chat-tool-name">{t('ChatToolCard.edit')}</span>
-        <FileExt path={path} />
+        <ChatFileIcon path={path} />
         <span className="chat-tool-title" data-file-path={path} title={path}>{shorten(path)}<span className="chat-tool-count">{tr('ChatToolCard.times', { value1: tools.length })}</span></span>
         <DiffCount diffs={tools.flatMap((tool) => tool.diffs)} />
         <span className="chat-tool-chevron" aria-hidden="true"><ChevronRightIcon /></span>
@@ -265,7 +263,7 @@ export function ChatToolCard({ item }: { item: ToolItem }) {
       >
         <ChatToolIcon name={item.name} display={item.display} status={status} />
         <span className="chat-tool-name">{toolLabel(item.name, item.display)}:</span>
-        {item.diffs.length > 0 && <FileExt path={item.diffs[0]?.path ?? item.title} />}
+        {item.diffs.length > 0 && <ChatFileIcon path={item.diffs[0]?.path ?? item.title} />}
         <span className="chat-tool-title" data-file-path={item.diffs[0]?.path ?? fileReference(title)?.path} title={title}>{shorten(title)}</span>
         <DiffCount diffs={item.diffs} />
         {details && <span className="chat-tool-chevron" aria-hidden="true"><ChevronRightIcon /></span>}

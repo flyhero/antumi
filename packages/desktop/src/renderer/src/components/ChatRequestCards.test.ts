@@ -5,6 +5,7 @@ import type { ChatItem } from '@antumi/protocol'
 import { ChatApprovalCard, ChatQuestionCard, ChatRequestLine } from './ChatRequestCards'
 
 vi.mock('../core-store', () => ({ perform: vi.fn() }))
+vi.mock('../appearance', () => ({ isDarkTheme: () => false, onThemeChange: () => () => {} }))
 
 type ApprovalItem = Extract<ChatItem, { kind: 'approval' }>
 type ToolItem = Extract<ChatItem, { kind: 'tool' }>

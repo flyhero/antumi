@@ -7,6 +7,7 @@ import { ChatFindExpansion } from '../chat-disclosure'
 import { StopBackground } from '../background-work'
 
 const opened = vi.hoisted(() => new Set<string>())
+vi.mock('../appearance', () => ({ isDarkTheme: () => false, onThemeChange: () => () => {} }))
 vi.mock('../chat-disclosure', async (original) => ({ ...await original<typeof import('../chat-disclosure')>(), useDisclosure: (key: string) => [opened.has(key), () => {}] }))
 vi.mock('../core-store', () => ({ showTerminal: vi.fn() }))
 beforeEach(() => opened.clear())

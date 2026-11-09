@@ -8952,34 +8952,7 @@ div.inspector-empty > p { margin: 0 0 8px; }
 .chat-turn-head .chat-message-time { margin-left: 0; }
 .chat-turn-tokens { font-family: var(--mono); }
 
-/* A file's type, from its extension, as a small badge before its name. */
-.chat-file-ext {
-  flex-shrink: 0;
-  width: 16px;
-  height: 16px;
-  border-radius: 3px;
-  background: var(--text-3);
-  color: #fff;
-  font-family: var(--mono);
-  font-size: 7px;
-  font-weight: 600;
-  line-height: 16px;
-  text-align: center;
-  text-transform: uppercase;
-}
-.chat-file-ext[data-ext='ts'], .chat-file-ext[data-ext='tsx'] { background: #3178c6; }
-.chat-file-ext[data-ext='js'], .chat-file-ext[data-ext='jsx'], .chat-file-ext[data-ext='mjs'] { background: #c9a900; }
-.chat-file-ext[data-ext='css'], .chat-file-ext[data-ext='scss'] { background: #7c4dbd; }
-.chat-file-ext[data-ext='md'], .chat-file-ext[data-ext='mdx'] { background: #4a78c2; }
-.chat-file-ext[data-ext='json'], .chat-file-ext[data-ext='yaml'], .chat-file-ext[data-ext='yml'], .chat-file-ext[data-ext='toml'] { background: #8a8a8a; }
-.chat-file-ext[data-ext='go'] { background: #00acd7; }
-.chat-file-ext[data-ext='py'] { background: #3572a5; }
-.chat-file-ext[data-ext='rs'] { background: #b7410e; }
-.chat-file-ext[data-ext='java'], .chat-file-ext[data-ext='kt'] { background: #b07219; }
-.chat-file-ext[data-ext='sql'] { background: #e38c00; }
-.chat-file-ext[data-ext='sh'] { background: #4eaa25; }
-.chat-file-ext[data-ext='html'], .chat-file-ext[data-ext='vue'] { background: #e34c26; }
-.chat-file-ext[data-ext='swift'] { background: #f05138; }
+.chat-tool-header .file-tree-icon { margin-right: 0; }
 
 /* The command an approval asks about: a code block, clipped to a few lines until opened. */
 .chat-approve-command { position: relative; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg); }

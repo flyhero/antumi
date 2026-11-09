@@ -9,6 +9,7 @@ import { ConversationInspector } from './ConversationInspector'
 import { TaskInspector } from './TaskInspector'
 import { useConversationPanel } from './ConversationView'
 import { conversationSurface } from './chat-surface'
+import { ChatIcon, SourceIcon } from './icons'
 
 vi.hoisted(() => {
   vi.stubGlobal('window', { antumi: undefined, matchMedia: () => ({ matches: false, addEventListener() {}, removeEventListener() {} }) })
@@ -61,7 +62,7 @@ describe('issue update entry', () => {
     expect(button()).toContain('class="source-updates-count">3')
     useCore.setState({ sourceUpdates: { 'conversation:one': { ...initial, unread: 0, pending: 0 } } })
     expect(button()).not.toContain('class="source-updates-count"')
-    expect(button()).toContain('来源更新')
+    expect(button()).toContain('评论更新')
   })
 
   it('does not show an entry without an update summary or on an older core', () => {
@@ -85,6 +86,21 @@ describe('source inspector availability', () => {
   const source = { provider: 'jira', instance: 'work', name: 'Jira', key: 'YAAS-1', url: 'https://jira.example/browse/YAAS-1' }
   const conversation: Conversation = { id: 'one', title: 'Investigate', titleLocked: false, agent: 'claude', workspacePath: '/w', projectPaths: [], managedWorkspace: true, sessionId: null, createdAt: 0, updatedAt: 0, source }
   const task = Task.parse({ id: 'task', title: 'Task', details: '', repos: [], dependsOn: [], conversationId: conversation.id, status: 'running', agent: 'claude', createdAt: 0, updatedAt: 0, source })
+
+  it('uses each target’s source mark beside comment updates, with a comment icon for other plugins', () => {
+    useCore.setState({ conversations: { one: conversation }, tasks: { task: { ...task, source: { ...source, provider: 'github', name: 'GitHub', key: 'repo/#1' } } }, sourceUpdates: { 'conversation:one': initial, 'task:task': { ...initial, target: { kind: 'task', id: task.id } } } })
+    for (const [kind, id, provider, label] of [
+      ['conversation', 'one', 'jira', 'Jira YAAS-1'],
+      ['task', 'task', 'github', 'GitHub repo/#1']
+    ] as const) {
+      const html = renderToStaticMarkup(createElement(SourceUpdatesButton, { target: { kind, id } }))
+      expect(html).toContain(renderToStaticMarkup(createElement(SourceIcon, { provider })))
+      expect(html).toContain('评论更新')
+      expect(html).toContain(label)
+    }
+    useCore.setState({ conversations: { one: { ...conversation, source: { ...source, provider: 'custom' } } } })
+    expect(renderToStaticMarkup(createElement(SourceUpdatesButton, { target }))).toContain(renderToStaticMarkup(createElement(ChatIcon)))
+  })
 
   it('offers source details without a repository, plan, todo or helper in both inspectors', () => {
     useCore.setState({ conversations: { one: conversation }, tasks: { task }, sourceUpdates: { 'conversation:one': initial, 'task:task': { ...initial, target: { kind: 'task', id: task.id } } }, conversationInspectorTab: 'source', taskInspectorTab: 'source' })

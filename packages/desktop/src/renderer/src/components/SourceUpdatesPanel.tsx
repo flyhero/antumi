@@ -6,7 +6,7 @@ import { dayAndTime } from '../labels'
 import { MarkdownEditor } from './MarkdownEditor'
 import { useSourceUpdateSummary } from '../source-updates'
 import { useConversationPane } from './conversation-pane'
-import { ChatIcon, PauseIcon, WarningIcon } from './icons'
+import { ChatIcon, PauseIcon, SourceIcon, WarningIcon } from './icons'
 import { SourceLink } from './SourceLink'
 import { Spinner } from './Spinner'
 
@@ -19,12 +19,14 @@ export function SourceCommentBadge({ target }: { target: SourceUpdateTarget }) {
 
 export function SourceUpdatesButton({ target }: { target: SourceUpdateTarget }) {
   const summary = useSourceUpdateSummary(target)
+  const source = useCore((state) => target.kind === 'task' ? state.tasks[target.id]?.source : state.conversations[target.id]?.source)
   const pane = useConversationPane()
   const expanded = useCore((state) => target.kind === 'task'
     ? state.inspectorOpen && state.taskInspectorTab === 'source'
     : state.conversationInspectorOpen && state.conversationInspectorTab === 'source')
   if (!summary) return null
   const hints = [t('SourceUpdates.title'), summary.pending > 0 ? t('SourceUpdates.pending', { count: summary.pending }) : t('SourceUpdates.noPending')]
+  if (source) hints.splice(1, 0, `${source.name} ${source.key}`)
   if (summary.unread > 0) hints.push(t('SourceUpdates.newComments', { count: summary.unread }))
   if (summary.problem) hints.push(summary.problem)
   else if (!summary.active) hints.push(t('SourceUpdates.paused'))
@@ -39,10 +41,11 @@ export function SourceUpdatesButton({ target }: { target: SourceUpdateTarget }) 
     data-problem={Boolean(summary.problem) || undefined}
     onClick={() => { if (pane && !pane.active) pane.focus(); showSourceUpdates(target) }}
   >
-    {summary.refreshing ? <Spinner /> : summary.problem ? <WarningIcon /> : !summary.active ? <PauseIcon /> : <ChatIcon />}
+    {source ? <SourceIcon provider={source.provider} fallback={ChatIcon} /> : <ChatIcon />}
     <span>{t('SourceUpdates.title')}</span>
     {summary.pending > 0 && <span className="source-updates-count">{summary.pending}</span>}
     {summary.unread > 0 && <span className="source-updates-unread" aria-hidden="true" />}
+    {summary.refreshing ? <Spinner /> : summary.problem ? <WarningIcon /> : !summary.active ? <PauseIcon /> : null}
   </button>
 }
 

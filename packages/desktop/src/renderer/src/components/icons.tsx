@@ -783,8 +783,8 @@ function JiraMark() {
 const SOURCE_MARKS: Partial<Record<string, () => ReactElement>> = { github: GitHubMark, jira: JiraMark }
 
 // A task source by its provider's own mark where there is one; any other (a plugin's) by the inbox.
-export function SourceIcon({ provider }: { provider: string }) {
-  const Mark = SOURCE_MARKS[provider] ?? InboxIcon
+export function SourceIcon({ provider, fallback = InboxIcon }: { provider: string; fallback?: () => ReactElement }) {
+  const Mark = SOURCE_MARKS[provider] ?? fallback
   return <Mark />
 }
 

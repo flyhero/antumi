@@ -120,8 +120,17 @@ jobs:
           node-version: '24'
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # electron-builder fetches Electron and its packaging tools from GitHub releases once, without
+      # retrying; a 504 there failed a whole release, so the build gets a few spaced tries.
       - name: Build installer
-        run: pnpm ${{ matrix.command }}
+        shell: bash
+        run: |
+          for attempt in 1 2 3 4; do
+            pnpm ${{ matrix.command }} && exit 0
+            echo "::warning::build attempt $attempt failed"
+            sleep $((attempt * 60))
+          done
+          exit 1
       - uses: actions/upload-artifact@v7
         with:
           name: release-${{ matrix.platform }}

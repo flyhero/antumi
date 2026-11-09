@@ -381,7 +381,7 @@ describe('SourceService', () => {
     const looked = new Map<string, string>()
     const rows = new Map<string, Conversation>()
     const opened: { agent: string; projectPaths: readonly string[]; start: object; issue: { source: object; title: string } }[] = []
-    const begun: { id: string; issue: { title: string; brief: string; readable: readonly string[] }; note: string }[] = []
+    const begun: { id: string; issue: { title: string; brief: string; readable: readonly string[] }; note: string; imageIds?: readonly string[] }[] = []
     const late: { id: string; text: string; imageIds: readonly string[] }[] = []
     const steps: string[] = []
     const preparing = (id: string, step: 'issue' | 'images', error?: { reason: string; message: string } | null) => {
@@ -405,8 +405,8 @@ describe('SourceService', () => {
         return rows.get(id)!
       },
       setPreparing: preparing,
-      beginInvestigation: async (id, issue, note) => {
-        begun.push({ id, issue, note })
+      beginInvestigation: async (id, issue, note, _references, imageIds) => {
+        begun.push({ id, issue, note, imageIds })
         const { preparing: _done, ...row } = rows.get(id)!
         rows.set(id, { ...row, title: issue.title, sessionId: 'session' })
         return rows.get(id)!
@@ -484,7 +484,8 @@ describe('SourceService', () => {
     await setUp()
     const { rows, begun, steps } = lookInto()
     demo.fetchFails = 1
-    const conversation = await service.investigate('demo', 'default', 'D-1', { agent: 'claude', projectPaths: [], note: '看看' })
+    const image = await attachments.put(pngBytes(8, 6))
+    const conversation = await service.investigate('demo', 'default', 'D-1', { agent: 'claude', projectPaths: [], note: '看看', images: [image.id] })
     await until(() => (rows.get(conversation.id)?.preparing?.error ? true : undefined))
     expect(rows.get(conversation.id)?.preparing).toEqual({ step: 'issue', error: 'fetch failed', reason: 'source-request-failed' })
     expect(steps).toEqual(['issue:source-request-failed'])
@@ -494,8 +495,21 @@ describe('SourceService', () => {
     expect(retried.preparing).toEqual({ step: 'issue', error: null })
     await expect(service.retryInvestigation(conversation.id)).rejects.toMatchObject({ reason: 'conversation-preparing' })
     const [first] = await until(() => (begun.length > 0 ? begun : undefined))
-    expect(first).toMatchObject({ id: conversation.id, note: '看看' })
+    expect(first).toMatchObject({ id: conversation.id, note: '看看', imageIds: [image.id] })
     await expect(service.retryInvestigation(conversation.id)).rejects.toMatchObject({ reason: 'conversation-running' })
+  })
+
+  it('passes user images with the opening instruction, validating and deduplicating them before opening', async () => {
+    await setUp()
+    const { opened, begun } = lookInto()
+    await expect(service.investigate('demo', 'default', 'D-1', { agent: 'claude', projectPaths: [], images: [`${'a'.repeat(64)}.png`] })).rejects.toMatchObject({ reason: 'attachment-not-found' })
+    expect(opened).toEqual([])
+    const image = await attachments.put(pngBytes(8, 6))
+    const conversation = await service.investigate('demo', 'default', 'D-1', { agent: 'claude', projectPaths: [], note: '看这张图', images: [image.id, image.id] })
+    const [first] = await until(() => begun.length > 0 ? begun : undefined)
+    expect(first).toMatchObject({ id: conversation.id, note: '看这张图', imageIds: [image.id] })
+    expect(opened[0]?.start).not.toHaveProperty('images')
+    expect(first?.issue.readable).not.toContain(await attachments.pathOf(image.id))
   })
 
   it('stops and empties the inbox when disabled, ignoring a refresh still under way', async () => {

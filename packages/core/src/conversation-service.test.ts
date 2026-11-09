@@ -892,6 +892,17 @@ describe('ConversationService', () => {
     expect(service.messages(opened.id).filter((message) => message.role === 'user').map((message) => message.text)).toEqual(['排查 Demo D-1：Login fails'])
   })
 
+  it('attaches user images to the investigation instruction alongside its issue handoff', async () => {
+    const source = { provider: 'demo', instance: 'default', name: 'Demo', key: 'D-1', url: 'https://demo.test/issues/D-1' }
+    const image = await attachmentsAt(root).put(pngBytes(4, 3))
+    const opened = await service.openInvestigation('claude', [], undefined, {}, { source, title: 'Crash' })
+    const started = await service.beginInvestigation(opened.id, { title: 'Crash', brief: '# Issue context', readable: [] }, '看这张图', undefined, [image.id, image.id])
+    await settle()
+    expect(daemon.written(started.sessionId!).at(-1)).toMatchObject({ message: { content: [{ type: 'image' }, { type: 'text', text: expect.stringContaining('看这张图') }] } })
+    expect(handoffFile(started.sessionId!)).toBe('# Issue context')
+    expect(service.chatPage(started.id).items.filter((item) => item.kind === 'user')).toMatchObject([{ images: [{ id: image.id, width: 4, height: 3 }], text: expect.stringContaining('看这张图') }])
+  })
+
   it('keeps an issue conversation preparing with what went wrong, and one a restart cut off', async () => {
     const source = { provider: 'demo', instance: 'default', name: 'Demo', key: 'D-2', url: 'https://demo.test/issues/D-2' }
     const opened = await service.openInvestigation('claude', [], undefined, {}, { source, title: 'Crash' })

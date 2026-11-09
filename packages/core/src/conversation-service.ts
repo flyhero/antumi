@@ -87,7 +87,7 @@ export type TaskChatLaunch = TaskLaunchOptions & {
 // What a stage's start takes beyond the agent: see TaskChatLaunch; moved says the agent works
 // somewhere else than its last stage did.
 // brief: a file written for the first stage to read before anything else, sent as a handoff is.
-type StageLaunch = { fresh?: boolean; moved?: boolean; planOnly?: boolean; readable?: readonly string[]; fork?: ForkPoint; opening?: string; brief?: string; references?: ChatReference[] }
+type StageLaunch = { fresh?: boolean; moved?: boolean; planOnly?: boolean; readable?: readonly string[]; fork?: ForkPoint; opening?: string; brief?: string; references?: ChatReference[]; images?: readonly ChatImage[] }
 // The provider session another conversation's stage ran, taken over through the turn `at` names;
 // neither null means a session the agent can fork, else the fork starts afresh.
 // latest: the point is the last the agent's session holds, so the session forked whole is the same.
@@ -947,17 +947,18 @@ export class ConversationService {
 
   // Starts the agent on the issue's brief. A start that fails leaves the conversation preparing
   // with the failure, to be tried again.
-  async beginInvestigation(id: string, issue: { title: string; brief: string; readable: readonly string[] }, note: string, references?: ChatReference[]): Promise<Conversation> {
+  async beginInvestigation(id: string, issue: { title: string; brief: string; readable: readonly string[] }, note: string, references?: ChatReference[], imageIds: readonly string[] = []): Promise<Conversation> {
     const current = this.get(id)
     this.fetchingIssues.delete(id)
     try {
+      const images = await this.chatImages(imageIds)
       if (current.source) this.store.setSource(id, { ...current.source, title: issue.title })
       this.store.update(id, { title: issue.title, titleLocked: true })
       const directory = path.join(this.sessionsRoot, id, 'handoffs')
       await mkdir(directory, { recursive: true, mode: 0o700 })
       const brief = path.join(directory, `${randomUUID()}.md`)
       await writeFile(brief, issue.brief, { mode: 0o600 })
-      return await this.start(id, current.agent, note, false, { brief, readable: issue.readable, references })
+      return await this.start(id, current.agent, note, false, { brief, readable: issue.readable, references, images })
     } catch (error) {
       if (!this.store.get(id) || this.store.get(id)?.sessionId) throw error
       this.setPreparing(id, 'issue', { reason: error instanceof Rejection ? error.reason : 'chat-start-failed', message: error instanceof Error ? error.message : String(error) })
@@ -1169,7 +1170,7 @@ export class ConversationService {
     const stage = this.store.startStage(id, agent, providerSessionId, this.store.maxSequence(id), stageId, launch.planOnly ?? false, route, account?.id ?? null)
     if (saved) await this.importHooks?.before(id, agent, saved)
     const provider = decision.kind === 'provider' ? providerLaunch(decision.route, decision.apiKey) : undefined
-    return { ...await this.startChat(current, stage, saved !== null, handoffPath === null ? null : { path: handoffPath, note, references: launch.references }, launch.readable ?? [], null, provider, account), starting: false }
+    return { ...await this.startChat(current, stage, saved !== null, handoffPath === null ? null : { path: handoffPath, note, references: launch.references, images: launch.images }, launch.readable ?? [], null, provider, account), starting: false }
   }
 
   // The first stage of a fork: the source's session taken over through the fork point, where the
@@ -1205,7 +1206,7 @@ export class ConversationService {
     stage: ConversationStage,
     resume: boolean,
     // The file a new agent reads first, and what the user added for it.
-    handoff: { path: string; note: string; references?: ChatReference[] } | null,
+    handoff: { path: string; note: string; references?: ChatReference[]; images?: readonly ChatImage[] } | null,
     readable: readonly string[],
     forkAt: string | null = null,
     // The model provider the stage runs on, with its key; the stage's route says which.
@@ -1296,7 +1297,7 @@ export class ConversationService {
       await launch?.ready(agentStage)
       if (handoff) {
         const message = handoffMessage(handoff.path, handoff.note)
-        await this.chats.send(id, message, [], false, false, undefined, chatReferencesFor(handoff.note, message, handoff.references))
+        await this.chats.send(id, message, handoff.images ?? [], false, false, undefined, chatReferencesFor(handoff.note, message, handoff.references))
       }
     } catch (error) {
       // A stage that never started leaves nothing to resume, so it goes, log and all.

@@ -90,7 +90,8 @@ export function ConversationDraft() {
   const rpc = useCore((s) => s.rpc)
   const deferStart = rpc?.features.includes('deferred-conversation-start') ?? false
   const optionsSupported = useChatOptionsSupported()
-  const imagesSupported = useChatImagesSupported()
+  const chatImagesSupported = useChatImagesSupported()
+  const imagesSupported = chatImagesSupported && (!issue || (rpc?.features.includes('source-investigate-images') ?? false))
   const mentionsSupported = useFileMentionsSupported()
   const pastedTextSupported = usePastedTextSupported()
   const worktreesSupported = useConversationWorktreesSupported()
@@ -120,7 +121,7 @@ export function ConversationDraft() {
   // An issue's note goes with the conversation's start, so a long paste in it stays text.
   const files = useComposerFiles({
     conversationId: null, cwd: projectPaths[0] ?? null, input: mentionMenu.inputProps.input, setValue, addImages: attached.add,
-    images: imagesSupported && !issue, mentions: mentionsSupported, pastes: pastedTextSupported && !issue, readOnly: busy
+    images: imagesSupported, mentions: mentionsSupported, pastes: pastedTextSupported && !issue, readOnly: busy
   })
   // Written out for the agent picked when it goes, which may not be the one picked before.
   const writtenMessage = agent ? writeMentionedText(value, agent) : { text, references: [] }
@@ -185,15 +186,14 @@ export function ConversationDraft() {
     setBusy(true)
     const note = written.trim()
     const opened = await perform((rpc) => rpc.call('sources.investigate', {
-      provider: issue.provider, instance: issue.instance, key: issue.key, agent, ...where, ...(note ? { note } : {}), ...(rpc.features.includes('chat-references') ? { references: messageReferences(writtenMessage, note) } : {}), ...startOptions(), ...chosen
+      provider: issue.provider, instance: issue.instance, key: issue.key, agent, ...where, ...(note ? { note } : {}), ...(imagesSupported && attached.images.length > 0 ? { images: attached.images.map((image) => image.id) } : {}), ...(rpc.features.includes('chat-references') ? { references: messageReferences(writtenMessage, note) } : {}), ...startOptions(), ...chosen
     }))
     if (!opened) {
       setBusy(false)
       return
     }
     rememberInvestigationProjects(inboxKey(issue), projectPaths)
-    // Images go nowhere here, so any already attached wait for the next new conversation.
-    saveComposerDraft(composerId, { ...EMPTY_DRAFT, images: attached.images })
+    saveComposerDraft(composerId, imagesSupported ? EMPTY_DRAFT : { ...EMPTY_DRAFT, images: attached.images })
     useCore.setState((state) => ({ conversations: { ...state.conversations, [opened.id]: opened }, conversationDraftIssue: null }))
     selectConversation(opened.id)
   }
@@ -319,7 +319,7 @@ export function ConversationDraft() {
             >
               {commandMenu.menu}
               {mentionMenu.menu}
-              {imagesSupported && !issue && <ChatImageStrip images={attached.images} uploading={attached.uploading} onRemove={attached.remove} />}
+              {imagesSupported && <ChatImageStrip images={attached.images} uploading={attached.uploading} onRemove={attached.remove} />}
               <MentionField
                 value={value}
                 setValue={setValue}
@@ -330,7 +330,7 @@ export function ConversationDraft() {
                 aria-label={t('ConversationDraft.firstMessage')}
                 placeholder={!agent ? t('ConversationDraft.chooseAnAgentAboveFirst') : issue ? t('ConversationDraft.additionalInstructionsOptionalEnterToInvestigate', { send: sendHint }) : t('ConversationDraft.sendTheFirstMessageToEnterToSend', { value1: agentLabel(agent), send: sendHint })}
                 onPasteCapture={(event) => {
-                  if (imagesSupported) attached.handlers.onPaste(event)
+                  if (imagesSupported && !busy) attached.handlers.onPaste(event)
                   files.onPasteCapture(event)
                 }}
                 onKeyDownCapture={(event) => {
@@ -340,7 +340,7 @@ export function ConversationDraft() {
                 }}
               />
               <div className="chat-options">
-                {imagesSupported && !issue && <ChatAddMenu disabled={busy} onAdd={attached.add} />}
+                {imagesSupported && <ChatAddMenu disabled={busy} onAdd={attached.add} />}
                 {agent && (
                   <ProviderPicker agent={agent} value={providerId} disabled={busy || Boolean(profile)} onChange={(next) => {
                     // Models differ between accounts, so what was picked for the old one goes.

@@ -68,7 +68,7 @@ export type SourceConversations = {
     issue: { source: TaskSource; title: string }
   ): Promise<Conversation>
   setPreparing(id: string, step: 'issue' | 'images', error?: { reason: string; message: string } | null): void
-  beginInvestigation(id: string, issue: { title: string; brief: string; readable: readonly string[] }, note: string, references?: ChatReference[]): Promise<Conversation>
+  beginInvestigation(id: string, issue: { title: string; brief: string; readable: readonly string[] }, note: string, references?: ChatReference[], imageIds?: readonly string[]): Promise<Conversation>
   sendInvestigationImages(id: string, text: string, imageIds: readonly string[]): Promise<void>
 }
 
@@ -128,8 +128,8 @@ export class SourceService {
   private timer: ReturnType<typeof setInterval> | undefined
   private conversations: SourceConversations | null = null
   // What each issue conversation's agent is to start with, kept until it has: the user's note
-  // (null for the default one) and references. Gone after a restart, when a retry starts afresh.
-  private readonly investigating = new Map<string, { note: string | null; references?: ChatReference[]; running: boolean }>()
+  // (null for the default one), references and images. Gone after a restart, when a retry starts afresh.
+  private readonly investigating = new Map<string, { note: string | null; references?: ChatReference[]; images: readonly string[]; running: boolean }>()
 
   constructor(
     private providers: readonly SourceProvider[],
@@ -451,11 +451,16 @@ export class SourceService {
     check()
     const known = listed ?? first!.issue
     const source: TaskSource = { provider: id, instance, name: ready.provider.name, key: known.key, url: known.url }
-    const { agent, projectPaths, allowBypass, note, references, ...start } = options
+    const { agent, projectPaths, allowBypass, note, references, images = [], ...start } = options
+    const imageIds = [...new Set(images)]
+    for (const imageId of imageIds) {
+      if (!await this.attachments.info(imageId)) throw new Rejection('attachment-not-found', `no image ${imageId}`)
+    }
+    check()
     // Unless asked otherwise, it only reads: a finding first, then the user decides on a fix.
     const permissionMode = start.permissionMode ?? agentDescriptor(agent).discussionMode
     const conversation = await conversations.openInvestigation(agent, projectPaths, allowBypass, { ...start, permissionMode }, { source, title: known.title.trim() || known.key })
-    this.investigating.set(conversation.id, { note: note?.trim() || null, ...(references ? { references } : {}), running: true })
+    this.investigating.set(conversation.id, { note: note?.trim() || null, ...(references ? { references } : {}), images: imageIds, running: true })
     this.emitInbox(id, instance)
     void this.track(id, () => this.prepare(conversation.id, source, first)).catch(() => {})
     return conversation
@@ -472,7 +477,7 @@ export class SourceService {
     if (!conversation.preparing) throw new Rejection('conversation-running', 'the agent has started already')
     return this.track(source.provider, async () => {
       this.requireReady(source.provider, source.instance)
-      this.investigating.set(conversationId, { note: pending?.note ?? null, ...(pending?.references ? { references: pending.references } : {}), running: true })
+      this.investigating.set(conversationId, { note: pending?.note ?? null, ...(pending?.references ? { references: pending.references } : {}), images: pending?.images ?? [], running: true })
       conversations.setPreparing(conversationId, 'issue')
       void this.track(source.provider, () => this.prepare(conversationId, source, null)).catch(() => {})
       return conversations.get(conversationId)
@@ -508,7 +513,7 @@ export class SourceService {
         title,
         brief: investigationBrief(source, snapshot, images, later ? text.deferred : 0),
         readable: images.flatMap((image) => (image.path ? [image.path] : []))
-      }, pending?.note ?? `排查 ${source.name} ${source.key}：${title}`, pending?.references)
+      }, pending?.note ?? `排查 ${source.name} ${source.key}：${title}`, pending?.references, pending?.images)
       this.investigating.delete(conversationId)
       this.emitInbox(source.provider, source.instance)
       if (later) void this.track(source.provider, () => this.sendLateImages(conversationId, source, later!)).catch(() => {})

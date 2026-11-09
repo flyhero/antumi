@@ -22,6 +22,7 @@ import {
   type SourceDescriptor,
   type SourceInbox,
   type SourceUpdateSummary,
+  type SourceUpdateTarget,
   type SourceProblem,
   type Task,
   type Terminal,
@@ -433,6 +434,12 @@ export function showConversationChanges(): void {
 // One of the conversation's plans by item key, or null for its newest.
 export function showConversationPlan(key: string | null): void {
   useCore.setState({ conversationInspectorOpen: true, conversationInspectorTab: 'plan', conversationPlan: key })
+}
+
+export function showSourceUpdates(target: SourceUpdateTarget): void {
+  useCore.setState(target.kind === 'task'
+    ? { inspectorOpen: true, taskInspectorTab: 'source' }
+    : { conversationInspectorOpen: true, conversationInspectorTab: 'source' })
 }
 
 type UtilityPanelState = Pick<CoreState, 'utilityPanelOrder' | 'browserPanelOpen' | 'terminalPanelOpen' | 'portsPanelOpen' | 'filesPanelOpen' | 'browserMaximized' | 'terminalMaximized' | 'portsMaximized' | 'filesMaximized'>

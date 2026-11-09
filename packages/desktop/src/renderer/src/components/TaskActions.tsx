@@ -50,6 +50,7 @@ import { createSchedule, openRunForTask, scheduleState } from '../schedules'
 import { useOpenTodoCount, useTodosShown } from '../conversation-todos'
 import { askConfirm } from '../confirm-dialog'
 import { Spinner } from './Spinner'
+import { useSourceUpdateSummary } from '../source-updates'
 
 function blockerText(blocker: string, waitingOn: readonly Task[]): string {
   if (blocker === 'blocked' && waitingOn.length > 0) {
@@ -738,6 +739,7 @@ function PullRequestButton({ task, labelled }: { task: Task; labelled: boolean }
 // details have theirs under the title. Where to look and closing end the row in both panes, so
 // switching between them never moves those.
 export function TaskToolbar({ task, view }: { task: Task; view: TaskView }) {
+  const sourceUpdates = useSourceUpdateSummary(task.source ? { kind: 'task', id: task.id } : null)
   const parent = useCore((state) => state.conversations[task.conversationId ?? ''])
   const delegationSupported = useAgentCallsSupported(parent)
   const { calls } = useAgentCalls(delegationSupported ? parent?.id ?? null : null)
@@ -749,7 +751,7 @@ export function TaskToolbar({ task, view }: { task: Task; view: TaskView }) {
   return (
     <div className="toolbar">
       {view === 'chat' && <TaskSteps task={task} />}
-      {task.conversationId && (calls?.length || helper || worktree || wire || todosShown) ? <InspectorToggle view={view} conversationId={task.conversationId} /> : null}
+      {task.conversationId && (calls?.length || helper || worktree || wire || todosShown || sourceUpdates) ? <InspectorToggle view={view} conversationId={task.conversationId} /> : null}
       {task.conversationId && <ViewToggle view={view} />}
       <MoreMenu task={task} />
       <span className="toolbar-separator" aria-hidden="true" />

@@ -1,4 +1,4 @@
-import { SourceUpdatesPanel } from './SourceUpdatesPanel'
+import { useSourceUpdateSummary } from '../source-updates'
 import { useAgentCallsSupported } from '../agent-calls'
 import { getLocale, t, tr } from '../i18n'
 import { useHelperSupported } from '../helper-conversations'
@@ -43,6 +43,7 @@ function taskSurface(task: Task, dependencies: readonly Task[], planOnly: boolea
   const blocker = checkChatResume(task, dependencies)
   return {
     inspector: 'task',
+    sourceUpdates: task.source ? { kind: 'task', id: task.id } : undefined,
     showPlan: showTaskPlan,
     showChanges: showTaskChanges,
     showFileChange: (path, edit) => {
@@ -115,6 +116,7 @@ export function TaskChat({ taskId }: { taskId: string }) {
   const wire = useWireLogShown() && conversationId !== null
   const todosShown = useTodosShown() && conversationId !== null
   const handoff = useTaskHandoff(task)
+  const sourceUpdates = useSourceUpdateSummary(task?.source ? { kind: 'task', id: taskId } : null)
   const { open: openHandoff } = handoff
   const handoffNow = handoff.available && handoff.blocker === null
 
@@ -142,7 +144,7 @@ export function TaskChat({ taskId }: { taskId: string }) {
     return null
   }
   const worktree = task.repos.some((repo) => repo.worktreePath !== null)
-  const showInspector = inspectorOpen && (delegationSupported || helperSupported || worktree || runs.length > 0 || plans.length > 0 || wire || todosShown)
+  const showInspector = inspectorOpen && (delegationSupported || helperSupported || worktree || runs.length > 0 || plans.length > 0 || wire || todosShown || sourceUpdates)
 
   return (
     <section className="detail terminal-view" aria-label={t('TaskChat.chat', { value1: task.title })}>
@@ -176,10 +178,9 @@ export function TaskChat({ taskId }: { taskId: string }) {
         <TaskToolbar task={task} view="chat" />
       </header>
       {memberChatId && <div className="squad-member-nav"><button type="button" className="button ghost" onClick={() => setMemberChatId(null)}>{t('TaskChat.backToLeader')}</button><span>{memberConversation?.title ?? t('TaskChat.loadingMemberConversation')}</span></div>}
-      {task.source && <SourceUpdatesPanel target={{ kind: 'task', id: task.id }} />}
       <div className="terminal-body">
         {memberChatId ? (
-          memberConversation ? <ConversationChat conversation={memberConversation} surface={{ ...surface, showBrowser: () => showBrowserPanel(memberConversation.id), prepareSend: async () => false, sendBlocker: t('TaskChat.theLeaderCoordinatesMemberAssignmentsReturnToThe'), handoffPlan: undefined, savePlan: null, handoff: null }} /> : <p className="muted">{t('TaskChat.loadingMemberConversation')}</p>
+          memberConversation ? <ConversationChat conversation={memberConversation} surface={{ ...surface, sourceUpdates: undefined, showBrowser: () => showBrowserPanel(memberConversation.id), prepareSend: async () => false, sendBlocker: t('TaskChat.theLeaderCoordinatesMemberAssignmentsReturnToThe'), handoffPlan: undefined, savePlan: null, handoff: null }} /> : <p className="muted">{t('TaskChat.loadingMemberConversation')}</p>
         ) : conversation ? (
           <ConversationChat conversation={conversation} surface={surface} />
         ) : starting ? (

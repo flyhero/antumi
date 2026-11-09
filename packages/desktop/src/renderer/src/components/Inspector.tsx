@@ -57,12 +57,12 @@ export function useChangedFiles(target: BranchTarget | null, updatedAt: number, 
   return files?.key === key ? files.files : null
 }
 
-export type InspectorTab = 'changes' | 'branch' | 'pullRequest' | 'plan' | 'todos' | 'wire' | 'squad' | 'helper' | 'delegation'
+export type InspectorTab = 'changes' | 'branch' | 'pullRequest' | 'source' | 'plan' | 'todos' | 'wire' | 'squad' | 'helper' | 'delegation'
 
-const TAB_LABEL: Record<InspectorTab, string> = localized(() => ({ changes: t('Inspector.changes'), branch: t('GitInspector.branches_1030'), pullRequest: t('PullRequest.tab'), plan: t('chatTools.plan'), todos: t('chatTools.toDos'), wire: t('Inspector.rawData'), squad: t('ChatPlan.squad'), helper: t('HelperPanel.helper'), delegation: t('AgentProfiles.calls') }))
+const TAB_LABEL: Record<InspectorTab, string> = localized(() => ({ changes: t('Inspector.changes'), branch: t('GitInspector.branches_1030'), pullRequest: t('PullRequest.tab'), source: t('SourceUpdates.tab'), plan: t('chatTools.plan'), todos: t('chatTools.toDos'), wire: t('Inspector.rawData'), squad: t('ChatPlan.squad'), helper: t('HelperPanel.helper'), delegation: t('AgentProfiles.calls') }))
 export const GIT_TABS: readonly InspectorTab[] = ['changes', 'branch']
 
-export function InspectorPanel({ label, ratio, onRatioChange, tabs = GIT_TABS, tab, onTab, fileCount, todoCount = 0, helperAwaiting = false, onRefresh, onClose, maximized = false, owner, children }: {
+export function InspectorPanel({ label, ratio, onRatioChange, tabs = GIT_TABS, tab, onTab, fileCount, todoCount = 0, sourceCount = 0, sourceUnread = 0, helperAwaiting = false, onRefresh, onClose, maximized = false, owner, children }: {
   maximized?: boolean
   // Above the tabs, whose it is where that is not plain: a split's column.
   owner?: ReactNode
@@ -76,6 +76,8 @@ export function InspectorPanel({ label, ratio, onRatioChange, tabs = GIT_TABS, t
   // To-dos not done yet, counted on their tab.
   helperAwaiting?: boolean
   todoCount?: number
+  sourceCount?: number
+  sourceUnread?: number
   onRefresh: () => void
   onClose: () => void
   children: ReactNode
@@ -96,10 +98,12 @@ export function InspectorPanel({ label, ratio, onRatioChange, tabs = GIT_TABS, t
               <button key={each} type="button" role="tab" aria-selected={tab === each} onClick={() => onTab(each)}>
                 {TAB_LABEL[each]}{each === 'helper' && helperAwaiting && <span className="helper-attention-dot" role="img" aria-label={t('ConversationView.helperNeedsYourResponse')} />}{each === 'changes' && fileCount > 0 && <span className="count">{fileCount}</span>}
                 {each === 'todos' && todoCount > 0 && <span className="count">{todoCount}</span>}
+                {each === 'source' && sourceCount > 0 && <span className="count">{sourceCount}</span>}
+                {each === 'source' && sourceUnread > 0 && <span className="source-updates-unread" role="img" aria-label={t('SourceUpdates.newComments', { count: sourceUnread })} />}
               </button>
             ))}
           </div>
-          {tab !== 'helper' && tab !== 'delegation' && tab !== 'plan' && tab !== 'wire' && tab !== 'todos' && (
+          {tab !== 'helper' && tab !== 'delegation' && tab !== 'plan' && tab !== 'wire' && tab !== 'todos' && tab !== 'source' && (
             <button type="button" className="tool-button inspector-refresh" aria-label={t('BrowserPanel.reload')} data-tooltip={t('BrowserPanel.reload')} onClick={onRefresh}>
               <RefreshIcon />
             </button>

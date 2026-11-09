@@ -19,6 +19,8 @@ import { useConversationTodos, useTodosShown } from '../conversation-todos'
 import { projectName } from './ProjectPicker'
 import { WireLogView } from './WireLogView'
 import { DiffCommentConversation } from './DiffComments'
+import { useSourceUpdateSummary } from '../source-updates'
+import { SourceUpdatesPanel } from './SourceUpdatesPanel'
 
 // Read again whenever the task changes (every agent turn and exit), the window regains focus,
 // or the user refreshes. An older core without the method has nothing to show.
@@ -93,7 +95,8 @@ export function TaskInspector({ task, widthRatio, onWidthRatioChange, plans = []
   const todosShown = useTodosShown() && task.conversationId !== null
   const todos = useConversationTodos(todosShown ? task.conversationId : null)
   const pullRequests = usePullRequests(task.id)
-  const tabs: InspectorTab[] = [...(helper ? ['helper' as const] : []), ...(calls?.length ? ['delegation' as const] : []),...(squadRuns.length ? ['squad' as const] : []),...(worktree ? GIT_TABS : []), ...(pullRequests.length > 0 ? ['pullRequest' as const] : []), ...(plans.length > 0 ? ['plan' as const] : []), ...(todosShown ? ['todos' as const] : []), ...(wire && task.conversationId ? ['wire' as const] : [])]
+  const sourceUpdates = useSourceUpdateSummary(task.source ? { kind: 'task', id: task.id } : null)
+  const tabs: InspectorTab[] = [...(helper ? ['helper' as const] : []), ...(calls?.length ? ['delegation' as const] : []),...(squadRuns.length ? ['squad' as const] : []),...(worktree ? GIT_TABS : []), ...(pullRequests.length > 0 ? ['pullRequest' as const] : []), ...(sourceUpdates ? ['source' as const] : []), ...(plans.length > 0 ? ['plan' as const] : []), ...(todosShown ? ['todos' as const] : []), ...(wire && task.conversationId ? ['wire' as const] : [])]
   const tab = tabs.includes(wanted) ? wanted : (tabs[0] ?? 'changes')
   const [refreshCount, setRefreshCount] = useState(0)
   const [gitMaximized, setGitMaximized] = useState(false)
@@ -116,6 +119,8 @@ export function TaskInspector({ task, widthRatio, onWidthRatioChange, plans = []
       helperAwaiting={helper?.chat?.turn === 'awaiting'}
       fileCount={fileCount}
       todoCount={openTodoCount(todos)}
+      sourceCount={sourceUpdates?.pending}
+      sourceUnread={sourceUpdates?.unread}
       onRefresh={() => setRefreshCount((count) => count + 1)}
       onClose={() => setInspectorOpen(false)}
     >
@@ -130,6 +135,8 @@ export function TaskInspector({ task, widthRatio, onWidthRatioChange, plans = []
           <TodoPanel conversationId={task.conversationId} />
         ) : tab === 'wire' && task.conversationId ? (
           <WireLogView conversationId={task.conversationId} />
+        ) : tab === 'source' ? (
+          <SourceUpdatesPanel key={task.id} target={{ kind: 'task', id: task.id }} inspector />
         ) : tab === 'pullRequest' ? (
           <PullRequestPanel task={task} />
         ) : tab === 'plan' ? (

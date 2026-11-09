@@ -3103,6 +3103,8 @@ body.side-panel-resizing * {
 
 .inspector-tabs {
   display: flex;
+  flex-wrap: wrap;
+  min-width: 0;
   gap: 2px;
   margin-right: auto;
 }
@@ -11263,3 +11265,21 @@ button.squad-member-main { cursor: pointer; }
 .source-update-comment { padding: 12px 0; border-bottom: 1px solid var(--border); }
 .source-update-delivery { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 8px 0; }
 .source-comment-badge { color: var(--accent); font-size: 12px; white-space: nowrap; }
+
+.source-updates-button { display: inline-flex; align-items: center; flex-shrink: 0; gap: 5px; height: 24px; padding: 0 6px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--text-muted); font: inherit; font-size: 12px; white-space: nowrap; cursor: pointer; }
+.source-updates-button:hover, .source-updates-button[aria-expanded='true'] { background: var(--fill); color: var(--text); }
+.source-updates-button:focus-visible { outline: 2px solid var(--focus); }
+.source-updates-button[data-pending] { color: var(--accent); }
+.source-updates-button[data-problem] { color: var(--warning); }
+.source-updates-button svg { flex-shrink: 0; width: 14px; height: 14px; }
+.source-updates-count { font-variant-numeric: tabular-nums; }
+.source-updates-unread { flex-shrink: 0; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
+.source-updates[data-inspector] { display: flex; flex-direction: column; min-height: 100%; padding: 0; border: 0; font-size: 13px; }
+.source-updates[data-inspector] .source-updates-content { flex: 1; max-height: none; overflow: visible; padding-top: 0; }
+.source-updates-origin { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
+.source-updates-footer { position: sticky; bottom: -14px; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 12px 0; border-top: 1px solid var(--border); background: var(--surface); }
+.source-updates-footer .muted { font-size: 12px; }
+.source-update-pending { display: inline-block; margin-top: 6px; color: var(--text-muted); font-size: 12px; }
+.source-updates[data-inspector] .md-editor { min-height: 0; margin-top: 8px; border: 0; border-radius: 0; }
+.source-updates[data-inspector] .md-editor-readonly .cm-editor { max-height: none; }
+.source-updates[data-inspector] .cm-content { padding: 0; }

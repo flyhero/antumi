@@ -1,4 +1,4 @@
-import { SourceUpdatesPanel } from './SourceUpdatesPanel'
+import { useSourceUpdateSummary } from '../source-updates'
 import { useAgentCalls, useAgentCallsSupported } from '../agent-calls'
 import { t, tr } from '../i18n'
 import { RouteBadge } from './RouteBadge'
@@ -47,10 +47,11 @@ export function useConversationPanel(conversation: Conversation | undefined) {
   const wire = useWireLogShown()
   const todosShown = useTodosShown()
   const todoLeft = useOpenTodoCount(todosShown && conversation ? id : null)
+  const sourceUpdates = useSourceUpdateSummary(conversation?.source ? { kind: 'conversation', id } : null)
   // A managed workspace is Antumi's own scratch folder: nothing of the user's to compare, but the
   // inspector still shows the agent's plans.
   const inspectable = (conversation?.projectPaths.length ?? 0) > 0
-  const hasPanel = Boolean(calls?.length || helper || inspectable || plans.length > 0 || wire || todosShown)
+  const hasPanel = Boolean(calls?.length || helper || inspectable || plans.length > 0 || wire || todosShown || sourceUpdates)
   const hint = todoLeft > 0 ? t('ConversationView.inspectorToDos', { todoLeft: todoLeft }) : inspectable ? t('ConversationView.viewChanges') : plans.length > 0 ? t('ConversationView.viewPlan') : wire ? t('ConversationView.viewRawData') : t('chatTools.listToDos')
   return { hasPanel, wire, todoLeft, hint }
 }
@@ -175,7 +176,6 @@ export function ConversationView({ id, pane }: { id: string; pane?: Conversation
           : <button type="button" className="tool-button" aria-label={t('BackdropPicker.close')} data-tooltip={t('BackdropPicker.close')} onClick={openOverview}><CloseIcon /></button>}
       </div>
     </header>
-    {conversation.source && <SourceUpdatesPanel target={{ kind: 'conversation', id }} />}
     <div className="terminal-body">
       <ConversationChat conversation={conversation} onHandoff={conversation.discussionId || conversation.parentConversationId ? undefined : openHandoff} />
     </div>

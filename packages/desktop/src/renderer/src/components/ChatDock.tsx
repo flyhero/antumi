@@ -20,6 +20,7 @@ import { ChatTodosChip } from './ChatTodos'
 import { useConversationPane, type ConversationPane } from './conversation-pane'
 import { ArrowUpIcon, ClockIcon, CloseIcon } from './icons'
 import { changeLineTotals, useChangedFiles } from './Inspector'
+import { SourceUpdatesButton } from './SourceUpdatesPanel'
 
 type ToolItem = Extract<ChatItem, { kind: 'tool' }>
 type StateItem = Extract<ChatItem, { kind: 'state' }>
@@ -146,7 +147,8 @@ export function ChatDock({ conversation, state, pending, tools, finishedCalls, o
   sent: readonly SentMessage[]
   onJump: (key: string) => void
 }) {
-  const inspectable = useChatSurface().changes !== null
+  const surface = useChatSurface()
+  const inspectable = surface.changes !== null
   const runs = openRunsForConversation(useCore((s) => s.schedules), conversation.id)
   const running = conversation.sessionId !== null
   const waiting = running && pending.length > 0
@@ -164,6 +166,7 @@ export function ChatDock({ conversation, state, pending, tools, finishedCalls, o
         {running && state && <ChatTodosChip todos={state.todos} />}
         {inspectable && <ChangesChip conversation={conversation} finishedCalls={finishedCalls} />}
         <span className="chat-dock-spacer" />
+        {surface.sourceUpdates && <SourceUpdatesButton target={surface.sourceUpdates} />}
         <ChatMessageList messages={sent} onJump={onJump} />
         <button type="button" className="tool-button" aria-label={t('ChatDock.previousMessage')} data-tooltip={t('ChatDock.previousMessage')} onClick={onPrevious}>
           <ArrowUpIcon />

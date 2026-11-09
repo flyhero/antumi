@@ -1,6 +1,9 @@
 // Application-owned text. Values and external content are passed separately.
 export const MESSAGES = {
   "SourceUpdates.title": {"zh": "来源更新", "en": "Issue updates"},
+  "SourceUpdates.tab": {"zh": "来源", "en": "Source"},
+  "SourceUpdates.noPending": {"zh": "没有待处理评论", "en": "No comments pending"},
+  "SourceUpdates.pendingComment": {"zh": "待交给 Agent", "en": "Not yet sent to Agent"},
   "SourceUpdates.newComments": {"zh": "{count} 条新评论", "en": "{count} new comments"},
   "SourceUpdates.pending": {"zh": "{count} 条尚未交给 Agent", "en": "{count} not yet sent to Agent"},
   "SourceUpdates.sendTask": {"zh": "发送到任务会话", "en": "Send to task conversation"},

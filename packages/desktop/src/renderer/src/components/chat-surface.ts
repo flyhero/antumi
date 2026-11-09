@@ -1,6 +1,6 @@
 import { t } from '../i18n'
 import { createContext, useContext } from 'react'
-import type { AgentKind, ChatItem, Conversation } from '@antumi/protocol'
+import type { AgentKind, ChatItem, Conversation, SourceUpdateTarget } from '@antumi/protocol'
 import type { PlanItem } from '../chat-state'
 import { showBrowserPanel, showConversationChanges, showConversationPlan, showInspectorFile } from '../core-store'
 import { insideProjects, locateInspectorFile, type ChatEdit } from '../inspector-file'
@@ -12,6 +12,7 @@ import { continueConversation } from './ConversationActions'
 export type ChatSurface = {
   // Which inspector the chat's side panel is: a task's or a free conversation's.
   inspector: 'task' | 'conversation'
+  sourceUpdates?: SourceUpdateTarget
   // The side panel on a plan (by item key; null for the newest), or on the changes.
   showPlan(key: string | null): void
   showChanges(): void
@@ -56,6 +57,7 @@ export function useChatSurface(): ChatSurface {
 export function conversationSurface(conversation: Conversation, handoff: ((agent?: AgentKind) => void) | null = null, fork: ((item: ChatItem) => void) | null = null): ChatSurface {
   return {
     inspector: 'conversation',
+    sourceUpdates: conversation.source ? { kind: 'conversation', id: conversation.id } : undefined,
     showPlan: showConversationPlan,
     showChanges: showConversationChanges,
     showFileChange: (path, edit) => {

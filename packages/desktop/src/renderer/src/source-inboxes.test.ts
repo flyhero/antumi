@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { SourceDescriptor, SourceInbox, SourceIssue } from '@antumi/protocol'
-import { activeInboxes, inboxTab, investigationProjects, rememberInvestigationProjects } from './source-inboxes'
+import { activeInboxes, inboxTab, investigationMode, investigationProjects, rememberInvestigationProjects } from './source-inboxes'
 
 const issue = (key: string): SourceIssue => ({
   key, title: key, url: `https://demo.test/${key}`, status: 'Open', statusCategory: 'todo', type: 'Bug', priority: null, updatedAt: null
@@ -55,5 +55,17 @@ describe('investigation projects', () => {
     rememberInvestigationProjects('jira/default', ['/code/api'])
     expect(investigationProjects('github/default')).toEqual(['/code/app', '/code/lib'])
     expect(investigationProjects('jira/default')).toEqual(['/code/api'])
+  })
+})
+
+describe('investigationMode', () => {
+  it('starts read-only until a mode is picked, then keeps the one picked', () => {
+    expect(investigationMode('claude', ['ask', 'plan', 'auto'], undefined)).toBe('plan')
+    expect(investigationMode('claude', ['ask', 'plan', 'auto'], 'auto')).toBe('auto')
+  })
+
+  it('falls back when the mode picked is no longer offered', () => {
+    expect(investigationMode('claude', ['ask', 'plan'], 'auto')).toBe('plan')
+    expect(investigationMode('claude', ['ask'], 'auto')).toBeNull()
   })
 })

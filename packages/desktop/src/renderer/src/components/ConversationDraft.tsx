@@ -13,7 +13,7 @@ import { useInstalledAgents } from '../installed-agents'
 import { agentLabel } from '../labels'
 import { antumiEntries } from '../chat-commands'
 import { AgentQuotaHint, confirmQuota, modelText, RecommendedMark, useRecommendation } from './AgentQuota'
-import { usePreferences } from '../preferences'
+import { setPreference, usePreferences } from '../preferences'
 import { useChatTypeface } from '../chat-typeface'
 import { openWithFirstMessage, startOptions } from './ConversationActions'
 import { sendsMessage } from './ChatComposer'
@@ -28,7 +28,7 @@ import { AgentIcon, CloseIcon, EnterIcon } from './icons'
 import { ProjectPicker } from './ProjectPicker'
 import { DraftBranchPicker, useProjectBranches } from './DraftBranchPicker'
 import { composerDraft, EMPTY_DRAFT, saveComposerDraft } from '../composer-drafts'
-import { inboxKey, rememberInvestigationProjects } from '../source-inboxes'
+import { inboxKey, investigationMode, rememberInvestigationProjects } from '../source-inboxes'
 import { catalogKey, providerFor } from '../model-provider-choice'
 import { ProviderPicker } from './ProviderPicker'
 import { DraftModeSwitch } from './DraftModeSwitch'
@@ -145,8 +145,8 @@ export function ConversationDraft() {
   // A mode the model or settings no longer allow falls back to that agent's available default.
   const offeredModes = agent ? startModes(agent, model) : []
   const chosenMode = agent ? modes[agent] : undefined
-  // Looking into an issue starts where the agent only reads, as a group chat member does.
-  const reading = agent && issue && offeredModes.includes(agentDescriptor(agent).discussionMode) ? agentDescriptor(agent).discussionMode : null
+  const investigationModes = usePreferences((s) => s.investigationModes)
+  const reading = agent && issue ? investigationMode(agent, offeredModes, investigationModes[agent]) : null
   const mode = profile?.capability === 'readOnly' && agent ? agentDescriptor(agent).readOnlyMode : agent ? (chosenMode && offeredModes.includes(chosenMode) ? chosenMode : reading ?? defaultStartMode(agent, offeredModes)) : null
   const effort = pick.effort && (!catalog || efforts.includes(pick.effort)) ? pick.effort : null
   const settingsLoading = Boolean(initial && agent && optionsSupported && catalog === undefined)
@@ -359,7 +359,9 @@ export function ConversationDraft() {
                       disabled={busy || profile?.capability === 'readOnly'}
                       onChange={(value) => {
                         const picked = ChatPermissionMode.safeParse(value)
-                        if (picked.success) setModes({ ...modes, [agent]: picked.data })
+                        if (!picked.success) return
+                        setModes({ ...modes, [agent]: picked.data })
+                        if (issue) setPreference('investigationModes', { ...investigationModes, [agent]: picked.data })
                       }}
                     />
                     <span className="chat-dock-spacer" />

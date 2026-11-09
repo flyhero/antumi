@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { DEFAULT_INSTANCE, type SourceDescriptor, type SourceInbox } from '@antumi/protocol'
+import { agentDescriptor, DEFAULT_INSTANCE, type AgentKind, type ChatPermissionMode, type SourceDescriptor, type SourceInbox } from '@antumi/protocol'
 
 export const inboxKey = (inbox: Pick<SourceInbox, 'provider' | 'instance'>) => `${inbox.provider}/${inbox.instance}`
 
@@ -49,4 +49,12 @@ export function rememberInvestigationProjects(key: string, paths: readonly strin
   } catch {
     // Storage full or blocked: this window still remembers.
   }
+}
+
+// The mode an agent looks into an issue in: the one last picked for it, else where it only reads,
+// as a group chat member does; null where it offers neither, to fall back to its own default.
+export function investigationMode(agent: AgentKind, offered: readonly ChatPermissionMode[], remembered: ChatPermissionMode | undefined): ChatPermissionMode | null {
+  if (remembered && offered.includes(remembered)) return remembered
+  const reading = agentDescriptor(agent).discussionMode
+  return offered.includes(reading) ? reading : null
 }

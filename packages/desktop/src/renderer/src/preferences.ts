@@ -1,4 +1,4 @@
-import { AgentKind, LanguagePreference, TranslateLanguage } from '@antumi/protocol'
+import { AgentKind, ChatPermissionMode, LanguagePreference, TranslateLanguage } from '@antumi/protocol'
 import { z } from 'zod'
 import { create } from 'zustand'
 import { BACKDROPS } from './backdrops'
@@ -80,6 +80,8 @@ const Preferences = z.object({
   // The permission mode a plan is carried out in, as last picked; where the stage lacks it, auto,
   // then accepting edits.
   planRunMode: z.enum(['auto', 'acceptEdits', 'ask', 'bypass']).catch('auto'),
+  // The mode each agent looks into an issue in, as last picked; until then, the one it only reads in.
+  investigationModes: z.partialRecord(AgentKind, ChatPermissionMode).catch({}),
   // Agents the user turned off: found here, but not offered for new tasks and conversations.
   // Every agent found is on until turned off.
   disabledAgents: z.array(AgentKind).catch([]),

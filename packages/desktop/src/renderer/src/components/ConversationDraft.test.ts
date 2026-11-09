@@ -31,7 +31,7 @@ describe('investigation draft images', () => {
 
   it('shows attached images with remove and add controls in an investigation draft', () => {
     const html = render()
-    expect(html).toContain('chat-draft-issue')
+    expect(html).toContain('chat-draft-source')
     expect(html).toContain('class="chat-images"')
     expect(html).toContain('class="chat-image-remove"')
     expect(html).toContain('class="chat-add-button"')

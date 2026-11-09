@@ -24,7 +24,7 @@ import { MentionField, useMentionedText } from './ChatMentionField'
 import { messageReferences, writeMentionedText } from '../chat-mentions'
 import { defaultStartMode, effortLabel, modeOptions, modeTone, startModes } from './ChatOptionsBar'
 import { ChatModelPicker, ChatPicker } from './ChatPicker'
-import { AgentIcon, CloseIcon, EnterIcon } from './icons'
+import { AgentIcon, CloseIcon, EnterIcon, ExternalIcon, SourceIcon } from './icons'
 import { ProjectPicker } from './ProjectPicker'
 import { DraftBranchPicker, useProjectBranches } from './DraftBranchPicker'
 import { composerDraft, EMPTY_DRAFT, saveComposerDraft } from '../composer-drafts'
@@ -232,18 +232,23 @@ export function ConversationDraft() {
       <div className="terminal-body">
         <div className="chat-view" data-width={width} {...typeface}>
           <div className="chat-list chat-draft">
-            <div className="chat-draft-start">
+            <div className="chat-draft-start" data-investigation={Boolean(issue) || undefined}>
               <DraftModeSwitch mode="single" carry={toGroup} blocked={groupBlocked} disabled={busy} />
               {issue && (
-                <div className="chat-draft-issue">
-                  <span className="muted">{tr('ConversationDraft.investigate', { value1: issue.source })}</span>
-                  <a className="chat-draft-issue-key" href={issue.url} target="_blank" rel="noreferrer" data-tooltip={t('ConversationDraft.openIn', { value1: issue.source })}>{issue.key}</a>
-                  <span className="chat-draft-issue-title" title={issue.title}>{issue.title}</span>
-                  <button type="button" className="tool-button" aria-label={t('ConversationDraft.stopInvestigatingThisIssue')} data-tooltip={t('ConversationDraft.switchToRegularConversation')} disabled={busy}
+                <section className="chat-draft-source" aria-label={t('ConversationDraft.investigationContext')}>
+                  <div className="chat-draft-source-meta">
+                    <span>{t('ConversationDraft.investigationContext')}</span>
+                    <span className="chat-draft-source-divider" aria-hidden="true">·</span>
+                    <a href={issue.url} target="_blank" rel="noreferrer" data-tooltip={t('ConversationDraft.openIn', { value1: issue.source })}>
+                      <SourceIcon provider={issue.provider} /><span>{issue.source}</span><span className="chat-draft-source-key">{issue.key}</span><ExternalIcon />
+                    </a>
+                  </div>
+                  <h1 className="chat-draft-source-title" title={issue.title}>{issue.title}</h1>
+                  <button type="button" className="tool-button chat-draft-source-remove" aria-label={t('ConversationDraft.stopInvestigatingThisIssue')} data-tooltip={t('ConversationDraft.switchToRegularConversation')} disabled={busy}
                     onClick={() => useCore.setState({ conversationDraftIssue: null })}><CloseIcon /></button>
-                </div>
+                </section>
               )}
-              <h2 className="chat-draft-title">{from ? t('ConversationDraft.startANewConversation') : t('ConversationDraft.chooseAnAgentToStart')}</h2>
+              <h2 className="chat-draft-title">{issue ? t('ConversationDraft.chooseInvestigationAgent') : from ? t('ConversationDraft.startANewConversation') : t('ConversationDraft.chooseAnAgentToStart')}</h2>
               {/* Starting is one choice, the agent below; one of the user's own agents comes along only
                   from its card on the agents page, and goes with the ×. */}
               {!issue && profile && (

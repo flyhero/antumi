@@ -3600,6 +3600,8 @@ export const MESSAGES = {
     "zh": "排查 issue",
     "en": "Investigate issue"
   },
+  "ConversationDraft.investigationContext": {"zh": "排查问题", "en": "Investigating issue"},
+  "ConversationDraft.chooseInvestigationAgent": {"zh": "选择排查的 Agent", "en": "Choose an agent to investigate"},
   "ConversationDraft.investigate": {
     "zh": "排查 {value1}",
     "en": "Investigate {value1}"

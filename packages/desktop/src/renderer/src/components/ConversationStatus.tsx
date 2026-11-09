@@ -1,10 +1,10 @@
 import { localized, t } from '../i18n'
-import type { Conversation } from '@antumi/protocol'
+import { sourceLabel, type Conversation } from '@antumi/protocol'
 import { useCore } from '../core-store'
 import { conversationGlyph, conversationState } from '../conversation-state'
 import { agentLabel } from '../labels'
 import { AgentAvatar } from './AgentAvatar'
-import { AgentIcon } from './icons'
+import { AgentIcon, SourceIcon } from './icons'
 import { Spinner } from './Spinner'
 
 const SPOKEN: Record<string, string> = localized(() => ({ unseen: t('ConversationStatus.newActivity') }))
@@ -27,14 +27,15 @@ export function ConversationStatus({ conversation }: { conversation: Conversatio
   )
 }
 
-// Keep the agent's own colours inside the status ring; idle chats need no ring.
+// Source investigations keep their provenance inside the same status ring as other chats.
 export function ConversationMark({ conversation }: { conversation: Conversation }) {
   const { glyph, label, detail } = useStatus(conversation)
-  const { profile } = conversation
+  const { profile, source } = conversation
   const saved = useCore((s) => Boolean(profile && s.agentProfiles[profile.id]))
+  const identity = [source ? sourceLabel(source) : null, profile?.name ?? agentLabel(conversation.agent)].filter(Boolean).join(' · ')
   return (
-    <span className="agent-status-mark" data-glyph={glyph} role="img" aria-label={`${profile?.name ?? agentLabel(conversation.agent)} · ${label}`} title={detail ?? label}>
-      {profile && saved ? <AgentAvatar id={profile.id} /> : <AgentIcon agent={conversation.agent} />}
+    <span className="agent-status-mark" data-glyph={glyph} role="img" aria-label={`${identity} · ${label}`} title={source ? `${identity} · ${detail ?? label}` : detail ?? label}>
+      {source ? <span className="conversation-source-icon" aria-hidden="true"><SourceIcon provider={source.provider} /></span> : profile && saved ? <AgentAvatar id={profile.id} /> : <AgentIcon agent={conversation.agent} />}
       {glyph !== 'idle' && <span className="agent-status-ring" aria-hidden="true" />}
     </span>
   )

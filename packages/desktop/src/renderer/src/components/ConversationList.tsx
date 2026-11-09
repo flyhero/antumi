@@ -3,7 +3,7 @@ import { PullRequestChip } from './PullRequestChip'
 import { livePullRequests, usePullRequests } from '../pull-requests'
 import { localized, t, tr } from '../i18n'
 import { useCallback, useEffect, useRef, useState, type MouseEvent } from 'react'
-import type { Conversation, Discussion, Task } from '@antumi/protocol'
+import { sourceLabel, type Conversation, type Discussion, type Task } from '@antumi/protocol'
 import { openBeside, selectConversation, selectDiscussion, selectTask, useCore, useDiscussionsSupported, useSplitPanes, useTaskRowsSupported } from '../core-store'
 import { arrangeItems, conversationItem, discussionItem, GROUP_LIMIT, itemArchived, itemConversation, itemMatches, itemShown, shownRows, sortItems, taskItem, type ItemGroup, type ListItem } from '../conversation-list-items'
 import { isListedConversation } from '../search-palette'
@@ -99,8 +99,7 @@ export function metaProjects(paths: readonly string[], underProject: boolean): s
   return others.length > 0 ? `+${others.map(projectName).join('、')}` : null
 }
 
-// The agent's name before the title; that it is one of the user's agents, the robot in the status
-// column says (ConversationMark).
+// A saved agent's name stays beside the topic, including when a source mark leads the row.
 function ConversationIdentity({ profile }: { profile: Conversation['profile'] }) {
   if (!profile) return null
   return <span className="conversation-identity" title={profile.name} aria-label={`${t('ConversationPeek.agent')}: ${profile.name}`}>
@@ -120,9 +119,10 @@ function ConversationMeta({ conversation, heading = 'none' }: { conversation: Co
   const projects = metaProjects(conversation.projectPaths, heading === 'project')
   return (
     <>
-      {/* Its logo already leads the row, unless a robot stands there for one of the user's agents. */}
-      {heading !== 'agent' && conversation.profile && <span className="conversation-agent" role="img" aria-label={agent} title={agent}><AgentIcon agent={conversation.agent} /></span>}
-      {projects !== null && <>{projects}{' · '}</>}
+      {conversation.source && <><span className="conversation-source-info" title={sourceLabel(conversation.source)}>{sourceLabel(conversation.source)}</span><span aria-hidden="true">·</span></>}
+      {/* The source or a saved agent's avatar can take the main icon's place. */}
+      {heading !== 'agent' && (conversation.profile || conversation.source) && <span className="conversation-agent" role="img" aria-label={agent} title={agent}><AgentIcon agent={conversation.agent} /></span>}
+      {projects !== null && <><span className="conversation-projects">{projects}</span>{' · '}</>}
       <span className="conversation-live" data-state={activity?.state}>{state}</span>
     </>
   )
@@ -360,7 +360,7 @@ export function ConversationList() {
             <ConversationIdentity profile={conversation.profile} />
             <TitleEditor title={conversation.title} label={t('ConversationList.conversationTitle')} onSave={(title) => void renameConversation(conversation.id, title)} onDone={() => setRenamingId(null)} />
           </span>
-          <span className="task-row-meta"><ConversationMeta conversation={conversation} heading={heading} /></span>
+          <span className="task-row-meta" data-source={Boolean(conversation.source) || undefined}><ConversationMeta conversation={conversation} heading={heading} /></span>
         </div>
         : <button
           type="button"
@@ -387,7 +387,7 @@ export function ConversationList() {
               : <span className="conversation-age">{timeAgo(conversation.updatedAt, now)}</span>}
             {conversation.context && <ContextUsage context={conversation.context} showTokens shape="meter" />}
           </span>
-          <span className="task-row-meta"><ConversationMeta conversation={conversation} heading={heading} /></span>
+          <span className="task-row-meta" data-source={Boolean(conversation.source) || undefined}><ConversationMeta conversation={conversation} heading={heading} /></span>
           {snippet && <span className="conversation-snippet"><Highlighted text={snippet} query={needle} /></span>}
         </button>}
     </li>

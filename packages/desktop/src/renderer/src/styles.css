@@ -1149,6 +1149,13 @@ span.chat-translate .spinner { width: 12px; height: 12px; }
 /* The agent's mark at the head of a conversation's line, the size of the text beside it. */
 .conversation-agent { display: inline-flex; vertical-align: -2px; margin-right: 6px; }
 .conversation-agent .agent-mark { width: 12px; height: 12px; }
+.conversation-source-icon { display: grid; place-items: center; width: 14px; height: 14px; color: var(--text-muted); }
+.conversation-source-icon svg { width: 14px; height: 14px; }
+.task-row-meta[data-source] { display: flex; align-items: center; gap: 4px; }
+.conversation-source-info { flex-shrink: 0; min-width: 0; max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.task-row-meta[data-source] .conversation-agent { flex-shrink: 0; margin: 0; }
+.task-row-meta[data-source] .conversation-projects { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.task-row-meta[data-source] .conversation-live { flex-shrink: 0; min-width: 0; max-width: 36%; margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Compact: a row is its status, title and age on one line, with the context only once it nears full
    (the composer's warning level), where it is worth a glance; the rest waits in the details on
    hover. */

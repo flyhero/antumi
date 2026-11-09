@@ -528,11 +528,14 @@ describe('reusable agent roles and delegated work', () => {
       profiles.setWorkspaces({ root: path.join(root, 'worktrees'), setup })
       const call = await profiles.dispatch(parentId, developer.id, 'Edit', 'e', 'worktree')
       await waitFor(() => store.call(call.id).worktree?.stage === 'setup')
-      // A new process finds the record mid-setup, with no setup of its own running.
+      // A new process finds the record mid-setup, with no setup of its own running. The one that
+      // started it goes first: two services over one record would race to start the member.
       const ran: string[] = []
-      const fresh = new AgentProfileService(store, chats, { profile: () => {}, call: () => {} }, undefined, undefined, { ready: () => ready, disabled: () => disabled, usage: () => usage })
-      fresh.setWorkspaces({ root: path.join(root, 'worktrees'), setup: { ...setup, setUp: async (_id: string, worktrees: readonly { dir: string }[]) => { ran.push(...worktrees.map((each) => each.dir)); return ['second run failed'] } } })
-      await fresh.reconcile()
+      await profiles.close()
+      store = new AgentProfileStore(path.join(root, 'antumi.db'))
+      profiles = new AgentProfileService(store, chats, { profile: () => {}, call: () => {} }, undefined, undefined, { ready: () => ready, disabled: () => disabled, usage: () => usage })
+      profiles.setWorkspaces({ root: path.join(root, 'worktrees'), setup: { ...setup, setUp: async (_id: string, worktrees: readonly { dir: string }[]) => { ran.push(...worktrees.map((each) => each.dir)); return ['second run failed'] } } })
+      await profiles.reconcile()
       await waitFor(() => store.call(call.id).worktree?.stage === 'ready')
       expect(ran).toEqual([store.call(call.id).worktree!.dir])
       await waitFor(() => store.call(call.id).state === 'running')

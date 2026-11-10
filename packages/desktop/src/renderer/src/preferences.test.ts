@@ -125,3 +125,33 @@ describe('group chats joining the conversation list', () => {
     expect(usePreferences.getState().showArchivedConversations).toBe(false)
   })
 })
+
+describe('windows sharing preferences', () => {
+  it('keeps what another window changed when a window with an older copy saves', async () => {
+    const main = await import('./preferences')
+    vi.resetModules()
+    const card = await import('./preferences')
+    main.setPreference('palette', 'indigo')
+    card.setPreference('chatFontSize', 16)
+    vi.resetModules()
+    const { usePreferences } = await import('./preferences')
+    expect(usePreferences.getState().palette).toBe('indigo')
+    expect(usePreferences.getState().chatFontSize).toBe(16)
+  })
+
+  it('keeps preferences a newer version saved', async () => {
+    storage.set('antumi.preferences', JSON.stringify({ palette: 'nord', laterSetting: 'kept' }))
+    const { setPreference } = await import('./preferences')
+    setPreference('theme', 'dark')
+    expect(JSON.parse(storage.get('antumi.preferences') ?? '{}')).toMatchObject({ palette: 'nord', laterSetting: 'kept', theme: 'dark' })
+  })
+
+  it('stores what was carried over, so a later change is not undone', async () => {
+    storage.set('antumi.preferences', JSON.stringify({ showArchivedDiscussions: true }))
+    const { setPreference } = await import('./preferences')
+    setPreference('showArchivedConversations', false)
+    vi.resetModules()
+    const { usePreferences } = await import('./preferences')
+    expect(usePreferences.getState().showArchivedConversations).toBe(false)
+  })
+})

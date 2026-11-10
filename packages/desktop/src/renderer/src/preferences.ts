@@ -164,6 +164,7 @@ function load(): Preferences {
   } catch {
     // Unreadable storage: start from defaults.
   }
+  const original = saved
   // 0.15.8 kept them as translateModels, before commit messages used them too.
   if (typeof saved === 'object' && saved !== null && 'translateModels' in saved && !('quickModels' in saved)) {
     saved = { ...saved, quickModels: saved.translateModels }
@@ -178,6 +179,15 @@ function load(): Preferences {
     const hidden = 'sidebarDiscussions' in saved && saved.sidebarDiscussions === false
     const archived = ('showArchivedConversations' in saved && saved.showArchivedConversations === true) || ('showArchivedDiscussions' in saved && saved.showArchivedDiscussions === true)
     saved = { ...saved, conversationKinds: hidden ? 'conversations' : 'all', showArchivedConversations: archived }
+  }
+  // Windows write only what they change, so what was carried over is stored now, or the carrying
+  // over would run again on old fields and undo a later change.
+  if (saved !== original) {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(saved))
+    } catch {
+      // Storage full or blocked: carried over again next time.
+    }
   }
   islandChosen = typeof saved === 'object' && saved !== null && 'island' in saved && IslandPreference.safeParse(saved.island).success
   const parsed = Preferences.safeParse(saved)
@@ -204,9 +214,20 @@ export function followPreferences(): void {
   })
 }
 
-usePreferences.subscribe((preferences) => {
+// Every window holds its own copy, so each writes only what it changed onto what is stored: a whole
+// copy would put back what another window changed a moment ago (or a version this one doesn't know).
+usePreferences.subscribe((preferences, previous) => {
+  const changed = Object.fromEntries(Object.entries(preferences).filter(([key, value]) => value !== Reflect.get(previous, key)))
+  if (Object.keys(changed).length === 0) return
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(preferences))
+    let stored: unknown = {}
+    try {
+      stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}')
+    } catch {
+      // Unreadable: what this window holds replaces it.
+    }
+    const base = typeof stored === 'object' && stored !== null && !Array.isArray(stored) ? stored : {}
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...base, ...changed }))
   } catch {
     // Storage full or blocked: the change still applies for this session.
   }

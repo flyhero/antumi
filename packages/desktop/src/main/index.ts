@@ -2,7 +2,7 @@ import { readFile, realpath, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { spawn } from 'node:child_process'
 import { dirname, extname, isAbsolute, join } from 'node:path'
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, net, Notification, protocol, screen, shell, type OpenDialogOptions, type WebContents } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, net, Notification, protocol, screen, session, shell, type OpenDialogOptions, type WebContents } from 'electron'
 import { z } from 'zod'
 import { resolveUiLocale, UiLocale } from '@antumi/protocol'
 import { applicationMenu } from './application-menu'
@@ -657,6 +657,9 @@ void app.whenReady().then(async () => {
 // rather than finding a port nothing answers on.
 let quitting = false
 app.on('before-quit', (event) => {
+  // Preferences live in localStorage, which Chromium writes to disk a little later; an update's
+  // relaunch could otherwise start on the choice made just before it.
+  session.defaultSession.flushStorageData()
   panelWindows.beginQuit()
   updater?.stop()
   if (quitting || !browserHost) return

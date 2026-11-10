@@ -5,7 +5,7 @@ import { mkdir, realpath, rm, rmdir, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { branchSwitchMessage, withoutBranchSwitchNote, chatReferencesFor, canHaveHelper, helperAllowsMode, isHelper, agentDescriptor, modelPrice, providerEndpoint, type CostBaseline, checkEditAdditionalProjects, checkSwitchBranch, handoffMessage, isPlanApproval, parseHandoffMessage, MAX_TASK_REPOS, type AgentKind, type ChatCatalog, type ChatImage, type ChatItem, type ChatModel, type ChatOption, type ChatSettings, type CommitPushResult, type CommitResult, type PushResult, type Conversation, type ConversationMessage, type ConversationSearchHit, type ConversationStage, type FileDiff, type FolderChanges, type ProjectBranches, type ProjectHead, type ChatDecision, type KnowledgeBase, type TaskSource, type UnattendedMode, type ChatPermissionMode, startModes, unattendedPermission, isAntumiRequest , PROCESS_OWNER_ENV, processOwner, parseProcessOwner } from '@antumi/protocol'
 import type { DaemonEvent, SessionInfo } from '@antumi/protocol/node'
-import { canReuseConversation, DEFAULT_ACCOUNT, type ConversationConfiguration, type TaskLaunchOptions } from '@antumi/protocol'
+import { ALLOW_SITE_ALWAYS, canReuseConversation, DEFAULT_ACCOUNT, type ConversationConfiguration, type TaskLaunchOptions } from '@antumi/protocol'
 import type { RunMeasure } from './agent-run-store'
 import type { AttachmentStore } from './attachment-store'
 import { WHOLE_SESSION_FORK, type ChatAnswer, type StageMessage } from './chat-driver'
@@ -202,7 +202,7 @@ export class ConversationService {
   // The tail of each conversation's sends and retries, for an agent that takes them one at a time.
   private readonly serialActions = new Map<string, Promise<void>>()
   // Antumi's own questions waiting on the user, by request id.
-  private readonly asks = new Map<string, { resolve: (decision: ChatDecision) => void; reject: (error: Error) => void }>()
+  private readonly asks = new Map<string, { resolve: (answer: ChatAnswer) => void; reject: (error: Error) => void }>()
   // Conversations a scheduled run is carrying out, by the mode it runs in: nobody is there, so
   // what their agents ask is answered as the mode says (unattendedAnswer) until the user acts in
   // them. Kept in memory: after a restart, a request waits for the user, as it always did.
@@ -1725,27 +1725,30 @@ export class ConversationService {
 
   // Asks the user, in the running chat, whether the browser may open a site; the card stays
   // until they answer, the agent leaves, or the turn is interrupted.
-  askHost(id: string, host: string, url: string): Promise<ChatDecision> {
+  askHost(id: string, host: string, url: string): Promise<ChatDecision | typeof ALLOW_SITE_ALWAYS> {
     // With no agent left in the conversation, what takes its tab elsewhere is the user or the page
     // itself (a form's redirect), which the gate is not there to stop; and there is no chat to ask
     // in, so asking would refuse it and leave the tab on a blank error page.
     if (!this.store.get(id)?.sessionId && !this.launching.has(id)) return Promise.resolve('allow')
     const requestId = this.chats.ask(id, { kind: 'browser-host', host, url })
-    return new Promise((resolve, reject) => this.asks.set(requestId, { resolve, reject }))
+    return new Promise((resolve, reject) => this.asks.set(requestId, {
+      resolve: (answer) => resolve(answer.choice === ALLOW_SITE_ALWAYS && answer.decision !== 'deny' ? ALLOW_SITE_ALWAYS : answer.decision),
+      reject
+    }))
   }
 
   // Asks the user, in the running chat, whether a command the agent wants may run in a terminal
   // of its own; the same card, and the same answers, as a site the browser would open.
   askTerminal(id: string, command: string, cwd: string): Promise<ChatDecision> {
     const requestId = this.chats.ask(id, { kind: 'terminal-run', command, cwd })
-    return new Promise((resolve, reject) => this.asks.set(requestId, { resolve, reject }))
+    return new Promise((resolve, reject) => this.asks.set(requestId, { resolve: (answer) => resolve(answer.decision), reject }))
   }
 
   // Asks the user, in the running chat, whether the agent may open the pull request it drafted
   // (its title, and branch → base); the same card and answers again.
   askPullRequest(id: string, title: string, detail: string): Promise<ChatDecision> {
     const requestId = this.chats.ask(id, { kind: 'pull-request', title, detail })
-    return new Promise((resolve, reject) => this.asks.set(requestId, { resolve, reject }))
+    return new Promise((resolve, reject) => this.asks.set(requestId, { resolve: (answer) => resolve(answer.decision), reject }))
   }
 
   // A question of Antumi's answered as cancelled (the agent went, the stage was replayed) has
@@ -1843,8 +1846,8 @@ export class ConversationService {
     }
     if (isAntumiRequest(requestId)) {
       const resolution = answer.decision === 'allow' ? 'allowed' : answer.decision === 'allowForSession' ? 'allowedForSession' : 'denied'
-      this.chats.answer(id, requestId, resolution, answer.message)
-      this.asks.get(requestId)?.resolve(answer.decision)
+      this.chats.answer(id, requestId, resolution, answer.message, answer.choice)
+      this.asks.get(requestId)?.resolve(answer)
       this.asks.delete(requestId)
       return
     }

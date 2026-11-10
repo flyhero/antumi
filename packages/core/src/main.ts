@@ -57,6 +57,7 @@ import { ConversationService } from './conversation-service'
 import { TerminalCommandStore } from './terminal-commands'
 import { BookmarkStore } from './bookmarks'
 import { BrowserHistoryStore } from './browser-history'
+import { BrowserSiteStore } from './browser-sites'
 import { ChatCommandStore } from './chat-commands'
 import { ShellPrompt } from './shell-prompt'
 import { TerminalService } from './terminal-service'
@@ -194,6 +195,7 @@ conversations.setImportHooks({ before: (id, agent, nativeId) => sessionImports.b
 
 
 const browserHistory = new BrowserHistoryStore(paths.database, () => server?.broadcast('browserHistory.changed', {}))
+const browserSites = new BrowserSiteStore(paths.database)
 const browser = new BrowserService(
   paths,
   attachments,
@@ -212,6 +214,7 @@ const browser = new BrowserService(
     }
   }
 )
+browser.allowSitesFrom(browserSites)
 // The desktop app runs the browser; core follows its host file to connect, and connects now in
 // case the app is already up. Earlier versions kept a Chromium download and profile beside it.
 watchBrowserHostFile(paths.browserHostFile, () => browser.hostFileChanged())
@@ -613,7 +616,7 @@ server = await startRpcServer({
     store: attachments,
     uploads: new AttachmentUploads(attachments)
   }, terminals, worktrees, browser, awake, terminalCommands, limits, runs, turns, chatSettings, environment, schedules, chatCommands, routines, discussions, wire, () => { server?.broadcast('git.changed', {}); profiles.tick() }, squads, todos, plugins, skills, mcpServers, smallModels, projectConfigs, modelProviders, sessionImports, accounts, cliMaintenance, analytics, automation, pets, new ProjectStar(sources), profiles, bookmarks, browserHistory, sourceUpdates,
-    { store: pullRequestStore, changed: (taskId, links) => server?.broadcast('pullRequests.changed', { taskId, links }), ready: (service) => { pullRequests.current = service } })
+    { store: pullRequestStore, changed: (taskId, links) => server?.broadcast('pullRequests.changed', { taskId, links }), ready: (service) => { pullRequests.current = service } }, browserSites)
 })
 await writeCoreEndpoint({ port: server.port, token, pid: process.pid, protocolVersion: PROTOCOL_VERSION, version: packageJson.version })
 daemon.start()
@@ -683,6 +686,7 @@ async function shutdown(): Promise<void> {
   pullRequestStore.close()
   bookmarks.close()
   browserHistory.close()
+  browserSites.close()
   process.exit(0)
 }
 process.on('SIGINT', () => void shutdown())

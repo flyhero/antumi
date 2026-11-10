@@ -400,7 +400,9 @@ export const MIGRATIONS = [
      data TEXT NOT NULL,
      suppressed TEXT NOT NULL DEFAULT '[]',
      PRIMARY KEY(task_id, repo_path)
-   );`
+   );`,
+  // Sites the agents' browser opens in any conversation without asking, by exact host name.
+  `CREATE TABLE browser_sites (host TEXT PRIMARY KEY, allowed_at INTEGER NOT NULL);`
 ]
 
 

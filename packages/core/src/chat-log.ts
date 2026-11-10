@@ -40,7 +40,8 @@ const LogLine = z.discriminatedUnion('dir', [
     at: z.number(),
     requestId: z.string(),
     resolution: z.enum(['allowed', 'allowedForSession', 'denied', 'cancelled']).catch('cancelled'),
-    message: z.string().optional()
+    message: z.string().optional(),
+    chosen: z.string().optional()
   })
 ])
 

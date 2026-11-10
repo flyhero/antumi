@@ -29,7 +29,7 @@ export type ChatRecord =
   | { dir: 'item'; at: number; item: ChatItem }
   // Antumi asked the user something mid-chat (the site its browser may open), and what they answered.
   | { dir: 'ask'; at: number; requestId: string; ask: { kind: 'browser-host'; host: string; url: string } | { kind: 'terminal-run'; command: string; cwd: string } | { kind: 'pull-request'; title: string; detail: string } }
-  | { dir: 'answer'; at: number; requestId: string; resolution: 'allowed' | 'allowedForSession' | 'denied' | 'cancelled'; message?: string }
+  | { dir: 'answer'; at: number; requestId: string; resolution: 'allowed' | 'allowedForSession' | 'denied' | 'cancelled'; message?: string; chosen?: string }
   // The user answered a question the agent asked in passing (answers null: put it aside); what
   // they chose goes to the agent as a message of its own.
   | { dir: 'reply'; at: number; requestId: string; answers: Record<string, string[]> | null }

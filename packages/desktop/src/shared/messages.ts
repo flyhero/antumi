@@ -2740,6 +2740,13 @@ export const MESSAGES = {
     "zh": "本会话允许",
     "en": "Allow in this conversation"
   },
+  "ChatRequestCards.allowSiteAlways": {"zh": "始终允许这个网站", "en": "Always allow this site"},
+  "ChatRequestCards.allowedSiteAlways": {"zh": "已允许，所有会话都不再询问这个网站", "en": "Allowed in every conversation from now on"},
+  "SettingsPage.alwaysAllowedSites": {"zh": "始终允许的网站", "en": "Always allowed sites"},
+  "SettingsPage.alwaysAllowedSitesDescription": {"zh": "Agent 打开这些网站时不再询问，只认完整的主机名。在确认卡上选「始终允许这个网站」加入。", "en": "Agents open these sites without asking, matched by the exact host name. Add one with “Always allow this site” on the confirmation card."},
+  "SettingsPage.noAlwaysAllowedSites": {"zh": "还没有", "en": "None yet"},
+  "SettingsPage.siteAllowedAgo": {"zh": "{ago}允许", "en": "Allowed {ago}"},
+  "SettingsPage.removeSite": {"zh": "移除", "en": "Remove"},
   "ChatRequestCards.runOnce": {
     "zh": "运行这一次",
     "en": "Run once"

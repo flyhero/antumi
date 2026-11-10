@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import {
+  ALLOW_SITE_ALWAYS,
   BROWSER_HOST_DECISION_WAIT_MS,
   browserHostOf,
   isLocalHost,
@@ -23,6 +24,7 @@ import { BROWSER_HOST_PROTOCOL_VERSION, type BrowserHostEvent, type BrowserHostP
 import type { AttachmentStore } from './attachment-store'
 import { connectBrowserHost, type HostConnect, type HostLink } from './browser-host-client'
 import { readBrowserHostEndpoint } from './browser-host-file'
+import type { BrowserSiteStore } from './browser-sites'
 import { clip } from './chat-items'
 import { Rejection } from './rejection'
 import type { Connection } from './rpc-server'
@@ -42,8 +44,11 @@ function mayBrowse(connection: Connection, tab: Pick<BrowserTab, 'conversationId
 }
 
 // Asks the user, in the conversation's chat, about a site the browser is to open. Resolves with
-// their decision; rejects when there is no chat to ask in or the question was dropped.
-export type HostAsk = (conversationId: string, host: string, url: string) => Promise<ChatDecision>
+// their decision, or with allowing the site in every conversation; rejects when there is no chat
+// to ask in or the question was dropped.
+export type HostAsk = (conversationId: string, host: string, url: string) => Promise<ChatDecision | typeof ALLOW_SITE_ALWAYS>
+// The sites allowed in every conversation, kept beyond core's run.
+export type SiteAllowance = Pick<BrowserSiteStore, 'allows' | 'allow'>
 
 type ActionParams<K extends keyof typeof browserActions> = z.output<(typeof browserActions)[K]>
 type BrowserPaths = Pick<AntumiPaths, 'browserHostFile'>
@@ -81,6 +86,7 @@ export class BrowserService {
   private readonly drivingTimers = new Map<string, NodeJS.Timeout>()
   private readonly acting = new Set<string>()
   private readonly userBusy = new Set<string>()
+  private sites: SiteAllowance | null = null
 
   constructor(
     private readonly paths: BrowserPaths,
@@ -91,6 +97,10 @@ export class BrowserService {
     private readonly now: () => number = Date.now,
     private readonly decisionWaitMs = BROWSER_HOST_DECISION_WAIT_MS
   ) {}
+
+  allowSitesFrom(sites: SiteAllowance): void {
+    this.sites = sites
+  }
 
   // ---- the app's host
 
@@ -219,10 +229,16 @@ export class BrowserService {
   private async permit(conversationId: string | null, tabId: string | null, hostName: string, url: string): Promise<BrowserNavigation['outcome']> {
     // The user's own tab goes where the user takes it.
     if (conversationId === null || this.needsNoAllowance(conversationId, tabId, hostName)) return 'done'
-    if (this.allowed.get(conversationId)?.has(hostName) || this.allowOnce.get(conversationId)?.has(hostName)) return 'done'
+    if (this.allowed.get(conversationId)?.has(hostName) || this.allowOnce.get(conversationId)?.has(hostName) || this.sites?.allows(hostName)) return 'done'
     // Asking can fail at once (no chat is running to ask in): that is a refusal, not a crash.
     const asked = Promise.resolve().then(() => this.askHost(conversationId, hostName, url)).then(
-      (decision) => {
+      (decision): ChatDecision => {
+        if (decision === ALLOW_SITE_ALWAYS) {
+          // Not also for the conversation: taking the site back off the list is to ask again.
+          if (this.sites) this.sites.allow(hostName)
+          else this.remember(this.allowed, conversationId, hostName)
+          return 'allowForSession'
+        }
         if (decision === 'allowForSession') this.remember(this.allowed, conversationId, hostName)
         else if (decision === 'allow') this.remember(this.allowOnce, conversationId, hostName)
         return decision

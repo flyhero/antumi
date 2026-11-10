@@ -410,10 +410,10 @@ export class ChatHost {
     return requestId
   }
 
-  answer(conversationId: string, requestId: string, resolution: AntumiResolution, message?: string): void {
+  answer(conversationId: string, requestId: string, resolution: AntumiResolution, message?: string, chosen?: string): void {
     const live = this.liveOf(conversationId)
     if (!live) return
-    this.record(live, { dir: 'answer', at: this.now(), requestId, resolution, ...(message ? { message } : {}) })
+    this.record(live, { dir: 'answer', at: this.now(), requestId, resolution, ...(message ? { message } : {}), ...(chosen ? { chosen } : {}) })
     this.flush(live)
   }
 

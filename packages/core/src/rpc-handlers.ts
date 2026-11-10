@@ -30,6 +30,7 @@ import type { ConversationService } from './conversation-service'
 import type { TerminalCommandStore } from './terminal-commands'
 import type { BookmarkStore } from './bookmarks'
 import type { BrowserHistoryStore } from './browser-history'
+import type { BrowserSiteStore } from './browser-sites'
 import type { ChatCommandStore } from './chat-commands'
 import type { TerminalService } from './terminal-service'
 import type { ProjectConfigStore } from './project-config'
@@ -114,7 +115,8 @@ export function createRpcHandlers(
   bookmarks?: BookmarkStore,
   browserHistory?: BrowserHistoryStore,
   sourceUpdates?: SourceUpdates,
-  pullRequestStore?: { store: PullRequestStore; changed: (taskId: string, links: PullRequestLink[]) => void; ready?: (service: PullRequestService) => void }
+  pullRequestStore?: { store: PullRequestStore; changed: (taskId: string, links: PullRequestLink[]) => void; ready?: (service: PullRequestService) => void },
+  browserSites?: BrowserSiteStore
 ): RpcHandlers {
   const profileService = () => {
     if (!profiles) throw new Rejection('profile-unavailable')
@@ -123,6 +125,10 @@ export function createRpcHandlers(
   const bookmarkStore = (): BookmarkStore => {
     if (!bookmarks) throw new Rejection('bookmarks-unavailable')
     return bookmarks
+  }
+  const siteStore = (): BrowserSiteStore => {
+    if (!browserSites) throw new Rejection('browser-sites-unavailable')
+    return browserSites
   }
   const historyStore = (): BrowserHistoryStore => {
     if (!browserHistory) throw new Rejection('browser-history-unavailable')
@@ -336,7 +342,7 @@ export function createRpcHandlers(
     'pets.cancel': ({ id }) => { petLibrary().cancel(id); return OK },
     'pets.remove': ({ id }) => petLibrary().remove(id),
     'pets.read': ({ id }) => petLibrary().read(id),
-    'system.hello': () => ({ protocolVersion: PROTOCOL_VERSION, serverVersion: packageJson.version, features: CORE_FEATURES.filter((feature) => (feature !== 'agent-profiles' || Boolean(profiles)) && (feature !== 'project-star' || Boolean(projectStar)) && (feature !== 'bookmarks' || Boolean(bookmarks)) && (feature !== 'browser-history' || Boolean(browserHistory)) && (feature !== 'pets' || Boolean(pets)) && (feature !== 'squads' || Boolean(squads)) && (!['plugins', 'plugin-recommendations'].includes(feature) || Boolean(plugins)) && (!['skills-library', 'skills-search', 'skills-activation'].includes(feature) || Boolean(skills)) && (feature !== 'mcp-servers' || Boolean(mcpServers)) && (feature !== 'small-model-stats' || Boolean(smallModels)) && (!['model-providers', 'model-provider-models'].includes(feature) || Boolean(modelProviders)) && (feature !== 'agent-accounts' || Boolean(accounts)) && (feature !== 'pull-requests' || Boolean(pullRequests))) }),
+    'system.hello': () => ({ protocolVersion: PROTOCOL_VERSION, serverVersion: packageJson.version, features: CORE_FEATURES.filter((feature) => (feature !== 'agent-profiles' || Boolean(profiles)) && (feature !== 'project-star' || Boolean(projectStar)) && (feature !== 'bookmarks' || Boolean(bookmarks)) && (feature !== 'browser-history' || Boolean(browserHistory)) && (feature !== 'browser-sites' || Boolean(browserSites)) && (feature !== 'pets' || Boolean(pets)) && (feature !== 'squads' || Boolean(squads)) && (!['plugins', 'plugin-recommendations'].includes(feature) || Boolean(plugins)) && (!['skills-library', 'skills-search', 'skills-activation'].includes(feature) || Boolean(skills)) && (feature !== 'mcp-servers' || Boolean(mcpServers)) && (feature !== 'small-model-stats' || Boolean(smallModels)) && (!['model-providers', 'model-provider-models'].includes(feature) || Boolean(modelProviders)) && (feature !== 'agent-accounts' || Boolean(accounts)) && (feature !== 'pull-requests' || Boolean(pullRequests))) }),
     'files.resolve': ({ conversationId, roots, path }) => files.resolve(fileScope(conversationId, roots), path),
     'files.read': ({ conversationId, roots, path }) => files.read(fileScope(conversationId, roots), path),
     'visualizations.read': ({ conversationId, stageId, path }) => {
@@ -644,6 +650,11 @@ export function createRpcHandlers(
       return OK
     },
     'bookmarks.import': ({ bookmarks: imported }) => bookmarkStore().import(imported),
+    'browser.sites': () => siteStore().list(),
+    'browser.forgetSite': ({ host }) => {
+      siteStore().forget(host)
+      return OK
+    },
     'browserHistory.search': ({ query, agents, limit, order }) => historyStore().search(query, agents, limit, order),
     'browserHistory.delete': ({ url, conversationId }) => {
       historyStore().delete(url, conversationId)

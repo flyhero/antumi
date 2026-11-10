@@ -15,6 +15,7 @@ import { TaskStore } from './task-store'
 import { CredentialStore } from './credential-store'
 import { ModelProviderStore } from './model-providers'
 import type { ModelProviderInput } from '@antumi/protocol'
+import { ALLOW_SITE_ALWAYS } from '@antumi/protocol'
 
 // The store an image a message names is looked up in; made on the way in.
 function attachmentsAt(root: string): AttachmentStore {
@@ -167,6 +168,18 @@ describe('ConversationService', () => {
     expect(await Promise.race([asked, new Promise((resolve) => setTimeout(() => resolve('waiting'), 20))])).toBe('waiting')
     await service.stop(running.id)
     await expect(service.askHost(running.id, 'mp.csdn.net', 'https://mp.csdn.net/')).resolves.toBe('allow')
+  })
+
+  it('offers to allow a site always, and hands that answer to the browser', async () => {
+    const running = await service.create('claude', [])
+    await settle()
+    const asked = service.askHost(running.id, 'www.zhihu.com', 'https://www.zhihu.com/search?q=agents')
+    const card = () => service.stageChatItems(running.id, service.stages(running.id).at(-1)!.id).find((item) => item.kind === 'approval')
+    const approval = card()
+    expect(approval?.kind === 'approval' && approval.choices?.map((choice) => choice.id)).toEqual(['allow', 'allowForSession', ALLOW_SITE_ALWAYS, 'deny'])
+    await service.respond(running.id, approval!.kind === 'approval' ? approval!.requestId : '', { decision: 'allowForSession', choice: ALLOW_SITE_ALWAYS })
+    await expect(asked).resolves.toBe(ALLOW_SITE_ALWAYS)
+    expect(card()).toMatchObject({ resolution: 'allowedForSession', chosen: ALLOW_SITE_ALWAYS })
   })
 
   it('copies stopped settings after a restart without reviving the previous model effort', async () => {

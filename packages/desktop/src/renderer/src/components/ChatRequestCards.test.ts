@@ -53,6 +53,24 @@ describe('approval card', () => {
     expect(line).toContain('MCP 工具')
     expect(line).toContain('github.create_issue')
   })
+  it('offers to allow a site always, and says so once answered that way', () => {
+    const site = { kind: 'host' as const, values: ['www.zhihu.com'], behavior: 'allow' as const }
+    const item: ApprovalItem = {
+      ...approval, tool: 'browser_host', title: 'www.zhihu.com', detail: 'https://www.zhihu.com/search?q=agents', toolItemId: null, decisions: ['allow', 'allowForSession', 'deny'],
+      choices: [
+        { id: 'allow', decision: 'allow', grants: [] },
+        { id: 'allowForSession', decision: 'allowForSession', grants: [{ ...site, scope: 'run' }] },
+        { id: 'allowAlways', decision: 'allowForSession', grants: [{ ...site, scope: 'user' }] },
+        { id: 'deny', decision: 'deny', grants: [] }
+      ]
+    }
+    const card = renderToStaticMarkup(createElement(ChatApprovalCard, { conversationId: 'conversation', item, tool: undefined }))
+    expect(card).toContain('允许一次')
+    expect(card).toContain('本会话允许')
+    expect(card).toContain('始终允许这个网站')
+    expect(renderToStaticMarkup(createElement(ChatRequestLine, { item: { ...item, resolution: 'allowedForSession', chosen: 'allowAlways' }, tool: undefined }))).toContain('所有会话都不再询问这个网站')
+    expect(renderToStaticMarkup(createElement(ChatRequestLine, { item: { ...item, resolution: 'allowedForSession', chosen: 'allowForSession' }, tool: undefined }))).toContain('本会话不再询问')
+  })
   it('takes the command from the call when the chat has it', () => {
     const tool: ToolItem = { id: 'tool:inner', stageId: 'stage', revision: 1, at: 0, kind: 'tool', name: 'commandExecution', title: 'rg', input: 'rg -n session', status: 'running', output: null, diffs: [] }
     expect(render(tool)).toContain('<pre>rg -n session</pre>')

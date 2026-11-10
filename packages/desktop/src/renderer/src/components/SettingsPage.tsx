@@ -1,6 +1,6 @@
 import { UsageSettings } from './UsageSettings'
 import { getLocale, localized, messageSearchText, t, tr, useLocale } from '../i18n'
-import type { BrowserStatus, WireUsage } from '@antumi/protocol'
+import type { BrowserSite, BrowserStatus, WireUsage } from '@antumi/protocol'
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { AGENT_KINDS, agentDescriptor, LANGUAGE_NAMES, PROTOCOL_VERSION, quickModel, TRANSLATE_LANGUAGES, UNATTENDED_MODES, type AgentKind, type SourceDescriptor, type UnattendedMode } from '@antumi/protocol'
 import packageJson from '../../../../package.json'
@@ -20,7 +20,7 @@ import { TitleNamingSettings } from './TitleNamingSettings'
 import { AutoArchiveSettings } from './AutoArchiveSettings'
 import { WorktreeCleanSettings } from './WorktreeCleanSettings'
 import { PullRequestSettings } from './PullRequestSettings'
-import { agentLabel } from '../labels'
+import { agentLabel, agoText } from '../labels'
 import { appVersion, canNotify, canShowIsland, canShowRequestPopup } from '../desktop-bridge'
 import { formatBytes } from '../wire-entries'
 import {
@@ -194,6 +194,39 @@ function BrowserRows() {
           <Toggle labelId={labelId} checked={openOnTab} onChange={(next) => setPreference('openBrowserOnTab', next)} />
         )}
       />
+      <AlwaysAllowedSites />
+    </>
+  )
+}
+
+// The sites agents open in every conversation without asking, each to be taken back here.
+function AlwaysAllowedSites() {
+  const rpc = useCore((s) => s.rpc)
+  const supported = rpc?.features.includes('browser-sites') ?? false
+  const [sites, setSites] = useState<BrowserSite[] | null>(null)
+  useEffect(() => {
+    if (!supported) return
+    void perform((rpc) => rpc.call('browser.sites', {})).then((list) => list && setSites(list))
+  }, [rpc, supported])
+  if (!supported) return null
+  const forget = async (host: string) => {
+    if (await perform((rpc) => rpc.call('browser.forgetSite', { host }))) setSites((current) => current?.filter((site) => site.host !== host) ?? null)
+  }
+  return (
+    <>
+      <SettingsRow
+        label={t('SettingsPage.alwaysAllowedSites')}
+        description={t('SettingsPage.alwaysAllowedSitesDescription')}
+        control={() => sites?.length === 0 ? <span className="muted">{t('SettingsPage.noAlwaysAllowedSites')}</span> : null}
+      />
+      {sites?.map((site) => (
+        <SettingsRow
+          key={site.host}
+          label={site.host}
+          description={t('SettingsPage.siteAllowedAgo', { ago: agoText(site.allowedAt) })}
+          control={() => <button type="button" className="button small" onClick={() => void forget(site.host)}>{t('SettingsPage.removeSite')}</button>}
+        />
+      ))}
     </>
   )
 }

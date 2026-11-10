@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { ChatDecision } from '@antumi/protocol'
+import { ALLOW_SITE_ALWAYS, type ChatDecision } from '@antumi/protocol'
 import { AttachmentStore } from './attachment-store'
 import { BrowserService, type BrowserEvent } from './browser-service'
 import { fakeBrowserHost } from './fake-browser-host'
@@ -19,12 +19,12 @@ describe('BrowserService', () => {
   let hostFile: string
   let host: ReturnType<typeof fakeBrowserHost>
   let events: BrowserEvent[]
-  let asks: Array<{ conversationId: string; host: string; url: string; answer: (decision: ChatDecision) => void; drop: () => void }>
+  let asks: Array<{ conversationId: string; host: string; url: string; answer: (decision: ChatDecision | typeof ALLOW_SITE_ALWAYS) => void; drop: () => void }>
   let service: BrowserService
   let now: number
 
   // The service as main.ts makes it, over the fake host's link.
-  const make = (ask: (conversationId: string, host: string, url: string) => Promise<ChatDecision>, onEvent: (event: BrowserEvent) => void = () => {}, decisionWaitMs?: number) =>
+  const make = (ask: (conversationId: string, host: string, url: string) => Promise<ChatDecision | typeof ALLOW_SITE_ALWAYS>, onEvent: (event: BrowserEvent) => void = () => {}, decisionWaitMs?: number) =>
     new BrowserService({ browserHostFile: hostFile }, new AttachmentStore(path.join(root, 'attachments')), ask, onEvent, (endpoint) => host.connect(endpoint), () => now, decisionWaitMs)
 
   beforeEach(async () => {
@@ -85,6 +85,30 @@ describe('BrowserService', () => {
     expect(third.conversationId).toBe(CONV_B)
     third.answer('deny')
     expect((await elsewhere).outcome).toBe('denied')
+  })
+
+  it('opens a site allowed always in every conversation, by its exact host, until it is taken back', async () => {
+    const allowed = new Set<string>()
+    service.allowSitesFrom({ allows: (host) => allowed.has(host), allow: (host) => { allowed.add(host) } })
+    const opened = await service.open(CONV_A)
+    const first = service.navigate(CONV_A, opened.tab.id, { url: 'https://www.zhihu.com/search?q=agents' })
+    ;(await until(() => asks[0])).answer(ALLOW_SITE_ALWAYS)
+    expect((await first).outcome).toBe('done')
+    expect([...allowed]).toEqual(['www.zhihu.com'])
+
+    const other = await service.open(CONV_B)
+    expect((await service.navigate(CONV_B, other.tab.id, { url: 'https://www.zhihu.com/question/1' })).outcome).toBe('done')
+    expect(asks).toHaveLength(1)
+    const sibling = service.navigate(CONV_B, other.tab.id, { url: 'https://zhuanlan.zhihu.com/p/1' })
+    expect((await until(() => asks[1])).host).toBe('zhuanlan.zhihu.com')
+    asks[1]!.answer('deny')
+    expect((await sibling).outcome).toBe('denied')
+
+    allowed.clear()
+    const again = service.navigate(CONV_A, opened.tab.id, { url: 'https://www.zhihu.com/' })
+    expect((await until(() => asks[2])).host).toBe('www.zhihu.com')
+    asks[2]!.answer('deny')
+    expect((await again).outcome).toBe('denied')
   })
 
   it('keeps an allow given after the wait for the agent, though the user opens the site first', async () => {

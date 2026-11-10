@@ -1,6 +1,6 @@
 import { localized, t, tr } from '../i18n'
 import { useContext, useEffect, useRef, useState, type KeyboardEvent } from 'react'
-import { isHostApproval, isTerminalRunTool, terminalToolKind, type ChatDecision, type ChatItem, type ChatPermissionMode, type ChatQuestion } from '@antumi/protocol'
+import { ALLOW_SITE_ALWAYS, isHostApproval, isTerminalRunTool, terminalToolKind, type ChatDecision, type ChatItem, type ChatPermissionMode, type ChatQuestion } from '@antumi/protocol'
 import { antumiToolPresentation, antumiToolTitle } from '../antumi-tool-presentation'
 import { choiceAction, choiceText, chosenText, isPlainDeny } from '../approval-choice-text'
 import { questionAnswers } from '../chat-state'
@@ -18,6 +18,8 @@ export type RequestItem = ApprovalItem | QuestionItem
 const DECISION_LABEL: Record<ChatDecision, string> = localized(() => ({ allow: t('approvalChoiceText.allow'), allowForSession: t('ChatRequestCards.allowForThisConversation'), deny: t('approvalChoiceText.deny') }))
 // A site is allowed for one visit or for the whole conversation; the words say so.
 const HOST_DECISION_LABEL: Record<ChatDecision, string> = localized(() => ({ allow: t('ChatRequestCards.allowOnce'), allowForSession: t('ChatRequestCards.allowInThisConversation'), deny: t('approvalChoiceText.deny') }))
+// Its choices, by id, where core offers to allow the site in every conversation too.
+const HOST_CHOICE_LABEL: Record<string, string> = localized(() => ({ ...HOST_DECISION_LABEL, [ALLOW_SITE_ALWAYS]: t('ChatRequestCards.allowSiteAlways') }))
 // Antumi's own question before an agent's command runs in a terminal of its own.
 const TERMINAL_DECISION_LABEL: Record<ChatDecision, string> = localized(() => ({ allow: t('ChatRequestCards.runOnce'), allowForSession: t('ChatRequestCards.allowTerminalCommandsForThisConversation'), deny: t('approvalChoiceText.deny') }))
 
@@ -81,7 +83,7 @@ export function ChatRequestLine({ item, tool }: { item: RequestItem; tool?: Tool
   const what = <>{toolLabel(antumi?.name ?? item.tool)}{subject && <> <span className="mono">{subject}</span></>}</>
   return item.resolution === null
     ? <div className="chat-request-line" data-waiting>{tr('ChatRequestCards.approvalNeededRespondBelow', { what: what })}</div>
-    : <div className="chat-request-line">{what} · {chosenText(item) ?? RESOLUTION_TEXT[item.resolution]}</div>
+    : <div className="chat-request-line">{what} · {isHostApproval(item) ? (item.chosen === ALLOW_SITE_ALWAYS ? t('ChatRequestCards.allowedSiteAlways') : RESOLUTION_TEXT[item.resolution]) : chosenText(item) ?? RESOLUTION_TEXT[item.resolution]}</div>
 }
 
 // A command in full, in a block of its own: three lines of it until opened, since one that chains
@@ -120,7 +122,11 @@ function approvalOptions(item: ApprovalItem): ApprovalOption[] {
   if (item.choices?.length) {
     // The plain no goes last, where its row takes the reason; the rest keep the agent's order.
     const ordered = [...item.choices.filter((choice) => !isPlainDeny(choice)), ...item.choices.filter(isPlainDeny)]
-    return ordered.map((choice) => ({ key: choice.id, decision: choice.decision, choice: choice.id, ...choiceText(choice), action: choiceAction(choice), denies: isPlainDeny(choice) }))
+    const host = isHostApproval(item)
+    return ordered.map((choice) => {
+      const label = host ? HOST_CHOICE_LABEL[choice.id] : undefined
+      return { key: choice.id, decision: choice.decision, choice: choice.id, ...(label ? { label, note: null, action: label } : { ...choiceText(choice), action: choiceAction(choice) }), denies: isPlainDeny(choice) }
+    })
   }
   return DECISION_ORDER.filter((decision) => item.decisions.includes(decision)).map((decision) => ({
     key: decision, decision, choice: null, label: decisionLabel(item, decision), note: null, action: decisionLabel(item, decision), denies: decision === 'deny'

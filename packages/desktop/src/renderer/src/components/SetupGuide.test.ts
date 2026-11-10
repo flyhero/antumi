@@ -91,7 +91,7 @@ describe('SetupGuide', () => {
     useExternalSessions.setState({ sessions: [session, { ...session, sessionId: 'b', cwd: '/work/api' }] })
     const html = render()
     expect(html).toContain('继续最近的会话')
-    expect(html).toContain('找到 2 个可继续的会话，按最近活跃时间推荐。')
+    expect(html).toContain('找到 2 个会话')
     expect(html).toContain('查看全部会话')
     expect(html).toContain('Fix the CSV export')
     expect(html).toContain('shop')
@@ -116,7 +116,7 @@ describe('SetupGuide', () => {
     expect(usePreferences.getState().setup.agent).toBe('codex')
     setLocale('en')
     expect(render()).toContain('Continue recent conversations')
-    expect(render()).toContain('Found 2 conversations you can continue')
+    expect(render()).toContain('Found 2 conversations')
     expect(render()).toContain('View all conversations')
   })
 

@@ -97,10 +97,7 @@ export function SetupGuide() {
               {step !== 'agent' && step !== 'waiting' && step !== 'sessions' && readiness?.state === 'authorize-on-use' && <p>{t('SetupGuide.deferredAuth')}</p>}
               {step !== 'waiting' && step !== 'sessions' && provider && <p>{t('SetupGuide.providerConfigured', { name: provider.name })} {t(probe === 'running' ? 'SetupGuide.providerTesting' : probe ? probe.ok ? 'SetupGuide.providerPassed' : 'SetupGuide.providerFailed' : 'SetupGuide.providerUntested')}</p>}
               {step === 'sessions' && <p>{sessions === null ? t('SetupGuide.findingSessions') : t('SetupGuide.sessionsFound', { count: resumable.count })}</p>}
-              {step === 'sessions' && resumable.shown.length > 0 && <>
-                <p>{t('SetupGuide.sessionsNote')}</p>
-                <ResumableSessionList sessions={resumable.shown} onResumed={() => updateSetup({ sessionChoice: 'resumed' })} />
-              </>}
+              {step === 'sessions' && resumable.shown.length > 0 && <ResumableSessionList sessions={resumable.shown} onResumed={() => updateSetup({ sessionChoice: 'resumed' })} />}
               {step === 'sources' && progress.sourceChoice === 'configure' && <>
                 <p>{t('SetupGuide.sourceConfiguration')}</p>
                 {(sources?.length ?? 0) > 0 && <ChatPicker label={t('SetupGuide.selectSource')} value={source?.provider ?? null} placeholder={t('SetupGuide.selectSource')}

@@ -29,6 +29,7 @@ import { ProjectPicker } from './ProjectPicker'
 import { DraftBranchPicker, useProjectBranches } from './DraftBranchPicker'
 import { composerDraft, EMPTY_DRAFT, saveComposerDraft } from '../composer-drafts'
 import { inboxKey, investigationMode, rememberInvestigationProjects } from '../source-inboxes'
+import { rememberedPick, type DraftChoice } from '../draft-choices'
 import { catalogKey, providerFor } from '../model-provider-choice'
 import { ProviderPicker } from './ProviderPicker'
 import { DraftModeSwitch } from './DraftModeSwitch'
@@ -139,13 +140,16 @@ export function ConversationDraft() {
   }, [agent, key, provider, rpc, optionsSupported, catalogs])
 
   const catalog = key ? catalogs[key] : null
-  const pick = (agent ? picks[agent] : undefined) ?? {}
+  // A page starts where the agent was last started from it; a provider's models are its own.
+  const draftChoices = usePreferences((s) => s.draftChoices)
+  const remembered = agent && !provider && !profile ? draftChoices[agent] : undefined
+  const pick = (agent ? picks[agent] : undefined) ?? rememberedPick(remembered, catalog?.models)
   const modelId = pick.model ?? catalog?.models.find((each) => each.isDefault)?.id ?? null
   const model = catalog?.models.find((each) => each.id === modelId)
   const efforts = model?.efforts ?? []
   // A mode the model or settings no longer allow falls back to that agent's available default.
   const offeredModes = agent ? startModes(agent, model) : []
-  const chosenMode = agent ? modes[agent] : undefined
+  const chosenMode = agent ? modes[agent] ?? (issue ? undefined : remembered?.mode) : undefined
   const investigationModes = usePreferences((s) => s.investigationModes)
   const reading = agent && issue ? investigationMode(agent, offeredModes, investigationModes[agent]) : null
   const mode = profile?.capability === 'readOnly' && agent ? agentDescriptor(agent).readOnlyMode : agent ? (chosenMode && offeredModes.includes(chosenMode) ? chosenMode : reading ?? defaultStartMode(agent, offeredModes)) : null
@@ -155,11 +159,16 @@ export function ConversationDraft() {
   // The model a start would run, as quota windows name models; unknown until its catalog is in.
   const modelFor = (kind: AgentKind) => {
     const models = catalogs[catalogKey(kind, providerOf(kind))]?.models ?? []
-    const id = picks[kind]?.model ?? models.find((each) => each.isDefault)?.id
+    const id = (kind === agent ? pick.model : picks[kind]?.model) ?? models.find((each) => each.isDefault)?.id
     return modelText(models.find((each) => each.id === id))
   }
+  const remember = (choice: DraftChoice) => {
+    if (agent && !provider && !profile) setPreference('draftChoices', { ...draftChoices, [agent]: { ...draftChoices[agent], ...choice } })
+  }
   const choose = (next: { model?: string; effort?: string }) => {
-    if (agent) setPicks({ ...picks, [agent]: next })
+    if (!agent) return
+    setPicks({ ...picks, [agent]: next })
+    remember({ model: next.model ?? modelId ?? undefined, effort: next.effort })
   }
   // A group chat's members run on the agents' own accounts, so a provider's model stays behind.
   const discussionsSupported = useDiscussionsSupported()
@@ -367,6 +376,7 @@ export function ConversationDraft() {
                         if (!picked.success) return
                         setModes({ ...modes, [agent]: picked.data })
                         if (issue) setPreference('investigationModes', { ...investigationModes, [agent]: picked.data })
+                        else remember({ mode: picked.data })
                       }}
                     />
                     <span className="chat-dock-spacer" />

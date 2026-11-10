@@ -82,6 +82,12 @@ const Preferences = z.object({
   planRunMode: z.enum(['auto', 'acceptEdits', 'ask', 'bypass']).catch('auto'),
   // The mode each agent looks into an issue in, as last picked; until then, the one it only reads in.
   investigationModes: z.partialRecord(AgentKind, ChatPermissionMode).catch({}),
+  // What each agent last started with on the new conversation page, on its own account.
+  draftChoices: z.partialRecord(AgentKind, z.object({
+    mode: ChatPermissionMode.optional().catch(undefined),
+    model: z.string().max(200).optional().catch(undefined),
+    effort: z.string().max(50).optional().catch(undefined)
+  })).catch({}),
   // Agents the user turned off: found here, but not offered for new tasks and conversations.
   // Every agent found is on until turned off.
   disabledAgents: z.array(AgentKind).catch([]),

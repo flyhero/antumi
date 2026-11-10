@@ -12103,6 +12103,23 @@ export const MESSAGES = {
     "zh": "{value1}月{value2}日 周{value3}",
     "en": "{value1}/{value2} {value3}"
   },
+  "InboxIssueDetail.view": {"zh": "查看", "en": "View"},
+  "InboxIssueDetail.original": {"zh": "在原站打开", "en": "Open original"},
+  "InboxIssueDetail.previous": {"zh": "上一个问题", "en": "Previous issue"},
+  "InboxIssueDetail.next": {"zh": "下一个问题", "en": "Next issue"},
+  "InboxIssueDetail.close": {"zh": "关闭详情", "en": "Close details"},
+  "InboxIssueDetail.content": {"zh": "问题内容", "en": "Issue content"},
+  "InboxIssueDetail.description": {"zh": "问题原文", "en": "Original content"},
+  "InboxIssueDetail.comments": {"zh": "评论", "en": "Comments"},
+  "InboxIssueDetail.priority": {"zh": "优先级：{priority}", "en": "Priority: {priority}"},
+  "InboxIssueDetail.loading": {"zh": "正在加载问题详情…", "en": "Loading issue details…"},
+  "InboxIssueDetail.loadingImages": {"zh": "正在加载附件图片…", "en": "Loading attached images…"},
+  "InboxIssueDetail.images": {"zh": "附件图片", "en": "Attached images"},
+  "InboxIssueDetail.imagesFailed": {"zh": "附件图片加载失败：{reason}", "en": "Could not load attached images: {reason}"},
+  "InboxIssueDetail.retry": {"zh": "重试", "en": "Retry"},
+  "InboxIssueDetail.refresh": {"zh": "刷新详情", "en": "Refresh details"},
+  "InboxIssueDetail.moreComments": {"zh": "加载更多评论", "en": "Load more comments"},
+  "InboxIssueDetail.footerHint": {"zh": "先了解问题，再开始处理", "en": "Review the issue before taking action"},
   "SourceInboxView.monthAndDay": {
     "zh": "{value1}月{value2}日",
     "en": "{value1}/{value2}"

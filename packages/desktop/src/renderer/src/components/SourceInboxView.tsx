@@ -1,12 +1,13 @@
-import { SourceUpdatesPanel, SourceCommentBadge } from './SourceUpdatesPanel'
+import { SourceCommentBadge } from './SourceUpdatesPanel'
 import { getLocale, t, tr } from '../i18n'
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import type { SourceInbox, SourceIssue, Task } from '@antumi/protocol'
 import { openConversationDraft, perform, selectConversation, selectTask, setInboxOpen, setInboxTab, setSettingsOpen, useCore, useSourceInvestigateSupported } from '../core-store'
 import { defaultAgent } from '../default-agent'
 import { sourceProblemText } from '../labels'
 import { activeInboxes, inboxKey, inboxTab, investigationProjects, type ActiveInbox } from '../source-inboxes'
 import { CloseIcon, GearIcon, InboxIcon, RefreshIcon } from './icons'
+import { InboxIssueDetail } from './InboxIssueDetail'
 
 const clock = (ms: number) =>
   new Date(ms).toLocaleTimeString(getLocale(), { hour: '2-digit', minute: '2-digit', hour12: false })
@@ -19,9 +20,9 @@ function updatedOn(ms: number): string {
 
 export const settingsSectionOf = (provider: string) => `source-${provider}`
 
-function IssueRow({ issue, name, busy, investigating = false, children }: { issue: SourceIssue; name: string; busy: boolean; investigating?: boolean; children: ReactNode }) {
+function IssueRow({ issue, name, busy, investigating = false, selected = false, panelId, onView, children }: { issue: SourceIssue; name: string; busy: boolean; investigating?: boolean; selected?: boolean; panelId?: string; onView?: (trigger: HTMLButtonElement) => void; children: ReactNode }) {
   return (
-    <li className="inbox-row" aria-busy={busy || undefined}>
+    <li className="inbox-row" aria-busy={busy || undefined} data-selected={selected || undefined}>
       <div className="inbox-row-text">
         <div className="inbox-row-meta">
           <a className="inbox-key" href={issue.url} target="_blank" rel="noreferrer" data-tooltip={t('SourceInboxView.openIn', { name: name })} data-tooltip-align="start">
@@ -36,9 +37,12 @@ function IssueRow({ issue, name, busy, investigating = false, children }: { issu
           {issue.conversationId && <SourceCommentBadge target={{ kind: 'conversation', id: issue.conversationId }} />}
           {investigating && <span className="inbox-investigating">{t('SourceInboxView.investigating')}</span>}
         </div>
-        <div className="inbox-row-title">{issue.title}</div>
+        {onView ? <button type="button" className="inbox-row-title inbox-row-view-title" aria-expanded={selected} aria-controls={panelId} onClick={(event) => onView(event.currentTarget)}>{issue.title}</button> : <div className="inbox-row-title">{issue.title}</div>}
       </div>
-      <div className="inbox-row-actions">{children}</div>
+      <div className="inbox-row-actions">
+        {onView && <button type="button" className="button inbox-view" aria-expanded={selected} aria-controls={panelId} onClick={(event) => onView(event.currentTarget)}>{t('InboxIssueDetail.view')}</button>}
+        {children}
+      </div>
     </li>
   )
 }
@@ -75,8 +79,31 @@ function InboxSection({
   const tasks = useCore((s) => s.tasks)
   const conversations = useCore((s) => s.conversations)
   const investigateSupported = useSourceInvestigateSupported()
+  const previewSupported = useCore((s) => s.rpc?.features.includes('source-issue-preview') ?? false)
   const [busyKey, setBusyKey] = useState<string | null>(null)
   const [showDismissed, setShowDismissed] = useState(false)
+  const [selectedKey, setSelectedKey] = useState<string | null>(null)
+  const [modal, setModal] = useState(false)
+  const layout = useRef<HTMLDivElement>(null)
+  const trigger = useRef<HTMLButtonElement | null>(null)
+  const panelId = useId()
+  const visibleIssues = [...inbox.items, ...(showDismissed ? inbox.dismissed : [])]
+  const selectedIndex = visibleIssues.findIndex((issue) => issue.key === selectedKey)
+  const selectedIssue = visibleIssues[selectedIndex]
+  useEffect(() => {
+    const element = layout.current
+    if (!element) return
+    const measure = () => setModal(element.clientWidth < 960)
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [])
+  useEffect(() => {
+    if (selectedKey && (!selectedIssue || !previewSupported)) setSelectedKey(null)
+  }, [selectedKey, selectedIssue, previewSupported])
+  const view = (issue: SourceIssue, button: HTMLButtonElement) => { trigger.current = button; setSelectedKey(issue.key) }
+  const close = () => { setSelectedKey(null); trigger.current?.focus({ preventScroll: true }) }
   const target = { provider: inbox.provider, instance: inbox.instance }
 
   const act = async (key: string, action: () => Promise<unknown>) => {
@@ -88,6 +115,7 @@ function InboxSection({
     act(key, async () => {
       const task = await perform((rpc) => rpc.call('sources.import', { ...target, key, agent: defaultAgent(tasks, conversations) }))
       if (task) {
+        setSelectedKey((selected) => selected === key ? null : selected)
         onImported(task)
       }
     })
@@ -100,76 +128,97 @@ function InboxSection({
   const restore = (key: string) => act(key, () => perform((rpc) => rpc.call('sources.restore', { ...target, key })))
   const refresh = () => void perform((rpc) => rpc.call('sources.refresh', target))
   const openSettings = () => setSettingsOpen(true, settingsSectionOf(inbox.provider))
+  const selectedConversationId = selectedIssue ? lookedInto(selectedIssue) : null
+  const previousIssue = visibleIssues[selectedIndex - 1]
+  const nextIssue = visibleIssues[selectedIndex + 1]
 
   return (
-    <section className="inbox-section" aria-label={t('SourceInboxView.inbox', { name: name })}>
-      <header className="inbox-section-header">
-        {tabs ?? (
-          <>
-            <h3>{name}</h3>
-            <span className="muted">{tr('SourceInboxView.pending', { value1: inbox.items.length })}</span>
-          </>
-        )}
-        <div className="toolbar">
-          <span className="muted inbox-synced">
-            {inbox.refreshing ? t('SourceInboxView.syncing') : inbox.refreshedAt !== null ? t('SourceInboxView.sync', { value1: clock(inbox.refreshedAt) }) : ''}
-          </span>
-          <button type="button" className="tool-button" aria-label={t('SourceInboxView.syncNow')} data-tooltip={t('SourceInboxView.syncNow')} aria-busy={inbox.refreshing || undefined} onClick={refresh}>
-            <RefreshIcon />
-          </button>
-          <button type="button" className="tool-button" aria-label={t('SourceInboxView.settings', { name: name })} data-tooltip={t('SourceInboxView.settings', { name: name })} onClick={openSettings}>
-            <GearIcon />
-          </button>
-        </div>
-      </header>
+    <section className="inbox-section" data-preview={previewSupported || undefined} aria-label={t('SourceInboxView.inbox', { name: name })}>
+      <div ref={layout} className="inbox-layout" data-detail={Boolean(selectedIssue) || undefined} data-modal={modal || undefined}>
+        <div className="inbox-issue-list-pane">
+          <header className="inbox-section-header">
+            {tabs ?? (
+              <>
+                <h3>{name}</h3>
+                <span className="muted">{tr('SourceInboxView.pending', { value1: inbox.items.length })}</span>
+              </>
+            )}
+            <div className="toolbar">
+              <span className="muted inbox-synced">
+                {inbox.refreshing ? t('SourceInboxView.syncing') : inbox.refreshedAt !== null ? t('SourceInboxView.sync', { value1: clock(inbox.refreshedAt) }) : ''}
+              </span>
+              <button type="button" className="tool-button" aria-label={t('SourceInboxView.syncNow')} data-tooltip={t('SourceInboxView.syncNow')} aria-busy={inbox.refreshing || undefined} onClick={refresh}>
+                <RefreshIcon />
+              </button>
+              <button type="button" className="tool-button" aria-label={t('SourceInboxView.settings', { name: name })} data-tooltip={t('SourceInboxView.settings', { name: name })} onClick={openSettings}>
+                <GearIcon />
+              </button>
+            </div>
+          </header>
 
-      <div className="inbox-section-body" role={tabs ? 'tabpanel' : undefined}>
-        {inbox.problem && (
-          <p className="inbox-error" role="alert">{tr('SourceInboxView.syncFailed_1794', { value1: sourceProblemText(inbox.problem), value2: <button type="button" className="link-button" onClick={openSettings}>{t('SourceInboxView.checkSettings')}</button> })}</p>
-        )}
+          <div className="inbox-section-body" role={tabs ? 'tabpanel' : undefined}>
+            {inbox.problem && (
+              <p className="inbox-error" role="alert">{tr('SourceInboxView.syncFailed_1794', { value1: sourceProblemText(inbox.problem), value2: <button type="button" className="link-button" onClick={openSettings}>{t('SourceInboxView.checkSettings')}</button> })}</p>
+            )}
 
-        {inbox.items.length > 0 ? (
-          <ul className="inbox-list">
-            {inbox.items.map((issue) => {
-              const conversationId = lookedInto(issue)
-              return (
-              <IssueRow key={issue.key} issue={issue} name={name} busy={busyKey === issue.key} investigating={conversationId !== null}>
-                {conversationId && (
-                  <button type="button" className="button primary" onClick={() => selectConversation(conversationId)}>{t('SourceInboxView.viewConversation')}</button>
-                )}
-                <button type="button" className={conversationId ? 'button' : 'button primary'} disabled={busyKey !== null} onClick={() => void importIssue(issue.key)}>{t('SourceInboxView.importTask')}</button>
-                {investigateSupported && !conversationId && (
-                  <button type="button" className="button" disabled={busyKey !== null} data-tooltip={t('SourceInboxView.openAReadOnlyConversationToInvestigateFix')} onClick={() => investigate(issue)}>{t('SourceInboxView.investigateInChat')}</button>
-                )}
-                <button type="button" className="button ghost" disabled={busyKey !== null} onClick={() => void dismiss(issue.key)}>{t('SourceInboxView.dismiss')}</button>
-              </IssueRow>
-              )
-            })}
-          </ul>
-        ) : (
-          <p className="inbox-empty">
-            {inbox.refreshedAt !== null
-              ? t('SourceInboxView.noNewIssuesAllMatchingIssuesHaveBeen')
-              : inbox.problem
-                ? t('SourceInboxView.issuesAppearHereAfterASuccessfulSync')
-                : t('SourceInboxView.runningFirstSync')}
-          </p>
-        )}
-
-        {inbox.dismissed.length > 0 && (
-          <div className="inbox-dismissed">
-            <button type="button" className="link-button" aria-expanded={showDismissed} onClick={() => setShowDismissed(!showDismissed)}>{tr('SourceInboxView.dismissed', { value1: showDismissed ? t('ChatPlan.collapse') : t('EnvironmentNotice.view'), value2: inbox.dismissed.length })}</button>
-            {showDismissed && (
+            {inbox.items.length > 0 ? (
               <ul className="inbox-list">
-                {inbox.dismissed.map((issue) => (
-                  <IssueRow key={issue.key} issue={issue} name={name} busy={busyKey === issue.key}>
-                    <button type="button" className="button" disabled={busyKey !== null} onClick={() => void restore(issue.key)}>{t('SourceInboxView.restore')}</button>
-                  </IssueRow>
-                ))}
+                {inbox.items.map((issue) => {
+                  const conversationId = lookedInto(issue)
+                  return (
+                    <IssueRow key={issue.key} issue={issue} name={name} busy={busyKey === issue.key} investigating={conversationId !== null} selected={selectedKey === issue.key} panelId={panelId} onView={previewSupported ? (button) => view(issue, button) : undefined}>
+                      {conversationId && (
+                        <button type="button" className={previewSupported ? 'button' : 'button primary'} onClick={() => selectConversation(conversationId)}>{t('SourceInboxView.viewConversation')}</button>
+                      )}
+                      <button type="button" className={conversationId || previewSupported ? 'button' : 'button primary'} disabled={busyKey !== null} onClick={() => void importIssue(issue.key)}>{t('SourceInboxView.importTask')}</button>
+                      {investigateSupported && !conversationId && (
+                        <button type="button" className="button" disabled={busyKey !== null} data-tooltip={t('SourceInboxView.openAReadOnlyConversationToInvestigateFix')} onClick={() => investigate(issue)}>{t('SourceInboxView.investigateInChat')}</button>
+                      )}
+                      <button type="button" className="button ghost" disabled={busyKey !== null} onClick={() => void dismiss(issue.key)}>{t('SourceInboxView.dismiss')}</button>
+                    </IssueRow>
+                  )
+                })}
               </ul>
+            ) : (
+              <p className="inbox-empty">
+                {inbox.refreshedAt !== null
+                  ? t('SourceInboxView.noNewIssuesAllMatchingIssuesHaveBeen')
+                  : inbox.problem
+                    ? t('SourceInboxView.issuesAppearHereAfterASuccessfulSync')
+                    : t('SourceInboxView.runningFirstSync')}
+              </p>
+            )}
+
+            {inbox.dismissed.length > 0 && (
+              <div className="inbox-dismissed">
+                <button type="button" className="link-button" aria-expanded={showDismissed} onClick={() => setShowDismissed(!showDismissed)}>{tr('SourceInboxView.dismissed', { value1: showDismissed ? t('ChatPlan.collapse') : t('EnvironmentNotice.view'), value2: inbox.dismissed.length })}</button>
+                {showDismissed && (
+                  <ul className="inbox-list">
+                    {inbox.dismissed.map((issue) => (
+                      <IssueRow key={issue.key} issue={issue} name={name} busy={busyKey === issue.key} selected={selectedKey === issue.key} panelId={panelId} onView={previewSupported ? (button) => view(issue, button) : undefined}>
+                        <button type="button" className="button" disabled={busyKey !== null} onClick={() => void restore(issue.key)}>{t('SourceInboxView.restore')}</button>
+                      </IssueRow>
+                    ))}
+                  </ul>
+                )}
+              </div>
             )}
           </div>
-        )}
+        </div>
+        {selectedIssue && previewSupported && <InboxIssueDetail key={selectedIssue.key} {...target} name={name} issue={selectedIssue} modal={modal} panelId={panelId} onClose={close}
+          onPrevious={previousIssue ? () => setSelectedKey(previousIssue.key) : undefined}
+          onNext={nextIssue ? () => setSelectedKey(nextIssue.key) : undefined}
+        >
+          {inbox.dismissed.some((issue) => issue.key === selectedIssue.key)
+            ? <button type="button" className="button" disabled={busyKey !== null} onClick={() => void restore(selectedIssue.key)}>{t('SourceInboxView.restore')}</button>
+            : <>
+              <span className="inbox-issue-footer-hint">{t('InboxIssueDetail.footerHint')}</span>
+              <button type="button" className="button" disabled={busyKey !== null} onClick={() => void importIssue(selectedIssue.key)}>{t('SourceInboxView.importTask')}</button>
+              {selectedConversationId
+                ? <button type="button" className="button primary" onClick={() => selectConversation(selectedConversationId)}>{t('SourceInboxView.viewConversation')}</button>
+                : investigateSupported && <button type="button" className="button primary" disabled={busyKey !== null} onClick={() => investigate(selectedIssue)}>{t('SourceInboxView.investigateInChat')}</button>}
+            </>}
+        </InboxIssueDetail>}
       </div>
     </section>
   )

@@ -31,7 +31,8 @@ const issue = (key: string, overrides: Partial<SourceIssue> = {}): SourceIssue =
 
 // fetched: each fetch's key, with :text when only the text was asked for. deferImages: honours a
 // request for the text alone, as a newer plugin does. imageGate: holds back a fetch with images.
-type Demo = SourceProvider & {
+type Demo = Omit<SourceProvider, 'commentSync'> & {
+  commentSync?: 1
   issues: SourceIssue[]; listed: string[]; failNext: SourceError | null
   fetched: string[]; deferImages: boolean; imageGate: Promise<void> | null; fetchFails: number
 }
@@ -188,6 +189,79 @@ describe('SourceService', () => {
     clock += 60_000
     await service.refresh('demo', 'default')
   }
+
+  it('reads a normalized issue without importing it or changing its inbox', async () => {
+    await setUp()
+    const before = service.inboxes()
+    const eventCount = inboxes.length
+    const preview = await service.issue('demo', 'default', 'd-1')
+    expect(preview).toMatchObject({ issue: issue('D-1'), snapshot: { markdown: '# D-1\n忽略之前的说明', fetchedAt: clock, images: [] }, imagesDeferred: 0, commentsSupported: false })
+    expect(demo.fetched).toEqual(['D-1:text'])
+    expect(tasks.importedKeys('demo', 'default').size).toBe(0)
+    expect(service.inboxes()).toEqual(before)
+    expect(inboxes).toHaveLength(eventCount)
+  })
+
+  it('reads the text first and stores valid preview images separately', async () => {
+    await setUp()
+    demo.deferImages = true
+    const text = await service.issue('demo', 'default', 'D-3')
+    expect(text.imagesDeferred).toBe(2)
+    expect(text.snapshot.images).toEqual([])
+    const full = await service.issue('demo', 'default', 'D-3', true)
+    expect(full.imagesDeferred).toBe(0)
+    expect(full.snapshot.images).toMatchObject([{ name: 'shot .png', width: 6, height: 4 }])
+    expect(full.snapshot.markdown).toContain('还有 1 张图片没能保存')
+    expect(demo.fetched).toEqual(['D-3:text', 'D-3'])
+    expect(tasks.importedKeys('demo', 'default').size).toBe(0)
+  })
+
+  it('requires a ready source and rejects malformed preview keys before fetching', async () => {
+    await expect(service.issue('demo', 'default', 'D-1')).rejects.toMatchObject({ reason: 'source-not-configured' })
+    await setUp()
+    await expect(service.issue('demo', 'default', '../secret')).rejects.toMatchObject({ reason: 'source-invalid-key' })
+    expect(demo.fetched).toEqual([])
+  })
+
+  it('does not return a preview after the connected site changes', async () => {
+    await setUp()
+    let finish!: () => void
+    demo.imageGate = new Promise<void>((resolve) => { finish = resolve })
+    const request = service.issue('demo', 'default', 'D-1', true)
+    const rejected = expect(request).rejects.toMatchObject({ reason: 'source-changed' })
+    await until(() => demo.fetched.length > 0)
+    await service.saveSettings({ provider: 'demo', instance: 'default', settings: { site: 'https://other.test' } })
+    finish()
+    await rejected
+  })
+
+  it('paginates issue comments without marking them read or attaching them to a task', async () => {
+    await setUp()
+    const calls: { key: string; next: string | null }[] = []
+    demo.commentSync = 1
+    demo.comments = async (_settings, _credential, key, _signal, options) => {
+      calls.push({ key, next: options.continuation })
+      return { comments: [{ id: options.continuation ?? 'first', author: 'Ann', createdAt: 100, updatedAt: null, url: issue(key).url, markdown: 'Details', truncated: false }], continuation: options.continuation ? null : 'second', checkpoint: { createdAt: 100, ids: ['first', 'second'] } }
+    }
+    expect((await service.issue('demo', 'default', 'D-1')).commentsSupported).toBe(true)
+    const options = { checkpoint: { createdAt: 0, ids: [] }, continuation: null }
+    const page = await service.issueComments('demo', 'default', 'd-1', options)
+    const next = await service.issueComments('demo', 'default', 'd-1', { ...options, continuation: page.continuation })
+    expect(page.comments[0]?.id).toBe('first')
+    expect(next.comments[0]?.id).toBe('second')
+    expect(next.continuation).toBeNull()
+    expect(calls).toEqual([{ key: 'D-1', next: null }, { key: 'D-1', next: 'second' }])
+    expect(tasks.importedKeys('demo', 'default').size).toBe(0)
+  })
+
+  it('rejects unsupported comments and checks the provider comment response', async () => {
+    await setUp()
+    const options = { checkpoint: { createdAt: 0, ids: [] }, continuation: null }
+    await expect(service.issueComments('demo', 'default', 'D-1', options)).rejects.toMatchObject({ reason: 'source-comments-unsupported' })
+    demo.commentSync = 1
+    demo.comments = async () => ({ comments: [{ id: '', author: '', createdAt: 0, updatedAt: null, url: 'javascript:alert(1)', markdown: '', truncated: false }], continuation: null, checkpoint: { createdAt: 0, ids: [] } })
+    await expect(service.issueComments('demo', 'default', 'D-1', options)).rejects.toMatchObject({ reason: 'source-request-failed' })
+  })
 
   it('describes each source with defaults, and shows whether it is signed in but never the secret', async () => {
     expect(service.list()).toEqual([

@@ -10,12 +10,14 @@ import {
   MAX_TASK_IMAGES,
   SOURCE_KEY_PATTERN,
   SourceIssue,
+  SourceCommentPage,
   type AgentKind,
   type Conversation,
   type CredentialStatus,
   type RpcParsedParams,
   type SourceDescriptor,
   type SourceInbox,
+  type SourceIssuePreview,
   type SourceProblem,
   type SourceSnapshot,
   type Task,
@@ -405,6 +407,39 @@ export class SourceService {
     state.inFlight = { generation, done }
     this.emitInbox(id, instance)
     return this.track(id, () => done)
+  }
+
+  issue(id: string, instance: string, rawKey: string, images = false): Promise<SourceIssuePreview> {
+    return this.track(id, async () => {
+      const check = this.guard(id, instance)
+      const ready = this.requireReady(id, instance)
+      const key = await this.checkedKey(ready.provider, rawKey)
+      check()
+      const detail = await this.fetch(ready, key, this.state(id, instance).controller.signal, images)
+      check()
+      return { issue: detail.issue, snapshot: detail.snapshot, imagesDeferred: detail.deferred, commentsSupported: ready.provider.commentSync === 1 && !!ready.provider.comments }
+    })
+  }
+
+  issueComments(id: string, instance: string, rawKey: string, options: SourceCommentOptions): Promise<SourceCommentPage> {
+    return this.track(id, async () => {
+      const check = this.guard(id, instance)
+      const ready = this.requireReady(id, instance)
+      const key = await this.checkedKey(ready.provider, rawKey)
+      check()
+      if (ready.provider.commentSync !== 1 || !ready.provider.comments) throw new Rejection('source-comments-unsupported')
+      const abort = this.state(id, instance).controller.signal
+      try {
+        const page = await this.call((signal) => ready.provider.comments!(ready.settings, ready.credential, key, AbortSignal.any([signal, abort]), options), FETCH_TIMEOUT_MS)
+        check()
+        const parsed = SourceCommentPage.safeParse(page)
+        if (!parsed.success) throw new Rejection('source-request-failed', 'invalid issue comments')
+        return parsed.data
+      } catch (error) {
+        if (error instanceof Rejection) throw error
+        throw sourceRejection(error)
+      }
+    })
   }
 
   import(id: string, instance: string, rawKey: string, agent: AgentKind | null): Promise<Task> {

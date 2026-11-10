@@ -125,6 +125,15 @@ export const SourceIssue = z.object({
 })
 export type SourceIssue = z.infer<typeof SourceIssue>
 
+// Reading an issue does not attach it to a task or a conversation.
+export const SourceIssuePreview = z.object({
+  issue: SourceIssue,
+  snapshot: SourceSnapshot,
+  imagesDeferred: z.number().int().nonnegative(),
+  commentsSupported: z.boolean()
+})
+export type SourceIssuePreview = z.infer<typeof SourceIssuePreview>
+
 export const SOURCE_FAILURES = [
   'not-configured',
   'invalid-settings',

@@ -39,6 +39,15 @@ const row = (html: string, key: string) => html.split('<li class="inbox-row"').f
 beforeEach(() => useCore.setState(useCore.getInitialState(), true))
 
 describe('source inbox', () => {
+  it('offers inline viewing only with a compatible core and preserves original links', () => {
+    connect(['source-issue-preview'])
+    expect(render().match(/class="button inbox-view"/g)).toHaveLength(2)
+    expect(render()).toContain('inbox-row-view-title')
+    expect(render()).toContain('href="https://github.com/acme/app/issues/1"')
+    connect([])
+    expect(render()).not.toContain('inbox-view')
+    expect(render()).not.toContain('inbox-row-view-title')
+  })
   it('offers source installation only when no provider is installed and the core supports plugins', () => {
     connect(['plugins'])
     useCore.setState({ sources: [], inboxes: {} })

@@ -786,6 +786,8 @@ export function createRpcHandlers(
     },
     'sources.inbox': () => sources.inboxes(),
     'sources.refresh': ({ provider, instance }) => sources.refresh(provider, instance),
+    'sources.issue': ({ provider, instance, key, images }) => sources.issue(provider, instance, key, images),
+    'sources.issueComments': ({ provider, instance, key, options }) => sources.issueComments(provider, instance, key, options),
     'sources.import': ({ provider, instance, key, agent }) => sources.import(provider, instance, key, agent ?? null),
     'sources.investigate': ({ provider, instance, key, ...options }) => sources.investigate(provider, instance, key, options),
     'sources.retryInvestigation': ({ id }) => sources.retryInvestigation(id),

@@ -6,7 +6,7 @@ import { addQuote } from './chat-quotes'
 import { focusPanelWindow, onPanelShortcut, onPanelWindows, openPanelWindow, panelHostReady, panelReceipt, sendPanelCommand } from './desktop-bridge'
 import { exportFileTabs, importFileTabs } from './file-tabs'
 import { runForwardedShortcut } from './panel-shortcuts'
-import { hiddenUtilityPanel, shownUtilityPanel, showError, useCore, type CoreState } from './core-store'
+import { hiddenUtilityPanel, openConversationDraft, shownUtilityPanel, showError, showTerminal, useCore, type CoreState } from './core-store'
 import { panelContext } from './panel-window-context'
 import { insertBrowserContext } from './browser-context'
 import { t } from './i18n'
@@ -14,6 +14,7 @@ import { t } from './i18n'
 function isOpen(state: CoreState, kind: PanelKind): boolean {
   if (kind === 'browser') return state.browserPanelOpen
   if (kind === 'files') return state.filesPanelOpen
+  if (kind === 'git') return state.gitPanelOpen
   return state.terminalPanelOpen
 }
 
@@ -28,6 +29,7 @@ function filesSnapshot(): z.infer<typeof FilesSnapshot> {
 function commandsFor(kind: PanelKind): PanelCommand[] {
   const state = useCore.getState()
   const commands: PanelCommand[] = [selectionContext(state)]
+  if (kind === 'git') commands.push({ type: 'show-git', location: state.gitLocation })
   if (kind === 'files') commands.push({ type: 'files-state', snapshot: filesSnapshot() })
   if (kind === 'terminal') commands.push({ type: 'select-terminal', id: state.activeTerminalId })
   if (kind === 'browser') {
@@ -76,12 +78,21 @@ function applyDelivery(action: PanelDelivery['action']): boolean {
     const next = {
       ...state,
       ...(docked ? handoff.context : {}),
+      ...(kind === 'git' && handoff.gitLocation !== undefined ? { gitLocation: handoff.gitLocation } : {}),
       ...(handoff.files ? { filesFolders: handoff.files.filesFolders } : {}),
       ...(kind === 'terminal' ? { activeTerminalId: handoff.terminalId } : {})
     }
     return docked && !state.panelWindows.includes(kind) ? { ...next, ...shownUtilityPanel(next, kind) } : next
   })
   if (handoff.browserTabId) focusBrowserTab(handoff.browserTabId)
+  if (kind === 'git' && docked && handoff.gitNavigation) {
+    const navigation = handoff.gitNavigation
+    if (navigation.type === 'terminal') showTerminal(navigation.id)
+    else {
+      openConversationDraft([navigation.project])
+      useCore.setState({ conversationDraftCarry: { text: navigation.text, projects: [navigation.project], agent: null, model: null } })
+    }
+  }
   return true
 }
 

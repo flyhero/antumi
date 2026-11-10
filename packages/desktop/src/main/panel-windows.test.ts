@@ -29,7 +29,7 @@ class Window extends EventEmitter {
 }
 
 const handoff: PanelHandoff = {
-  context: { section: 'conversations', selectedConversationId: 'chat', selectedId: null, selectedDiscussionId: null, settingsOpen: false, overviewOpen: false, inboxOpen: false, gitOpen: false, worktreesOpen: false, routinesOpen: false },
+  context: { section: 'conversations', selectedConversationId: 'chat', selectedId: null, selectedDiscussionId: null, settingsOpen: false, overviewOpen: false, inboxOpen: false, worktreesOpen: false, routinesOpen: false },
   files: { tabs: {}, drafts: [{ id: 'scope', path: '/a', text: 'unsaved', base: 'disk', mtimeMs: 1 }], filesFolders: null },
   terminalId: null, browserTabId: null
 }
@@ -121,7 +121,7 @@ it('allows application quit without waiting on renderer close handlers', () => {
 })
 
 it('collapses repeated context while a panel window is loading and keeps one-off commands', () => {
-  const first = { type: 'context' as const, section: 'conversations' as const, selectedConversationId: 'a', selectedId: null, selectedDiscussionId: null, settingsOpen: false, overviewOpen: false, inboxOpen: false, gitOpen: false, worktreesOpen: false, routinesOpen: false }
+  const first = { type: 'context' as const, section: 'conversations' as const, selectedConversationId: 'a', selectedId: null, selectedDiscussionId: null, settingsOpen: false, overviewOpen: false, inboxOpen: false, worktreesOpen: false, routinesOpen: false }
   const second = { ...first, selectedConversationId: 'b' }
   const collapsed = coalesce([first, { type: 'focus-tab', tabId: '1' }, second, { type: 'focus-tab', tabId: '2' }])
   expect(collapsed.filter((command) => command.type === 'context')).toEqual([second])

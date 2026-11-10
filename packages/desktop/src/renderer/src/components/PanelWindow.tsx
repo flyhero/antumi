@@ -3,6 +3,7 @@ import { useCore } from '../core-store'
 import { usePanelWindowShortcuts } from '../panel-shortcuts'
 import { BrowserSidePanel } from './BrowserSidePanel'
 import { FilesPanel } from './FilesPanel'
+import { GitPanel } from './GitPanel'
 import { SearchPalette } from './SearchPalette'
 import { TerminalPanel } from './TerminalPanel'
 import { ErrorToast } from './ErrorToast'
@@ -17,7 +18,7 @@ export function PanelWindow({ kind }: { kind: PanelKind }) {
   usePanelWindowShortcuts(kind)
   return (
     <div className="app panel-window">
-      {kind === 'browser' ? <BrowserSidePanel windowed /> : kind === 'files' ? <FilesPanel windowed /> : <TerminalPanel windowed />}
+      {kind === 'browser' ? <BrowserSidePanel windowed /> : kind === 'files' ? <FilesPanel windowed /> : kind === 'git' ? <GitPanel windowed /> : <TerminalPanel windowed />}
       {kind === 'files' && search && <SearchPalette initial={search} />}
       <ProjectTrustDialog />
       {error && <ErrorToast message={error} />}

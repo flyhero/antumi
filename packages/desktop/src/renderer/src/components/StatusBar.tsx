@@ -1,6 +1,6 @@
 import { localized, t, tr } from '../i18n'
 import { useEffect, useRef, useState } from 'react'
-import { openGit, openGuide, openOverview, setAwakeMode, setSchedulesOpen, setSettingsOpen, setWorktreesOpen, toggleBrowserPanel, toggleFilesPanel, togglePortsPanel, toggleTerminalPanel, useAwakeSupported, useFilesScope, useBrowserSupported, useCore, useSchedulesOpen, useSchedulesSupported, useWorktreesSupported, type ConnectionState } from '../core-store'
+import { openGuide, setAwakeMode, setSchedulesOpen, setSettingsOpen, setWorktreesOpen, toggleBrowserPanel, toggleGitPanel, toggleFilesPanel, togglePortsPanel, toggleTerminalPanel, useAwakeSupported, useFilesScope, useBrowserSupported, useCore, useSchedulesOpen, useSchedulesSupported, useWorktreesSupported, type ConnectionState } from '../core-store'
 import { ALL_TABS, useBrowserTabs } from '../browser-state'
 import { formatBytes, worktreeRows, worktreeSummary } from '../worktree-groups'
 import { useWorktrees } from '../worktree-store'
@@ -163,10 +163,10 @@ function FilesButton() {
   )
 }
 
-// Beside 文件: the project Git page, the same one the sidebar used to open.
+// Git shares the dock and separate windows with the other tools.
 function GitButton() {
   const supported = useCore((s) => s.rpc?.features.includes('git-projects') ?? false)
-  const open = useCore((s) => s.gitOpen)
+  const open = useCore((s) => s.gitPanelOpen || s.panelWindows.includes('git'))
   if (!supported) return null
   return (
     <button
@@ -177,7 +177,7 @@ function GitButton() {
       data-active={open}
       data-tooltip={open ? t('GitPage.close') : 'Git'}
       data-tooltip-side="top-end"
-      onClick={() => open ? openOverview() : openGit()}
+      onClick={toggleGitPanel}
     >
       <GitIcon />
       <span>Git</span>

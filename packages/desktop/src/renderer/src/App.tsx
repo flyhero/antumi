@@ -1,4 +1,3 @@
-import { GitPage } from './components/GitPage'
 import { AgentsView } from './components/AgentProfiles'
 import { t, useLocale } from './i18n'
 import { useEffect } from 'react'
@@ -47,7 +46,7 @@ import { recordingPanelShortcut, usePanelShortcuts } from './panel-shortcuts'
 function leavesTask(event: KeyboardEvent): boolean {
   const s = useCore.getState()
   if (event.defaultPrevented || s.section !== 'tasks' || s.selectedId === null) return false
-  if (s.settingsOpen || s.newTaskOpen || s.taskLaunchId || s.gitOpen || s.worktreesOpen || s.routinesOpen || s.overviewOpen || s.inboxOpen) return false
+  if (s.settingsOpen || s.newTaskOpen || s.taskLaunchId || s.worktreesOpen || s.routinesOpen || s.overviewOpen || s.inboxOpen) return false
   const typing = event.target instanceof Element && event.target.closest('input, textarea, select, [contenteditable="true"], .xterm, [role="menu"], dialog')
   return !typing && !document.querySelector('dialog[open]')
 }
@@ -71,7 +70,8 @@ export function App() {
   const newTaskOpen = useCore((s) => s.newTaskOpen)
   const taskLaunchId = useCore((s) => s.taskLaunchId)
   const settingsOpen = useCore((s) => s.settingsOpen)
-  const gitOpen = useCore((s) => s.gitOpen)
+  const gitPanelOpen = useCore((s) => s.gitPanelOpen)
+  const gitMaximized = useCore((s) => s.gitMaximized)
   const worktreesOpen = useCore((s) => s.worktreesOpen)
   const routinesOpen = useCore((s) => s.routinesOpen)
   const overviewOpen = useCore((s) => s.overviewOpen)
@@ -98,7 +98,9 @@ export function App() {
         ? 'ports'
         : filesPanelOpen && filesMaximized
           ? 'files'
-          : undefined
+          : gitPanelOpen && gitMaximized
+            ? 'git'
+            : undefined
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -148,8 +150,6 @@ export function App() {
               guideOpen ? <GuideView /> : <OverviewView />
             ) : inboxOpen ? (
               <SourceInboxView />
-            ) : gitOpen ? (
-              <GitPage />
             ) : worktreesOpen ? (
               <WorktreeManager />
             ) : routinesOpen ? (
@@ -174,9 +174,9 @@ export function App() {
             )}
           </>
         )}
-        {(portsPanelOpen || browserPanelOpen || terminalPanelOpen || filesPanelOpen) && (
+        {(portsPanelOpen || browserPanelOpen || terminalPanelOpen || filesPanelOpen || gitPanelOpen) && (
           <UtilityPanelDock
-            open={{ browser: browserPanelOpen, terminal: terminalPanelOpen, ports: portsPanelOpen, files: filesPanelOpen }}
+            open={{ browser: browserPanelOpen, terminal: terminalPanelOpen, ports: portsPanelOpen, files: filesPanelOpen, git: gitPanelOpen }}
             maximized={maximizedUtility}
             order={utilityPanelOrder}
           />

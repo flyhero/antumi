@@ -177,6 +177,7 @@ const requestPopup = new RequestPopup(() => {
 const PANEL_TITLE: Record<PanelKind, { en: string; zh: string }> = {
   browser: { en: 'Browser', zh: '浏览器' },
   files: { en: 'Files', zh: '文件' },
+  git: { en: 'Git', zh: 'Git' },
   terminal: { en: 'Terminal', zh: '终端' }
 }
 

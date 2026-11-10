@@ -102,3 +102,52 @@ it('restores the docked panel and its files when creating the native window fail
   expect(useCore.getState()).toMatchObject({ filesPanelOpen: true, panelWindows: [], error: 'Window creation failed' })
   expect(exportFileTabs()).toEqual(before)
 })
+
+it('moves the selected Git checkout into its window', async () => {
+  const open = vi.fn().mockResolvedValue(true)
+  vi.stubGlobal('window', { antumi: { openPanelWindow: open } })
+  const gitLocation = { project: '/project', workspace: '/project/feature' }
+  useCore.setState({ gitPanelOpen: true, gitMaximized: true, utilityPanelOrder: ['git'], gitLocation })
+  await detachPanel('git')
+  expect(open).toHaveBeenCalledWith('git', [{ type: 'context', ...panelContext(useCore.getState()) }, { type: 'show-git', location: gitLocation }])
+  expect(useCore.getState()).toMatchObject({ gitPanelOpen: false, gitMaximized: false, panelWindows: ['git'], utilityPanelOrder: [] })
+})
+
+it.each([true, false])('retains the Git checkout when its window returns with docked=%s', (docked) => {
+  stop = startPanelWindowHost()
+  const gitLocation = { project: '/other', workspace: '/other/worktree' }
+  emit([{ id: 1, action: { type: 'handoff', kind: 'git', docked, handoff: {
+    context: panelContext(useCore.getState()), gitLocation, files: null, terminalId: null, browserTabId: null
+  } } }])
+  expect(useCore.getState()).toMatchObject({ gitPanelOpen: docked, gitLocation, utilityPanelOrder: docked ? ['git'] : [] })
+})
+
+it('restores Git and its checkout if the native window cannot open', async () => {
+  vi.stubGlobal('window', { antumi: { openPanelWindow: vi.fn().mockRejectedValue(new Error('Window creation failed')) } })
+  const gitLocation = { project: '/project', workspace: '/project/feature' }
+  useCore.setState({ gitPanelOpen: true, utilityPanelOrder: ['git'], gitLocation })
+  await detachPanel('git')
+  expect(useCore.getState()).toMatchObject({ gitPanelOpen: true, gitLocation, panelWindows: [], utilityPanelOrder: ['git'], error: 'Window creation failed' })
+})
+
+it('opens a conflict investigation handed back by the Git window', () => {
+  stop = startPanelWindowHost()
+  emit([{ id: 1, action: { type: 'handoff', kind: 'git', docked: true, handoff: {
+    context: panelContext(useCore.getState()), files: null, terminalId: null, browserTabId: null,
+    gitNavigation: { type: 'conversation-draft', project: '/project/feature', text: 'Resolve this merge' }
+  } } }])
+  expect(useCore.getState()).toMatchObject({
+    gitPanelOpen: true, conversationDraft: true, overviewOpen: false,
+    conversationDraftProjects: { paths: ['/project/feature'] },
+    conversationDraftCarry: { text: 'Resolve this merge', projects: ['/project/feature'] }
+  })
+})
+
+it('shows a conflict terminal handed back by the Git window alongside Git', () => {
+  stop = startPanelWindowHost()
+  emit([{ id: 1, action: { type: 'handoff', kind: 'git', docked: true, handoff: {
+    context: panelContext(useCore.getState()), files: null, terminalId: null, browserTabId: null,
+    gitNavigation: { type: 'terminal', id: 'conflict-terminal' }
+  } } }])
+  expect(useCore.getState()).toMatchObject({ gitPanelOpen: true, terminalPanelOpen: true, activeTerminalId: 'conflict-terminal', utilityPanelOrder: ['git', 'terminal'] })
+})

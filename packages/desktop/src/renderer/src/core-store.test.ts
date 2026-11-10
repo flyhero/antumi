@@ -1,8 +1,8 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Discussion, Task, createRpcClient, type Conversation, type RpcConnection } from '@antumi/protocol'
 import { actionableItems } from './attention'
 import {
-  openAttentionItem, openConversationDraft, selectConversation, selectTask, openOverview, openGit, setGitLocation, setOverviewFilter, setOverviewScroll, setOverviewView, setRoutinesOpen,
+  openAttentionItem, openConversationDraft, selectConversation, selectTask, openOverview, openGit, setGitLocation, setGitMaximized, toggleGitPanel, toggleFilesPanel, setFilesMaximized, toggleBrowserPanel, filesContext, setOverviewFilter, setOverviewScroll, setOverviewView, setRoutinesOpen,
   refreshAttentionSummaries, setInboxOpen, setTaskStarting, openChatWhileStarting, setSchedulesOpen, setSettingsOpen, setWorktreesOpen, useCore,
   clearInspectorFile, closeConversationDraft, installAgentCli, openConversationTarget, openDiscussionDraft, switchDraftMode, showConversationChanges, showInspectorFile, showTaskChanges
 } from './core-store'
@@ -17,22 +17,51 @@ const chat: Conversation = {
 
 beforeEach(() => useCore.setState(useCore.getInitialState(), true))
 
-describe('Git page navigation', () => {
-  it('opens an exact checkout, keeps its location, and closes when selecting other content', () => {
-    useCore.setState({ tasks: { [task.id]: task }, worktreesOpen: true, routinesOpen: true })
+describe('Git panel', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('keeps the current content visible and its checkout while navigating', () => {
+    useCore.setState({ tasks: { [task.id]: task }, conversations: { chat }, worktreesOpen: true })
     openGit('/repo/worktree')
-    expect(useCore.getState()).toMatchObject({ gitOpen: true, overviewOpen: false, worktreesOpen: false, routinesOpen: false, gitLocation: { project: '/repo/worktree', workspace: '/repo/worktree' } })
+    expect(useCore.getState()).toMatchObject({ gitPanelOpen: true, gitMaximized: false, worktreesOpen: true, utilityPanelOrder: ['git'], gitLocation: { project: '/repo/worktree', workspace: '/repo/worktree' } })
     setGitLocation('/repo', '/repo/other')
-    selectTask(task.id)
-    expect(useCore.getState().gitOpen).toBe(false)
-    openGit()
-    expect(useCore.getState()).toMatchObject({ gitOpen: true, gitLocation: { project: '/repo', workspace: '/repo/other' } })
+    selectConversation(chat.id)
+    expect(useCore.getState()).toMatchObject({ gitPanelOpen: true, selectedConversationId: chat.id })
+    expect(filesContext(useCore.getState()).scope?.conversationId).toBe(chat.id)
     openOverview()
-    expect(useCore.getState().gitOpen).toBe(false)
-    openGit(); selectConversation('chat')
-    expect(useCore.getState().gitOpen).toBe(false)
-    openGit(); setWorktreesOpen(true)
-    expect(useCore.getState().gitOpen).toBe(false)
+    expect(useCore.getState().gitPanelOpen).toBe(true)
+    toggleGitPanel()
+    expect(useCore.getState()).toMatchObject({ gitPanelOpen: false, overviewOpen: true, utilityPanelOrder: [] })
+    openGit()
+    expect(useCore.getState()).toMatchObject({ gitPanelOpen: true, gitLocation: { project: '/repo', workspace: '/repo/other' } })
+  })
+
+  it('shares the dock, stacking limit and maximize controls with other tools', () => {
+    toggleFilesPanel()
+    setFilesMaximized(true)
+    openGit()
+    expect(useCore.getState()).toMatchObject({ utilityPanelOrder: ['files', 'git'], filesMaximized: false, gitMaximized: false })
+    setGitMaximized(true)
+    expect(useCore.getState().gitMaximized).toBe(true)
+    toggleBrowserPanel()
+    expect(useCore.getState()).toMatchObject({ utilityPanelOrder: ['git', 'browser'], filesPanelOpen: false, gitMaximized: false })
+    setGitMaximized(true)
+    toggleGitPanel()
+    expect(useCore.getState()).toMatchObject({ gitPanelOpen: false, gitMaximized: false, browserPanelOpen: true })
+  })
+
+  it('focuses the detached window on an exact checkout instead of opening a second panel', () => {
+    const focus = vi.fn().mockResolvedValue(undefined)
+    const send = vi.fn()
+    const close = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('window', { antumi: { focusPanelWindow: focus, sendPanelCommand: send, closePanelWindow: close } })
+    useCore.setState({ panelWindows: ['git'] })
+    openGit('/repo/other')
+    expect(focus).toHaveBeenCalledWith('git')
+    expect(send).toHaveBeenCalledWith('git', { type: 'show-git', location: { project: '/repo/other', workspace: '/repo/other' } })
+    expect(useCore.getState().gitPanelOpen).toBe(false)
+    toggleGitPanel()
+    expect(close).toHaveBeenCalledWith('git')
   })
 })
 

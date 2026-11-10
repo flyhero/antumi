@@ -169,10 +169,11 @@ export type CoreState = {
   inboxOpen: boolean
   // The inbox tab last shown, as an inboxKey; the tabs appear once two sources are signed in.
   inboxTab: string | null
-  // Project Git keeps its selected checkout while another page is open.
-  gitOpen: boolean
+  // Git keeps its selected checkout while the user navigates.
+  gitPanelOpen: boolean
+  gitMaximized: boolean
   gitLocation: { project: string; workspace: string } | null
-  // So does the page of worktrees, over whatever else was shown there.
+  // Worktrees open as a page over the current content.
   worktreesOpen: boolean
   // And the page of what runs later: its routines, or its reservations (预约).
   routinesOpen: boolean
@@ -299,7 +300,8 @@ export const useCore = create<CoreState>()(() => ({
   settingsSection: null,
   inboxOpen: false,
   inboxTab: null,
-  gitOpen: false,
+  gitPanelOpen: false,
+  gitMaximized: false,
   gitLocation: null,
   worktreesOpen: false,
   routinesOpen: false,
@@ -368,7 +370,6 @@ export function selectTask(id: string | null, view?: TaskView): void {
       inspectorFile: s.section === 'tasks' && s.selectedId === id ? s.inspectorFile : null,
       section: 'tasks',
       inboxOpen: false,
-      gitOpen: false,
       worktreesOpen: false,
       routinesOpen: false,
       overviewOpen: false,
@@ -442,7 +443,7 @@ export function showSourceUpdates(target: SourceUpdateTarget): void {
     : { conversationInspectorOpen: true, conversationInspectorTab: 'source' })
 }
 
-type UtilityPanelState = Pick<CoreState, 'utilityPanelOrder' | 'browserPanelOpen' | 'terminalPanelOpen' | 'portsPanelOpen' | 'filesPanelOpen' | 'browserMaximized' | 'terminalMaximized' | 'portsMaximized' | 'filesMaximized'>
+type UtilityPanelState = Pick<CoreState, 'utilityPanelOrder' | 'browserPanelOpen' | 'terminalPanelOpen' | 'portsPanelOpen' | 'filesPanelOpen' | 'browserMaximized' | 'terminalMaximized' | 'portsMaximized' | 'filesMaximized' | 'gitPanelOpen' | 'gitMaximized'>
 
 // The browser, terminal and ports panels as the dock's order says, which is what decides: those in
 // it are open, and a maximized one stays so only while it is, and only if asked to.
@@ -454,15 +455,17 @@ function utilityPanels(s: CoreState, order: UtilityPanelKind[], keepMaximized: b
     terminalPanelOpen: open('terminal'),
     portsPanelOpen: open('ports'),
     filesPanelOpen: open('files'),
+    gitPanelOpen: open('git'),
     browserMaximized: keepMaximized && s.browserMaximized && open('browser'),
     terminalMaximized: keepMaximized && s.terminalMaximized && open('terminal'),
     portsMaximized: keepMaximized && s.portsMaximized && open('ports'),
-    filesMaximized: keepMaximized && s.filesMaximized && open('files')
+    filesMaximized: keepMaximized && s.filesMaximized && open('files'),
+    gitMaximized: keepMaximized && s.gitMaximized && open('git')
   }
 }
 
 function openPanels(s: CoreState): UtilityPanelsOpen {
-  return { browser: s.browserPanelOpen, terminal: s.terminalPanelOpen, ports: s.portsPanelOpen, files: s.filesPanelOpen }
+  return { browser: s.browserPanelOpen, terminal: s.terminalPanelOpen, ports: s.portsPanelOpen, files: s.filesPanelOpen, git: s.gitPanelOpen }
 }
 
 // One panel brought up: below what is open, the top one going past two, and no other left
@@ -597,7 +600,7 @@ export function togglePortsPanel(): void {
 }
 
 export function setPortsMaximized(maximized: boolean): void {
-  useCore.setState({ portsMaximized: maximized, ...(maximized ? { terminalMaximized: false, browserMaximized: false, filesMaximized: false } : {}) })
+  useCore.setState({ portsMaximized: maximized, ...(maximized ? { gitMaximized: false, terminalMaximized: false, browserMaximized: false, filesMaximized: false } : {}) })
 }
 
 // The list updates when core says so, through terminalCommands.changed.
@@ -642,7 +645,7 @@ export function deleteChatCommand(id: string): void {
 }
 
 export function setTerminalMaximized(maximized: boolean): void {
-  useCore.setState({ terminalMaximized: maximized, ...(maximized ? { browserMaximized: false, portsMaximized: false, filesMaximized: false } : {}) })
+  useCore.setState({ terminalMaximized: maximized, ...(maximized ? { gitMaximized: false, browserMaximized: false, portsMaximized: false, filesMaximized: false } : {}) })
 }
 
 export function toggleBrowserPanel(): void {
@@ -654,11 +657,11 @@ export function toggleBrowserPanel(): void {
 }
 
 export function setBrowserMaximized(maximized: boolean): void {
-  useCore.setState({ browserMaximized: maximized, ...(maximized ? { terminalMaximized: false, portsMaximized: false, filesMaximized: false } : {}) })
+  useCore.setState({ browserMaximized: maximized, ...(maximized ? { gitMaximized: false, terminalMaximized: false, portsMaximized: false, filesMaximized: false } : {}) })
 }
 
 export function setFilesMaximized(maximized: boolean): void {
-  useCore.setState({ filesMaximized: maximized, ...(maximized ? { terminalMaximized: false, portsMaximized: false, browserMaximized: false } : {}) })
+  useCore.setState({ filesMaximized: maximized, ...(maximized ? { gitMaximized: false, terminalMaximized: false, portsMaximized: false, browserMaximized: false } : {}) })
 }
 
 export function toggleFilesPanel(): void {
@@ -672,7 +675,7 @@ export function toggleFilesPanel(): void {
 // What the user is looking at, which the files panel follows: a key that changes when they look
 // elsewhere, and the folders it has, null where it has none (a page, or nothing selected).
 export function filesContext(s: CoreState): { key: string; scope: FileScope | null } {
-  if (s.settingsOpen || s.overviewOpen || s.inboxOpen || s.gitOpen || s.worktreesOpen || s.routinesOpen) return { key: 'page', scope: null }
+  if (s.settingsOpen || s.overviewOpen || s.inboxOpen || s.worktreesOpen || s.routinesOpen) return { key: 'page', scope: null }
   if (s.section === 'discussions') {
     const discussion = s.selectedDiscussionId ? s.discussions[s.selectedDiscussionId] : undefined
     return { key: `discussion:${s.selectedDiscussionId ?? ''}`, scope: discussion?.projectPaths.length ? { conversationId: null, roots: discussion.projectPaths } : null }
@@ -740,7 +743,7 @@ export function selectConversation(id: string | null): void {
   setSplitPanes(panesAfterSelect(savedPanes(), current, id))
   useCore.setState((s) => {
     const { [id ?? '']: _seen, ...unseen } = s.unseen
-    return { selectedConversationId: id, section: 'conversations', inspectorFile: s.section === 'conversations' && s.selectedConversationId === id ? s.inspectorFile : null, settingsOpen: false, gitOpen: false, worktreesOpen: false, routinesOpen: false, overviewOpen: false, inboxOpen: false, conversationDraft: false, unseen }
+    return { selectedConversationId: id, section: 'conversations', inspectorFile: s.section === 'conversations' && s.selectedConversationId === id ? s.inspectorFile : null, settingsOpen: false, worktreesOpen: false, routinesOpen: false, overviewOpen: false, inboxOpen: false, conversationDraft: false, unseen }
   })
   if (id) markRoutineRunSeen(id)
 }
@@ -837,7 +840,7 @@ export type DraftIssue = { provider: string; instance: string; key: string; titl
 // `projects`: what the page starts with, as from a project's group; without, it starts with none.
 // `issue`: the inbox issue the conversation is opened to look into.
 export function openConversationDraft(projects?: readonly string[], issue: DraftIssue | null = null, from: CoreState['conversationDraftFrom'] = null): void {
-  useCore.setState({ selectedConversationId: null, section: 'conversations', settingsOpen: false, gitOpen: false, worktreesOpen: false, routinesOpen: false, overviewOpen: false, inboxOpen: false, conversationDraft: true, conversationDraftMode: 'single', conversationDraftCarry: null, conversationDraftProjects: projects ? { paths: [...projects] } : null, conversationDraftIssue: issue, conversationDraftFrom: from, discussionDraftFrom: null, draftProfileId: null })
+  useCore.setState({ selectedConversationId: null, section: 'conversations', settingsOpen: false, worktreesOpen: false, routinesOpen: false, overviewOpen: false, inboxOpen: false, conversationDraft: true, conversationDraftMode: 'single', conversationDraftCarry: null, conversationDraftProjects: projects ? { paths: [...projects] } : null, conversationDraftIssue: issue, conversationDraftFrom: from, discussionDraftFrom: null, draftProfileId: null })
 }
 
 export type DraftMode = 'single' | 'group'
@@ -857,7 +860,7 @@ export function closeConversationDraft(): void {
   openOverview()
 }
 
-const PAGES_CLOSED = { settingsOpen: false, gitOpen: false, worktreesOpen: false, routinesOpen: false, overviewOpen: false, inboxOpen: false } as const
+const PAGES_CLOSED = { settingsOpen: false, worktreesOpen: false, routinesOpen: false, overviewOpen: false, inboxOpen: false } as const
 
 export function selectSquad(id: string | null, draft = false): void {
   useCore.setState({ section: 'squads', agentProfilesTab: 'squads', selectedSquadId: id, squadDraft: draft, ...PAGES_CLOSED })
@@ -953,7 +956,6 @@ export function setInboxOpen(open: boolean): void {
         selectedConversationId: null,
         conversationDraft: false,
         settingsOpen: false,
-        gitOpen: false,
         worktreesOpen: false,
         routinesOpen: false,
         overviewOpen: false
@@ -1001,11 +1003,29 @@ export function setNewTaskOpen(open: boolean, draft: NewTaskDraft | null = null)
 }
 
 export function setSettingsOpen(open: boolean, section: string | null = null): void {
-  useCore.setState({ settingsOpen: open, settingsSection: section, ...(open ? { overviewOpen: false, gitOpen: false } : {}) })
+  useCore.setState({ settingsOpen: open, settingsSection: section, ...(open ? { overviewOpen: false } : {}) })
 }
 
 export function openGit(workspace?: string): void {
-  useCore.setState({ ...PAGES_CLOSED, gitOpen: true, ...(workspace ? { gitLocation: { project: workspace, workspace } } : {}) })
+  if (workspace) setGitLocation(workspace, workspace)
+  if (panelIsOut('git')) {
+    if (workspace) sendPanelCommand('git', { type: 'show-git', location: { project: workspace, workspace } })
+    focusPanelWindow('git')
+    return
+  }
+  useCore.setState((s) => shownUtilityPanel(s, 'git'))
+}
+
+export function toggleGitPanel(): void {
+  if (panelIsOut('git')) {
+    closePanelWindow('git')
+    return
+  }
+  useCore.setState((s) => s.gitPanelOpen ? hiddenUtilityPanel(s, 'git') : shownUtilityPanel(s, 'git'))
+}
+
+export function setGitMaximized(maximized: boolean): void {
+  useCore.setState({ gitMaximized: maximized, ...(maximized ? { terminalMaximized: false, portsMaximized: false, browserMaximized: false, filesMaximized: false } : {}) })
 }
 
 export function setGitLocation(project: string, workspace: string): void {
@@ -1013,7 +1033,7 @@ export function setGitLocation(project: string, workspace: string): void {
 }
 
 export function setWorktreesOpen(open: boolean): void {
-  useCore.setState(open ? { gitOpen: false, worktreesOpen: true, routinesOpen: false, overviewOpen: false, inboxOpen: false, settingsOpen: false } : OVERVIEW)
+  useCore.setState(open ? { worktreesOpen: true, routinesOpen: false, overviewOpen: false, inboxOpen: false, settingsOpen: false } : OVERVIEW)
 }
 
 // The reservations are a tab of the routines' page: what runs once, beside what runs again.
@@ -1028,7 +1048,7 @@ export function openUsageCard(agent: AgentKind | null): void {
 
 export function setRoutinesOpen(open: boolean, tab?: RoutinesTab): void {
   if (!open) return openOverview()
-  useCore.setState({ routinesOpen: true, ...(tab ? { routinesTab: tab } : {}), gitOpen: false, worktreesOpen: false, overviewOpen: false, inboxOpen: false, settingsOpen: false })
+  useCore.setState({ routinesOpen: true, ...(tab ? { routinesTab: tab } : {}), worktreesOpen: false, overviewOpen: false, inboxOpen: false, settingsOpen: false })
 }
 
 export function useSchedulesOpen(): boolean {
@@ -1039,7 +1059,7 @@ export function useSchedulesOpen(): boolean {
 // but a task, which goes back to the task board.
 const OVERVIEW = {
   overviewOpen: true, guideOpen: false, section: 'tasks', selectedId: null, selectedConversationId: null, conversationDraft: false,
-  squadDraft: false, inboxOpen: false, gitOpen: false, worktreesOpen: false, routinesOpen: false, settingsOpen: false
+  squadDraft: false, inboxOpen: false, worktreesOpen: false, routinesOpen: false, settingsOpen: false
 } as const
 
 export function openOverview(): void {
@@ -1276,7 +1296,7 @@ export function usePastedTextSupported(): boolean {
 
 // The task board stands where a task would: the tasks section with none open and no page over it.
 export function useTaskBoardOpen(): boolean {
-  return useCore((s) => s.section === 'tasks' && s.selectedId === null && !s.inboxOpen && !s.gitOpen && !s.worktreesOpen
+  return useCore((s) => s.section === 'tasks' && s.selectedId === null && !s.inboxOpen && !s.worktreesOpen
     && !s.routinesOpen && !s.overviewOpen && !s.settingsOpen)
 }
 

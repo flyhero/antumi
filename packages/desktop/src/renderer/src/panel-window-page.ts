@@ -18,6 +18,7 @@ function handoff(): PanelHandoff {
   const kind = thisPanelKind()
   return {
     context: panelContext(useCore.getState()),
+    ...(kind === 'git' ? { gitLocation: useCore.getState().gitLocation } : {}),
     files: kind === 'files' ? filesSnapshot() : null,
     terminalId: kind === 'terminal' ? useCore.getState().activeTerminalId : null,
     browserTabId: kind === 'browser' ? useBrowserTabs.getState()[ALL_TABS]?.selectedId ?? null : null
@@ -29,6 +30,11 @@ export function dockThisPanel(): void {
   const kind = thisPanelKind()
   if (!kind) return
   dockPanelWindow({ docked: kind, ...handoff() })
+}
+
+// Git actions that need the workspace bring their destination back with the panel.
+export function dockGitWithNavigation(gitNavigation: NonNullable<PanelHandoff['gitNavigation']>): void {
+  dockPanelWindow({ docked: 'git', ...handoff(), gitNavigation })
 }
 
 export function hideThisPanel(): void {
@@ -54,10 +60,13 @@ function apply(command: PanelCommand): void {
       settingsOpen: command.settingsOpen,
       overviewOpen: command.overviewOpen,
       inboxOpen: command.inboxOpen,
-      gitOpen: command.gitOpen,
       worktreesOpen: command.worktreesOpen,
       routinesOpen: command.routinesOpen
     })
+    return
+  }
+  if (command.type === 'show-git') {
+    useCore.setState({ gitLocation: command.location })
     return
   }
   if (command.type === 'focus-address') {

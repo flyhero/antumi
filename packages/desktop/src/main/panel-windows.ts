@@ -171,7 +171,7 @@ export function coalesce(commands: readonly PanelCommandValue[]): PanelCommandVa
   const latest = new Map<string, PanelCommandValue>()
   const rest: PanelCommandValue[] = []
   for (const command of commands) {
-    if (command.type === 'context' || command.type === 'files-state' || command.type === 'select-terminal') latest.set(command.type, command)
+    if (command.type === 'context' || command.type === 'files-state' || command.type === 'select-terminal' || command.type === 'show-git') latest.set(command.type, command)
     else rest.push(command)
   }
   return [...latest.values(), ...rest]

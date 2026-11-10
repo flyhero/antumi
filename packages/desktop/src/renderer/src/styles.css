@@ -10002,12 +10002,11 @@ summary.agent-group-head:focus-visible { outline: 2px solid var(--focus); outlin
 .fork-button svg { width: 14px; height: 14px; }
 .chat-user-footer .fork-button, .chat-message-actions .fork-button { margin-left: 2px; }
 
-/* The Git page shares its repository view with the conversation inspector. */
-.git-page { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; background: var(--surface); }
-.git-page-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px 8px; }
-.git-page-header h1 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: var(--chat-font-size, 14px); }
-.git-page-header h1 svg { width: 20px; height: 20px; }
-.git-page-projects { padding-inline: 20px; flex-wrap: wrap; }
+/* Git shares the dock's controls and the inspector's repository view. */
+.git-panel { overflow: hidden; }
+.git-panel-title { display: flex; align-items: center; flex: 1; gap: 6px; padding-inline: 6px; font-size: 12px; color: var(--text-muted); }
+.git-panel-title svg { width: 15px; height: 15px; }
+.git-project-bar.git-page-projects { flex-wrap: wrap; }
 /* Project / workspace sit side by side at their own width; the actions keep to the right. */
 .git-project-bar.git-page-projects > .chat-picker { flex: 0 1 auto; min-width: 0; max-width: 360px; }
 .git-page-separator { color: var(--text-3); }

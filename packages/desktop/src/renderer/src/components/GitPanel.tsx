@@ -1,19 +1,22 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import type { GitProject } from '@antumi/protocol'
 import { t } from '../i18n'
-import { openOverview, selectConversation, selectTask, setGitLocation, useCore } from '../core-store'
+import { selectConversation, selectTask, setGitLocation, setGitMaximized, toggleGitPanel, useCore } from '../core-store'
 import { canPickFolder, pickFolder } from '../desktop-bridge'
 import { setPreference, usePreferences } from '../preferences'
 import { ChatPicker } from './ChatPicker'
 import { GitRepository } from './GitRepository'
 import { useFocusCount } from './Inspector'
-import { GitIcon, CloseIcon, FolderIcon, RefreshIcon } from './icons'
+import { GitIcon, CloseIcon, FolderIcon, MaximizeIcon, RefreshIcon, RestoreIcon } from './icons'
+import { PanelWindowButton } from './PanelWindowButton'
+import { dockThisPanel, hideThisPanel } from '../panel-window-page'
 import { ProjectIcon } from './ProjectIcon'
 import { projectName } from './ProjectPicker'
 
-export function GitPage() {
+export function GitPanel({ windowed = false }: { windowed?: boolean }) {
   const rpc = useCore((s) => s.rpc)
   const location = useCore((s) => s.gitLocation)
+  const maximized = useCore((s) => s.gitMaximized)
   const revision = useCore((s) => s.gitRevision)
   const tasks = useCore((s) => s.tasks)
   const conversations = useCore((s) => s.conversations)
@@ -59,10 +62,12 @@ export function GitPage() {
   const active = current && !current.missing ? current.path : undefined
   const owner = current?.taskId ? tasks[current.taskId] : undefined
   const chat = current?.conversationIds.map((id) => conversations[id]).find(Boolean)
-  return <section className="git-page">
-    <header className="git-page-header">
-      <h1><GitIcon /> Git</h1>
-      <button className="tool-button" aria-label={t('GitPage.close')} onClick={openOverview}><CloseIcon /></button>
+  return <aside className="side-panel git-panel" aria-label="Git" data-maximized={maximized || undefined}>
+    <header className="terminal-panel-header git-panel-header">
+      <span className="git-panel-title"><GitIcon /> Git</span>
+      <PanelWindowButton kind="git" windowed={windowed} />
+      {!windowed && <button type="button" className="tool-button" aria-label={maximized ? t('BrowserSidePanel.restore') : t('BrowserSidePanel.maximize')} data-tooltip={maximized ? t('BrowserSidePanel.restore') : t('BrowserSidePanel.maximize')} onClick={() => setGitMaximized(!maximized)}>{maximized ? <RestoreIcon /> : <MaximizeIcon />}</button>}
+      <button type="button" className="tool-button" aria-label={t('GitPage.close')} data-tooltip={t('GitPage.close')} onClick={windowed ? hideThisPanel : toggleGitPanel}><CloseIcon /></button>
     </header>
     {/* Project and workspace on one line, read as a path: antumi / dev. */}
     <div className="git-project-bar git-page-projects">
@@ -73,8 +78,8 @@ export function GitPage() {
         <ChatPicker label={t('GitPage.workspace')} value={active ?? ''} placeholder={t('GitPage.workspace')} placement="below"
           options={project.workspaces.map((entry) => ({ value: entry.path, label: `${entry.branch ?? t('GitInspector.detachedHead')}${entry.taskId ? ` · ${tasks[entry.taskId]?.title ?? t('GitInspector.task')}` : ''}`, description: `${entry.path}${entry.missing ? ` · ${t('GitPage.missing')}` : ''}${entry.planning ? ` · ${t('GitPage.readOnly')}` : ''}${entry.locked ? ` · ${t('GitPage.locked')}` : ''}`, disabled: entry.missing }))}
           onChange={(path) => setGitLocation(selected, path)} />
-        {owner && <button className="button ghost" onClick={() => selectTask(owner.id)}>{t('SourceInboxView.openTask')}</button>}
-        {!owner && chat && <button className="button ghost" onClick={() => selectConversation(chat.id)}>{t('WorktreeManager.openConversation')}</button>}
+        {owner && <button className="button ghost" onClick={() => { selectTask(owner.id); if (windowed) dockThisPanel() }}>{t('SourceInboxView.openTask')}</button>}
+        {!owner && chat && <button className="button ghost" onClick={() => { selectConversation(chat.id); if (windowed) dockThisPanel() }}>{t('WorktreeManager.openConversation')}</button>}
       </>}
       <span className="git-page-actions">
         {canPickFolder() ? <button className="button" onClick={() => void browse()}><FolderIcon />{t('GitPage.openProject')}</button>
@@ -88,5 +93,5 @@ export function GitPage() {
       : !selected ? <div className="git-page-empty"><GitIcon /><strong>{t('GitPage.emptyTitle')}</strong><p>{t('GitPage.emptyDescription')}</p></div>
         : !project && !error ? <p className="git-message muted">{t('GitInspector.loadingProject')}</p>
           : active && !error && <div className="git-manager"><GitRepository key={active} target={{ kind: 'project', project: active }} refresh={retry} /></div>}
-  </section>
+  </aside>
 }

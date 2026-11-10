@@ -10,7 +10,6 @@ export function panelContext(state: CoreState): PanelContext {
     settingsOpen: state.settingsOpen,
     overviewOpen: state.overviewOpen,
     inboxOpen: state.inboxOpen,
-    gitOpen: state.gitOpen,
     worktreesOpen: state.worktreesOpen,
     routinesOpen: state.routinesOpen
   }

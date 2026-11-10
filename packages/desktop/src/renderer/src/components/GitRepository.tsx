@@ -23,6 +23,7 @@ import { describeGitAction, handGitProblemToAgent } from '../git-handoff'
 import { setPreference, usePreferences } from '../preferences'
 import { CopyButton } from './CopyButton'
 import { projectName } from './ProjectPicker'
+import { dockGitWithNavigation, thisPanelKind } from '../panel-window-page'
 
 function ReadState({ error, retry, children }: { error: string | null; retry: () => void; children?: ReactNode }) {
   return error ? <p className="git-message" role="alert">{error} <button className="button" onClick={retry}>{t('ChatContextMenu.retry')}</button></p> : <>{children}</>
@@ -251,7 +252,10 @@ export function GitRepository({ target, updatedAt = 0, refresh = 0 }: { target: 
         <strong>{status.operation === 'merge' ? t('GitInspector.mergeIsUnfinished') : status.rebase ? t('GitInspector.rebaseIsUnfinished') : status.picking === 'cherry-pick' ? t('GitPage.pickUnfinished') : status.picking === 'revert' ? t('GitPage.revertUnfinished') : t('GitInspector.anotherGitOperationIsUnfinishedResolveItIn')}</strong>
         {status.conflicts.map((file) => <ConflictRow key={file} target={target} directory={status.directory} file={file} disabled={disabled} resolve={() => void run({ kind: 'resolve', file })} />)}
         <div className="git-toolbar">
-          <button className="button" onClick={() => void openTerminal(status.directory)}>{t('GitInspector.openTerminal')}</button>
+          <button className="button" onClick={async () => {
+            const terminal = await openTerminal(status.directory)
+            if (terminal && thisPanelKind() === 'git') dockGitWithNavigation({ type: 'terminal', id: terminal.id })
+          }}>{t('GitInspector.openTerminal')}</button>
           {status.conflicts.length > 0 && <button className="button" data-tooltip={t('GitHandoff.handOffHint')} onClick={() => void handGitProblemToAgent({ operation: status.rebase ? 'rebase' : status.picking ?? 'merge', message: null, conflicts: status.conflicts }, { directory: status.directory, branch: status.branch })}>{t('GitHandoff.handOff')}</button>}
           {(status.operation === 'merge' || status.rebase || status.picking) && <>
             <button className="button" disabled={disabled || status.conflicts.length > 0} onClick={() => void run({ kind: 'continue' })}><ContinueIcon />{status.rebase ? t('GitInspector.continueRebase') : status.picking === 'cherry-pick' ? t('GitPage.finishPick') : status.picking === 'revert' ? t('GitPage.finishRevert') : t('GitInspector.finishMerge')}</button>

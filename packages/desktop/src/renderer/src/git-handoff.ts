@@ -1,6 +1,7 @@
 import type { GitAction } from '@antumi/protocol'
 import { openConversationDraft, useCore } from './core-store'
 import { t } from './i18n'
+import { dockGitWithNavigation, thisPanelKind } from './panel-window-page'
 
 // What went wrong on the Git page: the operation as git would name it, the error git gave, and the
 // files it stopped on.
@@ -89,6 +90,11 @@ export async function handGitProblemToAgent(problem: GitProblem, where: { direct
     budget -= excerpt.lines.length
     excerpts.push({ file, ...excerpt })
   }
+  const text = gitProblemPrompt(problem, where, excerpts)
+  if (thisPanelKind() === 'git') {
+    dockGitWithNavigation({ type: 'conversation-draft', project: where.directory, text })
+    return
+  }
   openConversationDraft([where.directory])
-  useCore.setState({ conversationDraftCarry: { text: gitProblemPrompt(problem, where, excerpts), projects: [where.directory], agent: null, model: null } })
+  useCore.setState({ conversationDraftCarry: { text, projects: [where.directory], agent: null, model: null } })
 }

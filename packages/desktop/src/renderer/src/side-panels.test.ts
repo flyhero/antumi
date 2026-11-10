@@ -37,4 +37,11 @@ describe('exclusivePanels', () => {
     expect(exclusivePanels({ ...closed, inspectorOpen: true }, closed)).toBeNull()
     expect(exclusivePanels(closed, { ...closed, inspectorOpen: true })).toBeNull()
   })
+
+  it('exchanges Git and the inspectors while keeping the browser open', () => {
+    const inspector = { ...closed, conversationInspectorOpen: true }
+    expect(exclusivePanels({ ...inspector, gitPanelOpen: true, utilityPanelOrder: ['git'] }, inspector)).toEqual({ inspectorOpen: false, conversationInspectorOpen: false })
+    const git: SidePanels = { ...closed, gitPanelOpen: true, utilityPanelOrder: ['browser', 'git'] }
+    expect(exclusivePanels({ ...git, inspectorOpen: true }, git)).toEqual({ terminalPanelOpen: false, gitPanelOpen: false, utilityPanelOrder: ['browser'] })
+  })
 })

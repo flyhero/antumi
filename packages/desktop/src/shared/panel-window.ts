@@ -1,8 +1,8 @@
 import { z } from 'zod'
 import { BrowserTab, ChatImage, ResolvedFile } from '@antumi/protocol'
 
-// Browser, files and terminal can leave the main window's dock and fill a window of their own.
-export const PanelKind = z.enum(['browser', 'files', 'terminal'])
+// Browser, files, Git and terminal can leave the main window's dock and fill a window of their own.
+export const PanelKind = z.enum(['browser', 'files', 'terminal', 'git'])
 export type PanelKind = z.infer<typeof PanelKind>
 
 export function panelWindowHash(kind: PanelKind): string {
@@ -14,6 +14,8 @@ export function panelKindFromHash(hash: string): PanelKind | null {
   const parsed = PanelKind.safeParse(name.slice('panel-'.length))
   return name.startsWith('panel-') && parsed.success ? parsed.data : null
 }
+
+const GitLocation = z.object({ project: z.string(), workspace: z.string() })
 
 const FileScopeMessage = z.object({
   conversationId: z.string().nullable(),
@@ -62,7 +64,6 @@ export const PanelContext = z.object({
   settingsOpen: z.boolean(),
   overviewOpen: z.boolean(),
   inboxOpen: z.boolean(),
-  gitOpen: z.boolean(),
   worktreesOpen: z.boolean(),
   routinesOpen: z.boolean()
 })
@@ -72,6 +73,7 @@ export type PanelContext = z.infer<typeof PanelContext>
 export const PanelCommand = z.discriminatedUnion('type', [
   PanelContext.extend({ type: z.literal('context') }),
   z.object({ type: z.literal('focus-address') }),
+  z.object({ type: z.literal('show-git'), location: GitLocation.nullable() }),
   z.object({ type: z.literal('focus-conversation'), conversationId: z.string() }),
   z.object({ type: z.literal('focus-tab'), tabId: z.string() }),
   z.object({ type: z.literal('select-terminal'), id: z.string().nullable() }),
@@ -82,9 +84,16 @@ export const PanelCommand = z.discriminatedUnion('type', [
 ])
 export type PanelCommand = z.infer<typeof PanelCommand>
 
+const GitNavigation = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('terminal'), id: z.string() }),
+  z.object({ type: z.literal('conversation-draft'), project: z.string(), text: z.string() })
+])
+
 // What a panel window hands back as it closes, so unsaved files are not left behind in it.
 export const PanelHandoff = z.object({
   context: PanelContext,
+  gitLocation: GitLocation.nullable().optional(),
+  gitNavigation: GitNavigation.optional(),
   files: FilesSnapshot.nullable(),
   terminalId: z.string().nullable(),
   browserTabId: z.string().nullable()

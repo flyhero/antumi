@@ -1,12 +1,12 @@
 import { randomUUID } from 'node:crypto'
 import { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
-import { MAX_CHAT_COMMANDS, SavedChatCommand } from '@antumi/protocol'
+import { MAX_CHAT_COMMANDS, MAX_PINNED_CHAT_COMMANDS, SavedChatCommand } from '@antumi/protocol'
 import { Rejection } from './rejection'
 
 type Fields = Pick<SavedChatCommand, 'name' | 'description' | 'prompt' | 'projectPath'>
 
-const SELECT = `SELECT id, name, description, prompt, project_path AS projectPath, created_at AS createdAt
+const SELECT = `SELECT id, name, description, prompt, project_path AS projectPath, created_at AS createdAt, pinned_at AS pinnedAt
   FROM chat_commands ORDER BY created_at, rowid`
 
 // Rows live in `chat_commands`, which TaskStore's migrations create.
@@ -50,6 +50,19 @@ export class ChatCommandStore {
       .run(created, name, description, prompt, projectPath, this.now())
     this.changed()
     return this.get(created)
+  }
+
+  // Pinning one already pinned keeps its place among the others. The limit counts every pinned
+  // command, whichever conversations it shows in, so the user has one number to keep in mind.
+  pin(id: string, pinned: boolean): SavedChatCommand {
+    const command = this.get(id)
+    if (pinned === (command.pinnedAt != null)) return command
+    if (pinned && this.list().filter((each) => each.pinnedAt != null).length >= MAX_PINNED_CHAT_COMMANDS) {
+      throw new Rejection('chat_command_pins_full', `最多固定 ${MAX_PINNED_CHAT_COMMANDS} 条命令，先取消一条`)
+    }
+    this.db.prepare('UPDATE chat_commands SET pinned_at = ? WHERE id = ?').run(pinned ? this.now() : null, id)
+    this.changed()
+    return this.get(id)
   }
 
   // Deleting one that is already gone is not an error: another window got there first.

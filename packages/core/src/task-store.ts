@@ -402,7 +402,9 @@ export const MIGRATIONS = [
      PRIMARY KEY(task_id, repo_path)
    );`,
   // Sites the agents' browser opens in any conversation without asking, by exact host name.
-  `CREATE TABLE browser_sites (host TEXT PRIMARY KEY, allowed_at INTEGER NOT NULL);`
+  `CREATE TABLE browser_sites (host TEXT PRIMARY KEY, allowed_at INTEGER NOT NULL);`,
+  // When a chat command was pinned above the composer (ChatCommandStore.pin).
+  `ALTER TABLE chat_commands ADD COLUMN pinned_at INTEGER;`
 ]
 
 

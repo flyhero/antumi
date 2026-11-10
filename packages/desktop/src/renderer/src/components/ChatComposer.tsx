@@ -1,12 +1,13 @@
 import { useComposerInsertions } from '../composer-insertions'
+import { useComposerCommandRuns } from '../composer-command-runs'
 import { mergeComposerImages } from '../browser-context'
 import { getLocale, t, tr } from '../i18n'
 import { HelperStartOptions } from './HelperModelPicker'
 import { useCallback, useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
-import { chatReferencesIn, chatReferencesFor, type ChatReference, agentDescriptor, canReuseConversation, type ChatImage, type ChatItem, type ChatQueued, type Conversation } from '@antumi/protocol'
+import { chatReferencesIn, chatReferencesFor, type ChatReference, agentDescriptor, canReuseConversation, type ChatImage, type ChatItem, type ChatQueued, type Conversation, type SavedChatCommand } from '@antumi/protocol'
 import { perform, useChatImagesSupported, useChatOptionsSupported, useCore, useFileMentionsSupported, usePastedTextSupported, useScheduleImagesSupported, useSchedulesSupported } from '../core-store'
 import { useComposerFiles } from '../composer-files'
-import { agentEntries, antumiEntries } from '../chat-commands'
+import { agentEntries, antumiEntries, expandPrompt, takesArguments } from '../chat-commands'
 import { composeMessage, parseQuotes, setQuotes, useQuotes, type ChatQuote } from '../chat-quotes'
 import { takeDraft } from '../chat-drafts'
 import { messageReferences, shiftMentions, readMentionedText, writeMentionedText } from '../chat-mentions'
@@ -385,6 +386,29 @@ export function ChatComposer({ conversation, state, compact = false }: { convers
       saveComposerDraft(id, EMPTY_DRAFT)
     } else relay?.cancel()
   }
+  // A pinned command clicked above the composer. One that takes arguments opens the input for them,
+  // ahead of whatever is typed there; one that takes none goes as it stands and leaves the input
+  // alone, unless the agent cannot take it now, when it waits in the input instead.
+  const runPinned = async (command: SavedChatCommand) => {
+    const prompt = expandPrompt(command.prompt, '')
+    if (!takesArguments(command) && canTake) {
+      setBusy(true)
+      const ready = await surface.prepareSend(stopped)
+      const sent = ready && await perform((rpc) => rpc.call('conversations.send', { id, text: prompt, ...(queueable ? { queue: true } : {}) }))
+      setBusy(false)
+      if (sent) return
+    }
+    const opening = takesArguments(command) ? `/${command.name} ` : prompt
+    setText((current) => !current.trim() ? opening : takesArguments(command) ? opening + current.trimStart() : `${opening}\n\n${current}`)
+    // After the editor has taken the new text: the caret goes where the arguments are typed.
+    requestAnimationFrame(() => {
+      const view = mentionMenu.inputProps.input.current
+      if (!view) return
+      view.focus()
+      view.dispatch({ selection: { anchor: Math.min(opening.length, view.state.doc.length) } })
+    })
+  }
+  useComposerCommandRuns(id, (command) => void runPinned(command))
   // The view moves to the new conversation as it opens, so the input is cleared in storage too.
   const sendNew = async () => {
     const expanded = commandMenu.expand(written)

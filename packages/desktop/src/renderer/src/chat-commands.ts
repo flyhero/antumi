@@ -20,6 +20,13 @@ export function antumiEntries(commands: readonly SavedChatCommand[], projectPath
     }))
 }
 
+// The pinned ones a conversation on these projects shows above its composer, in the order pinned.
+export function pinnedCommands(commands: readonly SavedChatCommand[], projectPaths: readonly string[]): SavedChatCommand[] {
+  return antumiEntries(commands.filter((command) => command.pinnedAt != null), projectPaths)
+    .flatMap((entry) => entry.source === 'antumi' ? [entry.command] : [])
+    .sort((a, b) => (a.pinnedAt ?? 0) - (b.pinnedAt ?? 0))
+}
+
 export function agentEntries(commands: readonly ChatCommand[]): CommandEntry[] {
   return commands.map((command) => ({ source: 'agent', ...command }))
 }

@@ -7838,6 +7838,32 @@ div.inspector-empty > p { margin: 0 0 8px; }
 }
 
 .chat-dock-spacer { flex: 1; }
+
+/* Commands pinned in settings, quiet like the project picker. The row is the header's spacer, so it
+   keeps right; the unseen copy is only there to be measured. */
+.chat-pinned-commands { position: relative; display: flex; align-items: center; justify-content: flex-end; gap: 2px; min-width: 0; }
+.chat-pinned-command {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  height: 24px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.chat-pinned-command:hover,
+.chat-pinned-command:focus-visible,
+.chat-pinned-command[aria-expanded='true'] { background: var(--surface-muted); color: var(--text); }
+.chat-pinned-command[data-tooltip]::after { white-space: pre-line; }
+.chat-pinned-more { padding: 0 5px; }
+.chat-pinned-more svg { width: 14px; height: 14px; }
+.chat-pinned-measure { position: absolute; display: flex; gap: 2px; visibility: hidden; pointer-events: none; }
 .chat-archived-note { min-width: 0; }
 .detail-empty-body { display: flex; flex-direction: column; align-items: center; gap: 8px; }
 

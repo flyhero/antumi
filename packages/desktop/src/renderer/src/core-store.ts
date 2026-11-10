@@ -640,6 +640,10 @@ export function saveChatCommand(params: RpcParams<'chatCommands.save'>): Promise
   return perform((rpc) => rpc.call('chatCommands.save', params))
 }
 
+export function pinChatCommand(id: string, pinned: boolean): void {
+  void perform((rpc) => rpc.call('chatCommands.pin', { id, pinned }))
+}
+
 export function deleteChatCommand(id: string): void {
   void perform((rpc) => rpc.call('chatCommands.delete', { id }))
 }

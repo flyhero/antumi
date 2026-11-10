@@ -712,7 +712,7 @@ const CHAT_COMMANDS_SECTION: Section = localized(() => ({
   group: t('sidebar.conversations'),
   title: t('SettingsPage.chatCommands'),
   description: t('SettingsPage.savedPromptsAvailableWithInTheComposerEdit'),
-  keywords: [t('chatTools.command'), t('SettingsPage.slash'), '/', t('ChatCommandSettings.prompt'), t('RoutinesSection.templates'), 'prompt', t('SettingsPage.chat'), t('BrowserPanel.conversation'), t('SettingsPage.shortcut')],
+  keywords: [t('chatTools.command'), t('SettingsPage.slash'), '/', t('ChatCommandSettings.prompt'), t('RoutinesSection.templates'), t('ChatCommandSettings.pin'), 'prompt', t('SettingsPage.chat'), t('BrowserPanel.conversation'), t('SettingsPage.shortcut')],
   Icon: TerminalIcon,
   Body: ChatCommandSettings,
   grouped: true

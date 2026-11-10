@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { SavedChatCommand } from '@antumi/protocol'
-import { agentEntries, commandQuery, expandPrompt, antumiEntries, matchCommands, typedAntumiCommand } from './chat-commands'
+import { agentEntries, commandQuery, expandPrompt, antumiEntries, matchCommands, pinnedCommands, typedAntumiCommand } from './chat-commands'
 
 const saved = (name: string, prompt: string, projectPath: string | null = null): SavedChatCommand => ({
   id: `00000000-0000-4000-8000-${name.padStart(12, '0').slice(-12)}`,
@@ -52,6 +52,19 @@ describe('antumiEntries', () => {
     const [withArgs, without] = antumiEntries([saved('a', 'Fix $ARGUMENTS'), saved('b', 'Explain\nthe code')], [])
     expect(withArgs?.argumentHint).toBe('参数')
     expect(without).toMatchObject({ argumentHint: null, description: 'Explain' })
+  })
+})
+
+describe('pinnedCommands', () => {
+  it('shows the pinned commands a conversation offers, in the order they were pinned', () => {
+    const commands = [
+      { ...saved('late', 'x'), pinnedAt: 30 },
+      saved('loose', 'y'),
+      { ...saved('early', 'z', '/work/repo'), pinnedAt: 10 },
+      { ...saved('elsewhere', 'w', '/work/other'), pinnedAt: 20 }
+    ]
+    expect(pinnedCommands(commands, ['/work/repo']).map((command) => command.name)).toEqual(['early', 'late'])
+    expect(pinnedCommands(commands, []).map((command) => command.name)).toEqual(['late'])
   })
 })
 

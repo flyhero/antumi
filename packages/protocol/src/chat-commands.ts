@@ -1,6 +1,8 @@
 import { z } from 'zod'
 
 export const MAX_CHAT_COMMANDS = 200
+// Pinned commands sit above the composer, where more than a few crowd its header.
+export const MAX_PINNED_CHAT_COMMANDS = 3
 // What a command's prompt stands in for: whatever the user typed after its name.
 export const CHAT_COMMAND_ARGUMENTS = '$ARGUMENTS'
 
@@ -13,5 +15,10 @@ export const ChatCommandFields = z.object({
   // Offered only in conversations on this folder; null, in every conversation.
   projectPath: z.string().min(1).nullable()
 })
-export const SavedChatCommand = ChatCommandFields.extend({ id: z.string().uuid(), createdAt: z.number() })
+export const SavedChatCommand = ChatCommandFields.extend({
+  id: z.string().uuid(),
+  createdAt: z.number(),
+  // When it was pinned above the composer, which orders the pinned ones; null or absent, not pinned.
+  pinnedAt: z.number().nullable().optional()
+})
 export type SavedChatCommand = z.infer<typeof SavedChatCommand>

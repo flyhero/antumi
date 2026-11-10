@@ -670,6 +670,7 @@ export function createRpcHandlers(
       chatCommands.delete(id)
       return OK
     },
+    'chatCommands.pin': ({ id, pinned }) => chatCommands.pin(id, pinned),
     'sessions.attach': async ({ sessionId, fromOffset }, connection) => {
       connection.attached.add(sessionId)
       try {

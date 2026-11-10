@@ -12,6 +12,7 @@ import { ArchivedBar } from './ArchivedBar'
 import { ChatComposer } from './ChatComposer'
 import { archiveConversation } from './ConversationActions'
 import { ChatMessageList, type SentMessage } from './ChatMessageList'
+import { ChatPinnedCommands } from './ChatPinnedCommands'
 import { ChatPlanCard } from './ChatPlan'
 import { ChatProjects } from './ChatProjects'
 import { ChatApprovalCard, ChatQuestionCard, type RequestItem } from './ChatRequestCards'
@@ -165,7 +166,7 @@ export function ChatDock({ conversation, state, pending, tools, finishedCalls, o
         <ChatProjects conversation={conversation} />
         {running && state && <ChatTodosChip todos={state.todos} />}
         {inspectable && <ChangesChip conversation={conversation} finishedCalls={finishedCalls} />}
-        <span className="chat-dock-spacer" />
+        <ChatPinnedCommands conversation={conversation} shown={!waiting && !archived && !resting && !conversation.parentConversationId} />
         {surface.sourceUpdates && <SourceUpdatesButton target={surface.sourceUpdates} />}
         <ChatMessageList messages={sent} onJump={onJump} />
         <button type="button" className="tool-button" aria-label={t('ChatDock.previousMessage')} data-tooltip={t('ChatDock.previousMessage')} onClick={onPrevious}>

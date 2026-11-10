@@ -1,12 +1,12 @@
 import { t, tr } from '../i18n'
 import { useEffect, useId, useState, type FormEvent } from 'react'
-import { CHAT_COMMAND_ARGUMENTS, ChatCommandFields, type SavedChatCommand } from '@antumi/protocol'
-import { deleteChatCommand, perform, saveChatCommand, useCore } from '../core-store'
+import { CHAT_COMMAND_ARGUMENTS, ChatCommandFields, MAX_PINNED_CHAT_COMMANDS, type SavedChatCommand } from '@antumi/protocol'
+import { deleteChatCommand, perform, pinChatCommand, saveChatCommand, useCore } from '../core-store'
 import { isShortcut, useShortcutLabel } from '../keyboard-shortcuts'
 import { projectName } from './ProjectPicker'
 import { SettingsEmptyState } from './SettingsEmptyState'
 import { SettingsGroup } from './SettingsControls'
-import { TerminalIcon } from './icons'
+import { PinIcon, TerminalIcon } from './icons'
 
 type Draft = { id?: string; name: string; description: string; prompt: string; projectPath: string | null }
 
@@ -95,8 +95,12 @@ function CommandForm({ draft, projects, onDone }: { draft: Draft; projects: read
   )
 }
 
-function CommandRow({ command, onEdit }: { command: SavedChatCommand; onEdit: () => void }) {
+// pins: whether core keeps pins, and whether all of them are taken.
+function CommandRow({ command, onEdit, pins }: { command: SavedChatCommand; onEdit: () => void; pins: { full: boolean } | null }) {
   const [removing, setRemoving] = useState(false)
+  const pinned = command.pinnedAt != null
+  // Left focusable when full, so its tooltip can say why.
+  const blocked = Boolean(pins?.full) && !pinned
   return (
     <li className="command-library-row">
       <div className="command-library-main">
@@ -111,6 +115,16 @@ function CommandRow({ command, onEdit }: { command: SavedChatCommand; onEdit: ()
           <p className="command-library-prompt" title={command.prompt}>{command.prompt}</p>
         </div>
         <div className="settings-inline-actions">
+          {pins && <button
+            type="button"
+            className="button chat-command-pin"
+            aria-pressed={pinned}
+            aria-disabled={blocked || undefined}
+            data-tooltip={blocked ? t('ChatCommandSettings.pinsFull', { max: MAX_PINNED_CHAT_COMMANDS }) : pinned ? t('ChatCommandSettings.unpinHint') : t('ChatCommandSettings.pinHint')}
+            onClick={() => { if (!blocked) pinChatCommand(command.id, !pinned) }}
+          >
+            <PinIcon />{pinned ? t('ChatCommandSettings.pinned') : t('ChatCommandSettings.pin')}
+          </button>}
           <button type="button" className="button" onClick={onEdit}>{t('chatTools.edit')}</button>
           <button type="button" className="button ghost" onClick={() => setRemoving(true)}>{t('ChatCommandSettings.delete')}</button>
         </div>
@@ -130,6 +144,9 @@ export function ChatCommandSettings() {
   const [draft, setDraft] = useState<Draft | null>(null)
   const [projects, setProjects] = useState<string[]>([])
   const [query, setQuery] = useState('')
+  const pinsSupported = useCore((s) => s.rpc?.features.includes('chat-command-pins') ?? false)
+  const pinnedCount = commands.filter((command) => command.pinnedAt != null).length
+  const pins = pinsSupported ? { full: pinnedCount >= MAX_PINNED_CHAT_COMMANDS } : null
   const visible = commands.filter((command) => [command.name, command.description, command.prompt, command.projectPath].some((value) => value?.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())))
 
   useEffect(() => {
@@ -165,9 +182,12 @@ export function ChatCommandSettings() {
             <input className="input" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('ChatCommandSettings.filter')} aria-label={t('ChatCommandSettings.filter')} type="search" />
             <button type="button" className="button primary" onClick={() => setDraft(NEW_DRAFT)}>{t('ChatCommandSettings.newCommand')}</button>
           </div>
-          <p className="settings-list-count" role="status">{t('ChatCommandSettings.count', { count: visible.length, total: commands.length })}</p>
+          <p className="settings-list-count" role="status">
+            {t('ChatCommandSettings.count', { count: visible.length, total: commands.length })}
+            {pins && ` · ${t('ChatCommandSettings.pinnedCount', { count: pinnedCount, max: MAX_PINNED_CHAT_COMMANDS })}`}
+          </p>
           <ul className="settings-project-list">
-            {visible.map((command) => <CommandRow key={command.id} command={command} onEdit={() => setDraft(command)} />)}
+            {visible.map((command) => <CommandRow key={command.id} command={command} pins={pins} onEdit={() => setDraft(command)} />)}
           </ul>
           {visible.length === 0 && <div className="settings-filter-empty">
             <p>{t('ChatCommandSettings.noMatches')}</p>

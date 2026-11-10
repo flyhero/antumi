@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { MAX_CHAT_COMMANDS, type SavedChatCommand } from '@antumi/protocol'
+import { MAX_CHAT_COMMANDS, MAX_PINNED_CHAT_COMMANDS, type SavedChatCommand } from '@antumi/protocol'
 import { ChatCommandStore } from './chat-commands'
 import { TaskStore } from './task-store'
 
@@ -83,5 +83,35 @@ describe('ChatCommandStore', () => {
 
     expect(() => store.save(command('more'))).toThrow(expect.objectContaining({ reason: 'chat_commands_full' }))
     expect(first && store.save({ ...first, description: 'still editable' }).description).toBe('still editable')
+  })
+
+  it('pins and unpins a command, and an edit keeps it pinned', () => {
+    const saved = store.save(command('slack'))
+    expect(saved.pinnedAt).toBeNull()
+
+    const pinned = store.pin(saved.id, true)
+    expect(pinned.pinnedAt).toEqual(expect.any(Number))
+    expect(store.pin(saved.id, true).pinnedAt).toBe(pinned.pinnedAt)
+    expect(store.save({ id: saved.id, ...command('slack'), description: 'Slack' }).pinnedAt).toBe(pinned.pinnedAt)
+    expect(emitted.at(-1)).toEqual(store.list())
+
+    expect(store.pin(saved.id, false).pinnedAt).toBeNull()
+  })
+
+  it('pins at most a few, counted across every project, until one is unpinned', () => {
+    const ids = Array.from({ length: MAX_PINNED_CHAT_COMMANDS }, (_, index) => store.save(command(`p${index}`, index === 0 ? '/repo' : null)).id)
+    ids.forEach((id) => store.pin(id, true))
+    const more = store.save(command('more', '/other'))
+
+    expect(() => store.pin(more.id, true)).toThrow(expect.objectContaining({ reason: 'chat_command_pins_full' }))
+    store.pin(ids[0] ?? '', false)
+    expect(store.pin(more.id, true).pinnedAt).toEqual(expect.any(Number))
+  })
+
+  it('refuses to pin one that is gone', () => {
+    const saved = store.save(command('gone'))
+    store.delete(saved.id)
+
+    expect(() => store.pin(saved.id, true)).toThrow(expect.objectContaining({ reason: 'chat_command_not_found' }))
   })
 })

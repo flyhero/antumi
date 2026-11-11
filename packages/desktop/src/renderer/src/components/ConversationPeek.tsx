@@ -9,6 +9,7 @@ import { agentLabel } from '../labels'
 import { conversationActivity } from '../work-activity'
 import { AgentIcon } from './icons'
 import { ContextUsage } from './ContextUsage'
+import { projectName } from './ProjectPicker'
 
 const OPEN_DELAY_MS = 500
 const CLOSE_DELAY_MS = 100
@@ -93,9 +94,10 @@ function PeekPanel({ row, label, children }: { row: DOMRect; label: string; chil
   return <div ref={panel} className="conversation-peek" role="tooltip" aria-label={label}>{children}</div>
 }
 
+// A project by its name: the card takes no pointer, so a path in a tooltip could never show.
 function ProjectPaths({ paths }: { paths: readonly string[] }) {
   return paths.length > 0
-    ? <>{paths.map((path) => <span key={path} className="conversation-peek-path" dir="ltr">{path}</span>)}</>
+    ? <>{paths.map((path) => <span key={path} className="conversation-peek-path" dir="ltr">{projectName(path)}</span>)}</>
     : <span className="muted">{t('ConversationPeek.noProject')}</span>
 }
 

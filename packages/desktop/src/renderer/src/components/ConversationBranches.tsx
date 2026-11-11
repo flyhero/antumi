@@ -220,7 +220,8 @@ function ProjectActions({ conversation, head, option, onChanged }: {
   const steps = useCore((s) => s.rpc?.features.includes('conversation-commit-steps') ?? false)
   const [open, setOpen] = useState<BranchAction | null>(null)
   const [busy, setBusy] = useState(false)
-  const [pushing, setPushing] = useState(false)
+  // What is under way after its dialog went: a switch or a push can take a while.
+  const [working, setWorking] = useState<string | null>(null)
   const writing = useWritingCommit({ kind: 'conversation', id: conversation.id, project: head.path })
   if (!option?.git) return null
   const blocker = checkSwitchBranch(conversation)
@@ -231,10 +232,15 @@ function ProjectActions({ conversation, head, option, onChanged }: {
       onChanged(note(result))
     }
   }
-  const run = async (call: Parameters<typeof perform>[0], branch: string) => {
-    setBusy(true)
-    done(() => switchedNote(branch))(await perform(call))
+  // The dialog goes at once, and the bar says what is under way until it ends.
+  const background = async <T,>(status: string, task: () => Promise<T | null>, note: (result: T) => string) => {
+    setOpen(null)
+    setWorking(status)
+    const result = await task()
+    setWorking(null)
+    if (result) onChanged(note(result))
   }
+  const run = (task: () => Promise<unknown>, branch: string) => void background(t('ConversationBranches.switching', { branch }), task, () => switchedNote(branch))
   const project = { id: conversation.id, project: head.path }
   const target: GitTarget = { kind: 'conversation', ...project }
   const commit = async (message: string, push: boolean) => {
@@ -257,14 +263,8 @@ function ProjectActions({ conversation, head, option, onChanged }: {
       done<CommitResult>((result) => t('ConversationBranches.committedNotPushedYet_609', { value1: result.commit }))(await perform((rpc) => rpc.call('conversations.commit', { ...project, message })))
     }
   }
-  // A push can take a while: the dialog goes at once, and the bar says it is under way.
-  const push = async () => {
-    setOpen(null)
-    setPushing(true)
-    const result = await perform((rpc) => rpc.call('conversations.push', project))
-    setPushing(false)
-    if (result) onChanged(t('ConversationBranches.pushedTo', { value1: result.branch, value2: result.upstream }))
-  }
+  const push = () => void background(t('ConversationBranches.pushing', { value1: head.branch }), () => perform((rpc) => rpc.call('conversations.push', project)),
+    (result) => t('ConversationBranches.pushedTo', { value1: result.branch, value2: result.upstream }))
   const hint = blocker ? reasonText(blocker, blocker) : undefined
   const commitHint = hint ?? (!head.branch ? t('ConversationBranches.noCurrentBranch') : head.changes === 0 ? t('ConversationBranches.noChangesToCommit') : undefined)
   // Nothing to push: a tracked branch with no commit past its upstream.
@@ -278,7 +278,7 @@ function ProjectActions({ conversation, head, option, onChanged }: {
       data-primary={primary || undefined}
       aria-haspopup="dialog"
       aria-expanded={open === action}
-      disabled={busy || pushing || writing || !enabled}
+      disabled={busy || working !== null || writing || !enabled}
       title={title}
       onClick={() => setOpen(action)}
     >
@@ -293,16 +293,16 @@ function ProjectActions({ conversation, head, option, onChanged }: {
         {commitPush && button('commit', canCommit, commitHint, <><CommitIcon />{steps ? 'Commit' : 'Commit & Push'}</>, canCommit)}
         {commitPush && steps && button('push', canPush, pushHint, <><PushIcon />Push</>, !canCommit && canPush && (head.ahead ?? 0) > 0)}
         {blocker ? <span className="branch-actions-blocked">{hint}</span> : writing ? <span className="branch-actions-blocked">{t('ConversationBranches.writingCommitMessageThenCommitting')}</span>
-          : pushing && <span className="branch-actions-blocked" role="status">{t('ConversationBranches.pushing', { value1: head.branch })}</span>}
+          : working && <span className="branch-actions-blocked" role="status">{working}</span>}
       </div>
       {open && (
         <BranchActionDialog action={open} head={head} onClose={() => setOpen(null)}>
           {open === 'switch' && (
-            <SwitchList option={option} onPick={(ref) => void run((rpc) => rpc.call('conversations.switchBranch', { ...project, ref }), localName(ref))} onLeave={() => setOpen(null)} />
+            <SwitchList option={option} onPick={(ref) => run(() => perform((rpc) => rpc.call('conversations.switchBranch', { ...project, ref })), localName(ref))} onLeave={() => setOpen(null)} />
           )}
-          {open === 'create' && <CreateForm onCreate={(name) => void run((rpc) => rpc.call('conversations.createBranch', { ...project, name }), name)} />}
+          {open === 'create' && <CreateForm onCreate={(name) => run(() => perform((rpc) => rpc.call('conversations.createBranch', { ...project, name })), name)} />}
           {open === 'commit' && <CommitForm target={target} steps={steps} busy={busy} onCommit={(message, alsoPush) => void commit(message, alsoPush)} />}
-          {open === 'push' && <PushForm head={head} busy={busy} onPush={() => void push()} />}
+          {open === 'push' && <PushForm head={head} busy={busy} onPush={push} />}
         </BranchActionDialog>
       )}
     </>

@@ -3456,6 +3456,10 @@ export const MESSAGES = {
     "zh": "正在写提交信息，写好就提交…",
     "en": "Writing commit message, then committing…"
   },
+  "ConversationBranches.switching": {
+    "zh": "正在切换到 {branch}…",
+    "en": "Switching to {branch}…"
+  },
   "ConversationBranches.pushing": {
     "zh": "正在推送 {value1}…",
     "en": "Pushing {value1}…"

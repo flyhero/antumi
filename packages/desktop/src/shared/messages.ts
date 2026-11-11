@@ -4,7 +4,7 @@ export const MESSAGES = {
   "AutoInvestigation.hint": {"zh": "首次启用只记录当前问题，之后新发现的问题才会自动排查。排查会消耗所选 Agent 的额度。", "en": "Enabling records existing issues first. Only newly discovered issues are investigated automatically, using the selected Agent’s quota."},
   "AutoInvestigation.projects": {"zh": "排查项目（必填）", "en": "Projects (required)"},
   "AutoInvestigation.chooseAgent": {"zh": "选择 Agent", "en": "Choose an Agent"},
-  "AutoInvestigation.modeHint": {"zh": "固定使用只读／规划模式，给出原因和方案后等待你处理；所有来源同时只主动排查 1 个问题。", "en": "Uses read-only or planning mode and stops for your input. Only one automatic investigation runs actively across all sources."},
+  "AutoInvestigation.modeHint": {"zh": "Agent 按所选权限模式自行排查，不会停下来问你；只读和规划模式下遇到需要授权的操作仍会等你。只想要结论不想改代码，在补充说明里写明。所有来源同时只主动排查 1 个问题。", "en": "The Agent investigates on its own in the chosen permission mode without asking you; read-only and planning modes still wait when an action needs approval. To get a finding without code changes, say so in the note. Only one automatic investigation runs actively across all sources."},
   "AutoInvestigation.note": {"zh": "补充说明（可选）", "en": "Additional instructions (optional)"},
   "AutoInvestigation.limit": {"zh": "每日新增会话上限", "en": "New automatic conversations per day"},
   "AutoInvestigation.connectionHint": {"zh": "保存后，来源恢复同步时才会开始；已有问题不会自动排查。", "en": "Starts when source sync is active. Existing issues will not be investigated automatically."},

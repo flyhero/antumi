@@ -1,4 +1,4 @@
-import { investigationRef, SourceInvestigationService } from './source-investigation-service'
+import { investigationPermission, investigationRef, SourceInvestigationService } from './source-investigation-service'
 import { SourceInvestigationStore } from './source-investigation-store'
 import { Rejection } from './rejection'
 import { SourceUpdates, type SourceUpdateOwner } from './source-updates'
@@ -624,7 +624,7 @@ sourceInvestigations = new SourceInvestigationService(new SourceInvestigationSto
     for (const project of config.projectPaths) {
       if (!(await stat(project).catch(() => null))?.isDirectory()) throw new Error(`项目不存在：${project}`)
     }
-    await conversations.validateStartOptions(config.agent, { permissionMode: agentDescriptor(config.agent).discussionMode, model: config.model, effort: config.effort }, config.modelProvider)
+    await conversations.validateStartOptions(config.agent, { permissionMode: investigationPermission(config.agent, config.permissionMode), model: config.model, effort: config.effort }, config.modelProvider)
   },
   available: (config) => {
     if (!config.agent) return 'agent-unavailable'
@@ -646,8 +646,8 @@ sourceInvestigations = new SourceInvestigationService(new SourceInvestigationSto
     const config = run.config
     if (!config?.agent) throw new Error('请选择 Agent')
     await sources.investigate(run.provider, run.instance, run.key, {
-      agent: config.agent, projectPaths: config.projectPaths, allowBypass: false,
-      permissionMode: agentDescriptor(config.agent).discussionMode,
+      agent: config.agent, projectPaths: config.projectPaths, allowBypass: config.permissionMode === 'bypass',
+      permissionMode: investigationPermission(config.agent, config.permissionMode),
       model: config.model, effort: config.effort, modelProvider: config.modelProvider, note: config.note
     }, run.id)
   },
@@ -655,8 +655,8 @@ sourceInvestigations = new SourceInvestigationService(new SourceInvestigationSto
     const config = run.config
     const conversation = conversations.get(run.id)
     if (!config?.agent || !conversation.source) throw new Error('排查配置或来源已丢失')
-    await conversations.openInvestigation(config.agent, config.projectPaths, false, {
-      permissionMode: agentDescriptor(config.agent).discussionMode,
+    await conversations.openInvestigation(config.agent, config.projectPaths, config.permissionMode === 'bypass', {
+      permissionMode: investigationPermission(config.agent, config.permissionMode),
       model: config.model, effort: config.effort, modelProvider: config.modelProvider
     }, { source: conversation.source, title: run.title, automaticId: run.id })
     if (!conversation.preparing) {

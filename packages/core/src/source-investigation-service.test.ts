@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AutoInvestigationConfig, Conversation, type SourceIssue } from '@antumi/protocol'
 import { TaskStore } from './task-store'
 import { SourceInvestigationStore, type InvestigationRun } from './source-investigation-store'
-import { SourceInvestigationService, type InvestigationSnapshot } from './source-investigation-service'
+import { SourceInvestigationService, investigationPermission, type InvestigationSnapshot } from './source-investigation-service'
 
 const issue = (key: string): SourceIssue => ({ key, title: `Bug ${key}`, url: `https://example.test/${key}`, status: 'Open', statusCategory: 'todo', type: 'Bug', priority: null, updatedAt: null })
 const enabled = AutoInvestigationConfig.parse({ enabled: true, agent: 'cursor', projectPaths: ['/project'], note: 'Check related tests', model: 'model', effort: 'high' })
@@ -88,6 +88,14 @@ describe('automatic source investigations', () => {
     await discover('D-1', 'D-2')
     expect(launched).toHaveLength(1)
     expect(store.run(run.id)?.status).toBe('cancelled')
+  })
+
+  it('runs in the permission mode picked, on an agent with no read-only mode too', async () => {
+    await service.save('demo', 'default', { ...enabled, agent: 'antigravity', permissionMode: 'bypass' })
+    await discover('D-1', 'D-2')
+    expect(launched[0]?.config).toMatchObject({ agent: 'antigravity', permissionMode: 'bypass' })
+    expect(investigationPermission('claude', 'bypass')).toBe('bypass')
+    expect(investigationPermission('claude', undefined)).toBe('plan')
   })
 
   it('does not baseline a failed sync and ignores imported, dismissed and manually investigated discoveries', async () => {

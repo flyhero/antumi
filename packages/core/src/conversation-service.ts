@@ -362,7 +362,7 @@ export class ConversationService {
     if (!vault || !(await stat(vault.path).catch(() => null))?.isDirectory()) return undefined
     // Projects are kept resolved; the vault is given as the user wrote it.
     if (conversation.projectPaths.includes(await realpath(vault.path))) return undefined
-    return { ...vault, write: vault.write && !stage.planOnly && !conversation.workspaceReadOnly && !this.automaticInvestigation?.owns(conversation.id) }
+    return { ...vault, write: vault.write && !stage.planOnly && !conversation.workspaceReadOnly }
   }
 
   setCapacity(settings: Pick<ChatSettings, 'maxConcurrentAgents' | 'agentConcurrency'>, released: () => void): void {
@@ -938,7 +938,7 @@ export class ConversationService {
       if (!existing.sessionId && this.store.stages(existing.id).length === 0) {
         await this.validateStartOptions(agent, start, start.modelProvider)
         this.store.setModelProvider(existing.id, start.modelProvider ?? null)
-        this.store.setChatOptions(existing.id, { allowBypass: false, permissionMode: agentDescriptor(agent).discussionMode,
+        this.store.setChatOptions(existing.id, { allowBypass: allowBypass ?? false, permissionMode: start.permissionMode ?? agentDescriptor(agent).discussionMode,
           [agent]: { model: start.model, effort: start.effort } })
       }
       return this.get(existing.id)
@@ -1242,7 +1242,7 @@ export class ConversationService {
     }) ?? null
     let userMcp: AgentMcpServer[] = []
     try {
-      userMcp = this.userMcpFor?.(agent, Boolean(current.discussionId || current.workspaceReadOnly || stage.planOnly || this.automaticInvestigation?.owns(id)), current.profile?.mcpServers) ?? []
+      userMcp = this.userMcpFor?.(agent, Boolean(current.discussionId || current.workspaceReadOnly || stage.planOnly), current.profile?.mcpServers) ?? []
     } catch (error) {
       this.wire?.record(id, stage.id, [{ dir: 'note', text: JSON.stringify({ event: 'user-mcp-unavailable', error: error instanceof Error ? error.message : String(error) }) }])
     }
@@ -1357,7 +1357,6 @@ export class ConversationService {
 
   private chatStage(conversation: Conversation, stage: ConversationStage, forkAt: string | null = null, knowledgeBase?: KnowledgeBase, userMcp: readonly AgentMcpServer[] = []): ChatStage {
     const chosen = this.store.chatOptions(conversation.id)
-    if (this.automaticInvestigation?.owns(conversation.id)) { chosen.permissionMode = agentDescriptor(stage.agent).discussionMode; chosen.allowBypass = false }
     const mcp = this.mcp?.(conversation.id)
     let permissionMode = isHelper(conversation) && chosen.permissionMode && !helperAllowsMode(chosen.permissionMode) ? 'ask' : chosen.permissionMode
     const { fallbackMode, permissionModes, launch, providerModels } = adapterOf(stage.agent)
@@ -1411,7 +1410,7 @@ export class ConversationService {
   }
 
   private agentStage(conversationId: string, stage: ConversationStage): AgentStage {
-    return { sessionsRoot: this.sessionsRoot, conversationId, stageId: stage.id, planOnly: Boolean(stage.planOnly || this.get(conversationId).workspaceReadOnly || this.automaticInvestigation?.owns(conversationId)) }
+    return { sessionsRoot: this.sessionsRoot, conversationId, stageId: stage.id, planOnly: Boolean(stage.planOnly || this.get(conversationId).workspaceReadOnly) }
   }
 
   // Remembered for the conversation's next start once the stage took it: a model or effort here,

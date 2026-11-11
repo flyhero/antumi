@@ -1,11 +1,13 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import { AgentKind, AutoInvestigationConfig, agentDescriptor, type AutoInvestigationInfo, type AutoInvestigationRun, type ChatCatalog } from '@antumi/protocol'
+import { AgentKind, AutoInvestigationConfig, ChatPermissionMode, agentDescriptor, type AutoInvestigationInfo, type AutoInvestigationRun, type ChatCatalog } from '@antumi/protocol'
 import { t, getLocale } from '../i18n'
 import { perform, selectConversation, useCore } from '../core-store'
 import { useInstalledAgents } from '../installed-agents'
 import { useOccludesBrowser } from '../browser-occlusion'
 import { agentLabel } from '../labels'
+import { resolveModel } from '../agent-models'
 import { AgentModelPicker } from './AgentModelPicker'
+import { modeOptions, modeTone, startModes } from './ChatOptionsBar'
 import { ChatPicker } from './ChatPicker'
 import { ProjectPicker } from './ProjectPicker'
 import { ProviderPicker } from './ProviderPicker'
@@ -104,7 +106,7 @@ export function AutoInvestigationHistory({ provider, instance, onClose }: { prov
 export function AutoInvestigationSettings({ provider, instance, info, connected }: { provider: string; instance: string; info: AutoInvestigationInfo | undefined; connected: boolean }) {
   const id = useId()
   const rpc = useCore((s) => s.rpc)
-  const installed = useInstalledAgents().filter((agent) => agentDescriptor(agent).capabilities.readOnly !== false)
+  const installed = useInstalledAgents()
   const saved = info?.config ?? AutoInvestigationConfig.parse({})
   const [draft, setDraft] = useState(saved)
   const [busy, setBusy] = useState(false)
@@ -125,6 +127,9 @@ export function AutoInvestigationSettings({ provider, instance, info, connected 
     return () => { live = false }
   }, [rpc, draft.agent, draft.modelProvider])
   if (!rpc?.features.includes('source-auto-investigation')) return null
+  // Unpicked, it only reads, as it did before the mode could be picked.
+  const mode = draft.agent ? draft.permissionMode ?? agentDescriptor(draft.agent).discussionMode : null
+  const modes = draft.agent ? startModes(draft.agent, resolveModel(catalog, { model: draft.model }).model) : []
   const save = async () => {
     setBusy(true)
     const result = await perform((client) => client.call('sources.saveAutoInvestigation', { provider, instance, config: draft }))
@@ -140,12 +145,16 @@ export function AutoInvestigationSettings({ provider, instance, info, connected 
     {draft.enabled && <>
       <div className="settings-field"><span className="settings-field-label">{t('AutoInvestigation.projects')}</span><ProjectPicker projects={draft.projectPaths.map((path) => ({ path, worktreePath: null }))} onChange={(projectPaths) => setDraft((known) => ({ ...known, projectPaths }))} locked={busy} /></div>
       <div className="auto-investigation-options">
-        <ChatPicker size="field" label="Agent" placeholder={t('AutoInvestigation.chooseAgent')} value={draft.agent ?? ''} options={[...new Set([...installed, ...(draft.agent ? [draft.agent] : [])])].map((agent) => ({ value: agent, label: agentLabel(agent), description: agentDescriptor(agent, getLocale()).modes[agentDescriptor(agent).discussionMode]?.label }))} disabled={busy} onChange={(value) => {
+        <ChatPicker size="field" label="Agent" placeholder={t('AutoInvestigation.chooseAgent')} value={draft.agent ?? ''} options={[...new Set([...installed, ...(draft.agent ? [draft.agent] : [])])].map((agent) => ({ value: agent, label: agentLabel(agent) }))} disabled={busy} onChange={(value) => {
           const next = AgentKind.safeParse(value)
-          if (next.success) setDraft((known) => ({ ...known, agent: next.data, model: undefined, effort: undefined, modelProvider: undefined }))
+          if (next.success) setDraft((known) => ({ ...known, agent: next.data, model: undefined, effort: undefined, modelProvider: undefined, permissionMode: undefined }))
         }} />
         {draft.agent && <ProviderPicker size="field" agent={draft.agent} value={draft.modelProvider ?? null} disabled={busy} onChange={(value) => setDraft((known) => ({ ...known, modelProvider: value ?? undefined, model: undefined, effort: undefined }))} />}
         <AgentModelPicker size="field" catalog={catalog} choice={{ model: draft.model, effort: draft.effort }} disabled={busy} onChange={(choice) => setDraft((known) => ({ ...known, model: choice.model, effort: choice.effort }))} />
+        {draft.agent && mode && <ChatPicker size="field" label={t('ChatHandoff.permissionMode')} placeholder={t('ChatHandoff.permissionMode')} value={mode} options={modeOptions(draft.agent, modes.includes(mode) ? modes : [mode, ...modes], modes)} tone={modeTone(mode)} disabled={busy} onChange={(value) => {
+          const next = ChatPermissionMode.safeParse(value)
+          if (next.success) setDraft((known) => ({ ...known, permissionMode: next.data }))
+        }} />}
       </div>
       <p className="settings-field-hint">{t('AutoInvestigation.modeHint')}</p>
       <div className="settings-field"><label className="settings-field-label" htmlFor={`${id}-note`}>{t('AutoInvestigation.note')}</label><textarea id={`${id}-note`} className="input settings-textarea" rows={3} maxLength={100000} value={draft.note} onChange={(event) => setDraft((known) => ({ ...known, note: event.target.value }))} /></div>

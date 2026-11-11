@@ -588,7 +588,7 @@ export class SourceService {
       this.updateSink?.({ kind: 'conversation', id: conversationId }, source, snapshot)
       await conversations.beginInvestigation(conversationId, {
         title,
-        brief: investigationBrief(source, snapshot, images, later ? text.deferred : 0),
+        brief: investigationBrief(source, snapshot, images, later ? text.deferred : 0, Boolean(auto && this.automatic?.owns(conversationId))),
         readable: images.flatMap((image) => (image.path ? [image.path] : []))
       }, (pending?.note ?? auto?.config?.note.trim()) || `排查 ${source.name} ${source.key}：${title}`, pending?.references, pending?.images, auto ? investigationRef(auto.id) : undefined)
       if (auto) this.automatic?.submitted(auto.id)

@@ -84,7 +84,7 @@ const UsageParams = z.object({ windowKinds: z.array(z.string()).optional() })
 // chat-images: conversations.send takes images; an older core would drop them unnoticed.
 // source-investigate-images: sources.investigate attaches uploaded images to the first instruction.
 // source-issue-preview: reads an issue and its comments without importing or investigating it.
-// source-auto-investigation: durable discovery, bounded automatic read-only investigations and history.
+// source-auto-investigation: durable discovery, bounded automatic investigations in a picked permission mode, and history.
 // conversation-projects: a conversation's additional projects can change (conversations.setAdditionalProjects).
 // browser: core hosts a browser for chat agents (the browser.* methods).
 // usage-limit: core continues a chat whose turn hit a usage limit once it lifts (usageLimit items).

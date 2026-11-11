@@ -3,6 +3,7 @@ import { SourceCommentState } from './source-comments'
 import { TextTranslations } from './localization'
 import { TaskImage } from './attachments'
 import { AgentKind } from './agent'
+import { ChatPermissionMode } from './chat'
 
 // Where tasks can come from besides being written by hand: an issue tracker, reached through a
 // source provider. A provider may be configured more than once (two Jira sites); each is an instance.
@@ -100,6 +101,8 @@ export const AutoInvestigationConfig = z.object({
   model: z.string().min(1).max(200).optional(),
   effort: z.string().min(1).max(100).optional(),
   modelProvider: z.string().min(1).max(100).optional(),
+  // Left out, the agent's discussion mode: it only reads, as before the mode could be picked.
+  permissionMode: ChatPermissionMode.optional(),
   note: z.string().trim().max(100000).default(''),
   dailyLimit: z.number().int().min(1).max(100).default(10)
 })

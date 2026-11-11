@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import {
-  AutoInvestigationConfig, AutoInvestigationRun, agentDescriptor,
+  AutoInvestigationConfig, AutoInvestigationRun, agentDescriptor, type AgentKind, type ChatPermissionMode,
   type AutoInvestigationInfo, type AutoInvestigationSummary, type Conversation, type SourceIssue
 } from '@antumi/protocol'
 import { Rejection } from './rejection'
@@ -31,6 +31,9 @@ const FATAL = new Set(['invalid-configuration', 'source-not-found', 'source-forb
 const beginAt = (at: number) => { const d = new Date(at); d.setHours(0, 0, 0, 0); return d.getTime() }
 const resetAt = (at: number) => { const d = new Date(at); d.setHours(24, 0, 0, 0); return d.getTime() }
 export const investigationRef = (id: string) => `auto-investigate:${id}`
+// The mode an automatic investigation runs in: the one picked, else where the agent only reads.
+export const investigationPermission = (agent: AgentKind, mode: ChatPermissionMode | undefined): ChatPermissionMode =>
+  mode ?? agentDescriptor(agent).discussionMode
 
 // A durable discovery ledger and one foreground investigation slot, separate from unattended runs.
 export class SourceInvestigationService {
@@ -93,7 +96,6 @@ export class SourceInvestigationService {
   async save(provider: string, instance: string, config: AutoInvestigationConfig): Promise<void> {
     if (config.enabled) {
       if (!config.agent || config.projectPaths.length === 0) throw new Rejection('invalid-params', '请选择排查项目和 Agent')
-      if (agentDescriptor(config.agent).capabilities.readOnly === false) throw new Rejection('agent-unavailable', '该 Agent 不支持只读排查')
       await this.deps.validate(config)
     }
     const previous = this.store.setting(provider, instance)

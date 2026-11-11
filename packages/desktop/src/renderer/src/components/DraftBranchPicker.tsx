@@ -23,6 +23,25 @@ export function useProjectBranches(project: string | null): { options: ProjectBr
   return { options, refresh }
 }
 
+// Which of the picked projects are not git repos, by what core says of each; one it has not
+// answered for yet counts as git, so the choice does not flicker away while it is asked.
+export function useNonGitProjects(projects: readonly string[]): ReadonlySet<string> {
+  const rpc = useCore((s) => s.rpc)
+  const [known, setKnown] = useState<Record<string, boolean>>({})
+  const key = projects.join('\n')
+  useEffect(() => {
+    if (!rpc) return
+    let live = true
+    for (const path of projects) {
+      void rpc.call('projects.branches', { path }).then((next) => {
+        if (live) setKnown((current) => ({ ...current, [path]: next.git }))
+      }, () => {})
+    }
+    return () => { live = false }
+  }, [rpc, key])
+  return new Set(projects.filter((path) => known[path] === false))
+}
+
 // Which branch a new conversation starts on, beside its primary project. With a worktree, the
 // branch its own is made from; without, the one the project is switched to before the agent
 // starts. picked: a full ref, or null for the branch the project has checked out.

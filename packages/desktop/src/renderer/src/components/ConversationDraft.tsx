@@ -26,7 +26,7 @@ import { defaultStartMode, effortLabel, modeOptions, modeTone, startModes } from
 import { ChatModelPicker, ChatPicker } from './ChatPicker'
 import { AgentIcon, CloseIcon, EnterIcon, ExternalIcon, SourceIcon } from './icons'
 import { ProjectPicker } from './ProjectPicker'
-import { DraftBranchPicker, useProjectBranches } from './DraftBranchPicker'
+import { DraftBranchPicker, useNonGitProjects, useProjectBranches } from './DraftBranchPicker'
 import { composerDraft, EMPTY_DRAFT, saveComposerDraft } from '../composer-drafts'
 import { inboxKey, investigationMode, rememberInvestigationProjects } from '../source-inboxes'
 import { rememberedPick, type DraftChoice } from '../draft-choices'
@@ -95,11 +95,14 @@ export function ConversationDraft() {
   const imagesSupported = chatImagesSupported && (!issue || (rpc?.features.includes('source-investigate-images') ?? false))
   const mentionsSupported = useFileMentionsSupported()
   const pastedTextSupported = usePastedTextSupported()
-  const worktreesSupported = useConversationWorktreesSupported()
-  const inWorktree = worktree && worktreesSupported && projectPaths.length > 0
   // The primary project's branch: where its worktree starts, or what it is switched to; null keeps
   // the one checked out. Picked again for each primary.
   const startBranchSupported = useStartBranchSupported()
+  // A worktree needs every project to be a git repo; core without projects.branches cannot say.
+  const nonGit = useNonGitProjects(startBranchSupported ? projectPaths : [])
+  const worktreesSupported = useConversationWorktreesSupported()
+  const worktreeOffered = worktreesSupported && projectPaths.length > 0 && nonGit.size === 0
+  const inWorktree = worktree && worktreeOffered
   const primary = startBranchSupported ? (projectPaths[0] ?? null) : null
   const branches = useProjectBranches(primary)
   const [branch, setBranch] = useState<string | null>(null)
@@ -315,7 +318,7 @@ export function ConversationDraft() {
                   onPick={setBranch}
                 />
               )}
-              {projectPaths.length > 0 && worktreesSupported && (
+              {worktreeOffered && (
                 <label
                   className="chat-draft-worktree"
                   data-tooltip-side="top"

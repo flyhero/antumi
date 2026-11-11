@@ -98,6 +98,8 @@ export type RpcConnection = RpcClient & {
   closed: Promise<void>
   // What the core said it supports beyond the protocol version (see CORE_FEATURES).
   features: readonly string[]
+  // Core's home folder, where core said (see system.hello).
+  home?: { path: string; windows: boolean }
 }
 
 export function connectRpc(url: string): Promise<RpcConnection> {
@@ -125,7 +127,7 @@ export function connectRpc(url: string): Promise<RpcConnection> {
             `protocol mismatch: client ${PROTOCOL_VERSION}, core ${hello.protocolVersion}`
           )
         }
-        resolve({ ...client, close: () => socket.close(), closed, features: hello.features ?? [] })
+        resolve({ ...client, close: () => socket.close(), closed, features: hello.features ?? [], ...(hello.home ? { home: hello.home } : {}) })
       } catch (error) {
         socket.close()
         reject(error instanceof Error ? error : new Error(String(error)))

@@ -236,7 +236,10 @@ export const rpcMethods = {
     result: z.object({
       protocolVersion: z.number().int(),
       serverVersion: z.string(),
-      features: z.array(z.string()).optional()
+      features: z.array(z.string()).optional(),
+      // The home folder of the user core runs as, which project paths are under: core may run on
+      // another machine than the app. Older cores leave it out.
+      home: z.object({ path: z.string(), windows: z.boolean() }).optional()
     })
   },
   'system.awakeStatus': { params: z.object({}), result: ComputerAwakeStatus },

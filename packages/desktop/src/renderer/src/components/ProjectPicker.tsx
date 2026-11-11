@@ -1,7 +1,7 @@
 import { t, tr } from '../i18n'
 import { useCallback, useState, type FormEvent } from 'react'
 import { MAX_TASK_REPOS, type TaskRepo } from '@antumi/protocol'
-import { perform } from '../core-store'
+import { perform, useCore } from '../core-store'
 import { canPickFolder, pickFolder } from '../desktop-bridge'
 import { ContextMenu, MenuItem, menuPoint, type MenuPoint } from './ContextMenu'
 import { Popover } from './Popover'
@@ -25,6 +25,23 @@ export function primaryProjectName(paths: readonly string[]): string {
 export function parentDir(projectPath: string): string | undefined {
   const parent = projectPath.replace(/[\\/]+[^\\/]+[\\/]*$/, '')
   return parent && parent !== projectPath ? parent : undefined
+}
+
+// Where a project is, for a row that already shows its name: the folder holding it, with core's
+// home as ~ except on Windows, where few would read ~ as a folder. The full path is the row's tooltip.
+export function projectLocation(projectPath: string, home?: { path: string; windows: boolean }): string {
+  const parent = projectPath.replace(/[\\/]+[^\\/]+[\\/]*$/, '')
+  if (parent === projectPath) return projectPath
+  if (parent === '') return projectPath.startsWith('\\') ? '\\' : '/'
+  if (/^[a-z]:$/i.test(parent)) return `${parent}\\`
+  const own = home && !home.windows ? home.path.replace(/\/+$/, '') : ''
+  if (own && (parent === own || parent.startsWith(`${own}/`))) return `~${parent.slice(own.length)}`
+  return parent
+}
+
+export function useProjectLocation(): (projectPath: string) => string {
+  const home = useCore((s) => s.rpc?.home)
+  return (projectPath) => projectLocation(projectPath, home)
 }
 
 // Only reachable in a plain browser, where there is no native folder dialog.
@@ -64,6 +81,7 @@ function ProjectMenu({
   onForget: (projectPath: string) => void
   onClose: () => void
 }) {
+  const location = useProjectLocation()
   return (
     <Popover label={t('ProjectPicker.addProject')} onClose={onClose}>
       {recent.length > 0 && (
@@ -75,7 +93,7 @@ function ProjectMenu({
                 <button type="button" className="menu-item" title={projectPath} onClick={() => onAdd(projectPath)}>
                   <ProjectIcon path={projectPath} />
                   <span className="menu-item-name">{projectName(projectPath)}</span>
-                  <span className="menu-item-path mono">{projectPath}</span>
+                  <span className="menu-item-path project-location">{location(projectPath)}</span>
                 </button>
                 <button
                   type="button"

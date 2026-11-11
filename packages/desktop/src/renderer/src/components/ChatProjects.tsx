@@ -7,7 +7,7 @@ import { reasonText } from '../labels'
 import { ContextMenu, type MenuPoint } from './ContextMenu'
 import { CheckIcon, ChevronDownIcon } from './icons'
 import { ProjectIcon } from './ProjectIcon'
-import { parentDir, projectName } from './ProjectPicker'
+import { parentDir, projectName, useProjectLocation } from './ProjectPicker'
 
 // Why the additional projects cannot change right now, as the menu says it.
 function blockerNote(conversation: Conversation, supported: boolean): string | null {
@@ -26,6 +26,7 @@ function sameProjects(a: readonly string[], b: readonly string[]): boolean {
 // Ticks wait for the menu to close, so picking several restarts the agent once and the rows hold still.
 export function ChatProjects({ conversation }: { conversation: Conversation }) {
   const supported = useCore((s) => s.rpc?.features.includes('conversation-projects') ?? false)
+  const location = useProjectLocation()
   const button = useRef<HTMLButtonElement>(null)
   const [at, setAt] = useState<MenuPoint | null>(null)
   const [recent, setRecent] = useState<readonly string[]>([])
@@ -101,7 +102,7 @@ export function ChatProjects({ conversation }: { conversation: Conversation }) {
           <div className="menu-item chat-projects-item chat-projects-primary" title={primary}>
             <ProjectIcon path={primary} />
             <span className="menu-item-name">{projectName(primary)}</span>
-            <span className="menu-item-path mono">{primary}</span>
+            <span className="menu-item-path project-location">{location(primary)}</span>
           </div>
           <div className="menu-separator" role="separator" />
           <div className="chat-picker-heading">{t('ChatProjects.additionalProjects')}</div>
@@ -120,7 +121,7 @@ export function ChatProjects({ conversation }: { conversation: Conversation }) {
               >
                 <ProjectIcon path={each} />
                 <span className="menu-item-name">{projectName(each)}</span>
-                <span className="menu-item-path mono">{each}</span>
+                <span className="menu-item-path project-location">{location(each)}</span>
                 {on && <span className="menu-check"><CheckIcon /></span>}
               </button>
             )

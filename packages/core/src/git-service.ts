@@ -281,10 +281,16 @@ export class GitService {
       const after = await projectHead(dir)
       const moved = ['switch', 'detach', 'merge', 'rebase', 'pull', 'continue', 'abort', 'resolve'].includes(action.kind) || (action.kind === 'update' && action.ref === `refs/heads/${status.branch}`) || (action.kind === 'create' && action.checkout) || (action.kind === 'rename' && action.ref === `refs/heads/${status.branch}`)
       if (moved) {
-        for (const conversation of this.conversations.listAll()) {
+        // Every conversation in this checkout hears of it. Conversations share folders, so each
+        // folder is asked for its checkout once, all at the same time.
+        const conversations = this.conversations.listAll()
+        const root = await gitOrNull(dir, ['rev-parse', '--show-toplevel'])
+        const folders = [...new Set(conversations.flatMap((conversation) => conversation.projectPaths))]
+        const roots = await Promise.all(folders.map((folder) => gitOrNull(folder, ['rev-parse', '--show-toplevel'])))
+        const here = new Set(folders.filter((_, index) => roots[index] === root))
+        for (const conversation of conversations) {
           for (const project of conversation.projectPaths) {
-            const root = await gitOrNull(project, ['rev-parse', '--show-toplevel'])
-            if (root === await gitOrNull(dir, ['rev-parse', '--show-toplevel'])) {
+            if (here.has(project)) {
               await this.conversations.recordGitChange(conversation.id, project, after.branch ?? '分离 HEAD', action.kind === 'switch' || action.kind === 'detach' || (action.kind === 'create' && action.checkout))
             }
           }

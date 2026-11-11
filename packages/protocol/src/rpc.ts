@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { AutoInvestigationConfig, AutoInvestigationInfo, AutoInvestigationPage, AutoInvestigationRun } from './source'
 import { SourceCommentOptions, SourceCommentPage, SourceDeliveryInfo, SourceUpdateTarget, SourceUpdateSummary, SourceUpdates } from './source-comments'
 import { BrowserDownload, BrowserDownloadAction, BrowserUploadOptions } from './browser'
 import { ChatReference } from './chat-reference'
@@ -83,6 +84,7 @@ const UsageParams = z.object({ windowKinds: z.array(z.string()).optional() })
 // chat-images: conversations.send takes images; an older core would drop them unnoticed.
 // source-investigate-images: sources.investigate attaches uploaded images to the first instruction.
 // source-issue-preview: reads an issue and its comments without importing or investigating it.
+// source-auto-investigation: durable discovery, bounded automatic read-only investigations and history.
 // conversation-projects: a conversation's additional projects can change (conversations.setAdditionalProjects).
 // browser: core hosts a browser for chat agents (the browser.* methods).
 // usage-limit: core continues a chat whose turn hit a usage limit once it lifts (usageLimit items).
@@ -128,7 +130,7 @@ const UsageParams = z.object({ windowKinds: z.array(z.string()).optional() })
 // pasted-text: a long paste is uploaded as an attachment and kept as a text file the conversation's
 //   agent reads without asking (attachments.commitText).
 // pull-request-base-branches: lists the remote branches a task's PR can target.
-export const CORE_FEATURES = ['chat-references', 'conversation-references', 'agent-profiles', 'pets', 'plugins', 'plugin-recommendations', 'chat-options', 'chat-images', 'task-start', 'worktrees', 'conversation-branches', 'conversation-commit-push', 'find-file', 'conversation-projects', 'browser', 'browser-collaboration', 'browser-file-transfers', 'keep-awake', 'terminal-commands', 'bookmarks', 'browser-history', 'usage-limit', 'agent-stats', 'conversation-stats', 'prompt-suggestions', 'environment', 'conversation-pin', 'schedules', 'chat-commands', 'file-mentions', 'plan-modes', 'agent-terminals', 'schedule-images', 'dashboard', 'task-conversation-summaries', 'routines', 'ports', 'conversation-fork', 'conversation-configuration', 'conversation-commit-steps', 'conversation-worktrees', 'conversation-start-branch', 'wire-log', 'file-preview', 'deferred-conversation-start', 'agent-cli-installation', 'agent-cli-maintenance', 'task-launch-options', 'git-management', 'git-commit-branches', 'task-handoff', 'handoff-model', 'handoff-mode', 'task-launch', 'discussions', 'discussion-members', 'discussion-projects', 'discussion-topics', 'discussion-requirements', 'task-cancel', 'task-redo-in-place', 'conversation-archive', 'discussion-archive', 'translate', 'commit-message', 'squads', 'squad-leader-planning', 'conversation-todos', 'knowledge-base', 'knowledge-base-kind', 'skills-library', 'skills-search', 'skills-activation', 'mcp-servers', 'source-investigate', 'source-investigate-images', 'source-issue-preview', 'todo-overview', 'conversation-helper', 'small-model-stats', 'terminal-color-prompt', 'git-commit-actions', 'file-editor', 'project-config', 'project-config-edit', 'model-providers', 'git-update', 'git-push-target', 'git-cherry-pick', 'git-amend', 'git-force-push', 'task-auto-run', 'session-import', 'agent-accounts', 'usage-analytics', 'task-references', 'release-idle-chats', 'project-star', 'git-favorites', 'project-files', 'git-projects', 'git-branch-browser', 'git-rebase', 'direct-agent-calls', 'discussion-formats', 'discussion-format-suggest', 'agent-call-resume', 'delegation-worktree', 'pasted-text', 'task-conversation-rows', 'inline-visualizations', 'archived-worktrees', 'model-provider-models', 'skills-local', 'model-provider-headers', 'provider-model-images', 'source-comments-v1', 'pull-requests', 'pull-request-base-branches', 'browser-sites', 'chat-command-pins'] as const
+export const CORE_FEATURES = ['source-auto-investigation', 'chat-references', 'conversation-references', 'agent-profiles', 'pets', 'plugins', 'plugin-recommendations', 'chat-options', 'chat-images', 'task-start', 'worktrees', 'conversation-branches', 'conversation-commit-push', 'find-file', 'conversation-projects', 'browser', 'browser-collaboration', 'browser-file-transfers', 'keep-awake', 'terminal-commands', 'bookmarks', 'browser-history', 'usage-limit', 'agent-stats', 'conversation-stats', 'prompt-suggestions', 'environment', 'conversation-pin', 'schedules', 'chat-commands', 'file-mentions', 'plan-modes', 'agent-terminals', 'schedule-images', 'dashboard', 'task-conversation-summaries', 'routines', 'ports', 'conversation-fork', 'conversation-configuration', 'conversation-commit-steps', 'conversation-worktrees', 'conversation-start-branch', 'wire-log', 'file-preview', 'deferred-conversation-start', 'agent-cli-installation', 'agent-cli-maintenance', 'task-launch-options', 'git-management', 'git-commit-branches', 'task-handoff', 'handoff-model', 'handoff-mode', 'task-launch', 'discussions', 'discussion-members', 'discussion-projects', 'discussion-topics', 'discussion-requirements', 'task-cancel', 'task-redo-in-place', 'conversation-archive', 'discussion-archive', 'translate', 'commit-message', 'squads', 'squad-leader-planning', 'conversation-todos', 'knowledge-base', 'knowledge-base-kind', 'skills-library', 'skills-search', 'skills-activation', 'mcp-servers', 'source-investigate', 'source-investigate-images', 'source-issue-preview', 'todo-overview', 'conversation-helper', 'small-model-stats', 'terminal-color-prompt', 'git-commit-actions', 'file-editor', 'project-config', 'project-config-edit', 'model-providers', 'git-update', 'git-push-target', 'git-cherry-pick', 'git-amend', 'git-force-push', 'task-auto-run', 'session-import', 'agent-accounts', 'usage-analytics', 'task-references', 'release-idle-chats', 'project-star', 'git-favorites', 'project-files', 'git-projects', 'git-branch-browser', 'git-rebase', 'direct-agent-calls', 'discussion-formats', 'discussion-format-suggest', 'agent-call-resume', 'delegation-worktree', 'pasted-text', 'task-conversation-rows', 'inline-visualizations', 'archived-worktrees', 'model-provider-models', 'skills-local', 'model-provider-headers', 'provider-model-images', 'source-comments-v1', 'pull-requests', 'pull-request-base-branches', 'browser-sites', 'chat-command-pins'] as const
 // session-import: core lists the sessions agents ran outside Antumi and imports them as conversations (sessionImports.*).
 // agent-accounts: Claude and Codex sign in to several accounts, one active each, and a usage limit
 // moves the agent to the next with quota (accounts.*); usage readings name their account.
@@ -803,6 +805,10 @@ export const rpcMethods = {
   // Stops its members and deletes it with their conversations; their folders stay.
   'discussions.delete': { params: DiscussionRef, result: Ok },
   'sources.list': { params: z.object({}), result: z.array(SourceDescriptor) },
+  'sources.saveAutoInvestigation': { params: InstanceRef.extend({ config: AutoInvestigationConfig }), result: SourceDescriptor },
+  'sources.autoInvestigations': { params: InstanceRef.extend({ cursor: z.string().optional(), limit: z.number().int().min(1).max(100).default(30) }), result: AutoInvestigationPage },
+  'sources.retryAutoInvestigation': { params: ConversationRef, result: AutoInvestigationRun },
+  'sources.cancelAutoInvestigation': { params: ConversationRef, result: AutoInvestigationRun },
   // Non-secret settings only; changing one marked bindsCredential signs the instance out.
   'sources.saveSettings': {
     params: InstanceRef.extend({
@@ -955,6 +961,7 @@ export const rpcNotifications = {
   'plugins.changed': z.object({ plugins: z.array(PluginInfo) }),
   'pets.changed': PetLibraryState,
   'sources.listChanged': z.object({ sources: z.array(SourceDescriptor) }),
+  'sources.autoInvestigationChanged': InstanceRef.extend({ info: AutoInvestigationInfo, run: AutoInvestigationRun.optional() }),
   'sources.updatesChanged': z.object({ summaries: z.array(SourceUpdateSummary) }),
   'sources.inboxChanged': z.object({ inbox: SourceInbox }),
   // Sent only to the connection that started the flow.

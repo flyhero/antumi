@@ -13,7 +13,7 @@ const SELECT = `SELECT id, title, title_locked AS titleLocked, agent, workspace_
   task_id AS taskId, pinned_at AS pinnedAt, archived_at AS archivedAt, routine_id AS routineId, forked_from_id AS forkedFromId,
   discussion_id AS discussionId, squad_run_id AS squadRunId, workspace_read_only AS workspaceReadOnly, helper_of AS helperOf, source,
   agent_profile AS profile, parent_conversation_id AS parentConversationId, agent_call_id AS agentCallId,
-  model_provider AS modelProvider,
+  model_provider AS modelProvider, auto_investigation_id AS autoInvestigationId,
   (SELECT context_usage FROM conversation_stages WHERE conversation_id = conversations.id ORDER BY started_at DESC, rowid DESC LIMIT 1) AS context
   FROM conversations`
 const STAGE_SELECT = `SELECT id, conversation_id AS conversationId, agent, provider_session_id AS providerSessionId,
@@ -118,16 +118,18 @@ export class ConversationStore {
     routine: { id: string; title: string } | null = null,
     // The group chat it is a member's part of, likewise named for good.
     discussion: { id: string; title: string } | null = null,
-    helperOf: string | null = null
+    helperOf: string | null = null,
+    investigation: { source: TaskSource; title: string; automaticId?: string } | null = null
   ): Conversation {
     const now = this.now()
     // A task's conversation is named after it for good: its title is the task's.
-    const named = task ?? routine ?? discussion ?? (helperOf ? { title: '小助手' } : null)
+    const named = task ?? routine ?? discussion ?? investigation ?? (helperOf ? { title: '小助手' } : null)
     this.db.prepare(`INSERT INTO conversations
-      (id, title, title_locked, agent, workspace_path, project_paths, project_starts, managed_workspace, task_id, routine_id, discussion_id, helper_of, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+      (id, title, title_locked, agent, workspace_path, project_paths, project_starts, managed_workspace, task_id, routine_id, discussion_id, helper_of, created_at, updated_at, source, auto_investigation_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
       id, named?.title ?? '新会话', Number(named !== null), agent, workspacePath, JSON.stringify(projectPaths), JSON.stringify(projectStarts),
-      Number(projectPaths.length === 0), task?.id ?? null, routine?.id ?? null, discussion?.id ?? null, helperOf, now, now)
+      Number(projectPaths.length === 0), task?.id ?? null, routine?.id ?? null, discussion?.id ?? null, helperOf, now, now,
+      investigation ? JSON.stringify({ ...investigation.source, title: investigation.title }) : null, investigation?.automaticId ?? null)
     return this.get(id)!
   }
 

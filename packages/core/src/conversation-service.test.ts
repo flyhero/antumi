@@ -905,6 +905,40 @@ describe('ConversationService', () => {
     expect(service.messages(opened.id).filter((message) => message.role === 'user').map((message) => message.text)).toEqual(['排查 Demo D-1：Login fails'])
   })
 
+  it('persists automatic investigation identity at creation and reuses its opening reference', async () => {
+    const id = randomUUID()
+    const source = { provider: 'demo', instance: 'default', name: 'Demo', key: 'D-1', url: 'https://demo.test/D-1' }
+    service.setAutomaticInvestigation({ owns: (candidate) => candidate === id, takeover: () => {} })
+    const opened = await service.openInvestigation('claude', [], false, { permissionMode: 'plan' }, { source, title: 'Crash', automaticId: id })
+    expect(opened).toMatchObject({ id, autoInvestigationId: id, source: { key: 'D-1' } })
+    const again = await service.openInvestigation('claude', [], false, { permissionMode: 'plan' }, { source, title: 'Crash', automaticId: id })
+    expect(again.id).toBe(id)
+    expect(store.list()).toHaveLength(1)
+    const started = await service.beginInvestigation(id, { title: 'Crash', brief: '# Issue', readable: [] }, 'Find the cause', undefined, [], `auto-investigate:${id}`)
+    expect(service.sentRef(id, `auto-investigate:${id}`, 0)).toBe(true)
+    expect(JSON.stringify(daemon.written(started.sessionId!))).toContain('Find the cause')
+    expect(daemon.spawns[0]?.args).toContain('plan')
+    expect(daemon.spawns[0]?.args).not.toContain('--allow-dangerously-skip-permissions')
+  })
+
+  it('uses a reconciled empty Agent process for an automatic opening that never left core', async () => {
+    const id = randomUUID()
+    const source = { provider: 'demo', instance: 'default', name: 'Demo', key: 'D-1', url: 'https://demo.test/D-1' }
+    service.setAutomaticInvestigation({ owns: (candidate) => candidate === id, takeover: () => {} })
+    const empty = await service.create('claude', [], false, { permissionMode: 'plan' }, null, id)
+    // The checkpoint after spawn/attach, before the opening instruction was sent.
+    store.setSource(id, source)
+    const checkpoint = new DatabaseSync(path.join(root, 'antumi.db'))
+    checkpoint.prepare('UPDATE conversations SET auto_investigation_id=? WHERE id=?').run(id, id)
+    checkpoint.close()
+    expect(daemon.spawns).toHaveLength(1)
+    expect(service.sourceDeliveryReceipt(id, `auto-investigate:${id}`, 'uncertain')).toBeNull()
+    const started = await service.beginInvestigation(id, { title: 'Crash', brief: '# Recovered context', readable: [] }, 'Investigate', undefined, [], `auto-investigate:${id}`)
+    expect(started.sessionId).toBe(empty.sessionId)
+    expect(daemon.spawns).toHaveLength(1)
+    expect(service.sentRef(id, `auto-investigate:${id}`, 0)).toBe(true)
+  })
+
   it('attaches user images to the investigation instruction alongside its issue handoff', async () => {
     const source = { provider: 'demo', instance: 'default', name: 'Demo', key: 'D-1', url: 'https://demo.test/issues/D-1' }
     const image = await attachmentsAt(root).put(pngBytes(4, 3))

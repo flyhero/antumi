@@ -1,3 +1,6 @@
+import { investigationRef, SourceInvestigationService } from './source-investigation-service'
+import { SourceInvestigationStore } from './source-investigation-store'
+import { Rejection } from './rejection'
 import { SourceUpdates, type SourceUpdateOwner } from './source-updates'
 import { SourceUpdateStore } from './source-update-store'
 import { AgentProfileStore } from './agent-profile-store'
@@ -7,7 +10,7 @@ import { randomBytes } from 'node:crypto'
 import { mkdir, rm, stat } from 'node:fs/promises'
 import path from 'node:path'
 import os from 'node:os'
-import { untrustedSource, AGENT_KINDS, agentDescriptor, PROTOCOL_VERSION, quotaVerdict, usageAccount, usageReadable, type AgentKind, type AgentUsage, type ChatItem } from '@antumi/protocol'
+import { untrustedSource, AGENT_KINDS, agentReadiness, agentDescriptor, PROTOCOL_VERSION, quotaVerdict, usageAccount, usageReadable, type AgentKind, type AgentUsage, type ChatItem } from '@antumi/protocol'
 import packageJson from '../package.json' with { type: 'json' }
 import { removeCoreEndpoint, antumiPaths, writeCoreEndpoint } from '@antumi/protocol/node'
 import { adapterOf } from './agents'
@@ -108,6 +111,7 @@ const turns = new ChatTurnStore(paths.database, {
 const smallModels = new SmallModelStore(paths.database)
 smallModels.recoverQuick()
 const attachments = new AttachmentStore(paths.attachments)
+let sourceInvestigations: SourceInvestigationService | undefined
 let sourceUpdates: SourceUpdates | undefined
 let server: RpcServer | null = null
 let awake: ComputerAwakeService | null = null
@@ -130,8 +134,10 @@ const conversations = new ConversationService(
   conversationsStore, daemon, paths.sessions,
   (event) => {
     if (event.type === 'changed' || event.type === 'deleted' || (event.type === 'chatItems' && event.items.some((item) => ['state', 'user', 'turn'].includes(item.kind)))) queueMicrotask(() => sourceUpdates?.changed())
+    if (event.type === 'changed' || event.type === 'deleted' || event.type === 'chatItems') queueMicrotask(() => sourceInvestigations?.changed())
     const watchers = (id: string) => [...(server?.connections ?? [])].filter((c) => c.watching.has(id))
     if (event.type === 'changed') {
+      if (event.conversation.autoInvestigationId) sourceInvestigations?.created(event.conversation.id, event.conversation.createdAt)
       server?.broadcast('conversations.changed', { conversation: event.conversation })
       // A task's conversation says whether its agent waits on the user.
       service.chatChanged(event.conversation)
@@ -142,6 +148,7 @@ const conversations = new ConversationService(
       profiles.tick()
       refreshAwake()
     } else if (event.type === 'deleted') {
+      sourceInvestigations?.deleted(event.id)
       server?.broadcast('conversations.deleted', { id: event.id })
       smallModels.interruptConversation(event.id)
       schedules.conversationDeleted(event.id)
@@ -158,7 +165,8 @@ const conversations = new ConversationService(
         unpriced: Boolean(conversations.stages(helper.id).find((stage) => stage.id === event.stageId)?.route)
       })
     } else if (event.type === 'chatItems') {
-      limits.observe(event.conversationId, event.items)
+      if (!sourceInvestigations?.managed(event.conversationId)) limits.observe(event.conversationId, event.items)
+      else if (event.items.some((item) => item.kind === 'usageLimit')) sourceInvestigations.waiting(event.conversationId, 'quota-exhausted')
       schedules.observe(event.conversationId, event.items)
       turns.observe(event.conversationId, event.items)
       smallModels.observe(event.items)
@@ -521,7 +529,7 @@ const chatSettings = new ChatSettingsStore(paths.chatSettings, (settings) => {
   conversations.setUserBrowser(settings.userBrowser ?? true)
   conversations.setUserTodos(settings.userTodos ?? true)
   conversations.setKnowledgeBase(settings.knowledgeBase ?? null)
-  conversations.setCapacity(settings, () => { void schedules.tick(); squads.tick(); profiles.tick() })
+  conversations.setCapacity(settings, () => { void schedules.tick(); squads.tick(); profiles.tick(); sourceInvestigations?.changed() })
   wire.setEnabled(settings.wireLog ?? false)
   void autoArchive.sweep()
   void worktreeAutoClean.sweep()
@@ -565,7 +573,7 @@ conversations.setTitleNaming(initialChatSettings.titleNaming)
 conversations.setUserBrowser(initialChatSettings.userBrowser)
 conversations.setUserTodos(initialChatSettings.userTodos)
 conversations.setKnowledgeBase(initialChatSettings.knowledgeBase)
-conversations.setCapacity(initialChatSettings, () => { void schedules.tick(); squads.tick(); profiles.tick() })
+conversations.setCapacity(initialChatSettings, () => { void schedules.tick(); squads.tick(); profiles.tick(); sourceInvestigations?.changed() })
 wire.setEnabled(initialChatSettings.wireLog)
 
 daemon.onEvent((event) => {
@@ -604,9 +612,67 @@ daemon.onConnect(() => {
       void environment.check(true).catch((error: unknown) => console.error('[antumi-core] agent discovery failed', error))
       // What came due while core or the daemon was away goes now, not at the next tick.
       await schedules.tick()
+      sourceInvestigations?.reconciled()
     })
     .catch((error) => console.error('[antumi-core] reconcile failed', error))
 })
+
+sourceInvestigations = new SourceInvestigationService(new SourceInvestigationStore(paths.database), {
+  snapshot: (provider, instance) => sources.automaticSnapshot(provider, instance),
+  validate: async (config) => {
+    if (!config.agent) throw new Error('请选择 Agent')
+    for (const project of config.projectPaths) {
+      if (!(await stat(project).catch(() => null))?.isDirectory()) throw new Error(`项目不存在：${project}`)
+    }
+    await conversations.validateStartOptions(config.agent, { permissionMode: agentDescriptor(config.agent).discussionMode, model: config.model, effort: config.effort }, config.modelProvider)
+  },
+  available: (config) => {
+    if (!config.agent) return 'agent-unavailable'
+    const check = environment.current()?.checks.find((entry) => entry.tool === config.agent)
+    if (!check || check.status !== 'ok' || check.problem || chatSettings.current().disabledAgents?.includes(config.agent)) return 'agent-unavailable'
+    if (config.modelProvider && !modelProviders.resolve(config.modelProvider)) return 'model-provider-unavailable'
+    if (!config.modelProvider && agentReadiness(config.agent, environment.current(), chatSettings.current().disabledAgents, []).state !== 'ready') return 'agent-unavailable'
+    if (!config.modelProvider && quotaVerdict(standingUsage.list().find((entry) => entry.agent === config.agent), Date.now(), config.model).state === 'exhausted') return 'quota-exhausted'
+    return null
+  },
+  capacity: (config) => !!config.agent && conversations.capacityAvailable(config.agent),
+  getConversation: (id) => { try { return conversations.get(id) } catch { return null } },
+  idle: (id) => conversations.agentIdle(id),
+  receipt: (id, ref) => {
+    const state = conversations.sourceDeliveryReceipt(id, ref, sourceInvestigations?.pending(id)?.submitted ? 'submitted' : 'uncertain')?.state
+    return state === 'submitted' || state === 'uncertain' ? state : null
+  },
+  launch: async (run) => {
+    const config = run.config
+    if (!config?.agent) throw new Error('请选择 Agent')
+    await sources.investigate(run.provider, run.instance, run.key, {
+      agent: config.agent, projectPaths: config.projectPaths, allowBypass: false,
+      permissionMode: agentDescriptor(config.agent).discussionMode,
+      model: config.model, effort: config.effort, modelProvider: config.modelProvider, note: config.note
+    }, run.id)
+  },
+  retry: async (run) => {
+    const config = run.config
+    const conversation = conversations.get(run.id)
+    if (!config?.agent || !conversation.source) throw new Error('排查配置或来源已丢失')
+    await conversations.openInvestigation(config.agent, config.projectPaths, false, {
+      permissionMode: agentDescriptor(config.agent).discussionMode,
+      model: config.model, effort: config.effort, modelProvider: config.modelProvider
+    }, { source: conversation.source, title: run.title, automaticId: run.id })
+    if (!conversation.preparing) {
+      if (run.submitted || conversations.sourceDeliveryReceipt(run.id, investigationRef(run.id), 'uncertain')) throw new Rejection('delivery-uncertain', '请在会话中检查首条指令是否已提交')
+      conversations.setPreparing(run.id, 'issue', { reason: 'investigation-interrupted', message: '问题准备中断，可以重试' })
+    }
+    await sources.retryInvestigation(run.id, true)
+  },
+  resumeImages: (run) => sources.resumeInvestigationImages(run.id),
+  changed: (provider, instance, info, run) => {
+    server?.broadcast('sources.autoInvestigationChanged', { provider, instance, info, run })
+    sources.automaticChanged(provider, instance)
+  }
+})
+sources.automatic = sourceInvestigations
+conversations.setAutomaticInvestigation(sourceInvestigations)
 
 const token = randomBytes(32).toString('hex')
 server = await startRpcServer({
@@ -637,6 +703,7 @@ refreshAwake()
 void turns.catchUp().catch((error: unknown) => console.error('[antumi-core] counting earlier chat turns failed:', error))
 void analytics.catchUp((stage) => conversations.stageChatItems(stage.conversationId, stage.id), smallModels.endedSince(0))
   .catch((error: unknown) => console.error('[antumi-core] rebuilding usage history failed:', error))
+sourceInvestigations.start()
 sources.start()
 sourceUpdates.start()
 // Idle chat agents are checked for once a minute, so one goes within a minute of its limit.
@@ -665,6 +732,7 @@ async function shutdown(): Promise<void> {
   discussions.close()
   sourceUpdates?.stop()
   pullRequests.current?.stop()
+  sourceInvestigations?.suspend()
   sources.stop()
   await plugins.close()
   await pets.close()
@@ -673,6 +741,7 @@ async function shutdown(): Promise<void> {
   cliMaintenance.close()
   daemon.stop()
   await server?.close()
+  await sourceInvestigations?.stop()
   await removeCoreEndpoint(process.pid)
   await sourceUpdates?.close()
   sourceUpdateStore.close()

@@ -5817,6 +5817,9 @@ div.inspector-empty > p { margin: 0 0 8px; }
   background: color-mix(in srgb, var(--info) 12%, transparent);
   color: var(--info);
 }
+.inbox-investigating[data-auto-state='waiting-user'] { background: var(--accent-bg); color: var(--accent); }
+.inbox-investigating[data-auto-state='failed'] { background: color-mix(in srgb, var(--danger) 10%, transparent); color: var(--danger); }
+.inbox-investigating[data-auto-state]:not([data-auto-state='running']):not([data-auto-state='preparing']):not([data-auto-state='waiting-user']):not([data-auto-state='failed']) { background: var(--fill-2); color: var(--text-muted); }
 
 .inbox-row-title {
   margin-top: 2px;
@@ -6111,6 +6114,24 @@ div.inspector-empty > p { margin: 0 0 8px; }
   flex-basis: 100%;
   margin: 0;
 }
+
+.auto-investigation-settings { border-top: 1px solid var(--border); padding-top: 20px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.auto-investigation-heading { display: flex; align-items: center; gap: 10px; }
+.auto-investigation-options { display: flex; flex-wrap: wrap; gap: 8px; }
+.auto-investigation-options > * { flex: 1 1 160px; min-width: 0; }
+.auto-investigation-limit { max-width: 120px; }
+.auto-investigation-summary { display: flex; flex-direction: column; gap: 4px; color: var(--text-muted); font-size: 12px; overflow-wrap: anywhere; }
+.inbox-auto-summary { padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+.conversation-auto-label { color: var(--text-muted); border: 1px solid var(--border-2); border-radius: var(--radius-xs); padding: 0 4px; }
+.auto-investigation-history { width: min(720px, calc(100vw - 40px)); max-width: none; max-height: calc(100dvh - 64px); padding: 0; border: 1px solid var(--border-2); border-radius: var(--radius-lg); background: var(--surface); color: var(--text); box-shadow: var(--shadow-float); }
+.auto-investigation-history[open] { display: flex; flex-direction: column; }
+.auto-investigation-history-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--border); }
+.auto-investigation-history-header h3 { margin: 0; }
+.auto-investigation-history-body { padding: 0 20px 20px; overflow-y: auto; overscroll-behavior: contain; }
+.auto-investigation-record { padding: 16px 0; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; overflow-wrap: anywhere; }
+.auto-investigation-record > div:first-child { display: flex; flex-wrap: wrap; gap: 8px; font-size: 12px; }
+.auto-investigation-record p { margin: 0; font-size: 12px; }
+.auto-investigation-record .toolbar { flex-wrap: wrap; }
 
 .source-enabled {
   display: flex;

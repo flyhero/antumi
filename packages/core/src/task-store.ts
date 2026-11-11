@@ -404,7 +404,14 @@ export const MIGRATIONS = [
   // Sites the agents' browser opens in any conversation without asking, by exact host name.
   `CREATE TABLE browser_sites (host TEXT PRIMARY KEY, allowed_at INTEGER NOT NULL);`,
   // When a chat command was pinned above the composer (ChatCommandStore.pin).
-  `ALTER TABLE chat_commands ADD COLUMN pinned_at INTEGER;`
+  `ALTER TABLE chat_commands ADD COLUMN pinned_at INTEGER;`,
+  `CREATE TABLE source_investigation_settings (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+   CREATE TABLE source_investigation_seen (binding TEXT NOT NULL, key TEXT NOT NULL, run_id TEXT, PRIMARY KEY(binding,key));
+   CREATE TABLE source_investigation_runs (id TEXT PRIMARY KEY, instance_key TEXT NOT NULL, binding TEXT NOT NULL, key TEXT NOT NULL, data TEXT NOT NULL, UNIQUE(binding,key));
+   CREATE INDEX source_investigation_runs_instance ON source_investigation_runs(instance_key);
+   CREATE INDEX source_investigation_runs_status ON source_investigation_runs(json_extract(data,'$.status'));
+   ALTER TABLE conversations ADD COLUMN auto_investigation_id TEXT;`
+
 ]
 
 

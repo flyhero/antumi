@@ -94,6 +94,7 @@ export const Conversation = z.object({
   workspaceReadOnly: z.boolean().optional(),
   // The issue it was opened to look into, from the inbox. Older cores leave it out.
   source: TaskSource.nullable().optional(),
+  autoInvestigationId: z.string().uuid().nullable().optional(),
   // While core fetches that issue before its agent can start: the issue's text, then its images,
   // which the agent waits a moment for. error: why the fetch stopped, reason its code; it can be retried
   // (sources.retryInvestigation). Older cores leave it out, fetching before they answer.

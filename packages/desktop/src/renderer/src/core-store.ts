@@ -1585,6 +1585,9 @@ export function startCoreConnection(scope: 'app' | 'requests' = 'app'): void {
           ...withUsage(s.accountUsage.filter((entry) => !accountsSupported(entry.agent) || accounts.accounts.some((each) => each.agent === entry.agent && each.id === usageAccount(entry))), accounts)
         })))
         rpc.on('sources.listChanged', ({ sources }) => useCore.setState({ sources }))
+        rpc.on('sources.autoInvestigationChanged', ({ provider, instance, info }) => useCore.setState((s) => ({
+          sources: s.sources?.map((source) => source.provider === provider ? { ...source, instances: source.instances.map((entry) => entry.instance === instance ? { ...entry, autoInvestigation: info } : entry) } : source) ?? null
+        })))
         // The last shell exiting puts the panel away, as closing the last tab would.
         rpc.on('terminals.changed', ({ terminals }) =>
           useCore.setState((s) => ({

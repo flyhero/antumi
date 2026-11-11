@@ -1,9 +1,11 @@
+import { SourceInvestigationService } from './source-investigation-service'
+import { SourceInvestigationStore } from './source-investigation-store'
 import { randomUUID } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { Conversation, type SourceDescriptor, type SourceInbox, type SourceIssue } from '@antumi/protocol'
+import { AutoInvestigationConfig, Conversation, type SourceDescriptor, type SourceInbox, type SourceIssue } from '@antumi/protocol'
 import { AttachmentStore } from './attachment-store'
 import { CredentialStore } from './credential-store'
 import { fakeConnection, until, type FakeConnection } from './fake-connection'
@@ -107,11 +109,13 @@ describe('SourceService', () => {
   let clock: number
   let env: NodeJS.ProcessEnv
   let service: SourceService
+  let automatic: SourceInvestigationService | null = null
   let client: FakeConnection
 
   const keys = (inbox: SourceInbox) => inbox.items.map((item) => item.key)
 
   beforeEach(async () => {
+    automatic = null
     dir = mkdtempSync(path.join(os.tmpdir(), 'antumi-sources-'))
     store = new TaskStore(path.join(dir, 'antumi.db'))
     attachments = new AttachmentStore(dir)
@@ -142,7 +146,8 @@ describe('SourceService', () => {
     client = fakeConnection()
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    if (automatic) { automatic.suspend(); service.stop(); await service.pause(['demo']); await automatic.stop() }
     projects.close()
     service.stop()
     store.close()
@@ -457,7 +462,7 @@ describe('SourceService', () => {
     const looked = new Map<string, string>()
     const rows = new Map<string, Conversation>()
     const opened: { agent: string; projectPaths: readonly string[]; start: object; issue: { source: object; title: string } }[] = []
-    const begun: { id: string; issue: { title: string; brief: string; readable: readonly string[] }; note: string; imageIds?: readonly string[] }[] = []
+    const begun: { id: string; issue: { title: string; brief: string; readable: readonly string[] }; note: string; imageIds?: readonly string[]; ref?: string }[] = []
     const late: { id: string; text: string; imageIds: readonly string[] }[] = []
     const steps: string[] = []
     const preparing = (id: string, step: 'issue' | 'images', error?: { reason: string; message: string } | null) => {
@@ -475,14 +480,14 @@ describe('SourceService', () => {
       },
       openInvestigation: async (agent, projectPaths, _allowBypass, start, issue) => {
         opened.push({ agent, projectPaths, start, issue })
-        const id = randomUUID()
+        const id = issue.automaticId ?? randomUUID()
         looked.set(issue.source.key, id)
-        rows.set(id, Conversation.parse({ id, title: issue.title, titleLocked: true, agent, workspacePath: '/code/app', projectPaths, managedWorkspace: false, sessionId: null, createdAt: 0, updatedAt: 0, source: issue.source, preparing: { step: 'issue', error: null } }))
+        rows.set(id, Conversation.parse({ id, title: issue.title, titleLocked: true, agent, workspacePath: '/code/app', projectPaths, managedWorkspace: false, sessionId: null, createdAt: 0, updatedAt: 0, source: issue.source, autoInvestigationId: issue.automaticId, preparing: { step: 'issue', error: null } }))
         return rows.get(id)!
       },
       setPreparing: preparing,
-      beginInvestigation: async (id, issue, note, _references, imageIds) => {
-        begun.push({ id, issue, note, imageIds })
+      beginInvestigation: async (id, issue, note, _references, imageIds, ref) => {
+        begun.push({ id, issue, note, imageIds, ref })
         const { preparing: _done, ...row } = rows.get(id)!
         rows.set(id, { ...row, title: issue.title, sessionId: 'session' })
         return rows.get(id)!
@@ -697,6 +702,75 @@ describe('SourceService', () => {
     await rejected
     expect(config.get('demo', 'default')?.settings.site).toBe('https://demo.test')
     service.replaceProviders([demo], ['demo'])
+  })
+
+  async function automaticSetup() {
+    await setUp()
+    const fixture = lookInto()
+    automatic = new SourceInvestigationService(new SourceInvestigationStore(path.join(dir, 'antumi.db')), {
+      snapshot: (provider, instance) => service.automaticSnapshot(provider, instance),
+      validate: async () => {}, available: () => null, capacity: () => true,
+      getConversation: (id) => fixture.rows.get(id) ?? null,
+      idle: () => false, receipt: () => null,
+      launch: async (run) => { await service.investigate(run.provider, run.instance, run.key, { agent: 'cursor', projectPaths: ['/code/app'], note: run.config?.note }, run.id) },
+      retry: async (run) => { await service.retryInvestigation(run.id, true) },
+      changed: () => {}
+    }, () => clock)
+    service.automatic = automatic
+    await service.saveAutoInvestigation('demo', 'default', AutoInvestigationConfig.parse({ enabled: true, agent: 'cursor', projectPaths: ['/code/app'], note: '先找相关测试' }))
+    automatic.reconciled()
+    await automatic.tick()
+    return fixture
+  }
+
+  it('automatically starts only newly discovered raw issues with a stable conversation and instruction reference', async () => {
+    const fixture = await automaticSetup()
+    expect(fixture.opened).toHaveLength(0)
+    demo.issues.push(issue('D-4'))
+    clock += 15 * 60_000
+    await service.refresh('demo', 'default')
+    await automatic!.tick()
+    await until(() => fixture.begun.length > 0 ? true : undefined)
+    const record = automatic!.store.runs()[0]!
+    expect(fixture.opened).toHaveLength(1)
+    expect(fixture.begun[0]).toMatchObject({ id: record.id, note: '先找相关测试', ref: `auto-investigate:${record.id}` })
+    expect(service.inbox('demo', 'default').items.find((item) => item.key === 'D-4')).toMatchObject({ conversationId: record.id, autoInvestigation: { id: record.id } })
+    expect(service.list()[0]?.instances[0]?.autoInvestigation?.config.enabled).toBe(true)
+    clock += 15 * 60_000
+    await service.refresh('demo', 'default')
+    expect(fixture.opened).toHaveLength(1)
+  })
+
+  it('serializes a manual click against automatic creation of the same issue', async () => {
+    const fixture = await automaticSetup()
+    demo.issues.push(issue('D-4'))
+    clock += 15 * 60_000
+    await service.refresh('demo', 'default')
+    await Promise.all([automatic!.tick(), service.investigate('demo', 'default', 'd-4', { agent: 'cursor', projectPaths: ['/code/app'] })])
+    await until(() => fixture.begun.length > 0 ? true : undefined)
+    expect(fixture.opened).toHaveLength(1)
+  })
+
+  it('keeps automatic source configuration across an older client saving connection settings', async () => {
+    await automaticSetup()
+    await service.saveSettings({ provider: 'demo', instance: 'default', settings: { site: 'https://demo.test', query: 'other' } })
+    expect(automatic!.info('demo', 'default').config).toMatchObject({ enabled: true, agent: 'cursor', note: '先找相关测试' })
+  })
+
+  it('allows manual recovery of a prepared conversation after automatic investigation was disabled', async () => {
+    const fixture = await automaticSetup()
+    demo.issues.push(issue('D-4'))
+    demo.fetchFails = 1
+    clock += 15 * 60_000
+    await service.refresh('demo', 'default')
+    await until(() => automatic!.store.runs()[0]?.status === 'retry-wait' ? true : undefined)
+    const run = automatic!.store.runs()[0]!
+    await service.saveAutoInvestigation('demo', 'default', { ...automatic!.info('demo', 'default').config, enabled: false })
+    expect(automatic!.pending(run.id)?.status).toBe('cancelled')
+    await service.retryInvestigation(run.id)
+    await until(() => fixture.begun.length > 0 ? true : undefined)
+    expect(automatic!.pending(run.id)?.status).toBe('handed-over')
+    expect(fixture.begun[0]).toMatchObject({ id: run.id, note: '先找相关测试' })
   })
 
 })

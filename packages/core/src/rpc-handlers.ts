@@ -214,6 +214,7 @@ export function createRpcHandlers(
     conversations.attend(id)
     const since = limits.mark()
     const result = await act()
+    sources.automatic?.takeover(id)
     limits.cancelFor(id, since)
     return result
   }
@@ -487,19 +488,20 @@ export function createRpcHandlers(
     'todos.remove': ({ id, groupId, itemId }) => todosOf(id).remove(id, groupId, itemId),
     'conversations.setArchived': ({ id, archived }) => conversations.setArchived(id, archived),
     'conversations.continue': ({ id, allowBypass }) => userActed(id, () => { profiles?.guardUser(id, true); squads?.guardUser(id, true); return conversations.continue(id, allowBypass) }),
-    'conversations.handoff': ({ id, agent, note, stopRunning, allowBypass, permissionMode, model, effort, references }) => conversations.handoff(id, agent, note, stopRunning, allowBypass, { permissionMode, model, effort, references }),
+    'conversations.handoff': ({ id, agent, note, stopRunning, allowBypass, permissionMode, model, effort, references }) => { sources.automatic?.takeover(id); return conversations.handoff(id, agent, note, stopRunning, allowBypass, { permissionMode, model, effort, references }) },
     'conversations.fork': ({ id, stageId, itemId }) => conversations.fork(id, stageId, itemId),
     // A mode the user picks is theirs to answer for: a run nobody watched stops answering for them.
-    'conversations.setOption': async ({ id, option, value }) => { profiles?.guardUser(id, true); squads?.guardUser(id, true); if (option === 'permissionMode') conversations.attend(id); await conversations.setOption(id, option, value); return OK },
+    'conversations.setOption': async ({ id, option, value }) => { profiles?.guardUser(id, true); squads?.guardUser(id, true); if (option === 'permissionMode') conversations.attend(id); await conversations.setOption(id, option, value); sources.automatic?.takeover(id); return OK },
     'conversations.send': ({ id, text, images, queue, steer, ref, references }) => userActed(id, async () => { profiles?.guardUser(id, true); squads?.guardUser(id, true); await conversations.send(id, text, images, queue, steer, ref, references); return OK }),
     'conversations.cancelQueued': ({ id, ref }) => { conversations.cancelQueued(id, ref); return OK },
     'conversations.sendQueued': ({ id, ref, now }) => userActed(id, async () => { await conversations.sendQueued(id, ref, now); return OK }),
     'conversations.setUsageLimitAutoContinue': ({ id, stageId, itemId, autoContinue }) => {
+      if (autoContinue) sources.automatic?.takeover(id)
       limits.setAutoContinue(id, stageId, itemId, autoContinue)
       return OK
     },
-    'conversations.retryUsageLimit': async ({ id, stageId, itemId }) => { await limits.retry(id, stageId, itemId); return OK },
-    'conversations.retryTurn': async ({ id, stageId, itemId }) => { await conversations.retryTurn(id, stageId, itemId); return OK },
+    'conversations.retryUsageLimit': async ({ id, stageId, itemId }) => { sources.automatic?.takeover(id); await limits.retry(id, stageId, itemId); return OK },
+    'conversations.retryTurn': async ({ id, stageId, itemId }) => { sources.automatic?.takeover(id); await conversations.retryTurn(id, stageId, itemId); return OK },
     'conversations.interrupt': async ({ id }) => {
       const child = conversations.get(id)
       if (child.agentCallId && child.parentConversationId) { await profiles?.cancel(child.parentConversationId, child.agentCallId); return OK }
@@ -510,7 +512,7 @@ export function createRpcHandlers(
       return OK
     },
     'conversations.stopBackground': async ({ id, itemId }) => { await conversations.stopBackground(id, itemId); return OK },
-    'conversations.respond': async ({ id, requestId, ...answer }) => { squads?.guardUser(id); conversations.userAnswers(id, requestId); await conversations.respond(id, requestId, answer); return OK },
+    'conversations.respond': async ({ id, requestId, ...answer }) => { squads?.guardUser(id); conversations.userAnswers(id, requestId); await conversations.respond(id, requestId, answer); sources.automatic?.takeover(id); return OK },
     // Read after subscribing, so an item that changes in between reaches the client either way.
     'conversations.watchChat': ({ id }, connection) => {
       connection.watching.add(id)
@@ -769,6 +771,19 @@ export function createRpcHandlers(
     'discussions.setArchived': ({ id, archived }) => discussions.setArchived(id, archived),
     'discussions.delete': async ({ id }) => { await discussions.delete(id); return OK },
     'sources.list': () => sources.list(),
+    'sources.saveAutoInvestigation': ({ provider, instance, config }) => sources.saveAutoInvestigation(provider, instance, config),
+    'sources.autoInvestigations': ({ provider, instance, cursor, limit }) => {
+      if (!sources.automatic) throw new Rejection('source-investigate-unavailable')
+      return sources.automatic.list(provider, instance, cursor, limit)
+    },
+    'sources.retryAutoInvestigation': ({ id }) => {
+      if (!sources.automatic) throw new Rejection('source-investigate-unavailable')
+      return sources.automatic.retry(id)
+    },
+    'sources.cancelAutoInvestigation': ({ id }) => {
+      if (!sources.automatic) throw new Rejection('source-investigate-unavailable')
+      return sources.automatic.cancel(id)
+    },
     'sources.saveSettings': (params) => sources.saveSettings(params),
     'sources.login': ({ provider, instance, flowId }, connection) => ({
       flowId: sources.login(connection, provider, instance, flowId)

@@ -1,3 +1,5 @@
+import type { SourceInvestigationService, InvestigationSnapshot } from './source-investigation-service'
+import { investigationRef } from './source-investigation-service'
 import { createHash } from 'node:crypto'
 import type { SourceUpdateTarget, SourceCommentOptions } from '@antumi/protocol'
 import type { ChatReference } from '@antumi/protocol'
@@ -67,10 +69,10 @@ export type SourceConversations = {
     projectPaths: readonly string[],
     allowBypass: boolean | undefined,
     start: { permissionMode?: string; model?: string; effort?: string; worktree?: boolean; branch?: string; modelProvider?: string },
-    issue: { source: TaskSource; title: string }
+    issue: { source: TaskSource; title: string; automaticId?: string }
   ): Promise<Conversation>
   setPreparing(id: string, step: 'issue' | 'images', error?: { reason: string; message: string } | null): void
-  beginInvestigation(id: string, issue: { title: string; brief: string; readable: readonly string[] }, note: string, references?: ChatReference[], imageIds?: readonly string[]): Promise<Conversation>
+  beginInvestigation(id: string, issue: { title: string; brief: string; readable: readonly string[] }, note: string, references?: ChatReference[], imageIds?: readonly string[], ref?: string): Promise<Conversation>
   sendInvestigationImages(id: string, text: string, imageIds: readonly string[]): Promise<void>
 }
 
@@ -128,6 +130,8 @@ export class SourceService {
   private readonly operations = new Map<string, Set<Promise<unknown>>>()
   private updateSink: ((target: SourceUpdateTarget, source: TaskSource, snapshot: SourceSnapshot) => void) | undefined
   private timer: ReturnType<typeof setInterval> | undefined
+  automatic: SourceInvestigationService | null = null
+  private readonly investigationLocks = new Map<string, Promise<unknown>>()
   private conversations: SourceConversations | null = null
   // What each issue conversation's agent is to start with, kept until it has: the user's note
   // (null for the default one), references and images. Gone after a restart, when a retry starts afresh.
@@ -254,7 +258,8 @@ export class SourceService {
           enabled: entry.enabled,
           // A record saved before a field existed shows that field's default.
           settings: { ...this.defaults(provider), ...entry.settings },
-          credential: this.credentialStatus(provider, entry.instance)
+          credential: this.credentialStatus(provider, entry.instance),
+          ...(this.automatic ? { autoInvestigation: this.automatic.info(provider.id, entry.instance) } : {})
         }))
       }
     })
@@ -354,7 +359,7 @@ export class SourceService {
     const dismissed = this.dismissals.dismissedIssues(id, instance)
     const looked = this.conversations?.investigations(id, instance) ?? new Map<string, string>()
     const waiting = state.found.filter((issue) => !imported.has(issue.key))
-      .map((issue) => ({ ...issue, conversationId: looked.get(issue.key) ?? null }))
+      .map((issue) => ({ ...issue, conversationId: looked.get(issue.key) ?? null, ...(this.automatic ? { autoInvestigation: this.automatic.issue(id, instance, issue.key) } : {}) }))
     return {
       provider: id,
       instance,
@@ -363,7 +368,8 @@ export class SourceService {
       dismissed: waiting.filter((issue) => dismissed.has(issue.key)),
       refreshedAt: state.refreshedAt,
       refreshing: state.inFlight !== null,
-      problem: state.problem
+      problem: state.problem,
+      ...(this.automatic ? { autoInvestigation: this.automatic.info(id, instance) } : {})
     }
   }
 
@@ -391,6 +397,8 @@ export class SourceService {
             state.found = this.acceptIssues(id, issues)
             state.refreshedAt = this.now()
             state.problem = null
+            const snapshot = this.automaticSnapshot(id, instance)
+            if (snapshot) this.automatic?.accept(snapshot)
           }
         },
         (error: unknown) => {
@@ -468,14 +476,32 @@ export class SourceService {
     return task
   }
 
-  investigate(id: string, instance: string, rawKey: string, options: InvestigateOptions): Promise<Conversation> {
-    return this.track(id, () => this.investigateInner(id, instance, rawKey, options))
+  investigate(id: string, instance: string, rawKey: string, options: InvestigateOptions, automaticId?: string): Promise<Conversation> {
+    return this.track(id, async () => {
+      const check = this.guard(id, instance)
+      const key = await this.checkedKey(this.provider(id), rawKey)
+      check()
+      const lockKey = `${id}/${instance}/${key}`
+      const previous = this.investigationLocks.get(lockKey) ?? Promise.resolve()
+      const run = previous.catch(() => {}).then(async () => {
+        check()
+        const pending = this.automatic?.issue(id, instance, key)
+        if (!automaticId && pending?.conversationId && ['preparing', 'running'].includes(pending.status)) {
+          try { return this.requireConversations().get(pending.conversationId) } catch { /* Not created yet. */ }
+        }
+        if (automaticId && this.requireConversations().investigations(id, instance).has(key)) throw new Rejection('source-already-investigated', '问题已有排查会话')
+        return this.investigateInner(id, instance, key, options, automaticId)
+      })
+      this.investigationLocks.set(lockKey, run)
+      void run.finally(() => { if (this.investigationLocks.get(lockKey) === run) this.investigationLocks.delete(lockKey) }).catch(() => {})
+      return run
+    })
   }
 
   // The conversation opens at once, named after the issue as the inbox has it; the issue is
   // fetched in full behind it, as for an import, and handed to its agent to read first. An issue
   // the inbox does not hold has its text fetched first, for the name and address.
-  private async investigateInner(id: string, instance: string, rawKey: string, options: InvestigateOptions): Promise<Conversation> {
+  private async investigateInner(id: string, instance: string, rawKey: string, options: InvestigateOptions, automaticId?: string): Promise<Conversation> {
     const conversations = this.requireConversations()
     const check = this.guard(id, instance)
     const ready = this.requireReady(id, instance)
@@ -494,7 +520,8 @@ export class SourceService {
     check()
     // Unless asked otherwise, it only reads: a finding first, then the user decides on a fix.
     const permissionMode = start.permissionMode ?? agentDescriptor(agent).discussionMode
-    const conversation = await conversations.openInvestigation(agent, projectPaths, allowBypass, { ...start, permissionMode }, { source, title: known.title.trim() || known.key })
+    if (automaticId) this.checkAutomatic(id, instance, automaticId)
+    const conversation = await conversations.openInvestigation(agent, projectPaths, allowBypass, { ...start, permissionMode }, { source, title: known.title.trim() || known.key, ...(automaticId ? { automaticId } : {}) })
     this.investigating.set(conversation.id, { note: note?.trim() || null, ...(references ? { references } : {}), images: imageIds, running: true })
     this.emitInbox(id, instance)
     void this.track(id, () => this.prepare(conversation.id, source, first)).catch(() => {})
@@ -502,7 +529,15 @@ export class SourceService {
   }
 
   // Fetches an issue conversation's issue again, after a failure or a restart cut it off.
-  async retryInvestigation(conversationId: string): Promise<Conversation> {
+  async retryInvestigation(conversationId: string, automatic = false): Promise<Conversation> {
+    if (!automatic && this.automatic?.pending(conversationId) && this.automatic.pending(conversationId)?.status !== 'handed-over') {
+      const run = this.automatic.pending(conversationId)
+      if (run && (run.status === 'cancelled' || run.status === 'skipped' || !this.automatic.info(run.provider, run.instance).config.enabled)) this.automatic.takeover(conversationId)
+      else {
+        this.automatic.retry(conversationId)
+        return this.requireConversations().get(conversationId)
+      }
+    }
     const conversations = this.requireConversations()
     const conversation = conversations.get(conversationId)
     const { source } = conversation
@@ -512,20 +547,22 @@ export class SourceService {
     if (!conversation.preparing) throw new Rejection('conversation-running', 'the agent has started already')
     return this.track(source.provider, async () => {
       this.requireReady(source.provider, source.instance)
-      this.investigating.set(conversationId, { note: pending?.note ?? null, ...(pending?.references ? { references: pending.references } : {}), images: pending?.images ?? [], running: true })
+      this.investigating.set(conversationId, { note: pending?.note ?? (this.automatic?.pending(conversationId)?.config?.note.trim() || null), ...(pending?.references ? { references: pending.references } : {}), images: pending?.images ?? [], running: true })
       conversations.setPreparing(conversationId, 'issue')
-      void this.track(source.provider, () => this.prepare(conversationId, source, null)).catch(() => {})
+      void this.track(source.provider, () => this.prepare(conversationId, source, null, !automatic && this.automatic?.pending(conversationId)?.status === 'handed-over')).catch(() => {})
       return conversations.get(conversationId)
     })
   }
 
   // The text first, then a short wait for the images where the provider sends them apart: the
   // agent starts on whatever is in by then, and images still on the way follow it.
-  private async prepare(conversationId: string, source: TaskSource, first: Fetched | null): Promise<void> {
+  private async prepare(conversationId: string, source: TaskSource, first: Fetched | null, manual = false): Promise<void> {
     const conversations = this.requireConversations()
+    if (this.automatic?.pending(conversationId)) this.automatic.preparation(conversationId, true)
     try {
       const check = this.guard(source.provider, source.instance)
       const ready = this.requireReady(source.provider, source.instance)
+      if (!manual && this.automatic?.pending(conversationId)) this.checkAutomatic(source.provider, source.instance, conversationId)
       const abort = this.state(source.provider, source.instance).controller.signal
       const text = first ?? await this.fetch(ready, source.key, abort, false)
       check()
@@ -540,15 +577,21 @@ export class SourceService {
         check()
       }
       const { issue, snapshot } = fetched
+      const auto = this.automatic?.pending(conversationId)
+      if (auto && !manual && !this.automatic?.owns(conversationId)) throw new Rejection('investigation-cancelled', '自动排查已交接或取消')
+      if (auto) { this.automatic?.canonical(conversationId, issue.key); this.automatic?.images(conversationId, later !== null) }
       const pending = this.investigating.get(conversationId)
       const title = issue.title.trim() || issue.key
       const images = await Promise.all(snapshot.images.map(async (image) => ({ name: image.name, path: await this.attachments.pathOf(image.id) })))
+      check()
+      if (!manual && auto) this.checkAutomatic(source.provider, source.instance, conversationId)
       this.updateSink?.({ kind: 'conversation', id: conversationId }, source, snapshot)
       await conversations.beginInvestigation(conversationId, {
         title,
         brief: investigationBrief(source, snapshot, images, later ? text.deferred : 0),
         readable: images.flatMap((image) => (image.path ? [image.path] : []))
-      }, pending?.note ?? `排查 ${source.name} ${source.key}：${title}`, pending?.references, pending?.images)
+      }, (pending?.note ?? auto?.config?.note.trim()) || `排查 ${source.name} ${source.key}：${title}`, pending?.references, pending?.images, auto ? investigationRef(auto.id) : undefined)
+      if (auto) this.automatic?.submitted(auto.id)
       this.investigating.delete(conversationId)
       this.emitInbox(source.provider, source.instance)
       if (later) void this.track(source.provider, () => this.sendLateImages(conversationId, source, later!)).catch(() => {})
@@ -556,24 +599,38 @@ export class SourceService {
       const pending = this.investigating.get(conversationId)
       if (pending) pending.running = false
       const rejection = error instanceof Rejection ? error : sourceRejection(error)
+      this.automatic?.failure(conversationId, rejection.reason, rejection.message)
       // A conversation deleted meanwhile, or started after all, has nothing left to show it on.
       try {
         if (conversations.get(conversationId).preparing) conversations.setPreparing(conversationId, 'issue', { reason: rejection.reason, message: rejection.message })
       } catch { /* Deleted. */ }
       console.error(`[antumi-core] ${source.provider}/${source.instance}: ${source.key} was not fetched for its conversation:`, rejection.message)
-    }
+    } finally { this.automatic?.preparation(conversationId, false) }
+  }
+
+  resumeInvestigationImages(conversationId: string): Promise<void> {
+    const source = this.requireConversations().get(conversationId).source
+    if (!source) return Promise.resolve()
+    return this.track(source.provider, async () => {
+      const ready = this.requireReady(source.provider, source.instance)
+      const check = this.guard(source.provider, source.instance)
+      const fetched = this.fetch(ready, source.key, this.state(source.provider, source.instance).controller.signal, true).then((value) => { check(); return value })
+      await this.sendLateImages(conversationId, source, fetched)
+    })
   }
 
   private async sendLateImages(conversationId: string, source: TaskSource, later: Promise<Fetched>): Promise<void> {
     try {
       const { snapshot } = await later
       if (snapshot.images.length === 0) return
+      if (this.automatic?.pending(conversationId)) this.updateSink?.({ kind: 'conversation', id: conversationId }, source, snapshot)
+      if (this.automatic?.pending(conversationId) && !this.automatic.owns(conversationId)) return
       await this.requireConversations().sendInvestigationImages(conversationId,
         `${source.name} ${source.key} 附件里的 ${snapshot.images.length} 张图片下载好了，请结合图片看看前面的判断是否需要修正。`,
         snapshot.images.map((image) => image.id))
     } catch (error) {
       console.error(`[antumi-core] ${source.provider}/${source.instance}: the images of ${source.key} did not reach its conversation:`, error instanceof Error ? error.message : error)
-    }
+    } finally { this.automatic?.images(conversationId, false); this.automatic?.changed() }
   }
 
   private requireConversations(): SourceConversations {
@@ -778,8 +835,40 @@ export class SourceService {
     state.refreshedAt = null
     state.problem = null
     state.lastRefresh = Number.NEGATIVE_INFINITY
+    this.automatic?.reset(id, instance)
     this.events.listChanged(this.list())
     this.emitInbox(id, instance)
+  }
+
+  automaticSnapshot(id: string, instance: string): InvestigationSnapshot | null {
+    const ready = this.ready(id, instance)
+    const state = this.state(id, instance)
+    if (!ready || state.refreshedAt === null) return null
+    const sites = ready.provider.settings.filter((field) => field.bindsCredential).map((field) => [field.key, ready.settings[field.key]])
+    const account = this.credential(ready.provider, instance)?.account
+    const binding = createHash('sha256').update(JSON.stringify([id, instance, sites, account ?? ready.credential.payload])).digest('hex')
+    const scope = createHash('sha256').update(JSON.stringify(Object.entries(ready.settings).sort(([a], [b]) => a.localeCompare(b)))).digest('hex')
+    const handled = new Set([...this.tasks.importedKeys(id, instance), ...this.dismissals.dismissedIssues(id, instance), ...this.conversations?.investigations(id, instance).keys() ?? []])
+    return { provider: id, instance, binding, scope, issues: state.found, handled, healthy: state.problem === null, refreshedAt: state.refreshedAt }
+  }
+
+  automaticChanged(id: string, instance: string): void { this.emitInbox(id, instance) }
+
+  private checkAutomatic(id: string, instance: string, conversationId: string): void {
+    const run = this.automatic?.pending(conversationId)
+    const current = this.automaticSnapshot(id, instance)
+    if (!run || !this.automatic?.owns(conversationId) || !current?.healthy || current.binding !== run.binding || current.scope !== run.scope) {
+      throw new Rejection('source-changed', '来源已改变，自动排查已停止')
+    }
+  }
+
+  async saveAutoInvestigation(id: string, instance: string, config: import('@antumi/protocol').AutoInvestigationConfig): Promise<SourceDescriptor> {
+    this.provider(id)
+    if (!this.automatic) throw new Rejection('source-investigate-unavailable')
+    await this.automatic.save(id, instance, config)
+    const result = this.descriptor(id)
+    this.events.listChanged(this.list())
+    return result
   }
 
   private descriptor(id: string): SourceDescriptor {

@@ -1,3 +1,4 @@
+import { AutoInvestigationSummary, AutoInvestigationHistory, autoInvestigationStatus, autoInvestigationReason } from './AutoInvestigationSettings'
 import { SourceCommentBadge } from './SourceUpdatesPanel'
 import { getLocale, t, tr } from '../i18n'
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
@@ -35,7 +36,8 @@ function IssueRow({ issue, name, busy, investigating = false, selected = false, 
           </span>
           {issue.updatedAt !== null && <span>{tr('SourceInboxView.updated', { value1: updatedOn(issue.updatedAt) })}</span>}
           {issue.conversationId && <SourceCommentBadge target={{ kind: 'conversation', id: issue.conversationId }} />}
-          {investigating && <span className="inbox-investigating">{t('SourceInboxView.investigating')}</span>}
+          {issue.autoInvestigation && <span className="inbox-investigating" data-auto-state={issue.autoInvestigation.status} title={autoInvestigationReason(issue.autoInvestigation.reason, issue.autoInvestigation.message) ?? undefined}>{autoInvestigationStatus(issue.autoInvestigation.status)}</span>}
+          {investigating && !issue.autoInvestigation && <span className="inbox-investigating">{t('SourceInboxView.investigating')}</span>}
         </div>
         {onView ? <button type="button" className="inbox-row-title inbox-row-view-title" aria-expanded={selected} aria-controls={panelId} onClick={(event) => onView(event.currentTarget)}>{issue.title}</button> : <div className="inbox-row-title">{issue.title}</div>}
       </div>
@@ -81,6 +83,7 @@ function InboxSection({
   const investigateSupported = useSourceInvestigateSupported()
   const previewSupported = useCore((s) => s.rpc?.features.includes('source-issue-preview') ?? false)
   const [busyKey, setBusyKey] = useState<string | null>(null)
+  const [history, setHistory] = useState(false)
   const [showDismissed, setShowDismissed] = useState(false)
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
   const [modal, setModal] = useState(false)
@@ -157,6 +160,7 @@ function InboxSection({
           </header>
 
           <div className="inbox-section-body" role={tabs ? 'tabpanel' : undefined}>
+            {inbox.autoInvestigation?.config.enabled && <div className="inbox-auto-summary"><AutoInvestigationSummary info={inbox.autoInvestigation} /><button type="button" className="link-button" onClick={() => setHistory(true)}>{t('AutoInvestigation.history')}</button></div>}
             {inbox.problem && (
               <p className="inbox-error" role="alert">{tr('SourceInboxView.syncFailed_1794', { value1: sourceProblemText(inbox.problem), value2: <button type="button" className="link-button" onClick={openSettings}>{t('SourceInboxView.checkSettings')}</button> })}</p>
             )}
@@ -220,6 +224,7 @@ function InboxSection({
             </>}
         </InboxIssueDetail>}
       </div>
+      {history && <AutoInvestigationHistory provider={inbox.provider} instance={inbox.instance} onClose={() => setHistory(false)} />}
     </section>
   )
 }

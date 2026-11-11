@@ -120,6 +120,7 @@ function ConversationMeta({ conversation, heading = 'none' }: { conversation: Co
   return (
     <>
       {conversation.source && <><span className="conversation-source-info" title={sourceLabel(conversation.source)}>{sourceLabel(conversation.source)}</span><span aria-hidden="true">·</span></>}
+      {conversation.autoInvestigationId && <span className="conversation-auto-label">{t('AutoInvestigation.automatic')}</span>}
       {/* The source or a saved agent's avatar can take the main icon's place. */}
       {heading !== 'agent' && (conversation.profile || conversation.source) && <span className="conversation-agent" role="img" aria-label={agent} title={agent}><AgentIcon agent={conversation.agent} /></span>}
       {projects !== null && <><span className="conversation-projects">{projects}</span>{' · '}</>}

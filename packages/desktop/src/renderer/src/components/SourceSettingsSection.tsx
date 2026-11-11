@@ -1,3 +1,4 @@
+import { AutoInvestigationSettings } from './AutoInvestigationSettings'
 import { getLocale, t, tr } from '../i18n'
 import { useEffect, useId, useState, type FormEvent } from 'react'
 import { DEFAULT_INSTANCE, translatedText, type SettingField, type SourceDescriptor } from '@antumi/protocol'
@@ -170,6 +171,7 @@ export function SourceSettingsSection({ source }: { source: SourceDescriptor }) 
           {busy ? t('SourceSettingsSection.saving') : t('SourceSettingsSection.saveSettings')}
         </button>
       </div>
+      <AutoInvestigationSettings provider={source.provider} instance={DEFAULT_INSTANCE} info={instance.autoInvestigation} connected={instance.enabled && credential.configured} />
     </form>
   )
 }

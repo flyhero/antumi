@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { SourceCommentState } from './source-comments'
 import { TextTranslations } from './localization'
 import { TaskImage } from './attachments'
+import { AgentKind } from './agent'
 
 // Where tasks can come from besides being written by hand: an issue tracker, reached through a
 // source provider. A provider may be configured more than once (two Jira sites); each is an instance.
@@ -92,11 +93,45 @@ export const CredentialStatus = z.object({
 })
 export type CredentialStatus = z.infer<typeof CredentialStatus>
 
+export const AutoInvestigationConfig = z.object({
+  enabled: z.boolean().default(false),
+  projectPaths: z.array(z.string().trim().min(1)).max(10).default([]),
+  agent: AgentKind.nullable().default(null),
+  model: z.string().min(1).max(200).optional(),
+  effort: z.string().min(1).max(100).optional(),
+  modelProvider: z.string().min(1).max(100).optional(),
+  note: z.string().trim().max(100000).default(''),
+  dailyLimit: z.number().int().min(1).max(100).default(10)
+})
+export type AutoInvestigationConfig = z.infer<typeof AutoInvestigationConfig>
+
+export const AutoInvestigationStatus = z.enum(['queued', 'preparing', 'running', 'waiting-user', 'retry-wait', 'completed', 'failed', 'skipped', 'cancelled', 'handed-over'])
+export const AutoInvestigationRun = z.object({
+  id: z.string().uuid(), provider: SourceId, instance: SourceId, key: SourceKey,
+  title: z.string(), url: z.string(), status: AutoInvestigationStatus,
+  conversationId: z.string().uuid().nullable(),
+  reason: z.string().nullable(), message: z.string().nullable(),
+  attempts: z.number().int().nonnegative(), retryAt: z.number().nullable(),
+  createdAt: z.number(), updatedAt: z.number(), startedAt: z.number().nullable(),
+  canRetry: z.boolean()
+})
+export type AutoInvestigationRun = z.infer<typeof AutoInvestigationRun>
+export const AutoInvestigationSummary = z.object({
+  baselineReady: z.boolean(), today: z.number().int(), queued: z.number().int(),
+  reason: z.string().nullable(), message: z.string().nullable(), resetsAt: z.number(),
+  possiblyTruncated: z.boolean()
+})
+export type AutoInvestigationSummary = z.infer<typeof AutoInvestigationSummary>
+export const AutoInvestigationInfo = z.object({ config: AutoInvestigationConfig, summary: AutoInvestigationSummary })
+export type AutoInvestigationInfo = z.infer<typeof AutoInvestigationInfo>
+export const AutoInvestigationPage = z.object({ items: z.array(AutoInvestigationRun), nextCursor: z.string().nullable() })
+
 export const SourceInstanceInfo = z.object({
   instance: SourceId,
   enabled: z.boolean(),
   settings: z.record(z.string(), z.string()),
-  credential: CredentialStatus
+  credential: CredentialStatus,
+  autoInvestigation: AutoInvestigationInfo.optional()
 })
 export type SourceInstanceInfo = z.infer<typeof SourceInstanceInfo>
 
@@ -121,7 +156,8 @@ export const SourceIssue = z.object({
   updatedAt: z.number().nullable(),
   // The latest conversation opened to look into it, while that conversation is kept. Older cores
   // leave it out.
-  conversationId: z.string().uuid().nullable().optional()
+  conversationId: z.string().uuid().nullable().optional(),
+  autoInvestigation: AutoInvestigationRun.optional()
 })
 export type SourceIssue = z.infer<typeof SourceIssue>
 
@@ -163,7 +199,8 @@ export const SourceInbox = z.object({
   refreshedAt: z.number().nullable(),
   refreshing: z.boolean(),
   // The last refresh failed; `items` keeps what the one before it found.
-  problem: SourceProblem.nullable()
+  problem: SourceProblem.nullable(),
+  autoInvestigation: AutoInvestigationInfo.optional()
 })
 export type SourceInbox = z.infer<typeof SourceInbox>
 

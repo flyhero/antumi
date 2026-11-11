@@ -87,7 +87,7 @@ export type TaskChatLaunch = TaskLaunchOptions & {
 // What a stage's start takes beyond the agent: see TaskChatLaunch; moved says the agent works
 // somewhere else than its last stage did.
 // brief: a file written for the first stage to read before anything else, sent as a handoff is.
-type StageLaunch = { fresh?: boolean; moved?: boolean; planOnly?: boolean; readable?: readonly string[]; fork?: ForkPoint; opening?: string; brief?: string; references?: ChatReference[]; images?: readonly ChatImage[] }
+type StageLaunch = { ref?: string; fresh?: boolean; moved?: boolean; planOnly?: boolean; readable?: readonly string[]; fork?: ForkPoint; opening?: string; brief?: string; references?: ChatReference[]; images?: readonly ChatImage[] }
 // The provider session another conversation's stage ran, taken over through the turn `at` names;
 // neither null means a session the agent can fork, else the fork starts afresh.
 // latest: the point is the last the agent's session holds, so the session forked whole is the same.
@@ -179,6 +179,9 @@ export class ConversationService {
   }
   private maxConcurrentAgents = 20
   private agentConcurrency: Partial<Record<AgentKind, number>> = {}
+  private automaticInvestigation: { owns(id: string): boolean; takeover(id: string): void } | null = null
+  setAutomaticInvestigation(hooks: { owns(id: string): boolean; takeover(id: string): void }): void { this.automaticInvestigation = hooks }
+
   private capacityReleased: (() => void) | null = null
   private readonly freshCatalogs = new Set<AgentKind>()
   private readonly catalogs = new Map<AgentKind, Promise<ChatCatalog | null>>()
@@ -359,7 +362,7 @@ export class ConversationService {
     if (!vault || !(await stat(vault.path).catch(() => null))?.isDirectory()) return undefined
     // Projects are kept resolved; the vault is given as the user wrote it.
     if (conversation.projectPaths.includes(await realpath(vault.path))) return undefined
-    return { ...vault, write: vault.write && !stage.planOnly && !conversation.workspaceReadOnly }
+    return { ...vault, write: vault.write && !stage.planOnly && !conversation.workspaceReadOnly && !this.automaticInvestigation?.owns(conversation.id) }
   }
 
   setCapacity(settings: Pick<ChatSettings, 'maxConcurrentAgents' | 'agentConcurrency'>, released: () => void): void {
@@ -563,7 +566,7 @@ export class ConversationService {
     agent: AgentKind,
     projectPaths: readonly string[],
     allowBypass?: boolean,
-    start: { permissionMode?: string; model?: string; effort?: string; worktree?: boolean; branch?: string; deferStart?: boolean; helperOf?: string; modelProvider?: string; profile?: AgentProfile; parentId?: string; callId?: string; readOnly?: boolean; referencePaths?: readonly string[]; unlisted?: boolean } = {},
+    start: { permissionMode?: string; model?: string; effort?: string; worktree?: boolean; branch?: string; deferStart?: boolean; helperOf?: string; modelProvider?: string; profile?: AgentProfile; parentId?: string; callId?: string; readOnly?: boolean; referencePaths?: readonly string[]; unlisted?: boolean; investigation?: { source: TaskSource; title: string; automaticId?: string } } = {},
     routine: { id: string; title: string } | null = null,
     id: string = randomUUID(),
     discussion: { id: string; title: string } | null = null,
@@ -628,7 +631,7 @@ export class ConversationService {
       const head = await folderHead(project)
       if (head) starts[project] = head
     }
-    const created = this.store.create(agent, workspace, projects, id, starts, null, routine, discussion)
+    const created = this.store.create(agent, workspace, projects, id, starts, null, routine, discussion, null, start.investigation ?? null)
     if (start.modelProvider) this.store.setModelProvider(id, start.modelProvider)
     if (start.profile) this.store.setProfile(id, start.profile, start.parentId ?? null, start.callId ?? null)
     if (start.readOnly || start.profile?.capability === 'readOnly') this.store.setWorkspaceReadOnly(id, true)
@@ -928,10 +931,20 @@ export class ConversationService {
     projectPaths: readonly string[],
     allowBypass: boolean | undefined,
     start: { permissionMode?: string; model?: string; effort?: string; worktree?: boolean; branch?: string; modelProvider?: string },
-    issue: { source: TaskSource; title: string }
+    issue: { source: TaskSource; title: string; automaticId?: string }
   ): Promise<Conversation> {
+    if (issue.automaticId && this.store.get(issue.automaticId)) {
+      const existing = this.get(issue.automaticId)
+      if (!existing.sessionId && this.store.stages(existing.id).length === 0) {
+        await this.validateStartOptions(agent, start, start.modelProvider)
+        this.store.setModelProvider(existing.id, start.modelProvider ?? null)
+        this.store.setChatOptions(existing.id, { allowBypass: false, permissionMode: agentDescriptor(agent).discussionMode,
+          [agent]: { model: start.model, effort: start.effort } })
+      }
+      return this.get(existing.id)
+    }
     if (!this.capacityAvailable(agent)) throw new Rejection('agent-capacity', 'Agent 运行数量已达到上限，请等待其他会话结束，或预约稍后执行')
-    const { id } = await this.create(agent, projectPaths, allowBypass, { ...start, deferStart: true })
+    const { id } = await this.create(agent, projectPaths, allowBypass, { ...start, deferStart: true, investigation: issue }, null, issue.automaticId)
     this.fetchingIssues.set(id, { step: 'issue', error: null })
     this.store.setSource(id, { ...issue.source, title: issue.title })
     return this.changed(this.store.update(id, { title: issue.title, titleLocked: true }))
@@ -947,7 +960,7 @@ export class ConversationService {
 
   // Starts the agent on the issue's brief. A start that fails leaves the conversation preparing
   // with the failure, to be tried again.
-  async beginInvestigation(id: string, issue: { title: string; brief: string; readable: readonly string[] }, note: string, references?: ChatReference[], imageIds: readonly string[] = []): Promise<Conversation> {
+  async beginInvestigation(id: string, issue: { title: string; brief: string; readable: readonly string[] }, note: string, references?: ChatReference[], imageIds: readonly string[] = [], ref?: string): Promise<Conversation> {
     const current = this.get(id)
     this.fetchingIssues.delete(id)
     try {
@@ -958,7 +971,13 @@ export class ConversationService {
       await mkdir(directory, { recursive: true, mode: 0o700 })
       const brief = path.join(directory, `${randomUUID()}.md`)
       await writeFile(brief, issue.brief, { mode: 0o600 })
-      return await this.start(id, current.agent, note, false, { brief, readable: issue.readable, references, images })
+      if (current.autoInvestigationId && current.sessionId && ref) {
+        if (this.sourceDeliveryReceipt(id, ref, 'uncertain')) throw new Rejection('delivery-uncertain', '首条指令的提交结果需要检查')
+        const message = handoffMessage(brief, note)
+        await this.chats.send(id, message, images, false, false, ref, chatReferencesFor(note, message, references))
+        return this.get(id)
+      }
+      return await this.start(id, current.agent, note, false, { brief, readable: issue.readable, references, images, ref })
     } catch (error) {
       if (!this.store.get(id) || this.store.get(id)?.sessionId) throw error
       this.setPreparing(id, 'issue', { reason: error instanceof Rejection ? error.reason : 'chat-start-failed', message: error instanceof Error ? error.message : String(error) })
@@ -1170,7 +1189,7 @@ export class ConversationService {
     const stage = this.store.startStage(id, agent, providerSessionId, this.store.maxSequence(id), stageId, launch.planOnly ?? false, route, account?.id ?? null)
     if (saved) await this.importHooks?.before(id, agent, saved)
     const provider = decision.kind === 'provider' ? providerLaunch(decision.route, decision.apiKey) : undefined
-    return { ...await this.startChat(current, stage, saved !== null, handoffPath === null ? null : { path: handoffPath, note, references: launch.references, images: launch.images }, launch.readable ?? [], null, provider, account), starting: false }
+    return { ...await this.startChat(current, stage, saved !== null, handoffPath === null ? null : { path: handoffPath, note, references: launch.references, images: launch.images, ref: launch.ref }, launch.readable ?? [], null, provider, account), starting: false }
   }
 
   // The first stage of a fork: the source's session taken over through the fork point, where the
@@ -1206,7 +1225,7 @@ export class ConversationService {
     stage: ConversationStage,
     resume: boolean,
     // The file a new agent reads first, and what the user added for it.
-    handoff: { path: string; note: string; references?: ChatReference[]; images?: readonly ChatImage[] } | null,
+    handoff: { path: string; note: string; references?: ChatReference[]; images?: readonly ChatImage[]; ref?: string } | null,
     readable: readonly string[],
     forkAt: string | null = null,
     // The model provider the stage runs on, with its key; the stage's route says which.
@@ -1223,7 +1242,7 @@ export class ConversationService {
     }) ?? null
     let userMcp: AgentMcpServer[] = []
     try {
-      userMcp = this.userMcpFor?.(agent, Boolean(current.discussionId || current.workspaceReadOnly || stage.planOnly), current.profile?.mcpServers) ?? []
+      userMcp = this.userMcpFor?.(agent, Boolean(current.discussionId || current.workspaceReadOnly || stage.planOnly || this.automaticInvestigation?.owns(id)), current.profile?.mcpServers) ?? []
     } catch (error) {
       this.wire?.record(id, stage.id, [{ dir: 'note', text: JSON.stringify({ event: 'user-mcp-unavailable', error: error instanceof Error ? error.message : String(error) }) }])
     }
@@ -1297,9 +1316,10 @@ export class ConversationService {
       await launch?.ready(agentStage)
       if (handoff) {
         const message = handoffMessage(handoff.path, handoff.note)
-        await this.chats.send(id, message, handoff.images ?? [], false, false, undefined, chatReferencesFor(handoff.note, message, handoff.references))
+        await this.chats.send(id, message, handoff.images ?? [], false, false, handoff.ref, chatReferencesFor(handoff.note, message, handoff.references))
       }
     } catch (error) {
+      if (current.autoInvestigationId && handoff?.ref && this.sourceDeliveryReceipt(id, handoff.ref, 'uncertain')) throw error
       // A stage that never started leaves nothing to resume, so it goes, log and all.
       this.chats.forget(sessionId, stage.id)
       await this.daemon.request('kill', { sessionId, force: true }).catch(() => {})
@@ -1329,7 +1349,7 @@ export class ConversationService {
   private roleInstructions(conversation: Conversation): string {
     const profile = conversation.profile
     const notes = [profile ? `你是用户配置的智能体「${profile.name}」。\n${profile.instructions}` : '']
-    if (this.delegationAvailable?.(conversation.id) && !conversation.parentConversationId && !conversation.discussionId && !conversation.squadRunId && !conversation.routineId && !isHelper(conversation)) {
+    if (!this.automaticInvestigation?.owns(conversation.id) && this.delegationAvailable?.(conversation.id) && !conversation.parentConversationId && !conversation.discussionId && !conversation.squadRunId && !conversation.routineId && !isHelper(conversation)) {
       notes.push('用户用 @ 点名智能体时，先查找对应智能体并委派，不要自行代替它回答。需要其他专业智能体协助时，可用 Antumi 的 antumi_agent_list 查找可调用的智能体（用户配置的，以及本机可直接调用的外部智能体），再用 antumi_agent_dispatch 委派具体子任务（说明目标、必要背景、文件范围和交付要求）。这是独立子会话，不自动继承聊天历史。只读委派和 workspace: worktree 的开发委派派出即开始，在主会话目录里改文件的开发委派等这一轮结束才开始；派出只读审阅后，别再改派给它看的那些文件，等它的结果回来。结果都在这一轮结束后交回，Antumi 会自动继续当前会话，所以派完没有别的事就结束回合。用 antumi_agent_status 查看进度；不要反复轮询。跨很多目录、彼此不重叠的机械性改动，可以拆成几个 workspace: worktree 的开发委派同时做：先把自己的改动提交，派出后可以继续做不相关的事，但别改派出去的那些文件；结果回来后合并各个分支（git merge），解决冲突，重新跑检查。')
     }
     return notes.filter(Boolean).join('\n\n')
@@ -1337,6 +1357,7 @@ export class ConversationService {
 
   private chatStage(conversation: Conversation, stage: ConversationStage, forkAt: string | null = null, knowledgeBase?: KnowledgeBase, userMcp: readonly AgentMcpServer[] = []): ChatStage {
     const chosen = this.store.chatOptions(conversation.id)
+    if (this.automaticInvestigation?.owns(conversation.id)) { chosen.permissionMode = agentDescriptor(stage.agent).discussionMode; chosen.allowBypass = false }
     const mcp = this.mcp?.(conversation.id)
     let permissionMode = isHelper(conversation) && chosen.permissionMode && !helperAllowsMode(chosen.permissionMode) ? 'ask' : chosen.permissionMode
     const { fallbackMode, permissionModes, launch, providerModels } = adapterOf(stage.agent)
@@ -1390,7 +1411,7 @@ export class ConversationService {
   }
 
   private agentStage(conversationId: string, stage: ConversationStage): AgentStage {
-    return { sessionsRoot: this.sessionsRoot, conversationId, stageId: stage.id, planOnly: Boolean(stage.planOnly || this.get(conversationId).workspaceReadOnly) }
+    return { sessionsRoot: this.sessionsRoot, conversationId, stageId: stage.id, planOnly: Boolean(stage.planOnly || this.get(conversationId).workspaceReadOnly || this.automaticInvestigation?.owns(conversationId)) }
   }
 
   // Remembered for the conversation's next start once the stage took it: a model or effort here,

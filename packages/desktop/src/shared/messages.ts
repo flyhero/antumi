@@ -8959,6 +8959,14 @@ export const MESSAGES = {
     "zh": "帮助",
     "en": "Help"
   },
+  "StatusBar.feedback": {
+    "zh": "反馈",
+    "en": "Feedback"
+  },
+  "StatusBar.feedbackTooltip": {
+    "zh": "在 GitHub 报告问题或提建议",
+    "en": "Report a problem or suggest an idea on GitHub"
+  },
   "StatusBar.settings": {
     "zh": "设置",
     "en": "Settings"
@@ -9004,14 +9012,6 @@ export const MESSAGES = {
     "en": "Keep awake: {value1}"
   },
   "StatusBar.manageAntumiWorktrees": {
-  "StatusBar.feedback": {
-    "zh": "反馈",
-    "en": "Feedback"
-  },
-  "StatusBar.feedbackTooltip": {
-    "zh": "在 GitHub 报告问题或提建议",
-    "en": "Report a problem or suggest an idea on GitHub"
-  },
     "zh": "管理 Antumi 建的 worktree",
     "en": "Manage Antumi worktrees"
   },

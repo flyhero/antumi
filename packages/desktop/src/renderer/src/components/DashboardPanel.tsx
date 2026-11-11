@@ -126,7 +126,7 @@ export function DashboardPanel() {
   return (
     <div className="dashboard-stats">
       <div className="dashboard-toolbar">
-        <p className="muted">{tr('DashboardPanel.taskRunsConversationsAndQuickRequestsGroupedBy', { value1: report && t('DashboardPanel.updated', { value1: reportTime(report.at) }) })}</p>
+        <p className="muted">{report && t('DashboardPanel.updated', { value1: reportTime(report.at) })}</p>
         <DrillChip drill={drill} onClear={() => setDrill({ source: drill.source, agent: drill.agent })} />
         {usage.supported && (
           <>

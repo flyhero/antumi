@@ -4153,13 +4153,9 @@ export const MESSAGES = {
     "zh": "还没有任务。",
     "en": "No tasks yet."
   },
-  "DashboardPanel.taskRunsConversationsAndQuickRequestsGroupedBy": {
-    "zh": "任务运行、对话和轻量请求的用量，按这台电脑的日期计{value1}",
-    "en": "Task runs, conversations, and quick requests, grouped by this computer's local date{value1}"
-  },
   "DashboardPanel.updated": {
-    "zh": " · 更新于 {value1}",
-    "en": " · Updated {value1}"
+    "zh": "更新于 {value1}",
+    "en": "Updated {value1}"
   },
   "DashboardPanel.timeRange": {
     "zh": "时间范围",

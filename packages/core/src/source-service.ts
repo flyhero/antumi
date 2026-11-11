@@ -415,7 +415,7 @@ export class SourceService {
       const ready = this.requireReady(id, instance)
       const key = await this.checkedKey(ready.provider, rawKey)
       check()
-      const detail = await this.fetch(ready, key, this.state(id, instance).controller.signal, images)
+      const detail = await this.fetch(ready, key, this.state(id, instance).controller.signal, images, 'hold')
       check()
       return { issue: detail.issue, snapshot: detail.snapshot, imagesDeferred: detail.deferred, commentsSupported: ready.provider.commentSync === 1 && !!ready.provider.comments }
     })
@@ -624,7 +624,8 @@ export class SourceService {
   }
 
   // images false asks for the text alone; deferred is how many images the provider left for later.
-  private async fetch(ready: Ready, key: string, abort: AbortSignal, images = true): Promise<Fetched> {
+  // A preview holds its images in memory; anything a task or conversation keeps stores them.
+  private async fetch(ready: Ready, key: string, abort: AbortSignal, images = true, keep: 'store' | 'hold' = 'store'): Promise<Fetched> {
     let raw: SourceIssueDetail
     try {
       raw = await this.call((signal) => ready.provider.fetch(ready.settings, ready.credential, key, AbortSignal.any([signal, abort]), ...(images ? [] : [{ images: false }])), FETCH_TIMEOUT_MS)
@@ -635,7 +636,7 @@ export class SourceService {
     if (!issue) {
       throw new Rejection('source-request-failed', `${ready.provider.name} answered with an issue core cannot accept`)
     }
-    const { images: stored, lost } = await this.storeImages(raw.images ?? [])
+    const { images: stored, lost } = await this.storeImages(raw.images ?? [], keep)
     const note = lost > 0 ? `\n\n（还有 ${lost} 张图片没能保存）` : ''
     const text = typeof raw.markdown === 'string' ? raw.markdown : ''
     const markdown = text.slice(0, MAX_SNAPSHOT_LENGTH - note.length) + note
@@ -643,12 +644,12 @@ export class SourceService {
   }
 
   // Each image passes the same checks as one the user uploads; one that fails is counted, not fatal.
-  private async storeImages(raw: readonly { name: string; bytes: Uint8Array }[]): Promise<{ images: TaskImage[]; lost: number }> {
+  private async storeImages(raw: readonly { name: string; bytes: Uint8Array }[], keep: 'store' | 'hold'): Promise<{ images: TaskImage[]; lost: number }> {
     const images: TaskImage[] = []
     let lost = Math.max(0, raw.length - MAX_TASK_IMAGES)
     for (const image of raw.slice(0, MAX_TASK_IMAGES)) {
       try {
-        const info = await this.attachments.put(image.bytes)
+        const info = keep === 'hold' ? await this.attachments.hold(image.bytes) : await this.attachments.put(image.bytes)
         if (!images.some((existing) => existing.id === info.id)) {
           images.push({ id: info.id, name: imageName(image.name), width: info.width, height: info.height })
         }

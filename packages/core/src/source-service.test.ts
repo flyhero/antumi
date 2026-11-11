@@ -202,7 +202,7 @@ describe('SourceService', () => {
     expect(inboxes).toHaveLength(eventCount)
   })
 
-  it('reads the text first and stores valid preview images separately', async () => {
+  it('reads the text first and holds valid preview images without writing them', async () => {
     await setUp()
     demo.deferImages = true
     const text = await service.issue('demo', 'default', 'D-3')
@@ -214,6 +214,8 @@ describe('SourceService', () => {
     expect(full.snapshot.markdown).toContain('还有 1 张图片没能保存')
     expect(demo.fetched).toEqual(['D-3:text', 'D-3'])
     expect(tasks.importedKeys('demo', 'default').size).toBe(0)
+    expect(await attachments.info(full.snapshot.images[0]!.id)).toMatchObject({ width: 6, height: 4 })
+    expect(await attachments.pathOf(full.snapshot.images[0]!.id)).toBeNull()
   })
 
   it('requires a ready source and rejects malformed preview keys before fetching', async () => {

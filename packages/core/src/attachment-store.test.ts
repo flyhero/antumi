@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -29,6 +29,28 @@ describe('AttachmentStore', () => {
     expect(await new AttachmentStore(dir).info(first?.id ?? '')).toEqual(first)
     const bytes = await store.read(first?.id ?? '', 0, 8)
     expect([...bytes]).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+  })
+
+  it('holds a previewed image in memory only, readable like a stored one', async () => {
+    const info = await store.hold(pngBytes(4, 3))
+    expect(readdirSync(dir)).toEqual([])
+    expect(await store.info(info.id)).toEqual(info)
+    expect([...await store.read(info.id, 0, 8)]).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+    expect(await store.pathOf(info.id)).toBeNull()
+    expect(await new AttachmentStore(dir).info(info.id)).toBeNull()
+  })
+
+  it('lets the oldest held image go past the limit, and keeps one stored since', async () => {
+    const small = new AttachmentStore(dir, pngBytes(4, 3).byteLength + pngBytes(5, 3).byteLength)
+    const first = await small.hold(pngBytes(4, 3))
+    const second = await small.hold(pngBytes(5, 3))
+    const third = await small.hold(pngBytes(6, 3))
+    expect(await small.info(first.id)).toBeNull()
+    expect(await small.info(second.id)).toEqual(second)
+    expect(await small.info(third.id)).toEqual(third)
+    await small.put(pngBytes(4, 3))
+    expect(await small.hold(pngBytes(4, 3))).toEqual(first)
+    expect(readdirSync(dir)).toEqual([first.id])
   })
 
   it('stores the same way without waiting, for an agent\'s output read in one go', async () => {

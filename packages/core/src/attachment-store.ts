@@ -6,6 +6,9 @@ import { ATTACHMENT_ID_PATTERN, MAX_ATTACHMENT_BYTES, type AttachmentInfo } from
 import { IMAGE_MIME, ImageError, inspectImage, type ImageFacts } from './image-file'
 import { Rejection } from './rejection'
 
+// Images only looked at, an issue's in the inbox, stay in memory up to this much, the oldest let go.
+const HELD_BYTES = 64 * 1024 * 1024
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 // A stored image as an agent takes it: by path, or by its bytes read when asked for.
@@ -16,8 +19,11 @@ export type AttachmentFile = { id: string; mime: AttachmentInfo['mime']; path: s
 export class AttachmentStore {
   // Facts read from disk, keyed by id; files never change once written.
   private readonly infos = new Map<string, AttachmentInfo>()
+  // Images held in memory only, oldest first.
+  private readonly held = new Map<string, { info: AttachmentInfo; bytes: Uint8Array }>()
+  private heldBytes = 0
 
-  constructor(private readonly dir: string) {}
+  constructor(private readonly dir: string, private readonly heldLimit = HELD_BYTES) {}
 
   // The same, for a caller that cannot wait: an agent's output is read and logged in one go, and
   // an image in it must be stored before the log names it.
@@ -76,6 +82,29 @@ export class AttachmentStore {
     return info
   }
 
+  // Read like a stored image while it is looked at, but never written: a preview leaves nothing on
+  // disk. An agent cannot take it by path; what it is handed is stored with put().
+  async hold(input: Uint8Array): Promise<AttachmentInfo> {
+    const { facts, info } = this.prepare(input)
+    if (await this.isFile(this.file(info.id))) {
+      this.infos.set(info.id, info)
+      return info
+    }
+    const earlier = this.held.get(info.id)
+    if (earlier) {
+      this.held.delete(info.id)
+      this.heldBytes -= earlier.bytes.byteLength
+    }
+    this.held.set(info.id, { info, bytes: facts.bytes })
+    this.heldBytes += facts.bytes.byteLength
+    for (const [id, image] of this.held) {
+      if (this.heldBytes <= this.heldLimit || id === info.id) break
+      this.held.delete(id)
+      this.heldBytes -= image.bytes.byteLength
+    }
+    return info
+  }
+
   // A long paste, kept as a text file only the conversation's agent is let read without asking:
   // each conversation's under a folder of its own, by the hash of the text.
   async putText(conversationId: string, input: Uint8Array): Promise<string> {
@@ -118,7 +147,7 @@ export class AttachmentStore {
     }
     const file = this.file(id)
     if (!(await this.isFile(file))) {
-      return null
+      return this.held.get(id)?.info ?? null
     }
     try {
       const facts = inspectImage(await readFile(file))
@@ -134,6 +163,8 @@ export class AttachmentStore {
   async read(id: string, offset: number, length: number): Promise<Uint8Array> {
     const file = this.file(id)
     if (!(await this.isFile(file))) {
+      const image = this.held.get(id)
+      if (image) return image.bytes.subarray(offset, offset + length)
       throw new Rejection('attachment-not-found', `no image ${id}`)
     }
     const handle = await open(file, 'r')

@@ -1033,6 +1033,16 @@ export function BugIcon() {
   )
 }
 
+export function MegaphoneIcon() {
+  return (
+    <svg {...stroked}>
+      <path d="M3.5 7.8h2.8l7.2-3.6v11.6l-7.2-3.6H3.5a1 1 0 0 1-1-1V8.8a1 1 0 0 1 1-1z" />
+      <path d="M6.3 12.2l1 3.8h1.9l-.8-3" />
+      <path d="M16 8a3 3 0 0 1 0 4" />
+    </svg>
+  )
+}
+
 export function BellIcon() {
   return (
     <svg {...stroked}>

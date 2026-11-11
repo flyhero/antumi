@@ -1,12 +1,13 @@
 import { localized, t, tr } from '../i18n'
 import { useEffect, useRef, useState } from 'react'
+import { PROJECT_GITHUB_URL } from '@antumi/protocol'
 import { openGuide, setAwakeMode, setSchedulesOpen, setSettingsOpen, setWorktreesOpen, toggleBrowserPanel, toggleGitPanel, toggleFilesPanel, togglePortsPanel, toggleTerminalPanel, useAwakeSupported, useFilesScope, useBrowserSupported, useCore, useSchedulesOpen, useSchedulesSupported, useWorktreesSupported, type ConnectionState } from '../core-store'
 import { ALL_TABS, useBrowserTabs } from '../browser-state'
 import { formatBytes, worktreeRows, worktreeSummary } from '../worktree-groups'
 import { useWorktrees } from '../worktree-store'
 import { useShortcutLabel } from '../keyboard-shortcuts'
 import { usePanelShortcut } from '../panel-shortcuts'
-import { BoltIcon, BookIcon, WorktreeIcon, ChatIcon, CheckIcon, ClockIcon, CoffeeIcon, FilesIcon, GearIcon, GitIcon, GlobeIcon, HelpIcon, PortsIcon, PulseIcon, TerminalIcon } from './icons'
+import { BoltIcon, BookIcon, WorktreeIcon, ChatIcon, CheckIcon, ClockIcon, CoffeeIcon, FilesIcon, GearIcon, GitIcon, GlobeIcon, HelpIcon, MegaphoneIcon, PortsIcon, PulseIcon, TerminalIcon } from './icons'
 import { usePorts } from '../port-state'
 import { UsageBar } from './UsageBar'
 import { useFolderChanges } from './ConversationInspector'
@@ -94,6 +95,26 @@ function HelpButton() {
         {/* The icon its Settings section shows. */}
         <MenuItem icon={<ChatIcon />} label={t('SupportSettings.title')} onSelect={() => select(() => setSettingsOpen(true, 'support'))} />
       </ContextMenu>}
+    </>
+  )
+}
+
+// Always in sight at the far end, apart from the panels: it leaves the app for GitHub.
+function FeedbackButton() {
+  return (
+    <>
+      <span className="statusbar-divider" aria-hidden="true" />
+      <a
+        className="tool-button statusbar-feedback"
+        href={`${PROJECT_GITHUB_URL}/issues/new`}
+        target="_blank"
+        rel="noreferrer"
+        data-tooltip={t('StatusBar.feedbackTooltip')}
+        data-tooltip-side="top-end"
+      >
+        <MegaphoneIcon />
+        <span>{t('StatusBar.feedback')}</span>
+      </a>
     </>
   )
 }
@@ -329,6 +350,7 @@ export function StatusBar() {
       <TerminalButton />
       <PortsButton />
       <AwakeButton />
+      <FeedbackButton />
     </footer>
   )
 }

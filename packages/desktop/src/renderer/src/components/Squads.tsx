@@ -13,6 +13,7 @@ import { AgentModelPicker } from './AgentModelPicker'
 import { effortLabel } from './ChatOptionsBar'
 import { ChatPicker } from './ChatPicker'
 import { Segmented } from './SettingsControls'
+import { SidebarPinnedAgents } from './SidebarPinnedAgents'
 
 const MAX_MEMBERS = 5
 const LEADER_DUTY = () => t('Squads.readOnlyLeaderBreaksDownWorkAssignsMembers')
@@ -25,10 +26,13 @@ export function SquadsEntry() {
   const open = useCore((state) => state.section === 'squads' && !state.routinesOpen && !state.overviewOpen && !state.worktreesOpen)
   if (!supported && !profilesSupported) return null
   return (
-    <button type="button" className="inbox-entry sidebar-squads" aria-current={open} onClick={() => { selectSquad(null); if (profilesSupported) useCore.setState({ agentProfilesTab: 'profiles' }) }}>
-      <SquadIcon />
-      <span>{t(profilesSupported ? 'AgentProfiles.title' : 'ChatPlan.squad')}</span>
-    </button>
+    <>
+      <button type="button" className="inbox-entry sidebar-squads" aria-current={open} onClick={() => { selectSquad(null); if (profilesSupported) useCore.setState({ agentProfilesTab: 'profiles' }) }}>
+        <SquadIcon />
+        <span>{t(profilesSupported ? 'AgentProfiles.title' : 'ChatPlan.squad')}</span>
+      </button>
+      {profilesSupported && <SidebarPinnedAgents />}
+    </>
   )
 }
 

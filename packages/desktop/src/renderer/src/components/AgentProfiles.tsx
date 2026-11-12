@@ -9,7 +9,7 @@ import { agentLabel } from '../labels'
 import { t } from '../i18n'
 import { timeAgo } from '../conversation-state'
 import { AgentAvatar } from './AgentAvatar'
-import { AgentIcon, InfoIcon, PlusIcon } from './icons'
+import { AgentIcon, InfoIcon, PinIcon, PlusIcon } from './icons'
 import { AgentsPageHeader } from './AgentsPageHeader'
 import { AgentModelPicker } from './AgentModelPicker'
 import { ChatPicker } from './ChatPicker'
@@ -20,6 +20,7 @@ import type { ChecklistGroup } from '../grouped-checklist'
 import { Segmented } from './SettingsControls'
 import { AgentProfileTemplatesDialog } from './AgentProfileTemplates'
 import { usePreferences } from '../preferences'
+import { newAgentConversation, pinAgent } from '../pinned-agents'
 import './agent-profiles.css'
 
 const useProfileEditor = create<{ view: 'list' | 'editor'; templatesOpen: boolean; profile: AgentProfile | null; seed: AgentProfileFields | null; template: AgentProfileTemplate | null }>(() => ({ view: 'list', templatesOpen: false, profile: null, seed: null, template: null }))
@@ -54,6 +55,7 @@ export function AgentsView() {
 function ProfilesView() {
   const installed = useInstalledAgents()
   const profiles = useCore((state) => state.agentProfiles)
+  const pinned = usePreferences((state) => state.pinnedAgentIds)
   const [tab, setTab] = useState<'active' | 'archived'>('active')
   const tabsId = useId()
   const { view, templatesOpen, profile, seed, template } = useProfileEditor()
@@ -92,7 +94,10 @@ function ProfilesView() {
             <span className="squad-card-foot"><span className="agent-profile-engine" title={[agentLabel(item.agent), item.model].filter(Boolean).join(' · ')}>{[agentLabel(item.agent), item.model].filter(Boolean).join(' · ')}</span><span className="squad-card-time">{t('SourceInboxView.updated', { value1: timeAgo(item.updatedAt, now) })}</span></span>
           </button>
           <footer className="agent-profile-card-actions">
-            {item.archivedAt === null && <button type="button" className="button" onClick={() => { openConversationDraft(); useCore.setState({ draftProfileId: item.id }) }}>{t('AgentProfiles.chat')}</button>}
+            {item.archivedAt === null && <>
+              <button type="button" className="button" onClick={() => newAgentConversation(item.id)}>{t('AgentProfiles.chat')}</button>
+              <button type="button" className="button ghost" aria-pressed={pinned.includes(item.id)} onClick={() => pinAgent(item.id, !pinned.includes(item.id))}><PinIcon />{t(pinned.includes(item.id) ? 'AgentProfiles.unpinFromSidebar' : 'AgentProfiles.pinToSidebar')}</button>
+            </>}
             <button type="button" className="button ghost" onClick={() => edit(item)}>{t('AgentProfiles.edit')}</button>
             <button type="button" className="button ghost" disabled={busy} onClick={() => void archive(item)}>{t(item.archivedAt === null ? 'AgentProfiles.archive' : 'AgentProfiles.restore')}</button>
           </footer>

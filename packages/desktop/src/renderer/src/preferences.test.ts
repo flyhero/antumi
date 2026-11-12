@@ -21,6 +21,15 @@ beforeEach(() => {
 
 afterEach(() => vi.unstubAllGlobals())
 
+it('preserves the pinned agents and their order after restarting', async () => {
+  const ids = ['22222222-2222-4222-8222-222222222222', '11111111-1111-4111-8111-111111111111']
+  const { setPreference } = await import('./preferences')
+  setPreference('pinnedAgentIds', ids)
+  vi.resetModules()
+  const { usePreferences } = await import('./preferences')
+  expect(usePreferences.getState().pinnedAgentIds).toEqual(ids)
+})
+
 describe('project color preferences', () => {
   it('persists color choices and loads them after a restart', async () => {
     const { setPreference } = await import('./preferences')

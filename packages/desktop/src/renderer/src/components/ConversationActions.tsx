@@ -16,6 +16,8 @@ import { currentInstalledAgents, otherInstalledAgent, useInstalledAgents } from 
 import { askConfirm, askConfirmWithOption } from '../confirm-dialog'
 import { cleanAway, worktreesToOffer } from '../conversation-worktrees'
 import { refreshWorktrees } from '../worktree-store'
+import { usePreferences } from '../preferences'
+import { pinAgent } from '../pinned-agents'
 
 // Every way into a handoff ends in the conversation's composer, with the agent picked there (by
 // default the other one here), to be sent from it with whatever the user adds.
@@ -186,6 +188,8 @@ export function ConversationContextMenu({ conversation, at, onClose, onRename, o
   const busy = conversation.chat?.turn === 'running' || conversation.chat?.turn === 'awaiting'
   const profilesSupported = useCore((state) => state.rpc?.features.includes('agent-profiles') ?? false)
   const savedProfile = useCore((state) => conversation.profile && state.agentProfiles[conversation.profile.id] ? conversation.profile.id : null)
+  const pinnedAgents = usePreferences((state) => state.pinnedAgentIds)
+  const profileArchived = useCore((state) => savedProfile ? state.agentProfiles[savedProfile]?.archivedAt !== null : true)
   const reusable = useReuseConversationSupported() && canReuseConversation(conversation)
   const handoff = other && !archived
   return (
@@ -196,6 +200,7 @@ export function ConversationContextMenu({ conversation, at, onClose, onRename, o
       {/* A chat with an agent the user saved leads to that agent; saving it again would only copy it
           without its skills or servers. A direct call's stand-in profile is saved nowhere: it may be. */}
       {profilesSupported && savedProfile && <MenuItem label={t('AgentProfiles.editAgent')} icon={<SquadIcon />} onSelect={pick(() => openAgentProfile(savedProfile))} />}
+      {profilesSupported && savedProfile && !profileArchived && <MenuItem label={t(pinnedAgents.includes(savedProfile) ? 'AgentProfiles.unpinFromSidebar' : 'AgentProfiles.pinToSidebar')} icon={<PinIcon />} onSelect={pick(() => pinAgent(savedProfile, !pinnedAgents.includes(savedProfile)))} />}
       {profilesSupported && !savedProfile && canReuseConversation(conversation) && <MenuItem label={t('AgentProfiles.saveFromConversation')} icon={<SquadIcon />} onSelect={pick(() => editAgentProfile({ name: conversation.title.slice(0, 60), agent: conversation.agent, model: conversation.chatOptions?.model ?? null, effort: conversation.chatOptions?.effort ?? null, modelProvider: conversation.modelProvider ?? null, capability: conversation.workspaceReadOnly || conversation.planOnly ? 'readOnly' : 'develop', instructions: conversation.profile?.instructions ?? '' }))} />}
       {(reusable || handoff || conversation.sessionId) && <>
         <div className="menu-separator" role="separator" />

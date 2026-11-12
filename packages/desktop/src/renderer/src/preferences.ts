@@ -132,6 +132,8 @@ const Preferences = z.object({
   gitFoldedGroups: z.record(z.string(), z.array(z.string())).catch({}),
   gitPushRejectedUpdate: z.enum(['ask', 'merge', 'rebase']).catch('ask'),
   conversationGroup: z.enum(CONVERSATION_GROUPS).catch('project'),
+  // Saved agents kept immediately below the sidebar's Agents entry, in the order pinned.
+  pinnedAgentIds: z.array(z.string().uuid()).catch([]),
   // Conversation groups folded in the sidebar, by grouping and group ("project:group:antumi").
   foldedConversationGroups: z.array(z.string()).catch([]),
   conversationSort: z.enum(CONVERSATION_SORTS).catch('recent'),

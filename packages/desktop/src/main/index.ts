@@ -24,6 +24,7 @@ import { bundleOf, leftovers, stageFromDmg, swapBlocked, swapInto } from './app-
 import { appImageBlocked, replaceAppImage } from './app-image-swap'
 import { VisualizationPages } from './visualization-pages'
 import { VISUALIZATION_SCHEME } from '../shared/visualization-policy'
+import { previewHtml } from './preview-html'
 
 // The built-in browser: its tabs live here, in main, so a window closing or its renderer going
 // never touches a page an agent is on. The slot puts the one on show into the window that asked.
@@ -72,7 +73,8 @@ async function servePreview(request: Request): Promise<Response> {
     if (!info.isFile() || info.size > 32 * 1024 * 1024) return new Response('not found', { status: 404 })
     const body = await readFile(real)
     const type = PREVIEW_TYPES[extname(real).toLowerCase()] ?? 'application/octet-stream'
-    return new Response(body, { headers: { 'content-type': type, 'content-security-policy': PREVIEW_POLICY, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' } })
+    const content = type.startsWith('text/html') ? previewHtml(body.toString('utf8')) : body
+    return new Response(content, { headers: { 'content-type': type, 'content-security-policy': PREVIEW_POLICY, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' } })
   } catch {
     return new Response('not found', { status: 404 })
   }

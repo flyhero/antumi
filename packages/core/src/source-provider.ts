@@ -31,6 +31,8 @@ export type SourceProvider = {
   readonly name: string
   readonly commentSync?: 1
   comments?(settings: SourceSettings, credential: SourceCredential, key: string, signal: AbortSignal, options: SourceCommentOptions): Promise<SourceCommentPage>
+  // An image a comment names by id; core checks it as it does the issue's images.
+  image?(settings: SourceSettings, credential: SourceCredential, key: string, id: string, signal: AbortSignal): Promise<{ name: string; bytes: Uint8Array }>
   readonly settings: readonly SettingField[]
   // Checks and canonicalizes settings before they are saved; throws SourceError('invalid-settings').
   normalizeSettings(values: SourceSettings): Record<string, string> | Promise<Record<string, string>>

@@ -1,12 +1,18 @@
 import { z } from 'zod'
+import { MAX_TASK_IMAGES } from './attachments'
 
 const WebUrl = z.string().max(4000).refine((value) => {
   try { return ['http:', 'https:'].includes(new URL(value).protocol) } catch { return false }
 })
+// An image in a comment by the tracker's id: its bytes come from the plugin's image call, and only
+// when the comment is sent to an agent, so syncing stays light.
+export const SourceCommentImage = z.object({ id: z.string().min(1).max(500), name: z.string().max(4096) })
+export type SourceCommentImage = z.infer<typeof SourceCommentImage>
 export const SourceComment = z.object({
   id: z.string().min(1).max(500), author: z.string().max(500),
   createdAt: z.number().int().nonnegative(), updatedAt: z.number().int().nonnegative().nullable(),
-  url: WebUrl, markdown: z.string().max(50_000), truncated: z.boolean().default(false)
+  url: WebUrl, markdown: z.string().max(50_000), truncated: z.boolean().default(false),
+  images: z.array(SourceCommentImage).max(MAX_TASK_IMAGES).optional()
 })
 export type SourceComment = z.infer<typeof SourceComment>
 // Include every identity at the boundary: trackers commonly round timestamps to a second.
@@ -26,6 +32,8 @@ export const SourceDelivery = z.object({
   id: z.string().uuid(), requestId: z.string().uuid(), target: SourceUpdateTarget,
   generation: z.string().optional(),
   conversationId: z.string(), ref: z.string(), commentIds: z.array(z.string()),
+  // The comments' images as stored attachments, sent with the text; kept so a retry sends the same.
+  imageIds: z.array(z.string()).max(MAX_TASK_IMAGES).optional(),
   text: z.string(), state: SourceDeliveryState, error: z.string().nullable(), createdAt: z.number()
 })
 export type SourceDelivery = z.infer<typeof SourceDelivery>

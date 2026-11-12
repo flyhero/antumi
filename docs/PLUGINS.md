@@ -252,4 +252,4 @@ SDK 的 `fetch` 可以返回 `images: [{ name, bytes: Uint8Array }]`。SDK 转�
 
 ### 评论同步
 
-SDK 0.1.3 支持来源声明 `commentSync: 1`，通过 `fetch.commentState` 建立基线、`comments` 分页补拉新增评论。旧插件不受影响。详见 SDK README 和 [来源评论同步](SOURCE-COMMENTS.md)。
+SDK 0.1.3 支持来源声明 `commentSync: 1`，通过 `fetch.commentState` 建立基线、`comments` 分页补拉新增评论。旧插件不受影响。SDK 0.1.4 起评论可用 `images` 列出其中的图片编号，再实现 `image` 按编号返回图片内容，Antumi 把评论交给 Agent 时才来取。详见 SDK README 和 [来源评论同步](SOURCE-COMMENTS.md)。

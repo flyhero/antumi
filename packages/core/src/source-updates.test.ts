@@ -28,9 +28,14 @@ describe('watched issue updates', () => {
   const receipts = new Map<string, SourceDeliveryReceipt>()
   let snapshot: SourceSnapshot
   let changedSnapshot: SourceSnapshot | null
+  let fetchedImages: string[]
   function make() {
     return new SourceUpdates(store, { updateConnection: () => ({ binding, supported: true,
       fetch: async () => snapshot,
+      image: async (ref: { id: string; name: string }) => {
+        fetchedImages.push(ref.id)
+        return ref.id === 'broken' ? null : { id: `stored-${ref.id}`, name: ref.name, width: 1, height: 1 }
+      },
       comments: async (options: SourceCommentOptions): Promise<SourceCommentPage> => {
         changes++
         if (failPage) throw new Error('page failed')
@@ -51,6 +56,7 @@ describe('watched issue updates', () => {
     comments = [comment('old')]
     snapshot = baseline
     changedSnapshot = null
+    fetchedImages = []
     now = 100_000
     binding = 'original-binding'
     changes = 0
@@ -76,6 +82,18 @@ describe('watched issue updates', () => {
     await updates.send(target, requestId, 999)
     expect(send).toHaveBeenCalledTimes(1)
     expect(updates.summary(target).pending).toBe(0)
+  })
+  it('fetches a comment’s images only when sending it, and says which did not come', async () => {
+    comments.push({ ...comment('pictured'), images: [{ id: 'shot', name: 'shot.png' }, { id: 'broken', name: 'gone.png' }] })
+    await updates.poll()
+    expect(fetchedImages).toEqual([])
+    const requestId = randomUUID()
+    const sent = await updates.send(target, requestId, updates.summary(target).through)
+    expect(fetchedImages).toEqual(['shot', 'broken'])
+    expect(sent.imageIds).toEqual(['stored-shot'])
+    expect(sent.text).toContain('评论里的 1 张图片附在这条消息里')
+    expect(sent.text).toContain('还有 1 张图片没能下载')
+    expect(send.mock.calls[0]?.[1].imageIds).toEqual(['stored-shot'])
   })
   it('recovers durable cursors and receipts after a restart', async () => {
     comments.push(comment('new', 2000))

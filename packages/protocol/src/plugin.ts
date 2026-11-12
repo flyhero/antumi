@@ -63,6 +63,8 @@ export const pluginMethods = {
   // images false: the issue's text alone, its images fetched by a later call; a plugin that leaves
   // them out says how many in imagesDeferred. Older plugins ignore it and send the images anyway.
   comments: { params: SourceCommentOptions.extend({ source: SourceId, settings: Settings, credential: PluginCredential, key: z.string() }), result: SourceCommentPage },
+  // One image a comment names (SourceComment.images), asked for only when the comment goes to an agent.
+  image: { params: z.object({ source: SourceId, settings: Settings, credential: PluginCredential, key: z.string(), id: z.string().min(1).max(500) }), result: SourceImage },
   fetch: {
     params: z.object({ source: SourceId, settings: Settings, credential: PluginCredential, key: z.string(), images: z.boolean().optional() }),
     result: SourceIssue.extend({ markdown: z.string().max(50_000), images: SourceImages.optional(), imagesDeferred: z.number().int().nonnegative().max(1000).optional(), commentState: SourceCommentState.optional() })
@@ -75,7 +77,7 @@ export type PluginParams<M extends PluginMethod> = z.output<(typeof pluginMethod
 export type PluginResult<M extends PluginMethod> = z.output<(typeof pluginMethods)[M]['result']>
 export const PluginCall = z.object({
   type: z.literal('call'), id: z.string(),
-  method: z.enum(['handshake', 'normalizeSettings', 'normalizeKey', 'envCredential', 'login', 'list', 'fetch', 'comments']),
+  method: z.enum(['handshake', 'normalizeSettings', 'normalizeKey', 'envCredential', 'login', 'list', 'fetch', 'comments', 'image']),
   params: z.unknown()
 })
 export const PluginAnswer = z.object({ type: z.literal('answer'), id: z.string(), value: z.string() })

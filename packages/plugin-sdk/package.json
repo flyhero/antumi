@@ -1,6 +1,6 @@
 {
   "name": "@antumi/plugin-sdk",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Build standalone Antumi task source plugins",
   "type": "module",
   "license": "Apache-2.0",

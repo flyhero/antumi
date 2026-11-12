@@ -111,6 +111,12 @@ export function runSourcePlugin(options: Options): { close(): void } {
         if (!source.comments) throw new SourceError('request-failed', '来源不支持评论同步')
         return source.comments(settings, credential, key, signal, { checkpoint, continuation })
       }
+      case 'image': {
+        const { settings, credential, key, id } = pluginSchemas.image.params.parse(params)
+        if (!source.image) throw new SourceError('request-failed', '来源不支持读取评论图片')
+        const image = await source.image(settings, credential, key, id, signal)
+        return { name: image.name, base64: Buffer.from(image.bytes).toString('base64') }
+      }
       case 'fetch': {
         const { settings, credential, key, images } = pluginSchemas.fetch.params.parse(params)
         const detail = await source.fetch(settings, credential, key, signal, { images: images ?? true })

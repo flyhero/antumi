@@ -14,6 +14,9 @@ export type LoginSession = {
 export type SourcePlugin = {
   readonly id: string
   comments?(settings: SourceSettings, credential: SourceCredential, key: string, signal: AbortSignal, options: SourceCommentOptions): Promise<SourceCommentPage>
+  // The bytes of an image a comment names in its images, asked for when Antumi sends the comment to
+  // an agent. Required once comments name images.
+  image?(settings: SourceSettings, credential: SourceCredential, key: string, id: string, signal: AbortSignal): Promise<{ name: string; bytes: Uint8Array }>
   normalizeSettings(values: SourceSettings): Record<string, string> | Promise<Record<string, string>>
   normalizeKey?(key: string): string | Promise<string>
   envCredential?(env: Readonly<Record<string, string | undefined>>): SourceCredential | null

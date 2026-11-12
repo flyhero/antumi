@@ -56,6 +56,13 @@ describe('source SDK protocol runtime', () => {
     expect(h.messages[1]).toMatchObject({ type: 'result', result: { comments: [], checkpoint: { createdAt: 1000, ids: ['one'] } } })
   })
 
+  it('hands over a comment image by id, encoded for the host', async () => {
+    const h = harness({ image: async (_settings, _credential, key, id) => ({ name: `${key}-${id}.png`, bytes: new Uint8Array([1, 2, 3]) }) })
+    await h.hello()
+    h.call('image', { source: 'demo', settings: {}, credential: { kind: 'token', payload: {} }, key: 'DEMO-1', id: '42' })
+    await h.tick(); await h.tick()
+    expect(h.messages[1]).toEqual({ type: 'result', id: 'image', result: { name: 'DEMO-1-42.png', base64: 'AQID' } })
+  })
   it('requires implementations for advertised comment capabilities', () => {
     expect(() => runSourcePlugin({ manifest: { ...manifest, contributes: { sources: [{ ...manifest.contributes.sources[0], commentSync: 1 }] } }, sources: [source] })).toThrow('comments implementation')
   })

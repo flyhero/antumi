@@ -1,7 +1,7 @@
 import type { SourceInvestigationService, InvestigationSnapshot } from './source-investigation-service'
 import { investigationRef } from './source-investigation-service'
 import { createHash } from 'node:crypto'
-import type { SourceUpdateTarget, SourceCommentOptions } from '@antumi/protocol'
+import type { SourceUpdateTarget, SourceCommentImage, SourceCommentOptions } from '@antumi/protocol'
 import type { ChatReference } from '@antumi/protocol'
 import {
   agentDescriptor,
@@ -217,6 +217,18 @@ export class SourceService {
     return {
       binding, supported: ready.provider.commentSync === 1 && !!ready.provider.comments,
       fetch: async () => { const detail = await this.fetch(ready, source.key, abort, false); check(); return detail.snapshot },
+      // A comment's image, stored as an attachment; null when it could not be fetched or is no image.
+      image: async (ref: SourceCommentImage) => {
+        if (!ready.provider.image) return null
+        try {
+          const raw = await this.call((signal) => ready.provider.image!(ready.settings, ready.credential, source.key, ref.id, AbortSignal.any([signal, abort])), FETCH_TIMEOUT_MS)
+          check()
+          return (await this.storeImages([{ name: raw.name || ref.name, bytes: raw.bytes }], 'store')).images[0] ?? null
+        } catch (error) {
+          console.error(`[antumi-core] ${source.provider}/${source.instance}: an image of a comment on ${source.key} was not fetched:`, error instanceof Error ? error.message : error)
+          return null
+        }
+      },
       comments: async (options: SourceCommentOptions) => {
         if (!ready.provider.comments) throw new Rejection('source-comments-unsupported')
         const result = await this.call((signal) => ready.provider.comments!(ready.settings, ready.credential, source.key, AbortSignal.any([signal, abort]), options), FETCH_TIMEOUT_MS)

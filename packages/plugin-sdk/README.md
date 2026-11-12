@@ -22,6 +22,8 @@ runSourcePlugin({ manifest, sources: [source] })
 - `login(session, settings, signal)`：使用 `session.prompt()` 顺序提问（`text` / `secret` / `select`），用 `session.notify()` 显示进度。成功返回经过平台验证的 `{ credential, account }`。
 - `list(settings, credential, signal)`：返回最多 200 个 `SourceIssue`，在平台侧完成分页、筛选和状态映射。
 - `fetch(settings, credential, key, signal)`：返回事项字段和最多 50,000 字符的 `markdown` 原文快照。SDK 0.1.1 起可附带 `images: [{ name, bytes: Uint8Array }]`（20 张、单张 10 MiB、合计 50 MiB），需要支持来源图片的宿主。SDK 负责 base64 编解码约定，宿主附件仓库验证实际图片。
+- `comments(settings, credential, key, signal, options)`：可选，manifest 里声明 `commentSync: 1` 的来源实现，增量返回评论。SDK 0.1.4 起每条评论可带 `images: [{ id, name }]`，列出评论里的图片（最多 20 张），只给编号不给内容。
+- `image(settings, credential, key, id, signal)`：可选（SDK 0.1.4 起），返回评论里某张图片的 `{ name, bytes }`。宿主把评论发给 Agent 时才按 `images` 里的编号来取，同步评论时不下载图片；评论列出了图片就必须实现它。
 - `fetch` 的第五个参数 `options`（SDK 0.1.2 起）：`options.images === false` 表示宿主想先拿到正文，图片会另调一次 `fetch` 来取。能分开取图的插件这时不下载图片，在结果里用 `imagesDeferred` 写明留下了几张；不理会这个参数、照常返回图片也可以。宿主排查问题时用它先让 Agent 开始，不让慢图片拖住。
 
 设置和凭据由 core 保存；SDK 不读写用户配置、不访问数据库、不依赖 Electron。站点地址字段需要设置 `bindsCredential: true`，防止改地址后把旧凭据发到新站点。

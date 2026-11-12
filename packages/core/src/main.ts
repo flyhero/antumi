@@ -317,7 +317,7 @@ sourceUpdates = new SourceUpdates(sourceUpdateStore, sources, {
       await service.resumeChat(owner.target.id)
     }
     else await conversations.continue(id)
-    await conversations.send(id, text, [], true, false, delivery.ref)
+    await conversations.send(id, text, delivery.imageIds ?? [], true, false, delivery.ref)
     const receipt = conversations.sourceDeliveryReceipt(id, delivery.ref, 'submitted')
     return receipt ?? { state: 'uncertain' }
   },

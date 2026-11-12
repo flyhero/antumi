@@ -121,7 +121,7 @@ export class PluginProcess {
       child.stdout.on('data', (chunk: Buffer) => {
         if (outcome) return
         bytes += chunk.length
-        if (bytes > (method === 'fetch' && handshaken ? 72 * 1024 * 1024 : MAX_OUTPUT)) { fail('插件输出超出大小限制'); return }
+        if (bytes > (method === 'fetch' && handshaken ? 72 * 1024 * 1024 : method === 'image' && handshaken ? 16 * 1024 * 1024 : MAX_OUTPUT)) { fail('插件输出超出大小限制'); return }
         let at = 0
         while (at < chunk.length && !outcome) {
           const end = chunk.indexOf(10, at)
@@ -186,7 +186,13 @@ export class PluginProcess {
       const timed = () => AbortSignal.timeout(20_000)
       providers.push({
         ...source,
-        ...(source.commentSync === 1 ? { comments: (settings, credential, key, signal, options) => this.call('comments', { source: source.id, settings, credential, key, ...options }, signal) } satisfies Partial<SourceProvider> : {}),
+        ...(source.commentSync === 1 ? {
+          comments: (settings, credential, key, signal, options) => this.call('comments', { source: source.id, settings, credential, key, ...options }, signal),
+          image: async (settings, credential, key, id, signal) => {
+            const image = await this.call('image', { source: source.id, settings, credential, key, id }, signal)
+            return { name: image.name, bytes: Buffer.from(image.base64, 'base64') }
+          }
+        } satisfies Partial<SourceProvider> : {}),
         envCredential: () => credential,
         normalizeSettings: (settings) => this.call('normalizeSettings', { source: source.id, settings }, timed()),
         normalizeKey: (key) => this.call('normalizeKey', { source: source.id, key }, timed()),

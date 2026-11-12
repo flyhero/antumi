@@ -155,16 +155,28 @@ pnpm prebuild:android          # 生成 android/（不提交）
 cd android
 rm -rf app/build/generated/assets/react app/build/generated/res/react   # 见下
 ./gradlew assembleRelease
-# → android/app/build/outputs/apk/release/app-release.apk，改名为 Antumi-X.Y.Z-android.apk
+cd .. && pnpm collect:apks     # 按发布用的名字复制到 dist/
+# → dist/Antumi-X.Y.Z-android-arm64-v8a.apk、dist/Antumi-X.Y.Z-android-armeabi-v7a.apk
 ```
 
 Gradle 会把打 JS 包的任务（`createBundleReleaseJsAndAssets`）误判为已是最新，monorepo 里别的包改了它看不出来，于是 APK 里还是旧的 JS。打包前删掉上面两个目录，强制重打。第一次编译要下载 1–2 GB 依赖，十分钟左右。
 
-APK 只带手机用的两种架构（`arm64-v8a`、`armeabi-v7a`，见 `app.json` 里 `expo-build-properties` 的 `buildArchs`），x86 的模拟器装不上；Apple 芯片 Mac 上的模拟器是 arm64，不受影响。改了 `app.json` 要重新 `pnpm prebuild:android`，`android/` 才会跟上。
+release 包按架构拆成两个 APK，每部手机只下载自己那一份：`arm64-v8a` 和 `armeabi-v7a`，即 `app.json` 里 `expo-build-properties` 的 `buildArchs`，由 `plugins/abi-splits.js` 拆开（debug 包仍是一个，`expo run:android` 照常用）。x86 的模拟器两个都装不上；Apple 芯片 Mac 上的模拟器是 arm64，装 `arm64-v8a` 那个。改了 `app.json` 要重新 `pnpm prebuild:android`，`android/` 才会跟上。
 
-在模拟器或接了 USB 调试的手机上装：`adb install -r app-release.apk`；用 `adb shell am start -a android.intent.action.VIEW -d '<配对链接>' app.antumi.mobile` 打开配对链接，不用扫码。
+在模拟器或接了 USB 调试的手机上装：`adb install -r dist/Antumi-X.Y.Z-android-arm64-v8a.apk`；用 `adb shell am start -a android.intent.action.VIEW -d '<配对链接>' app.antumi.mobile` 打开配对链接，不用扫码。
 
-发布前在真机上至少过一遍：扫码配对、确认码一致、看会话、回答确认、发消息和图片、撤销后被拒、断网重连。Release 说明写清这一版需要的桌面端最低版本（手机端要求电脑上的 core 支持 `mobile`）。推标签前先问用户。
+发布前在真机上至少过一遍：扫码配对、确认码一致、看会话、回答确认、发消息和图片、撤销后被拒、断网重连。推标签前先问用户。
+
+两个 APK 都传到 Release。Release 说明写清这一版需要的桌面端最低版本（手机端要求电脑上的 core 支持 `mobile`），再放上下面这段，把版本号换掉：
+
+```markdown
+### 选哪个安装包
+
+- **Antumi-X.Y.Z-android-arm64-v8a.apk**：绝大多数手机选这个，近几年的安卓手机都是 64 位。
+- **Antumi-X.Y.Z-android-armeabi-v7a.apk**：只给很老或很便宜的 32 位手机。
+
+不确定就先装 arm64-v8a；提示「应用未安装」或「与设备不兼容」时，换另一个装就行。已经装了 Antumi 的，到 App 的 设置 → 检查更新，会直接给出适合这部手机的那个。
+```
 
 ## 出错时
 

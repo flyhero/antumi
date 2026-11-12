@@ -1,8 +1,11 @@
 import * as Application from 'expo-application'
+import * as Device from 'expo-device'
 import { PROJECT_GITHUB_REPOSITORY } from '@antumi/protocol'
 import { z } from 'zod'
+import { releaseApk } from './release-apk'
 
-// The app is not in a store: a newer APK is a GitHub release tagged mobile-v<version>.
+// The app is not in a store: a newer APK is a GitHub release tagged mobile-v<version>, one APK per
+// architecture (release-apk.ts).
 
 const Release = z.object({
   tag_name: z.string(),
@@ -32,7 +35,7 @@ export async function checkForUpdate(): Promise<Update | null> {
   const releases = z.array(Release).parse(await response.json())
   for (const release of releases) {
     if (release.draft || !release.tag_name.startsWith('mobile-v')) continue
-    const apk = release.assets.find((asset) => asset.name.endsWith('.apk'))
+    const apk = releaseApk(release.assets, Device.supportedCpuArchitectures)
     if (!apk) continue
     const version = release.tag_name.slice('mobile-v'.length)
     return newer(version, currentVersion()) ? { version, url: apk.browser_download_url } : null

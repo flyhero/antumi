@@ -57,7 +57,7 @@ For a platform outside the recommendations, use **Install from another source** 
 
 **Optional,** Android only for now. Away from the computer, read conversations, answer requests and send messages to keep agents going. Agents still run on the computer; a phone disconnecting does not stop them.
 
-1. Download `Antumi-…-android.apk` from [GitHub Releases](https://github.com/flyhero/antumi/releases) and install it. The first time, allow installing apps from unknown sources; if the phone warns you, check the source and continue.
+1. Download `Antumi-…-android-arm64-v8a.apk` from [GitHub Releases](https://github.com/flyhero/antumi/releases) and install it; nearly every phone takes this one. If a very old 32-bit phone will not install it, get `Antumi-…-android-armeabi-v7a.apk` instead. The first time, allow installing apps from unknown sources; if the phone warns you, check the source and continue.
 2. In [**Settings → Phone**](antumi:settings/mobile), turn on **Allow phones to connect** and click **Add a phone**.
 3. On the phone, tap **Add a computer** and scan the code on the computer. If you cannot scan it, click **Copy pairing link** on the computer, send the link to your phone, and tap it or paste it into the app.
 4. Check that the phone and the computer show the same 6-digit code, then choose on the computer:

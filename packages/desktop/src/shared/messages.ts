@@ -565,7 +565,7 @@ export const MESSAGES = {
   "MobileSettings.pushDescription": {"zh": "填一个 ntfy 主题地址，在手机上订阅它，App 没打开也能收到提醒。只推送「有会话在等你确认」这类短句，不含会话标题和内容。", "en": "An ntfy topic URL to subscribe to on your phone, for notices while the app is closed. Only short notices like “a conversation is waiting for you” go out, never titles or content."},
   "MobileSettings.app": {"zh": "手机端", "en": "Phone app"},
   "MobileSettings.download": {"zh": "下载 Android 版", "en": "Get the Android app"},
-  "MobileSettings.downloadDescription": {"zh": "在 GitHub Releases 下载 APK 安装。暂时没有 iOS 版。", "en": "Download the APK from GitHub Releases. There is no iOS app yet."},
+  "MobileSettings.downloadDescription": {"zh": "在 GitHub Releases 下载 APK 安装，大多数手机选 arm64-v8a 那个。暂时没有 iOS 版。", "en": "Download the APK from GitHub Releases; most phones take the arm64-v8a one. There is no iOS app yet."},
   "MobileSettings.openReleases": {"zh": "打开下载页", "en": "Open downloads"},
   "SupportSettings.title": {"zh": "支持与反馈", "en": "Support & feedback"},
   "SupportSettings.description": {"zh": "支持 Antumi、分享给朋友、查看项目地址、反馈问题与交流。", "en": "Support Antumi, share it with friends, visit the project, send feedback, and connect with the community."},

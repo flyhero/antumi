@@ -57,7 +57,7 @@
 
 **可选，** 目前只有 Android 版。离开电脑时，在手机上看会话、回答确认、发消息让 Agent 接着做。Agent 仍在电脑上运行，手机断开不影响它们。
 
-1. 在 [GitHub Releases](https://github.com/flyhero/antumi/releases) 下载 `Antumi-…-android.apk` 并安装。第一次要允许「安装未知来源应用」；手机提示有风险时，确认来源后选继续安装。
+1. 在 [GitHub Releases](https://github.com/flyhero/antumi/releases) 下载 `Antumi-…-android-arm64-v8a.apk` 并安装，绝大多数手机都用这个；很老的 32 位手机装不上时，改下 `Antumi-…-android-armeabi-v7a.apk`。第一次要允许「安装未知来源应用」；手机提示有风险时，确认来源后选继续安装。
 2. 在 [**设置 → 手机**](antumi:settings/mobile) 打开 **允许手机连接**，点 **添加手机**。
 3. 手机上点 **添加电脑**，扫描电脑上的二维码。扫不了时，在电脑上点 **复制配对链接**，发到手机上点开，或粘贴到 App 里。
 4. 核对手机和电脑上的 6 位确认码，一致后在电脑上选：

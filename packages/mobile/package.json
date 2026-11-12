@@ -7,7 +7,8 @@
     "start": "expo start --dev-client",
     "android": "expo run:android",
     "prebuild:android": "expo prebuild --platform android --clean",
-    "build:android": "expo prebuild --platform android --clean && cd android && ./gradlew assembleRelease",
+    "build:android": "expo prebuild --platform android --clean && cd android && ./gradlew assembleRelease && cd .. && node scripts/collect-apks.mjs",
+    "collect:apks": "node scripts/collect-apks.mjs",
     "typecheck": "tsc -p ."
   },
   "dependencies": {

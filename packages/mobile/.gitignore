@@ -1,0 +1,7 @@
+# Made by expo prebuild / export, never committed.
+.expo/
+android/
+ios/
+dist/
+*.apk
+*.keystore

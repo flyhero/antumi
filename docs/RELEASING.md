@@ -137,6 +137,35 @@ git push origin vX.Y.Z
 
 查看进度：`gh run list --workflow=Release --limit 3`，`gh run watch <id>`。
 
+## Android 手机端
+
+手机端（`packages/mobile`）不上应用商店，在 GitHub Releases 提供 APK，和桌面端分开发版：版本号只在 `packages/mobile/package.json` 和 `app.json`（`expo.version`，`android.versionCode` 每次加一）里改，不跟随上面五个 `package.json`，标签用 `mobile-vX.Y.Z`。App 的「检查更新」只认这种标签、带 `.apk` 附件的 Release。
+
+打包要本机装好 JDK 17 和 Android SDK，还要一把发布签名密钥。密钥只有一把，离线备份，永远不换：换了密钥，已安装的用户只能卸载重装。
+
+不装 Android Studio 也行：`brew install openjdk@17` 和 `brew install --cask android-commandlinetools`，接受许可（`sdkmanager --sdk_root=$HOME/Library/Android/sdk --licenses`）后装 `platform-tools`、`platforms;android-37.0`、`build-tools;37.0.0`、`ndk;27.1.12297006`、`cmake;3.22.1`（React Native 0.88 的要求，见 `react-native/gradle/libs.versions.toml`）。要模拟器再装 `emulator`、一个 arm64 系统镜像和 `cmdline-tools;latest`（Homebrew 那份 `avdmanager` 找不到这个 SDK 里的镜像）。
+
+```bash
+export JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home
+export ANDROID_HOME=$HOME/Library/Android/sdk
+cd packages/mobile
+pnpm prebuild:android          # 生成 android/（不提交）
+# 在 android/app/build.gradle 的 signingConfigs.release 填上密钥，或用 ~/.gradle/gradle.properties 里的变量；
+# 模板默认用调试密钥签 release 包，那样的包不能发布
+cd android
+rm -rf app/build/generated/assets/react app/build/generated/res/react   # 见下
+./gradlew assembleRelease
+# → android/app/build/outputs/apk/release/app-release.apk，改名为 Antumi-X.Y.Z-android.apk
+```
+
+Gradle 会把打 JS 包的任务（`createBundleReleaseJsAndAssets`）误判为已是最新，monorepo 里别的包改了它看不出来，于是 APK 里还是旧的 JS。打包前删掉上面两个目录，强制重打。第一次编译要下载 1–2 GB 依赖，十分钟左右。
+
+APK 只带手机用的两种架构（`arm64-v8a`、`armeabi-v7a`，见 `app.json` 里 `expo-build-properties` 的 `buildArchs`），x86 的模拟器装不上；Apple 芯片 Mac 上的模拟器是 arm64，不受影响。改了 `app.json` 要重新 `pnpm prebuild:android`，`android/` 才会跟上。
+
+在模拟器或接了 USB 调试的手机上装：`adb install -r app-release.apk`；用 `adb shell am start -a android.intent.action.VIEW -d '<配对链接>' app.antumi.mobile` 打开配对链接，不用扫码。
+
+发布前在真机上至少过一遍：扫码配对、确认码一致、看会话、回答确认、发消息和图片、撤销后被拒、断网重连。Release 说明写清这一版需要的桌面端最低版本（手机端要求电脑上的 core 支持 `mobile`）。推标签前先问用户。
+
 ## 出错时
 
 - **工作流报 `does not match`**：有 `package.json` 的版本和标签不一致。不要移动已推送的标签：补一个修正提交，打下一个版本号（或下一个 `-beta.N`）重新发。

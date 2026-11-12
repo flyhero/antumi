@@ -9,6 +9,11 @@ catalog:
   vitest: 5.0.1
   ws: 8.21.3
   zod: 4.6.5
+  # Noise for the phone link (protocol/src/mobile): audited, dependency-free, and plain JS, so the
+  # same code runs in core's gateway and in React Native.
+  '@noble/ciphers': 2.4.0
+  '@noble/curves': 2.4.0
+  '@noble/hashes': 2.4.0
   # playwright-core only: the playwright package's install script downloads browsers at
   # install time, and the app drives its own Chromium.
   playwright-core: 1.63.0
@@ -27,3 +32,6 @@ allowBuilds:
 # false), every native module arrives prebuilt.
 overrides:
   '@electron/node-gyp': 10.2.0-electron.2
+
+minimumReleaseAgeExclude:
+  - lucide-react-native@1.72.0

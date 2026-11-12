@@ -9,6 +9,7 @@ Task-first multi-agent manager. See docs/ARCHITECTURE.md for the architecture di
 - Electron main stays thin: no task logic, no git, no PTYs. Browser tabs are the one exception, and they live in main rather than in a window for the same reason: a window closing or crashing must never touch a running agent, nor a page it is on.
 - Native modules (node-pty) load only in the daemon, which runs on plain Node. Never import a native module into Electron.
 - core must stay free of Electron imports so it can run headless on a server.
+- **Phones** reach core only through its gateway (`core/src/gateway-main.ts`), a child process core starts when phone access is on: it owns the port phones reach and the Noise link, and is a client of core like the MCP server. What a phone may do is decided in core (`MOBILE_METHODS` in protocol, checked in `rpc-server.ts` before any handler); a new RPC stays off phones until it is added there. See docs/MOBILE.md.
 
 ## Protocol
 

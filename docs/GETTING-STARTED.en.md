@@ -53,6 +53,37 @@ In [**Settings → Accounts**](antumi:settings/accounts), click **Add Claude Cod
 
 For a platform outside the recommendations, use **Install from another source** with a GitHub repository or a local ZIP. To write your own, see the [plugin development guide](https://github.com/flyhero/antumi/blob/main/docs/PLUGINS.md).
 
+## On your phone
+
+**Optional,** Android only for now. Away from the computer, read conversations, answer requests and send messages to keep agents going. Agents still run on the computer; a phone disconnecting does not stop them.
+
+1. Download `Antumi-…-android.apk` from [GitHub Releases](https://github.com/flyhero/antumi/releases) and install it. The first time, allow installing apps from unknown sources; if the phone warns you, check the source and continue.
+2. In [**Settings → Phone**](antumi:settings/mobile), turn on **Allow phones to connect** and click **Add a phone**.
+3. On the phone, tap **Add a computer** and scan the code on the computer. If you cannot scan it, click **Copy pairing link** on the computer, send the link to your phone, and tap it or paste it into the app.
+4. Check that the phone and the computer show the same 6-digit code, then choose on the computer:
+   - **View only**: read conversations and tasks;
+   - **View and operate**: send messages and images, answer requests, start conversations and widen permissions. This hands the phone control of your conversations.
+
+The phone and the computer need to be on the same Wi‑Fi, with the computer on and awake (click the coffee cup in the status bar to turn on **Keep awake**). If you lose the phone, click **Revoke** in the device list under **Settings → Phone**; in the phone app's **Settings** you can also ask for fingerprint or face when it opens.
+
+### Away from home: Tailscale
+
+Off your Wi‑Fi, the phone reaches the computer through [Tailscale](https://tailscale.com). No Antumi server is involved; Tailscale just puts both devices on one private network.
+
+1. Install Tailscale on the computer and the phone and sign in with the same account.
+2. In **Settings → Phone** on the computer, look at the addresses phones try: a name ending in `.ts.net` means Antumi found Tailscale.
+3. Pair as usual. A phone paired before does not need to scan again: it picks up the name the next time it connects.
+4. Keep Tailscale on on the phone when you are out. The phone tries the local addresses first, then Tailscale.
+
+If it cannot connect, check that Tailscale and Antumi are both running on the computer, that MagicDNS is on (the default), and, if you changed Tailscale's access controls, that the phone may reach the computer's port 7820 (or the port you set in **Settings → Phone**). Android runs one VPN at a time: another VPN turns Tailscale off.
+
+### Notices while the app is closed: ntfy
+
+1. Install the [ntfy](https://ntfy.sh) app on the phone and subscribe to a topic only you know, such as `antumi-` followed by random characters.
+2. On the computer, enter `https://ntfy.sh/your-topic` in **Settings → Phone → Push address** and save.
+
+When a conversation waits for you, finishes a turn or its agent exits unexpectedly, ntfy shows a one-line notice, never the conversation's title or content. ntfy.sh is a public server, so pick a topic that is hard to guess, or use your own ntfy server.
+
 ## Features
 
 Look up these features when the relevant situation comes up.

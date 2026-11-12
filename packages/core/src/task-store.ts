@@ -410,8 +410,11 @@ export const MIGRATIONS = [
    CREATE TABLE source_investigation_runs (id TEXT PRIMARY KEY, instance_key TEXT NOT NULL, binding TEXT NOT NULL, key TEXT NOT NULL, data TEXT NOT NULL, UNIQUE(binding,key));
    CREATE INDEX source_investigation_runs_instance ON source_investigation_runs(instance_key);
    CREATE INDEX source_investigation_runs_status ON source_investigation_runs(json_extract(data,'$.status'));
-   ALTER TABLE conversations ADD COLUMN auto_investigation_id TEXT;`
-
+   ALTER TABLE conversations ADD COLUMN auto_investigation_id TEXT;`,
+  // Phones paired with this computer (docs/MOBILE.md), and the phone link's settings as one row.
+  `CREATE TABLE mobile_devices (id TEXT PRIMARY KEY, name TEXT NOT NULL, platform TEXT NOT NULL, public_key TEXT NOT NULL UNIQUE,
+     access TEXT NOT NULL, paired_at INTEGER NOT NULL, last_seen_at INTEGER);
+   CREATE TABLE mobile_settings (id INTEGER PRIMARY KEY CHECK (id = 1), data TEXT NOT NULL);`
 ]
 
 

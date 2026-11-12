@@ -1,0 +1,67 @@
+{
+  "expo": {
+    "name": "Antumi",
+    "slug": "antumi",
+    "scheme": "antumi",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "android": {
+      "package": "app.antumi.mobile",
+      "versionCode": 1,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.USE_BIOMETRIC"
+      ],
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO"
+      ],
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#2DBEC2"
+      },
+      "softwareKeyboardLayoutMode": "resize"
+    },
+    "ios": {
+      "bundleIdentifier": "app.antumi.mobile",
+      "infoPlist": {
+        "NSLocalNetworkUsageDescription": "Antumi connects to the computer you paired on your local network.",
+        "NSCameraUsageDescription": "Antumi scans the pairing code your computer shows.",
+        "NSFaceIDUsageDescription": "Antumi can ask for Face ID when it opens."
+      }
+    },
+    "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true,
+            "buildArchs": ["arm64-v8a", "armeabi-v7a"]
+          }
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Antumi scans the pairing code your computer shows.",
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Antumi can ask for Face ID when it opens."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Antumi sends the photos you pick to a conversation.",
+          "microphonePermission": false
+        }
+      ],
+      "expo-secure-store"
+    ],
+    "icon": "./assets/icon.png"
+  }
+}

@@ -1,0 +1,304 @@
+import { useEffect, useMemo, useState } from 'react'
+import { FlatList, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import * as ImagePicker from 'expo-image-picker'
+import { ArrowUp, Check, ChevronDown, MessageSquare, Plus, SlidersHorizontal, Square, X } from 'lucide-react-native'
+import { chatItemKey, conversationWorking, type ChatItem, type ChatOption, type Conversation } from '@antumi/protocol'
+import {
+  ApprovalDock, AssistantText, ChatImageView, NoticeLine, ProjectRoots, QuestionDock, ReasoningLine, RequestLine, TodosCard, ToolGroup, TurnHead, UserMessage, WorkingLine, type Approval, type Question, type Tool
+} from '../components/chat'
+import { EmptyState, IconButton, Muted, Screen, confirmTap, tap } from '../components/ui'
+import { t } from '../i18n'
+import { modeName, where } from '../labels'
+import { pop } from '../navigation'
+import { canOperate, continueChat, EMPTY_DRAFT, interrupt, loadOlder, send, setDraft, setOption, unwatch, uploadImage, useSession, watch } from '../session'
+import { radius, space, type, useTheme } from '../theme'
+
+type StateItem = Extract<ChatItem, { kind: 'state' }>
+
+type Row =
+  | { key: string; kind: 'item'; item: ChatItem }
+  | { key: string; kind: 'tools'; tools: Tool[] }
+  | { key: string; kind: 'turn' }
+  | { key: string; kind: 'working' }
+
+// The stage's own state item says which modes, models and efforts it offers now.
+function latestState(items: readonly ChatItem[]): StateItem | null {
+  for (let i = items.length - 1; i >= 0; i--) {
+    const item = items[i]!
+    if (item.kind === 'state') return item
+  }
+  return null
+}
+
+function openRequest(items: readonly ChatItem[]): Approval | Question | null {
+  for (let i = items.length - 1; i >= 0; i--) {
+    const item = items[i]!
+    if ((item.kind === 'approval' || (item.kind === 'question' && !item.async)) && item.resolution === null) return item
+  }
+  return null
+}
+
+// Chat items in reading order as rows: runs of tool calls become one, each turn opens with the
+// agent's name, and the working line closes it while the agent is at it.
+function rowsOf(items: readonly ChatItem[], working: boolean, docked: ChatItem | null): Row[] {
+  const rows: Row[] = []
+  let afterUser = true
+  for (const item of items) {
+    // The open request is answered in the dock; the stream keeps it once it is.
+    if (item.kind === 'state' || (item.kind === 'turn' && !item.error) || item === docked) continue
+    if (item.kind === 'user') {
+      afterUser = true
+      rows.push({ key: chatItemKey(item), kind: 'item', item })
+      continue
+    }
+    if (afterUser) {
+      rows.push({ key: `turn:${chatItemKey(item)}`, kind: 'turn' })
+      afterUser = false
+    }
+    const last = rows[rows.length - 1]
+    if (item.kind === 'tool') {
+      if (last?.kind === 'tools') last.tools.push(item)
+      else rows.push({ key: `tools:${chatItemKey(item)}`, kind: 'tools', tools: [item] })
+      continue
+    }
+    rows.push({ key: chatItemKey(item), kind: 'item', item })
+  }
+  if (working) {
+    if (afterUser) rows.push({ key: 'turn:working', kind: 'turn' })
+    rows.push({ key: 'working', kind: 'working' })
+  }
+  return rows
+}
+
+function ItemView({ item }: { item: ChatItem }) {
+  switch (item.kind) {
+    case 'user': return <UserMessage item={item} />
+    case 'assistant': return <AssistantText text={item.text} />
+    case 'reasoning': return <ReasoningLine item={item} />
+    case 'approval':
+    case 'question': return <RequestLine item={item} />
+    case 'notice': return <NoticeLine text={item.text} tone={item.level} />
+    case 'usageLimit': return <NoticeLine text={item.message ?? item.error ?? ''} tone="warning" />
+    case 'turn': return item.error ? <NoticeLine text={item.error} tone="error" /> : null
+    case 'todos': return <TodosCard item={item} />
+    default: return null
+  }
+}
+
+function OptionsSheet({ id, state, agent, onClose }: { id: string; state: StateItem; agent: Conversation['agent']; onClose: () => void }) {
+  const theme = useTheme()
+  const insets = useSafeAreaInsets()
+  const model = state.models.find((each) => each.id === state.model)
+  const pick = (option: ChatOption, value: string) => {
+    tap()
+    void setOption(id, option, value)
+  }
+  const group = (title: string, option: ChatOption, values: { value: string; label: string; detail?: string | null }[], current: string | null) => values.length === 0 ? null : (
+    <View style={styles.sheetGroup}>
+      <Text style={[type.caption, styles.sheetTitle, { color: theme.textMuted }]}>{title}</Text>
+      <View style={[styles.sheetCard, { backgroundColor: theme.raised }]}>
+        {values.map(({ value, label, detail }, index) => (
+          <Pressable key={value} onPress={() => pick(option, value)} style={[styles.sheetRow, index > 0 && { borderTopColor: theme.border, borderTopWidth: StyleSheet.hairlineWidth }]}>
+            <View style={styles.flex}>
+              <Text style={[type.secondary, { color: theme.text, fontWeight: value === current ? '600' : '400' }]}>{label}</Text>
+              {detail ? <Text style={[type.caption, { color: theme.textMuted }]} numberOfLines={1}>{detail}</Text> : null}
+            </View>
+            {value === current ? <Check size={18} color={theme.accent} /> : null}
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  )
+  return (
+    <Modal transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent navigationBarTranslucent>
+      <Pressable style={[styles.backdrop, { backgroundColor: theme.overlay }]} onPress={onClose} />
+      <View style={[styles.sheet, { backgroundColor: theme.surface, paddingBottom: insets.bottom + space.lg }]}>
+        <View style={[styles.grabber, { backgroundColor: theme.borderStrong }]} />
+        <View style={styles.sheetHead}>
+          <Text style={[type.title, styles.flex, { color: theme.text }]}>{t('options')}</Text>
+          <IconButton icon={X} label={t('close')} onPress={onClose} />
+        </View>
+        <ScrollView contentContainerStyle={styles.sheetBody}>
+          {group(t('permissionMode'), 'permissionMode', state.permissionModes.map((mode) => ({ value: mode, label: modeName(agent, mode) })), state.permissionMode)}
+          {group(t('model'), 'model', state.models.map((each) => ({ value: each.id, label: each.label, detail: each.description })), state.model)}
+          {group(t('effort'), 'effort', (model?.efforts ?? []).map((effort) => ({ value: effort, label: effort })), state.effort)}
+        </ScrollView>
+      </View>
+    </Modal>
+  )
+}
+
+function Composer({ conversation, state, onOptions }: { conversation: Conversation; state: StateItem | null; onOptions: () => void }) {
+  const theme = useTheme()
+  const insets = useSafeAreaInsets()
+  const { text, images } = useSession((s) => s.drafts[conversation.id]) ?? EMPTY_DRAFT
+  const setText = (next: string) => setDraft(conversation.id, (draft) => ({ ...draft, text: next }))
+  const [uploading, setUploading] = useState(false)
+  const [sending, setSending] = useState(false)
+  const running = conversationWorking(conversation)
+  const stopped = conversation.sessionId === null
+  const empty = !text.trim() && images.length === 0
+  const modelLabel = state ? state.models.find((each) => each.id === state.model)?.label ?? state.model : null
+  const chip = [modelLabel, state?.permissionMode ? modeName(conversation.agent, state.permissionMode) : null].filter(Boolean).join(' · ')
+  const pickImage = async () => {
+    const picked = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], base64: true, quality: 0.8 })
+    const asset = picked.canceled ? null : picked.assets[0]
+    if (!asset?.base64) return
+    setUploading(true)
+    const uploaded = await uploadImage(asset.base64)
+    setUploading(false)
+    if (uploaded) setDraft(conversation.id, (draft) => ({ ...draft, images: [...draft.images, { id: uploaded, width: asset.width, height: asset.height }] }))
+  }
+  const submit = async () => {
+    if (empty) return
+    confirmTap()
+    setSending(true)
+    if (stopped) await continueChat(conversation.id)
+    if (await send(conversation.id, text.trim(), images.map((image) => image.id), running)) setDraft(conversation.id, () => EMPTY_DRAFT)
+    setSending(false)
+  }
+  return (
+    <View style={[styles.composerWrap, { paddingBottom: Math.max(insets.bottom, space.sm) }]}>
+      <View style={[styles.composer, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+        {images.length > 0 || uploading ? (
+          <View style={styles.attachments}>
+            {images.map((image) => (
+              <View key={image.id}>
+                <ChatImageView image={image} size={56} />
+                <Pressable accessibilityLabel={t('close')} onPress={() => setDraft(conversation.id, (draft) => ({ ...draft, images: draft.images.filter((each) => each.id !== image.id) }))} style={[styles.remove, { backgroundColor: theme.text }]}>
+                  <X size={11} color={theme.bg} strokeWidth={3} />
+                </Pressable>
+              </View>
+            ))}
+            {uploading ? <View style={[styles.uploading, { backgroundColor: theme.raised }]}><Muted>…</Muted></View> : null}
+          </View>
+        ) : null}
+        <TextInput
+          style={[type.body, styles.input, { color: theme.text }]}
+          placeholder={running ? t('queuePlaceholder') : t('messagePlaceholder')}
+          placeholderTextColor={theme.text3}
+          value={text}
+          onChangeText={setText}
+          multiline
+        />
+        <View style={styles.composerBar}>
+          <Pressable accessibilityLabel={t('addImage')} onPress={() => void pickImage()} style={({ pressed }) => [styles.round, { backgroundColor: theme.raised, opacity: pressed ? 0.7 : 1 }]}>
+            <Plus size={19} color={theme.text} />
+          </Pressable>
+          {state ? (
+            <Pressable onPress={onOptions} style={({ pressed }) => [styles.modelChip, { backgroundColor: theme.raised, opacity: pressed ? 0.7 : 1 }]}>
+              <SlidersHorizontal size={14} color={theme.textMuted} />
+              <Text style={[type.caption, styles.chipText, { color: theme.text }]} numberOfLines={1}>{chip || t('options')}</Text>
+              <ChevronDown size={14} color={theme.textMuted} />
+            </Pressable>
+          ) : null}
+          {running && empty ? (
+            <Pressable accessibilityLabel={t('interrupt')} onPress={() => { confirmTap(); void interrupt(conversation.id) }} style={({ pressed }) => [styles.send, { backgroundColor: theme.text, opacity: pressed ? 0.7 : 1 }]}>
+              <Square size={13} color={theme.bg} fill={theme.bg} />
+            </Pressable>
+          ) : (
+            <Pressable accessibilityLabel={t('send')} disabled={empty || sending} onPress={() => void submit()} style={({ pressed }) => [styles.send, { backgroundColor: empty ? theme.sunken : theme.accent, opacity: pressed ? 0.75 : 1 }]}>
+              <ArrowUp size={19} color={empty ? theme.text3 : theme.accentText} strokeWidth={2.5} />
+            </Pressable>
+          )}
+        </View>
+      </View>
+    </View>
+  )
+}
+
+export function ChatScreen({ id }: { id: string }) {
+  const theme = useTheme()
+  const conversation = useSession((s) => s.conversations[id])
+  const chat = useSession((s) => s.chats[id])
+  const status = useSession((s) => s.status)
+  const [options, setOptions] = useState(false)
+  useEffect(() => {
+    if (status === 'online') void watch(id)
+    return () => unwatch(id)
+  }, [id, status])
+  const items = chat?.items ?? []
+  const request = useMemo(() => openRequest(items), [items])
+  const state = useMemo(() => latestState(items), [items])
+  const working = conversation ? conversationWorking(conversation) && !request : false
+  const rows = useMemo(() => rowsOf(items, working, request).reverse(), [items, working, request])
+  if (!conversation) {
+    return <Screen title={t('appName')} onBack={() => pop()}><Muted>{t('noConversations')}</Muted></Screen>
+  }
+  const operate = canOperate()
+  return (
+    <Screen
+      title={conversation.title || where(conversation)}
+      subtitle={where(conversation)}
+      onBack={() => pop()}
+      scroll={false}
+      actions={operate && state ? <IconButton icon={SlidersHorizontal} label={t('options')} onPress={() => setOptions(true)} /> : null}
+    >
+      <ProjectRoots.Provider value={conversation.projectPaths}>
+      <KeyboardAvoidingView style={styles.flex} behavior="padding">
+        <FlatList
+          inverted
+          data={rows}
+          keyExtractor={(row) => row.key}
+          contentContainerStyle={[styles.list, rows.length === 0 && styles.grow]}
+          ListEmptyComponent={chat ? <View style={styles.flipped}><EmptyState icon={MessageSquare} title={t('noMessages')} /></View> : undefined}
+          renderItem={({ item: row }) => (
+            <View style={styles.rowGap}>
+              {row.kind === 'turn' ? <TurnHead agent={conversation.agent} />
+                : row.kind === 'tools' ? <ToolGroup tools={row.tools} />
+                : row.kind === 'working' ? <WorkingLine doing={conversation.chat?.doing?.title ?? null} />
+                : <ItemView item={row.item} />}
+            </View>
+          )}
+          ListFooterComponent={chat?.before || chat?.truncated ? (
+            <View style={styles.top}>
+              {chat.before ? <Pressable onPress={() => void loadOlder(id)} style={[styles.older, { backgroundColor: theme.raised }]}><Text style={[type.caption, { color: theme.text, fontWeight: '600' }]}>{t('loadOlder')}</Text></Pressable> : null}
+              {chat.truncated ? <NoticeLine text={t('truncated')} tone="info" /> : null}
+            </View>
+          ) : undefined}
+        />
+        {request && request.kind === 'approval' ? <ApprovalDock key={request.requestId} item={request} conversation={conversation} /> : null}
+        {request && request.kind === 'question' ? <QuestionDock key={request.requestId} item={request} conversation={conversation} /> : null}
+        {operate ? <Composer conversation={conversation} state={state} onOptions={() => setOptions(true)} /> : (
+          <View style={[styles.viewOnly, { borderTopColor: theme.border }]}><Muted center>{t('viewOnly')}</Muted></View>
+        )}
+      </KeyboardAvoidingView>
+      </ProjectRoots.Provider>
+      {options && state ? <OptionsSheet id={id} state={state} agent={conversation.agent} onClose={() => setOptions(false)} /> : null}
+    </Screen>
+  )
+}
+
+const styles = StyleSheet.create({
+  flex: { flex: 1 },
+  // Undoes the list's inversion, which on Android flips both axes (see VirtualizedList).
+  flipped: { flex: 1, justifyContent: 'center', transform: Platform.OS === 'android' ? [{ scale: -1 }] : [{ scaleY: -1 }] },
+  grow: { flexGrow: 1 },
+  list: { paddingHorizontal: space.lg, paddingVertical: space.md },
+  rowGap: { paddingVertical: 6 },
+  top: { gap: space.sm, paddingBottom: space.md, alignItems: 'center' },
+  older: { borderRadius: radius.pill, paddingHorizontal: space.lg, paddingVertical: space.sm },
+  composerWrap: { paddingHorizontal: space.md, paddingTop: space.xs },
+  composer: { borderRadius: radius.xl, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: space.md, paddingTop: space.md, paddingBottom: space.sm, gap: space.sm },
+  attachments: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
+  remove: { position: 'absolute', top: -5, right: -5, width: 20, height: 20, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
+  uploading: { width: 56, height: 56, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
+  input: { maxHeight: 150, paddingHorizontal: space.xs, paddingVertical: 0 },
+  composerBar: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  round: { width: 36, height: 36, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
+  modelChip: { flexShrink: 1, flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, borderRadius: radius.pill, paddingHorizontal: space.md },
+  chipText: { flexShrink: 1, fontWeight: '600' },
+  send: { width: 36, height: 36, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', marginLeft: 'auto' },
+  viewOnly: { borderTopWidth: StyleSheet.hairlineWidth, padding: space.lg },
+  backdrop: { flex: 1 },
+  sheet: { borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, maxHeight: '78%', paddingTop: space.sm },
+  grabber: { alignSelf: 'center', width: 40, height: 5, borderRadius: radius.pill, marginBottom: space.sm },
+  sheetHead: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.lg, paddingBottom: space.sm },
+  sheetBody: { paddingHorizontal: space.lg, gap: space.lg, paddingBottom: space.lg },
+  sheetGroup: { gap: space.sm },
+  sheetTitle: { fontWeight: '600', paddingHorizontal: space.xs },
+  sheetCard: { borderRadius: radius.lg, overflow: 'hidden' },
+  sheetRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingHorizontal: space.lg, paddingVertical: 13 }
+})

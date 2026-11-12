@@ -47,8 +47,7 @@ import {
   BoltIcon,
   RobotIcon,
   PulseIcon,
-  TerminalIcon
-} from './icons'
+  TerminalIcon, PhoneIcon } from './icons'
 import { ChatCommandSettings } from './ChatCommandSettings'
 import { KnowledgeBaseSettings } from './KnowledgeBaseSettings'
 import { SkillsSettingsSection } from './SkillsSettingsSection'
@@ -62,6 +61,7 @@ import { settingsSectionOf } from './SourceInboxView'
 import { SourceSettingsSection } from './SourceSettingsSection'
 import { projectName } from './ProjectPicker'
 import { Segmented, SettingsGroup, SettingsRow, Stepper, Toggle } from './SettingsControls'
+import { MobileSettings, useMobileSupported } from './MobileSettings'
 import { SupportSettings } from './SupportSettings'
 import { ProjectConfigDialog, projectConfigSummary } from './ProjectConfigDialog'
 import { useOccludesBrowser } from '../browser-occlusion'
@@ -810,6 +810,17 @@ const BROWSER_SECTION: Section = localized(() => ({
   Body: BrowserRows
 }))
 
+const MOBILE_SECTION: Section = localized(() => ({
+  id: 'mobile',
+  group: t('SettingsPage.integrations'),
+  title: t('MobileSettings.title'),
+  description: t('MobileSettings.description'),
+  keywords: ['phone', 'mobile', 'android', 'iPhone', 'Tailscale', 'ntfy', '手机', '配对', '二维码', '推送', t('MobileSettings.addPhone'), t('MobileSettings.push'), t('MobileSettings.port')],
+  Icon: PhoneIcon,
+  Body: MobileSettings,
+  grouped: true
+}))
+
 const PLUGINS_SECTION: Section = localized(() => ({
   id: 'plugins',
   group: t('SettingsPage.integrations'),
@@ -855,6 +866,7 @@ export function SettingsPage() {
   const sources = useCore((s) => s.sources)
   const plugins = useCore((s) => s.rpc?.features.includes('plugins') ?? false)
   const browser = useBrowserSupported()
+  const phones = useMobileSupported()
   const knowledge = useKnowledgeBaseSupported()
   const skills = useSkillsSupported()
   const mcp = useMcpServersSupported()
@@ -874,8 +886,8 @@ export function SettingsPage() {
         CONVERSATION_SECTION, ...(chatCommands ? [CHAT_COMMANDS_SECTION] : []), ...(sessionImport ? [SESSION_IMPORT_SECTION] : []),
         ...(skills ? [SKILLS_SECTION] : []), ...(mcp ? [MCP_SECTION] : [])
       ] : [section]))
-    return [...own, ...(plugins ? [PLUGINS_SECTION] : []), ...sourceSections(sources ?? []), ...(knowledge ? [KNOWLEDGE_SECTION] : []), ...(browser ? [BROWSER_SECTION] : []), ...information, ...(wireLog ? [DEBUG_SECTION] : [])]
-  }, [sources, browser, knowledge, skills, mcp, sessionImport, accounts, modelProviders, chatCommands, wireLog, plugins, run, permissions, locale])
+    return [...own, ...(plugins ? [PLUGINS_SECTION] : []), ...sourceSections(sources ?? []), ...(knowledge ? [KNOWLEDGE_SECTION] : []), ...(browser ? [BROWSER_SECTION] : []), ...(phones ? [MOBILE_SECTION] : []), ...information, ...(wireLog ? [DEBUG_SECTION] : [])]
+  }, [sources, browser, phones, knowledge, skills, mcp, sessionImport, accounts, modelProviders, chatCommands, wireLog, plugins, run, permissions, locale])
   const activeId = useCore((state) => state.settingsSection) ?? SECTIONS[0]?.id ?? ''
   const [query, setQuery] = useState('')
   useEffect(() => { setQuery('') }, [activeId])

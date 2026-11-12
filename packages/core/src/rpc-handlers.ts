@@ -23,7 +23,7 @@ import type { PluginService } from './plugin-service'
 import type { PetLibrary } from './pet-library'
 import type { SourceUpdates } from './source-updates'
 import type { SourceService } from './source-service'
-import type { RpcHandlers } from './rpc-server'
+import type { Connection, RpcHandlers } from './rpc-server'
 import type { TaskService } from './task-service'
 import type { UsageLimitResumes } from './usage-limit-resume'
 import { readableUsage, type UsageService } from './usage-service'
@@ -32,6 +32,7 @@ import type { TerminalCommandStore } from './terminal-commands'
 import type { BookmarkStore } from './bookmarks'
 import type { BrowserHistoryStore } from './browser-history'
 import type { BrowserSiteStore } from './browser-sites'
+import type { MobileService } from './mobile-service'
 import type { ChatCommandStore } from './chat-commands'
 import type { TerminalService } from './terminal-service'
 import type { ProjectConfigStore } from './project-config'
@@ -117,8 +118,20 @@ export function createRpcHandlers(
   browserHistory?: BrowserHistoryStore,
   sourceUpdates?: SourceUpdates,
   pullRequestStore?: { store: PullRequestStore; changed: (taskId: string, links: PullRequestLink[]) => void; ready?: (service: PullRequestService) => void },
-  browserSites?: BrowserSiteStore
+  browserSites?: BrowserSiteStore,
+  mobile?: MobileService
 ): RpcHandlers {
+  const mobileService = (): MobileService => {
+    if (!mobile) throw new Rejection('mobile-unavailable')
+    return mobile
+  }
+  const hello = () => ({ protocolVersion: PROTOCOL_VERSION, serverVersion: packageJson.version, home: { path: homedir(), windows: process.platform === 'win32' }, features: CORE_FEATURES.filter((feature) => (feature !== 'agent-profiles' || Boolean(profiles)) && (feature !== 'project-star' || Boolean(projectStar)) && (feature !== 'bookmarks' || Boolean(bookmarks)) && (feature !== 'browser-history' || Boolean(browserHistory)) && (feature !== 'browser-sites' || Boolean(browserSites)) && (feature !== 'pets' || Boolean(pets)) && (feature !== 'squads' || Boolean(squads)) && (!['plugins', 'plugin-recommendations'].includes(feature) || Boolean(plugins)) && (!['skills-library', 'skills-search', 'skills-activation'].includes(feature) || Boolean(skills)) && (feature !== 'mcp-servers' || Boolean(mcpServers)) && (feature !== 'small-model-stats' || Boolean(smallModels)) && (!['model-providers', 'model-provider-models'].includes(feature) || Boolean(modelProviders)) && (feature !== 'agent-accounts' || Boolean(accounts)) && (feature !== 'pull-requests' || Boolean(pullRequests)) && (feature !== 'mobile' || Boolean(mobile))) })
+  // A phone reaches only projects the user already worked in from the computer.
+  const requireRecentForPhone = (connection: Connection, paths: readonly string[]): void => {
+    if (!connection.mobile) return
+    const recent = new Set(projects.recent())
+    if (!paths.every((each) => recent.has(each))) throw new Rejection('mobile-project-not-recent', 'pick a recent project')
+  }
   const profileService = () => {
     if (!profiles) throw new Rejection('profile-unavailable')
     return profiles
@@ -209,7 +222,7 @@ export function createRpcHandlers(
     (id, command, cwd) => conversations.askTerminal(id, command, cwd)
   )
   // A page of chat items as clients see them: a usage limit with what core means to do about it.
-  const page = (result: { items: ChatItem[]; before: string | null }) => ({ ...result, items: limits.decorate(smallModels?.decorate(result.items) ?? result.items) })
+  const page = (result: { items: ChatItem[]; before: string | null; truncated?: boolean }) => ({ ...result, items: limits.decorate(smallModels?.decorate(result.items) ?? result.items) })
   // The user going on with a conversation themselves: core no longer continues it after a limit.
   const userActed = async <T>(id: string, act: () => Promise<T>): Promise<T> => {
     conversations.attend(id)
@@ -344,7 +357,19 @@ export function createRpcHandlers(
     'pets.cancel': ({ id }) => { petLibrary().cancel(id); return OK },
     'pets.remove': ({ id }) => petLibrary().remove(id),
     'pets.read': ({ id }) => petLibrary().read(id),
-    'system.hello': () => ({ protocolVersion: PROTOCOL_VERSION, serverVersion: packageJson.version, home: { path: homedir(), windows: process.platform === 'win32' }, features: CORE_FEATURES.filter((feature) => (feature !== 'agent-profiles' || Boolean(profiles)) && (feature !== 'project-star' || Boolean(projectStar)) && (feature !== 'bookmarks' || Boolean(bookmarks)) && (feature !== 'browser-history' || Boolean(browserHistory)) && (feature !== 'browser-sites' || Boolean(browserSites)) && (feature !== 'pets' || Boolean(pets)) && (feature !== 'squads' || Boolean(squads)) && (!['plugins', 'plugin-recommendations'].includes(feature) || Boolean(plugins)) && (!['skills-library', 'skills-search', 'skills-activation'].includes(feature) || Boolean(skills)) && (feature !== 'mcp-servers' || Boolean(mcpServers)) && (feature !== 'small-model-stats' || Boolean(smallModels)) && (!['model-providers', 'model-provider-models'].includes(feature) || Boolean(modelProviders)) && (feature !== 'agent-accounts' || Boolean(accounts)) && (feature !== 'pull-requests' || Boolean(pullRequests))) }),
+    'system.hello': ({ client }, connection) => {
+      if (client) mobileService().authorize(connection, client.deviceId)
+      return hello()
+    },
+    'mobile.status': () => mobileService().status(),
+    'mobile.setEnabled': ({ enabled }) => mobileService().setEnabled(enabled),
+    'mobile.setPort': ({ port }) => mobileService().setPort(port),
+    'mobile.setPushUrl': ({ url }) => mobileService().setPushUrl(url),
+    'mobile.beginPairing': () => mobileService().beginPairing(),
+    'mobile.cancelPairing': () => mobileService().cancelPairing(),
+    'mobile.confirmPairing': ({ pairingId, access }) => mobileService().confirmPairing(pairingId, access),
+    'mobile.setAccess': ({ deviceId, access }) => mobileService().setAccess(deviceId, access),
+    'mobile.revoke': ({ deviceId }) => mobileService().revoke(deviceId),
     'files.resolve': ({ conversationId, roots, path }) => files.resolve(fileScope(conversationId, roots), path),
     'files.read': ({ conversationId, roots, path }) => files.read(fileScope(conversationId, roots), path),
     'visualizations.read': ({ conversationId, stageId, path }) => {
@@ -432,7 +457,12 @@ export function createRpcHandlers(
     'system.installAgentCli': ({ agent }) => cliInstaller.install(agent),
     'tasks.list': ({ status }) => service.list(status),
     'tasks.get': ({ id }) => service.get(id),
-    'tasks.create': (params) => service.createTask(params),
+    'tasks.create': (params, connection) => {
+      // A squad is set up on the computer, with the agent profiles it runs.
+      if (connection.mobile && params.squadId) throw new Rejection('mobile-not-allowed', 'squads are set up on the computer')
+      requireRecentForPhone(connection, params.repos ?? [])
+      return service.createTask(params)
+    },
     'tasks.update': (params) => service.update(params),
     'tasks.startOptions': ({ id }) => service.startOptions(id),
     'tasks.move': async ({ id, status }) => {
@@ -466,7 +496,9 @@ export function createRpcHandlers(
     'conversations.get': ({ id }) => conversations.get(id),
     'conversations.configuration': ({ id }) => conversations.configuration(id),
     'conversations.helper': ({ id }) => conversations.helper(id),
-    'conversations.create': ({ agent, projectPaths, worktree, branch, allowBypass, permissionMode, model, effort, deferStart, helperOf, modelProvider, profileId }) => {
+    'conversations.create': ({ agent, projectPaths, worktree, branch, allowBypass, permissionMode, model, effort, deferStart, helperOf, modelProvider, profileId }, connection) => {
+      if (connection.mobile && (helperOf || profileId)) throw new Rejection('mobile-project-not-recent', 'pick a recent project')
+      requireRecentForPhone(connection, projectPaths)
       const profile = profileId ? profileService().get(profileId) : undefined
       if (profile && (profile.agent !== agent || helperOf)) throw new Rejection('invalid-params', '智能体配置与会话不匹配')
       return conversations.create(agent, projectPaths, allowBypass, { permissionMode: profile?.capability === 'readOnly' ? agentDescriptor(agent).readOnlyMode : permissionMode,
@@ -515,12 +547,12 @@ export function createRpcHandlers(
     'conversations.stopBackground': async ({ id, itemId }) => { await conversations.stopBackground(id, itemId); return OK },
     'conversations.respond': async ({ id, requestId, ...answer }) => { squads?.guardUser(id); conversations.userAnswers(id, requestId); await conversations.respond(id, requestId, answer); sources.automatic?.takeover(id); return OK },
     // Read after subscribing, so an item that changes in between reaches the client either way.
-    'conversations.watchChat': ({ id }, connection) => {
+    'conversations.watchChat': ({ id, limit }, connection) => {
       connection.watching.add(id)
-      return page(conversations.chatPage(id))
+      return page(conversations.chatPage(id, undefined, limit))
     },
     'conversations.unwatchChat': ({ id }, connection) => { connection.watching.delete(id); return OK },
-    'conversations.chatItems': ({ id, before }) => page(conversations.chatPage(id, before)),
+    'conversations.chatItems': ({ id, before, limit }) => page(conversations.chatPage(id, before, limit)),
     // Any idle time will do: Infinity is past every agent's last activity.
     'conversations.releaseIdle': async () => ({ released: await conversations.releaseIdle(Infinity) }),
     'conversations.stop': ({ id }) => userActed(id, async () => {
@@ -536,7 +568,10 @@ export function createRpcHandlers(
     'conversations.stages': ({ id }) => conversations.stages(id),
     'conversations.branches': ({ id }) => conversations.branches(id),
     'conversations.branchOptions': ({ id }) => conversations.branchOptions(id),
-    'projects.branches': ({ path }) => conversations.projectBranchOptions(path),
+    'projects.branches': ({ path }, connection) => {
+      requireRecentForPhone(connection, [path])
+      return conversations.projectBranchOptions(path)
+    },
     'conversations.switchBranch': async ({ id, project, ref }) => { await git.execute({ kind: 'conversation', id, project }, { kind: 'switch', ref }); return conversations.get(id) },
     'conversations.createBranch': async ({ id, project, name }) => { await git.execute({ kind: 'conversation', id, project }, { kind: 'create', name, ref: 'HEAD', checkout: true }); return conversations.get(id) },
     'conversations.commitPush': async ({ id, project, message }) => { const result = await git.execute({ kind: 'conversation', id, project }, { kind: 'commit', message, push: true }); return { commit: result.commit ?? '', branch: result.branch ?? '', upstream: result.upstream ?? '' } },

@@ -48,6 +48,7 @@ import { AgentPullRequestRun, PullRequestDraft, PullRequestEligibility, PullRequ
 import { Bookmark, BookmarkFields, BookmarkImport, MAX_BOOKMARKS } from './bookmarks'
 import { BrowserHistoryEntry, BrowserHistorySearch } from './browser-history'
 import { BrowserSite } from './browser-sites'
+import { MobileAccess, MobilePairing, MobilePort, MobilePushUrl, MobileStatus } from './mobile'
 
 // Bump only for breaking changes; additive optional fields keep the version.
 export const PROTOCOL_VERSION = 18
@@ -130,7 +131,7 @@ const UsageParams = z.object({ windowKinds: z.array(z.string()).optional() })
 // pasted-text: a long paste is uploaded as an attachment and kept as a text file the conversation's
 //   agent reads without asking (attachments.commitText).
 // pull-request-base-branches: lists the remote branches a task's PR can target.
-export const CORE_FEATURES = ['source-auto-investigation', 'chat-references', 'conversation-references', 'agent-profiles', 'pets', 'plugins', 'plugin-recommendations', 'chat-options', 'chat-images', 'task-start', 'worktrees', 'conversation-branches', 'conversation-commit-push', 'find-file', 'conversation-projects', 'browser', 'browser-collaboration', 'browser-file-transfers', 'keep-awake', 'terminal-commands', 'bookmarks', 'browser-history', 'usage-limit', 'agent-stats', 'conversation-stats', 'prompt-suggestions', 'environment', 'conversation-pin', 'schedules', 'chat-commands', 'file-mentions', 'plan-modes', 'agent-terminals', 'schedule-images', 'dashboard', 'task-conversation-summaries', 'routines', 'ports', 'conversation-fork', 'conversation-configuration', 'conversation-commit-steps', 'conversation-worktrees', 'conversation-start-branch', 'wire-log', 'file-preview', 'deferred-conversation-start', 'agent-cli-installation', 'agent-cli-maintenance', 'task-launch-options', 'git-management', 'git-commit-branches', 'task-handoff', 'handoff-model', 'handoff-mode', 'task-launch', 'discussions', 'discussion-members', 'discussion-projects', 'discussion-topics', 'discussion-requirements', 'task-cancel', 'task-redo-in-place', 'conversation-archive', 'discussion-archive', 'translate', 'commit-message', 'squads', 'squad-leader-planning', 'conversation-todos', 'knowledge-base', 'knowledge-base-kind', 'skills-library', 'skills-search', 'skills-activation', 'mcp-servers', 'source-investigate', 'source-investigate-images', 'source-issue-preview', 'todo-overview', 'conversation-helper', 'small-model-stats', 'terminal-color-prompt', 'git-commit-actions', 'file-editor', 'project-config', 'project-config-edit', 'model-providers', 'git-update', 'git-push-target', 'git-cherry-pick', 'git-amend', 'git-force-push', 'task-auto-run', 'session-import', 'agent-accounts', 'usage-analytics', 'task-references', 'release-idle-chats', 'project-star', 'git-favorites', 'project-files', 'git-projects', 'git-branch-browser', 'git-rebase', 'direct-agent-calls', 'discussion-formats', 'discussion-format-suggest', 'agent-call-resume', 'delegation-worktree', 'pasted-text', 'task-conversation-rows', 'inline-visualizations', 'archived-worktrees', 'model-provider-models', 'skills-local', 'model-provider-headers', 'provider-model-images', 'source-comments-v1', 'pull-requests', 'pull-request-base-branches', 'browser-sites', 'chat-command-pins'] as const
+export const CORE_FEATURES = ['mobile', 'source-auto-investigation', 'chat-references', 'conversation-references', 'agent-profiles', 'pets', 'plugins', 'plugin-recommendations', 'chat-options', 'chat-images', 'task-start', 'worktrees', 'conversation-branches', 'conversation-commit-push', 'find-file', 'conversation-projects', 'browser', 'browser-collaboration', 'browser-file-transfers', 'keep-awake', 'terminal-commands', 'bookmarks', 'browser-history', 'usage-limit', 'agent-stats', 'conversation-stats', 'prompt-suggestions', 'environment', 'conversation-pin', 'schedules', 'chat-commands', 'file-mentions', 'plan-modes', 'agent-terminals', 'schedule-images', 'dashboard', 'task-conversation-summaries', 'routines', 'ports', 'conversation-fork', 'conversation-configuration', 'conversation-commit-steps', 'conversation-worktrees', 'conversation-start-branch', 'wire-log', 'file-preview', 'deferred-conversation-start', 'agent-cli-installation', 'agent-cli-maintenance', 'task-launch-options', 'git-management', 'git-commit-branches', 'task-handoff', 'handoff-model', 'handoff-mode', 'task-launch', 'discussions', 'discussion-members', 'discussion-projects', 'discussion-topics', 'discussion-requirements', 'task-cancel', 'task-redo-in-place', 'conversation-archive', 'discussion-archive', 'translate', 'commit-message', 'squads', 'squad-leader-planning', 'conversation-todos', 'knowledge-base', 'knowledge-base-kind', 'skills-library', 'skills-search', 'skills-activation', 'mcp-servers', 'source-investigate', 'source-investigate-images', 'source-issue-preview', 'todo-overview', 'conversation-helper', 'small-model-stats', 'terminal-color-prompt', 'git-commit-actions', 'file-editor', 'project-config', 'project-config-edit', 'model-providers', 'git-update', 'git-push-target', 'git-cherry-pick', 'git-amend', 'git-force-push', 'task-auto-run', 'session-import', 'agent-accounts', 'usage-analytics', 'task-references', 'release-idle-chats', 'project-star', 'git-favorites', 'project-files', 'git-projects', 'git-branch-browser', 'git-rebase', 'direct-agent-calls', 'discussion-formats', 'discussion-format-suggest', 'agent-call-resume', 'delegation-worktree', 'pasted-text', 'task-conversation-rows', 'inline-visualizations', 'archived-worktrees', 'model-provider-models', 'skills-local', 'model-provider-headers', 'provider-model-images', 'source-comments-v1', 'pull-requests', 'pull-request-base-branches', 'browser-sites', 'chat-command-pins'] as const
 // session-import: core lists the sessions agents ran outside Antumi and imports them as conversations (sessionImports.*).
 // agent-accounts: Claude and Codex sign in to several accounts, one active each, and a usage limit
 // moves the agent to the next with quota (accounts.*); usage readings name their account.
@@ -166,7 +167,9 @@ const AllowBypass = z.boolean().optional()
 // The mode, model and effort an agent takes over with; absent keeps what it last ran in this chat.
 const HandoffOptions = TaskLaunchOptions.pick({ permissionMode: true, model: true, effort: true }).extend({ references: z.array(ChatReference).max(1000).optional() })
 // One page of a conversation's chat history; `before` fetches the page older than it, null when none is left.
-const ChatPage = z.object({ items: ChatItemList, before: z.string().nullable() })
+// truncated: a limit cut the oldest stage of the page short, and paging back goes on before it.
+const ChatPage = z.object({ items: ChatItemList, before: z.string().nullable(), truncated: z.boolean().optional() })
+const ChatPageLimit = z.number().int().min(1).max(1000)
 // Browser calls from an agent name the conversation they act for, and a tab of that conversation.
 const BrowserConversationRef = z.object({ conversationId: z.string().uuid() })
 const BrowserTabRef = BrowserConversationRef.extend({ tabId: BrowserTabId })
@@ -232,7 +235,12 @@ export const rpcMethods = {
   // its cheapest). Needs commit-message.
   'git.commitMessage': { params: gitParams({ model: z.string().trim().min(1).max(200).optional() }), result: z.object({ message: z.string(), model: z.string().nullable() }) },
   'system.hello': {
-    params: z.object({ protocolVersion: z.number().int() }),
+    params: z.object({
+      protocolVersion: z.number().int(),
+      // Core's phone gateway, for the paired phone this connection carries: core then holds it to
+      // what MOBILE_METHODS lets that device do. Needs mobile.
+      client: z.object({ kind: z.literal('mobile'), deviceId: z.string().min(1).max(100) }).optional()
+    }),
     result: z.object({
       protocolVersion: z.number().int(),
       serverVersion: z.string(),
@@ -522,9 +530,11 @@ export const rpcMethods = {
   },
   // The latest page of chat items; this connection then receives conversations.chatItems and
   // conversations.chatDelta for the conversation until it unwatches.
-  'conversations.watchChat': { params: ConversationRef, result: ChatPage },
+  // limit: the latest that many items of the stage rather than all of it, before then naming the
+  // rest; a stage has no cap of its own, which a phone cannot take in one go. Needs mobile.
+  'conversations.watchChat': { params: ConversationRef.extend({ limit: ChatPageLimit.optional() }), result: ChatPage },
   'conversations.unwatchChat': { params: ConversationRef, result: Ok },
-  'conversations.chatItems': { params: ConversationRef.extend({ before: z.string().uuid() }), result: ChatPage },
+  'conversations.chatItems': { params: ConversationRef.extend({ before: z.string().uuid(), limit: ChatPageLimit.optional() }), result: ChatPage },
   'conversations.stop': { params: ConversationRef, result: Conversation },
   // Lets every chat agent with nothing to do go now rather than after its idle wait, as before an
   // app update; the next message starts each again on the same session.
@@ -671,6 +681,19 @@ export const rpcMethods = {
   'browserHistory.clear': { params: z.object({}), result: Ok },
   // Sites allowed in every conversation (ALLOW_SITE_ALWAYS), and taking one back. Needs browser-sites.
   'browser.sites': { params: z.object({}), result: z.array(BrowserSite) },
+  // The phone link (docs/MOBILE.md): the gateway, pairing and paired devices. Needs mobile.
+  'mobile.status': { params: z.object({}), result: MobileStatus },
+  'mobile.setEnabled': { params: z.object({ enabled: z.boolean() }), result: MobileStatus },
+  'mobile.setPort': { params: z.object({ port: MobilePort }), result: MobileStatus },
+  'mobile.setPushUrl': { params: z.object({ url: MobilePushUrl.nullable() }), result: MobileStatus },
+  // A new one-time code, replacing any open pairing. The gateway must be running.
+  'mobile.beginPairing': { params: z.object({}), result: MobilePairing },
+  'mobile.cancelPairing': { params: z.object({}), result: MobileStatus },
+  // The user's answer once a phone completed the handshake: an access, or null to refuse it.
+  'mobile.confirmPairing': { params: z.object({ pairingId: z.string().min(1).max(100), access: MobileAccess.nullable() }), result: MobileStatus },
+  'mobile.setAccess': { params: z.object({ deviceId: z.string().min(1).max(100), access: MobileAccess }), result: MobileStatus },
+  // Ends the device's connections at once; what it already sent stays done.
+  'mobile.revoke': { params: z.object({ deviceId: z.string().min(1).max(100) }), result: MobileStatus },
   'browser.forgetSite': { params: BrowserSite.pick({ host: true }), result: Ok },
   // The user's own chat commands, oldest first. Saving without an id adds one.
   'chatCommands.list': { params: z.object({}), result: z.array(SavedChatCommand) },
@@ -945,6 +968,7 @@ export const rpcNotifications = {
   'conversations.chatDelta': z.object({ conversationId: z.string(), stageId: z.string().optional(), itemId: z.string(), append: z.string() }),
   'tasks.changed': z.object({ task: Task }),
   'tasks.deleted': z.object({ id: z.string() }),
+  'mobile.changed': z.object({ status: MobileStatus }),
   'sessions.data': z.object({ sessionId: z.string(), data: z.string(), offset: z.number().int() }),
   'sessions.exit': z.object({ sessionId: z.string(), exitCode: z.number() }),
   'usage.changed': z.object({ usage: AgentUsage }),

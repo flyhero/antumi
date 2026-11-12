@@ -1,5 +1,5 @@
 import { t } from './i18n'
-import { isHelper } from '@antumi/protocol'
+import { conversationAlert, conversationAsking, conversationCrashed, conversationWaiting, conversationWorking, isHelper } from '@antumi/protocol'
 import { isScheduleOpen, limitOf, PLAN_TOOLS, type AgentKind, type Conversation, type ConversationRequest, type Routine, type ScheduledRun, type SquadRun, type Task } from '@antumi/protocol'
 
 // What waits on the user: a task or a conversation.
@@ -23,11 +23,10 @@ export type Snapshot = {
   squadRuns?: Readonly<Record<string, SquadRun>>
 }
 
-export const waiting = (conversation: Conversation) => conversation.sessionId !== null && conversation.chat?.turn === 'awaiting'
-// The turn is over with a question the agent asked in passing still open.
-const asking = (conversation: Conversation) => conversation.sessionId !== null && conversation.chat?.turn === 'idle' && conversation.chat.request?.async === true
-export const working = (conversation: Conversation) => Boolean(conversation.delegation?.open) || conversation.chat?.turn === 'running' || conversation.chat?.turn === 'awaiting'
-const crashed = (conversation: Conversation) => conversation.sessionId === null && (conversation.lastExit?.code ?? 0) !== 0
+export const waiting = conversationWaiting
+const asking = conversationAsking
+export const working = conversationWorking
+const crashed = conversationCrashed
 // Put away by the user: its agent was stopped and it takes no message until it is taken out, so
 // nothing in it waits on them.
 const archived = (conversation: Conversation) => conversation.archivedAt != null
@@ -185,19 +184,15 @@ export function named(conversation: Conversation, tasks: Snapshot['tasks'], runs
 export function noticesBetween(prev: Snapshot, next: Snapshot, tellWaiting = true, tellFinished = true): Notice[] {
   const notices: Notice[] = []
   for (const conversation of Object.values(next.conversations)) {
-    if (isHelper(conversation)) continue
-    const before = prev.conversations[conversation.id]
-    if (!before || before === conversation || conversation.routineId) continue
-    // A group chat's member finishes a turn every round: only one waiting on the user is told of.
-    if ((conversation.discussionId || conversation.squadRunId || conversation.parentConversationId) && !(waiting(conversation) && !waiting(before))) continue
-    if (conversation.taskId && next.tasks[conversation.taskId]?.squadId && !waitingOrAsking(conversation)) continue
+    const alert = conversationAlert(prev.conversations[conversation.id], conversation, (taskId) => Boolean(next.tasks[taskId]?.squadId))
+    if (!alert) continue
     const { title, target } = named(conversation, next.tasks, next.squadRuns)
-    if (crashed(conversation) && !crashed(before)) {
+    if (alert === 'crashed') {
       notices.push({ title, body: t('attention.agentExitedUnexpectedlyCodeSendAMessageTo', { value1: conversation.lastExit?.code }), target })
-    } else if (waiting(conversation) && !waiting(before)) {
+    } else if (alert === 'waiting') {
       if (tellWaiting) notices.push({ title, body: t('attention.agentNeedsYourApprovalOrAnswer'), target })
-    } else if (working(before) && !working(conversation)) {
-      if (tellFinished) notices.push({ title, body: asking(conversation) ? t('attention.agentFinishedThisTurnAndHasAQuestion') : t('attention.agentFinishedThisTurn'), target })
+    } else if (tellFinished) {
+      notices.push({ title, body: alert === 'finishedAsking' ? t('attention.agentFinishedThisTurnAndHasAQuestion') : t('attention.agentFinishedThisTurn'), target })
     }
   }
   return notices

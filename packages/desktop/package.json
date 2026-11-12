@@ -22,7 +22,8 @@
   },
   "dependencies": {
     "@fontsource-variable/geist-mono": "5.3.0",
-    "playwright-core": "catalog:"
+    "playwright-core": "catalog:",
+    "qrcode": "1.5.4"
   },
   "devDependencies": {
     "@antumi/protocol": "workspace:*",
@@ -40,6 +41,7 @@
     "@replit/codemirror-indentation-markers": "6.5.3",
     "@types/css-tree": "3.2.0",
     "@types/node": "catalog:",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@types/ws": "catalog:",

@@ -1,5 +1,6 @@
 import type { ChatReference, AgentProfile, SkillRef } from '@antumi/protocol'
 import { agentCliAccess } from './agent-cli-access'
+import { limitChatPage } from './chat-page-limit'
 import { randomUUID } from 'node:crypto'
 import { mkdir, realpath, rm, rmdir, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
@@ -1942,23 +1943,27 @@ export class ConversationService {
     })
   }
 
-  // The newest chat stages' items, oldest first; `before` pages further back.
-  chatPage(id: string, before?: string): { items: ChatItem[]; before: string | null } {
+  // The newest chat stages' items, oldest first; `before` pages further back. With a limit, only
+  // the newest that many (limitChatPage).
+  chatPage(id: string, before?: string, limit?: number): { items: ChatItem[]; before: string | null; truncated?: boolean } {
     const conversation = this.get(id)
     const stages = this.store.stages(id)
     const until = before === undefined ? stages.length : stages.findIndex((stage) => stage.id === before)
     if (until < 0) throw new Rejection('stage-not-found', `no chat stage ${before}`)
     const pages: ChatItem[][] = []
+    const most = Math.min(limit ?? CHAT_PAGE_ITEMS, CHAT_PAGE_ITEMS)
     let count = 0
     let index = until
-    while (index > 0 && (pages.length === 0 || count < CHAT_PAGE_ITEMS)) {
+    while (index > 0 && (pages.length === 0 || count < most)) {
       index--
       const items = this.chats.items(this.chatStage(conversation, stages[index]!))
       this.rememberContext(id, items)
       pages.unshift(items)
       count += items.length
     }
-    return { items: pages.flat(), before: index > 0 ? stages[index]!.id : null }
+    if (limit === undefined || count <= limit) return { items: pages.flat(), before: index > 0 ? stages[index]!.id : null }
+    const cut = limitChatPage(pages, index, limit)
+    return { items: cut.items, before: cut.first > 0 ? stages[cut.first]!.id : null, ...(cut.truncated ? { truncated: true } : {}) }
   }
 
   async stop(id: string): Promise<Conversation> {

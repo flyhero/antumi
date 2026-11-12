@@ -10,7 +10,7 @@ import { randomBytes } from 'node:crypto'
 import { mkdir, rm, stat } from 'node:fs/promises'
 import path from 'node:path'
 import os from 'node:os'
-import { untrustedSource, AGENT_KINDS, agentReadiness, agentDescriptor, PROTOCOL_VERSION, quotaVerdict, usageAccount, usageReadable, type AgentKind, type AgentUsage, type ChatItem } from '@antumi/protocol'
+import { coreUrl, untrustedSource, AGENT_KINDS, agentReadiness, agentDescriptor, PROTOCOL_VERSION, quotaVerdict, usageAccount, usageReadable, type AgentKind, type AgentUsage, type ChatItem } from '@antumi/protocol'
 import packageJson from '../package.json' with { type: 'json' }
 import { removeCoreEndpoint, antumiPaths, writeCoreEndpoint } from '@antumi/protocol/node'
 import { adapterOf } from './agents'
@@ -81,6 +81,8 @@ import { knowledgeBaseSkills } from './skills-recommended'
 import { WireLog } from './wire-log'
 import { timestampConsole } from './log-timestamps'
 import { useSystemProxy } from './system-proxy'
+import { MobileStore } from './mobile-store'
+import { MobileService } from './mobile-service'
 
 timestampConsole()
 await useSystemProxy()
@@ -111,9 +113,23 @@ const turns = new ChatTurnStore(paths.database, {
 const smallModels = new SmallModelStore(paths.database)
 smallModels.recoverQuick()
 const attachments = new AttachmentStore(paths.attachments)
+const mobileStore = new MobileStore(paths.database)
 let sourceInvestigations: SourceInvestigationService | undefined
 let sourceUpdates: SourceUpdates | undefined
 let server: RpcServer | null = null
+const mobile = new MobileService(mobileStore, {
+  dir: path.join(paths.home, 'mobile'),
+  connections: () => server?.connections ?? [],
+  changed: (status) => server?.broadcast('mobile.changed', { status })
+})
+// Whether a task is a team's, whose members the phone is told of only when held up.
+const inSquad = (taskId: string) => {
+  try {
+    return Boolean(service.get(taskId).squadId)
+  } catch {
+    return false
+  }
+}
 let awake: ComputerAwakeService | null = null
 // Built with the RPC handlers, which own the Git service it reads branches through.
 const pullRequests: { current: PullRequestService | null } = { current: null }
@@ -139,6 +155,7 @@ const conversations = new ConversationService(
     if (event.type === 'changed') {
       if (event.conversation.autoInvestigationId) sourceInvestigations?.created(event.conversation.id, event.conversation.createdAt)
       server?.broadcast('conversations.changed', { conversation: event.conversation })
+      mobile.conversationChanged(event.conversation, inSquad)
       // A task's conversation says whether its agent waits on the user.
       service.chatChanged(event.conversation)
       schedules.conversationChanged(event.conversation)
@@ -150,6 +167,7 @@ const conversations = new ConversationService(
     } else if (event.type === 'deleted') {
       sourceInvestigations?.deleted(event.id)
       server?.broadcast('conversations.deleted', { id: event.id })
+      mobile.conversationDeleted(event.id)
       smallModels.interruptConversation(event.id)
       schedules.conversationDeleted(event.id)
       sources.tasksChanged()
@@ -682,9 +700,11 @@ server = await startRpcServer({
     store: attachments,
     uploads: new AttachmentUploads(attachments)
   }, terminals, worktrees, browser, awake, terminalCommands, limits, runs, turns, chatSettings, environment, schedules, chatCommands, routines, discussions, wire, () => { server?.broadcast('git.changed', {}); profiles.tick() }, squads, todos, plugins, skills, mcpServers, smallModels, projectConfigs, modelProviders, sessionImports, accounts, cliMaintenance, analytics, automation, pets, new ProjectStar(sources), profiles, bookmarks, browserHistory, sourceUpdates,
-    { store: pullRequestStore, changed: (taskId, links) => server?.broadcast('pullRequests.changed', { taskId, links }), ready: (service) => { pullRequests.current = service } }, browserSites)
+    { store: pullRequestStore, changed: (taskId, links) => server?.broadcast('pullRequests.changed', { taskId, links }), ready: (service) => { pullRequests.current = service } }, browserSites, mobile)
 })
 await writeCoreEndpoint({ port: server.port, token, pid: process.pid, protocolVersion: PROTOCOL_VERSION, version: packageJson.version })
+mobile.seed(conversations.list(true, true, true))
+await mobile.start(coreUrl({ port: server.port, token }))
 daemon.start()
 await awake.start()
 refreshAwake()
@@ -740,6 +760,7 @@ async function shutdown(): Promise<void> {
   awake?.stop()
   cliMaintenance.close()
   daemon.stop()
+  mobile.stop()
   await server?.close()
   await sourceInvestigations?.stop()
   await removeCoreEndpoint(process.pid)
@@ -756,6 +777,7 @@ async function shutdown(): Promise<void> {
   bookmarks.close()
   browserHistory.close()
   browserSites.close()
+  mobileStore.close()
   process.exit(0)
 }
 process.on('SIGINT', () => void shutdown())

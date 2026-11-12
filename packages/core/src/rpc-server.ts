@@ -5,7 +5,10 @@ import { WebSocketServer, WebSocket } from 'ws'
 import { ZodError } from 'zod'
 import {
   LEGACY_USAGE_WINDOW_KINDS,
+  MOBILE_NOTIFICATIONS,
   RPC_ERROR,
+  mobileMayCall,
+  type MobileAccess,
   RpcRequest,
   isRpcMethod,
   rpcSchemas,
@@ -30,6 +33,11 @@ export type Connection = {
   notify<N extends RpcNotificationName>(name: N, params: RpcNotificationParams<N>): void
   // For state that belongs to this client alone, like a sign-in waiting on its answers.
   onClose(listener: () => void): () => void
+  // A paired phone's connection, declared in system.hello by the gateway: from then on core holds
+  // it to MOBILE_METHODS for this access, and sends it only MOBILE_NOTIFICATIONS.
+  mobile?: { deviceId: string; access: MobileAccess }
+  // Ends the connection from core's side, as when its phone is revoked.
+  close?(): void
 }
 
 export type RpcHandlers = {
@@ -85,6 +93,10 @@ export function startRpcServer(options: {
     if (!isRpcMethod(method)) {
       return errorFrame(id, RPC_ERROR.methodNotFound, `unknown method ${method}`)
     }
+    // Before any handler: a phone's request that its device may not make never reaches one.
+    if (connection.mobile && method !== 'system.hello' && !mobileMayCall(method, connection.mobile.access)) {
+      return errorFrame(id, RPC_ERROR.rejected, `${method} is not available on this phone`, 'mobile-not-allowed')
+    }
     try {
       const result = await dispatch(method, params, connection)
       return JSON.stringify({ jsonrpc: '2.0', id, result })
@@ -122,11 +134,15 @@ export function startRpcServer(options: {
       wiring: new Set(),
       browsing: new Set(),
       usageKinds: new Set(LEGACY_USAGE_WINDOW_KINDS),
-      notify: (name, params) => send(JSON.stringify({ jsonrpc: '2.0', method: name, params })),
+      notify: (name, params) => {
+        if (connection.mobile && !MOBILE_NOTIFICATIONS.has(name)) return
+        send(JSON.stringify({ jsonrpc: '2.0', method: name, params }))
+      },
       onClose: (listener) => {
         closeListeners.add(listener)
         return () => closeListeners.delete(listener)
-      }
+      },
+      close: () => socket.close()
     }
     connections.add(connection)
     socket.on('message', (data) => {

@@ -339,3 +339,20 @@
   .account-entry-main { align-items: flex-start; }
   .account-entry-actions { flex-direction: column; align-items: flex-end; }
 }
+
+/* 设置 → 手机. The QR code reads dark on light in either theme: scanners want that, so the tokens
+   are taken in their light form here. */
+.mobile-inline-form { display: flex; gap: 8px; align-items: center; }
+.mobile-port { width: 88px; }
+.mobile-push { width: 240px; }
+.mobile-state-failed { color: var(--danger); font-size: 12px; }
+.mobile-empty { padding: 12px 0; }
+.mobile-pairing { display: flex; gap: 20px; align-items: center; padding: 16px 0; border-bottom: 1px solid var(--border); }
+.mobile-pairing[role='alertdialog'] { flex-direction: column; align-items: flex-start; gap: 8px; }
+.mobile-pairing-text { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.mobile-pairing-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 4px; }
+.mobile-qr { width: 168px; height: 168px; flex-shrink: 0; color-scheme: light; border-radius: var(--radius-sm); }
+.mobile-qr-back { fill: var(--surface); }
+.mobile-qr-modules { fill: var(--text); }
+.mobile-code { margin: 4px 0; font-family: var(--mono); font-size: 28px; letter-spacing: 0.12em; color: var(--text); }
+.mobile-device-controls { display: flex; gap: 8px; align-items: center; }

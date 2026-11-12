@@ -45,6 +45,7 @@
 | `packages/core` | 独立的任务与会话存储及业务逻辑；任务创建 git worktree；通过 daemon 启动 Agent CLI；另有给 Agent 用的 MCP 服务（`mcp-main.ts`，预览和浏览器工具），由 Agent 作为独立进程启动 |
 | `packages/daemon` | 进程宿主，独立进程：Agent 跑在 stdio 管道上，终端面板的 shell 跑在 PTY 里；缓存最近输出，供重新连接时回放 |
 | `packages/desktop` | Electron 桌面端：看板、详情编辑、聊天界面、终端面板；主进程还持有内置浏览器的标签页，并用 playwright-core 替 Agent 驱动它们 |
+| `packages/mobile` | Android 手机端（React Native + Expo）：配对后查看会话、回答确认、发消息；只经过 core 的手机网关连接，见 [MOBILE.md](MOBILE.md) |
 
 运行时数据在 `~/.antumi/`（可用 `ANTUMI_HOME` 覆盖）：`antumi.db`、`core.json`（端口与 token，权限 0600）、`worktrees/`、`sessions/`、`browser/`（`host.json`，桌面端写的浏览器宿主地址）、`skills/`（技能库：`skills.json` 锁文件、`repos/` 里的 git 克隆、`bundles/` 里交给 Agent 的目录）、`mcp-servers.json`（用户的 MCP 服务器，不含密钥）、`credentials.json`（任务来源和 MCP 服务器的密钥，权限 0600）。
 
@@ -60,6 +61,10 @@
 - core ↔ daemon：NDJSON over Unix socket（Windows 上是 named pipe）。只有连接被拒绝才说明 daemon 的 socket 已失效，超时或 EPERM 不能证明什么。
 - `packages/protocol` 是唯一的类型来源：RPC 方法和通知都先在这里定义 zod schema，再在 `core/src/rpc-handlers.ts` 实现。客户端和 core 可以是不同版本；增加可选字段是安全的，破坏性改动要提升 `PROTOCOL_VERSION`（daemon 线路是 `DAEMON_PROTOCOL_VERSION`）。当前 core RPC 协议版本为 18，daemon 协议版本为 3，浏览器宿主协议版本为 3。桌面端和 core 跨越 RPC 版本时应一起升级。
 - 启动 Agent 用 argv 数组，prompt 前加 `--`，从不经过 shell。
+
+### 手机端
+
+手机不直接连 core。用户在 设置 → 手机 打开后，core 启动一个子进程「手机网关」（`core/src/gateway-main.ts`，打包后是 `gateway.mjs`），由它在私有地址上监听端口（默认 7820），用 Noise 协议做配对和端到端加密，再为每台手机开一个到 core 的本地连接，在 `system.hello` 里声明是哪台设备。授权在 core 里做：`rpc-server.ts` 在任何处理函数之前按 `MOBILE_METHODS`（protocol）检查方法和设备权限（查看 / 操作），只把 `MOBILE_NOTIFICATIONS` 发给手机。设备和设置存在 `mobile_devices` / `mobile_settings` 表，电脑的长期私钥在 `~/.antumi/mobile/key.json`（0600）。网关不是权限隔离：它以同一用户运行、拿着完整 token，只保持最小。设计、协议细节和取舍见 [MOBILE.md](MOBILE.md)。
 
 ## 2. 任务模型
 

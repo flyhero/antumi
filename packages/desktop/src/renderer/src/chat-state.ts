@@ -5,7 +5,7 @@ import { isCompaction } from './chat-notices'
 import { diffCounts, isSubagent } from './chat-tools'
 import { isBackgroundCommand, keepsInView } from './background-work'
 import { browserOperation } from './browser-activity'
-import { parseHandoffMessage, withoutBranchSwitchNote, type AgentCall, type AgentKind, type ChatDiff, type ChatItem, type ChatQuestion, type ChatTodo, type ConversationStage, browserToolKind, isPlanApproval, isPreviewTool, previewRequest, toolImagePath, CODEX_IMAGE_GENERATION, terminalToolKind, todoToolKind } from '@antumi/protocol'
+import { appendChatText, chatItemKey, mergeChatItems, prependChatItems, replaceChatStage, parseHandoffMessage, withoutBranchSwitchNote, type AgentCall, type AgentKind, type ChatDiff, type ChatItem, type ChatQuestion, type ChatTodo, type ConversationStage, browserToolKind, isPlanApproval, isPreviewTool, previewRequest, toolImagePath, CODEX_IMAGE_GENERATION, terminalToolKind, todoToolKind } from '@antumi/protocol'
 
 // A conversation's chat items as this window holds them, in the order core first saw them;
 // `before` pages further back, null when nothing older is left.
@@ -28,35 +28,9 @@ export function usePlans(conversationId: string): PlanItem[] {
   )
 }
 
-// Item ids are unique within their stage only: each stage numbers its notices and requests afresh.
-export function itemKey(item: Pick<ChatItem, 'stageId' | 'id'>): string {
-  return `${item.stageId}/${item.id}`
-}
-
-// A known item is replaced where it stands, a new one goes last: core sends items in order.
-export function mergeItems(current: readonly ChatItem[], incoming: readonly ChatItem[]): ChatItem[] {
-  const next = [...current]
-  const index = new Map(next.map((item, position) => [itemKey(item), position]))
-  for (const item of incoming) {
-    const position = index.get(itemKey(item))
-    if (position === undefined) {
-      index.set(itemKey(item), next.length)
-      next.push(item)
-    } else {
-      next[position] = item
-    }
-  }
-  return next
-}
-
-// Without a stage (an older core), the id alone decides; streamed items carry provider-unique ids.
-export function appendText(items: readonly ChatItem[], stageId: string | undefined, itemId: string, text: string): ChatItem[] {
-  return items.map((item) =>
-    item.id === itemId && (stageId === undefined || item.stageId === stageId) && (item.kind === 'assistant' || item.kind === 'reasoning')
-      ? { ...item, text: item.text + text }
-      : item
-  )
-}
+export const itemKey = chatItemKey
+export const mergeItems = mergeChatItems
+export const appendText = appendChatText
 
 // Deltas come dozens of times a second, and each re-renders the reply it grows, at a cost that
 // grows with the reply: applied one by one, a long reply falls further and further behind, and a
@@ -120,8 +94,7 @@ export function prependChatPage(conversationId: string, page: ChatPage): void {
   useChat.setState((state) => {
     const current = state[conversationId]
     if (!current) return {}
-    const shown = new Set(current.items.map(itemKey))
-    return { [conversationId]: { items: [...page.items.filter((item) => !shown.has(itemKey(item))), ...current.items], before: page.before } }
+    return { [conversationId]: { items: prependChatItems(current.items, page.items), before: page.before } }
   })
 }
 
@@ -130,9 +103,8 @@ export function receiveChatItems(conversationId: string, items: readonly ChatIte
   useChat.setState((state) => {
     const current = state[conversationId]
     if (current && replaceStage) {
-      const first = current.items.findIndex((item) => item.stageId === replaceStage)
-      if (first < 0) return {}
-      return { [conversationId]: { ...current, items: [...current.items.slice(0, first), ...items, ...current.items.slice(first).filter((item) => item.stageId !== replaceStage)] } }
+      const replaced = replaceChatStage(current.items, replaceStage, items)
+      return replaced ? { [conversationId]: { ...current, items: replaced } } : {}
     }
     return current ? { [conversationId]: { ...current, items: mergeItems(current.items, items) } } : {}
   })

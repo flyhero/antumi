@@ -186,6 +186,7 @@ function FilesButton() {
 
 // Git shares the dock and separate windows with the other tools.
 function GitButton() {
+  const shortcut = useShortcutLabel('toggle-git')
   const supported = useCore((s) => s.rpc?.features.includes('git-projects') ?? false)
   const open = useCore((s) => s.gitPanelOpen || s.panelWindows.includes('git'))
   if (!supported) return null
@@ -196,7 +197,7 @@ function GitButton() {
       aria-label="Git"
       aria-pressed={open}
       data-active={open}
-      data-tooltip={open ? t('GitPage.close') : 'Git'}
+      data-tooltip={[open ? t('GitPage.close') : 'Git', shortcut].filter(Boolean).join(' ')}
       data-tooltip-side="top-end"
       onClick={toggleGitPanel}
     >

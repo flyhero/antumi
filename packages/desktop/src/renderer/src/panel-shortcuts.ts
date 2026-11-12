@@ -3,7 +3,7 @@ import type { PanelShortcutAction } from '../../shared/panel-shortcuts'
 import { ShortcutAction, SHORTCUTS } from '../../shared/keyboard-shortcuts'
 import { closePanelWindow, focusPanelWindow, forwardPanelShortcut, onBrowserShortcut, sendPanelCommand, syncPanelShortcuts } from './desktop-bridge'
 import type { PanelKind } from '../../shared/panel-window'
-import { focusSplitPane, openSearch, setNewTaskOpen, toggleSplit, toggleBrowserPanel, toggleFilesPanel, toggleTerminalPanel, setSettingsOpen, useCore } from './core-store'
+import { focusSplitPane, openSearch, setNewTaskOpen, toggleSplit, toggleBrowserPanel, toggleFilesPanel, toggleGitPanel, toggleTerminalPanel, setSettingsOpen, useCore } from './core-store'
 import { toggleSidebar } from './components/WindowBrand'
 import { usePreferences } from './preferences'
 import { isShortcut, recordingShortcut, useShortcutLabel } from './keyboard-shortcuts'
@@ -55,6 +55,7 @@ function runAppShortcut(action: ShortcutAction, addressFocused?: boolean): boole
   if (action === 'toggle-files') toggleFilesPanel()
   else if (action === 'toggle-terminal') void toggleTerminalPanel()
   else if (action === 'toggle-browser') browserKey(addressFocused)
+  else if (action === 'toggle-git') { if (state.rpc?.features.includes('git-projects')) toggleGitPanel(); else return false }
   else if (action === 'new-task') setNewTaskOpen(true)
   else if (action === 'search') openSearch()
   else if (action === 'focus-left' || action === 'focus-right') return focusSplitPane(action === 'focus-left' ? 0 : 1)

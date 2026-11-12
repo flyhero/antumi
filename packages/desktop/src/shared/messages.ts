@@ -239,6 +239,7 @@ export const MESSAGES = {
   "KeyboardShortcuts.files": {"zh": "显示 / 隐藏文件栏", "en": "Toggle files panel"},
   "KeyboardShortcuts.terminal": {"zh": "显示 / 隐藏终端栏", "en": "Toggle terminal panel"},
   "KeyboardShortcuts.browser": {"zh": "显示 / 隐藏浏览器栏", "en": "Toggle browser panel"},
+  "KeyboardShortcuts.git": {"zh": "显示 / 隐藏 Git", "en": "Toggle Git"},
   "KeyboardShortcuts.search": {"zh": "搜索动作或按键", "en": "Search actions or keys"},
   "KeyboardShortcuts.resetAll": {"zh": "全部恢复默认", "en": "Reset all to defaults"},
   "KeyboardShortcuts.hint": {"zh": "点击按键组合即可修改、禁用或恢复默认。每项注明生效区域，设置保存在这台设备上；面板开关在终端和网页中同样有效。", "en": "Click a binding to change, disable or reset it. Each action shows its scope. Saved on this device; panel shortcuts also work in terminals and web pages."},

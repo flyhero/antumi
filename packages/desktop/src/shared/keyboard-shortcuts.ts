@@ -8,9 +8,8 @@ const primary = (key: string, shift = false) => (platform: ShortcutPlatform): Sh
   { key, shift, ctrl: platform !== 'darwin', meta: platform === 'darwin', alt: false }
 ]
 const plain = (key: string, shift = false) => (): ShortcutBinding[] => [{ key, shift, ctrl: false, meta: false, alt: false }]
-const findKeys = (previous: boolean) => (platform: ShortcutPlatform): ShortcutBinding[] => [
-  ...primary('g', previous)(platform), ...plain('F3', previous)()
-]
+// ⌘G is Git's: the find box steps with Enter and ⇧Enter, F3 and ⇧F3 from anywhere it owns.
+const findKeys = (previous: boolean) => plain('F3', previous)
 
 // Scopes describe where a key can act, not which component happened to register first.
 export const SHORTCUTS = {
@@ -37,6 +36,7 @@ export const SHORTCUTS = {
   // On macOS ⌘J too, as editors toggle their bottom panel; elsewhere Ctrl+J is the shell's.
   'toggle-terminal': { label: 'KeyboardShortcuts.terminal', group: 'panels', scope: 'app', defaults: (platform: ShortcutPlatform) => [...(platform === 'darwin' ? primary('j')(platform) : []), defaultPanelShortcut('toggle-terminal', platform)], browser: true },
   'toggle-browser': { label: 'KeyboardShortcuts.browser', group: 'panels', scope: 'app', defaults: (platform: ShortcutPlatform) => [defaultPanelShortcut('toggle-browser', platform)], browser: true },
+  'toggle-git': { label: 'KeyboardShortcuts.git', group: 'panels', scope: 'app', defaults: primary('g'), browser: true },
   'submit-form': { label: 'KeyboardShortcuts.submitForm', group: 'forms', scope: 'form', defaults: primary('Enter') }
 } as const
 

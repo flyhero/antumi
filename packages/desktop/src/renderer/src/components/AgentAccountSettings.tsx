@@ -135,8 +135,10 @@ export function AgentAccountSettings() {
             <h3><AgentIcon agent={agent} />{agentLabel(agent)}<span>{t('SettingsPage.accountCount', { count: own.length })}</span></h3>
             <AddAccount agent={agent} />
           </header>
-          {own.length ? own.sort((a, b) => Number(b.id === active) - Number(a.id === active)).map((account) => <AccountRow key={account.id} account={account} active={active === account.id} />)
-            : <p className="settings-quota-note">{t('SettingsPage.accountEmptyHint')}</p>}
+          <div className="settings-card">
+            {own.length ? own.sort((a, b) => Number(b.id === active) - Number(a.id === active)).map((account) => <AccountRow key={account.id} account={account} active={active === account.id} />)
+              : <p className="settings-quota-note account-empty">{t('SettingsPage.accountEmptyHint')}</p>}
+          </div>
         </section>
       })}
       <details className="settings-disclosure"><summary>{t('SettingsPage.accountSwitchingHelp')}</summary><p>{t('AgentAccounts.intro')}</p></details>

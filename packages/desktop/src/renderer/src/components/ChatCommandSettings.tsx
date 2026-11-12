@@ -6,7 +6,7 @@ import { isShortcut, useShortcutLabel } from '../keyboard-shortcuts'
 import { projectName } from './ProjectPicker'
 import { SettingsEmptyState } from './SettingsEmptyState'
 import { SettingsGroup } from './SettingsControls'
-import { PinIcon, TerminalIcon } from './icons'
+import { PencilIcon, PinIcon, TerminalIcon } from './icons'
 
 type Draft = { id?: string; name: string; description: string; prompt: string; projectPath: string | null }
 
@@ -154,7 +154,7 @@ export function ChatCommandSettings() {
   }, [connected])
 
   if (!connected) return <p className="settings-empty">{t('ChatCommandSettings.connectToAntumiCoreToView')}</p>
-  if (draft) return <SettingsGroup title={draft.id ? t('chatTools.edit') : t('ChatCommandSettings.newCommand')}><CommandForm key={draft.id ?? 'new'} draft={draft} projects={projects} onDone={() => setDraft(null)} /></SettingsGroup>
+  if (draft) return <SettingsGroup title={draft.id ? t('chatTools.edit') : t('ChatCommandSettings.newCommand')} icon={<PencilIcon />}><CommandForm key={draft.id ?? 'new'} draft={draft} projects={projects} onDone={() => setDraft(null)} /></SettingsGroup>
   return (
     <>
       {commands.length === 0 ? (

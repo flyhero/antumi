@@ -5,6 +5,7 @@ import { setPreference, usePreferences } from '../preferences'
 import { BUILTIN_PET, cancelPet, installPet, refreshPets, removePet, usePetLibrary, usePetLibraryStore } from '../pet-library'
 import { Segmented, SettingsGroup, SettingsRow } from './SettingsControls'
 import { PetCreationGuide } from './PetCreationGuide'
+import { SparkIcon } from './icons'
 import './pet-settings.css'
 
 export function petName(id: string): string {
@@ -68,7 +69,7 @@ export function PetSettings() {
   return (
     <>
       <section className="pet-style-section" aria-labelledby={styleId}>
-        <h3 id={styleId} className="settings-subsection-title">{t('Pet.style')}</h3>
+        <h3 id={styleId} className="settings-subsection-title"><SparkIcon />{t('Pet.style')}</h3>
         <PetStylePicker labelId={styleId} />
       </section>
       <PetCreationGuide />

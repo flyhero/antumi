@@ -5,7 +5,7 @@ import { perform, useCore } from '../core-store'
 import { agentLabel } from '../labels'
 import { Segmented, SettingsGroup, Toggle } from './SettingsControls'
 import { SettingsEmptyState } from './SettingsEmptyState'
-import { PlugIcon } from './icons'
+import { DownloadIcon, PlugIcon } from './icons'
 
 // The agents a server can be handed to, as their descriptors say.
 const TAKERS = AGENT_KINDS.filter((kind) => agentDescriptor(kind).capabilities.userMcp)
@@ -123,7 +123,7 @@ function ServerForm({ initial, onDone }: { initial: Draft; onDone: (saved: strin
   const what = draft.type === 'stdio' ? t('McpSettingsSection.environmentVariables') : t('McpSettingsSection.requestHeaders')
 
   return (
-    <SettingsGroup title={initial.previousName ? t('McpSettingsSection.editServer', { name: initial.previousName }) : t('McpSettingsSection.addServer')}>
+    <SettingsGroup title={initial.previousName ? t('McpSettingsSection.editServer', { name: initial.previousName }) : t('McpSettingsSection.addServer')} icon={<PlugIcon />}>
       <form className="chat-command-form" onSubmit={(event) => void save(event)}>
       {json === null ? (
         <button type="button" className="button ghost mcp-json-toggle" onClick={() => setJson('')}>{t('McpSettingsSection.pasteJsonToFillFields')}</button>
@@ -307,7 +307,7 @@ function ImportPanel({ onDone }: { onDone: (imported: string[]) => void }) {
   }
 
   return (
-    <SettingsGroup title={t('McpSettingsSection.importFromClaudeCodexCursor')}>
+    <SettingsGroup title={t('McpSettingsSection.importFromClaudeCodexCursor')} icon={<DownloadIcon />}>
     <div className="chat-command-form">
       {failed ? <div className="settings-loading" role="status"><p>{t('McpSettingsSection.importFailed')}</p><button type="button" className="button" onClick={() => void load()}>{t('AppUpdate.retry')}</button></div> : candidates === null ? <p className="settings-empty" role="status">{t('McpSettingsSection.readingAgentConfigurations')}</p> : candidates.length === 0 ? <SettingsEmptyState icon={<PlugIcon />} title={t('McpSettingsSection.noImportTitle')} actions={<button type="button" className="button" onClick={() => void load()}>{t('AppUpdate.retry')}</button>}>{t('McpSettingsSection.noMcpServersInAnyAgentSUser')}</SettingsEmptyState> : (
         <ul className="settings-project-list">

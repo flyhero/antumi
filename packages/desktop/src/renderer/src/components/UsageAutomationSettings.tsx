@@ -5,6 +5,7 @@ import { perform, setSettingsOpen, useAccountsSupported, useCore } from '../core
 import { getLocale, t } from '../i18n'
 import { agentLabel } from '../labels'
 import { SettingsGroup, SettingsRow, Toggle } from './SettingsControls'
+import { BoltIcon } from './icons'
 
 function PolicyForm({ account, policy, saved }: { account: AgentAccount; policy?: UsageAutomationState['policies'][number]; saved(state: UsageAutomationState): void }) {
   const [daily, setDaily] = useState(policy?.daily.join(', ') ?? '')
@@ -60,7 +61,7 @@ export function UsageAutomationSettings({ embedded = false }: { embedded?: boole
   const eligible = accounts?.accounts.filter((entry) => agentDescriptor(entry.agent).quotaAutomation) ?? []
   const account = eligible.find((entry) => `${entry.agent}/${entry.id}` === selected) ?? eligible[0]
   if (!eligible.length) return <div className="settings-loading"><p>{t('SettingsPage.automationNoAccounts')}</p>{accountsSupported && <button type="button" className="button" onClick={() => setSettingsOpen(true, 'accounts')}>{t('AgentAccounts.manage')}</button>}</div>
-  return <SettingsGroup title={embedded ? undefined : t('UsageAnalytics.automation')}>
+  return <SettingsGroup title={embedded ? undefined : t('UsageAnalytics.automation')} icon={<BoltIcon />}>
     {problem && <div className="settings-loading" role="status"><span>{t('SettingsPage.automationLoadFailed')}</span><button type="button" className="button" onClick={() => setReload((value) => value + 1)}>{t('ChatContextMenu.retry')}</button></div>}
     <SettingsRow label={t('UsageAnalytics.account')} control={(id) => <select className="input" aria-labelledby={id} value={account ? `${account.agent}/${account.id}` : ''} onChange={(event) => setSelected(event.target.value)}>
       {eligible.map((entry) => <option key={`${entry.agent}/${entry.id}`} value={`${entry.agent}/${entry.id}`}>{agentLabel(entry.agent)} · {accountName(entry)}</option>)}

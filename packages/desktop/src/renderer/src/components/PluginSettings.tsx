@@ -5,6 +5,7 @@ import { perform, useCore } from '../core-store'
 import { pickPlugin } from '../desktop-bridge'
 import { SettingsGroup, Toggle } from './SettingsControls'
 import { ChatPicker } from './ChatPicker'
+import { DownloadIcon, PuzzleIcon, StarIcon } from './icons'
 
 // A plugin's GitHub repository, opened in the user's browser (main sends web links there).
 function RepositoryLink({ repository }: { repository: string }) {
@@ -67,7 +68,7 @@ export function PluginSettings() {
     <div className="plugin-settings">
       <p className="settings-note">{t('PluginSettings.notAgentPlugins')}</p>
       {status && <p className="settings-status" role="status">{status}</p>}
-      {recommended.length > 0 && <SettingsGroup title={t('PluginSettings.recommended')}>
+      {recommended.length > 0 && <SettingsGroup title={t('PluginSettings.recommended')} icon={<StarIcon />}>
         {recommended.map((entry) => {
           const installed = plugins?.find((plugin) => plugin.id === entry.id)
           return <div className="settings-row" key={entry.id}>
@@ -82,7 +83,7 @@ export function PluginSettings() {
           </div>
         })}
       </SettingsGroup>}
-      <SettingsGroup title={t('PluginSettings.installedPlugins')}>
+      <SettingsGroup title={t('PluginSettings.installedPlugins')} icon={<PuzzleIcon />}>
         {plugins === null ? <p className="muted">{t('PluginSettings.loadingPlugins')}</p> : plugins.length === 0 ? <p className="muted">{t('PluginSettings.noPluginsInstalledYet')}</p> : plugins.map((plugin) => (
           <div key={plugin.id} className="plugin-row">
             <div className="settings-row">
@@ -110,7 +111,7 @@ export function PluginSettings() {
           </div>
         ))}
       </SettingsGroup>
-      <SettingsGroup title={t('PluginSettings.installFromElsewhere')}>
+      <SettingsGroup title={t('PluginSettings.installFromElsewhere')} icon={<DownloadIcon />}>
         <form className="plugin-install" onSubmit={(event) => { event.preventDefault(); install() }}>
           <div className="settings-field">
             <label className="settings-field-label" htmlFor={`${ids}-kind`}>{t('PluginSettings.installationSource')}</label>

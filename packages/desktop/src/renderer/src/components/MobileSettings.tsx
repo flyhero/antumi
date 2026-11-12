@@ -7,6 +7,7 @@ import { t } from '../i18n'
 import { agoText } from '../labels'
 import { CopyButton } from './CopyButton'
 import { Segmented, SettingsGroup, SettingsRow, Toggle } from './SettingsControls'
+import { BellIcon, DownloadIcon, PhoneIcon } from './icons'
 
 // 设置 → 手机 (docs/MOBILE.md): the gateway's switch and port, pairing a phone by QR code and the
 // code both screens show, the paired devices, and the push address.
@@ -65,7 +66,7 @@ export function MobileSettings() {
         />
       </SettingsGroup>
       {status.enabled && (
-        <SettingsGroup title={t('MobileSettings.devices')}>
+        <SettingsGroup title={t('MobileSettings.devices')} icon={<PhoneIcon />}>
           <SettingsRow
             label={t('MobileSettings.addPhone')}
             description={t('MobileSettings.addPhoneDescription')}
@@ -80,10 +81,10 @@ export function MobileSettings() {
           {status.devices.map((device) => <DeviceRow key={device.id} device={device} onStatus={apply} />)}
         </SettingsGroup>
       )}
-      <SettingsGroup title={t('MobileSettings.push')}>
+      <SettingsGroup title={t('MobileSettings.push')} icon={<BellIcon />}>
         <PushRow status={status} onStatus={apply} />
       </SettingsGroup>
-      <SettingsGroup title={t('MobileSettings.app')}>
+      <SettingsGroup title={t('MobileSettings.app')} icon={<DownloadIcon />}>
         <SettingsRow
           label={t('MobileSettings.download')}
           description={t('MobileSettings.downloadDescription')}

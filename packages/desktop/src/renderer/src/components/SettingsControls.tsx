@@ -27,11 +27,11 @@ export function SettingsRow({
 
 // A card of rows, for a section that splits its settings by what they shape; untitled where the
 // card heads itself.
-export function SettingsGroup({ title, children }: { title?: string; children: ReactNode }) {
+export function SettingsGroup({ title, icon, children }: { title?: string; icon?: ReactNode; children: ReactNode }) {
   const titleId = useId()
   return (
     <section className="settings-subsection" aria-labelledby={title ? titleId : undefined}>
-      {title && <h3 id={titleId} className="settings-subsection-title">{title}</h3>}
+      {title && <h3 id={titleId} className="settings-subsection-title">{icon}{title}</h3>}
       <div className="settings-card">{children}</div>
     </section>
   )

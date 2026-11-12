@@ -18,7 +18,7 @@ import { MarkdownThemePicker } from './MarkdownThemePicker'
 import { MarkdownThemePreview } from './MarkdownThemePreview'
 import { resolveMarkdownTheme, type MarkdownThemePack } from '../markdown-theme-packs'
 import { MarkdownThemeLibrary } from './MarkdownThemeLibrary'
-import { ArrowUpIcon, CheckIcon, ChatIcon, ChevronDownIcon, RobotIcon, RotateLeftIcon, TerminalIcon } from './icons'
+import { ArrowUpIcon, BookIcon, CheckIcon, ChatIcon, ChevronDownIcon, ContrastIcon, DocumentIcon, GlobeIcon, RobotIcon, RotateLeftIcon, TerminalIcon } from './icons'
 
 function ThemeMiniature({ scheme }: { scheme: 'light' | 'dark' }) {
   return (
@@ -148,7 +148,7 @@ export function AppearanceSettings() {
       <div className="appearance-layout">
       <div className="appearance-controls">
         <div hidden={section !== 'colors'}>
-        <SettingsGroup title={t('SettingsPage.colors')}>
+        <SettingsGroup title={t('SettingsPage.colors')} icon={<ContrastIcon />}>
           <ThemePicker />
           <SettingsRow
             label={t('SettingsPage.palette')}
@@ -167,7 +167,7 @@ export function AppearanceSettings() {
         </SettingsGroup>
         </div>
         <div hidden={section !== 'chat'}>
-        <SettingsGroup title={t('MarkdownTheme.reading')}>
+        <SettingsGroup title={t('MarkdownTheme.reading')} icon={<BookIcon />}>
           <p className="settings-note">{t('MarkdownTheme.readingHint')}</p>
           <SettingsRow
             label={t('SettingsPage.fontSize')}
@@ -234,13 +234,13 @@ export function AppearanceSettings() {
         </SettingsGroup>
         </div>
         <div hidden={section !== 'markdown'}>
-          <SettingsGroup title="Markdown"><MarkdownThemePicker />
+          <SettingsGroup title="Markdown" icon={<DocumentIcon />}><MarkdownThemePicker />
             <p className="settings-note">{t('MarkdownTheme.readingHint')} <button type="button" className="link-button" onClick={() => setSection('chat')}>{t('MarkdownTheme.adjustReading')}</button></p>
           </SettingsGroup>
           <MarkdownThemeLibrary onPreview={previewMarkdownDraft} />
         </div>
         <div hidden={section !== 'terminal'}>
-        <SettingsGroup title={t('SettingsPage.terminalAndCode')}>
+        <SettingsGroup title={t('SettingsPage.terminalAndCode')} icon={<TerminalIcon />}>
           <SettingsRow
             label={t('SettingsPage.codeFont')}
             description={t('SettingsPage.fontForTerminalsCodeBlocksChangesAndFile')}
@@ -295,7 +295,7 @@ export function AppearanceSettings() {
         </SettingsGroup>
         </div>
         <div hidden={section !== 'language'}>
-        <SettingsGroup title={t('language.interfaceLanguage')}>
+        <SettingsGroup title={t('language.interfaceLanguage')} icon={<GlobeIcon />}>
           <SettingsRow label={t('language.interfaceLanguage')} description={t('language.description')}
             control={(labelId) => <Segmented labelId={labelId} value={language} onChange={(value) => setPreference('language', value)}
               options={[{ value: 'system', label: t('SettingsPage.system') }, { value: 'zh-CN', label: '简体中文' }, { value: 'en', label: 'English' }]} />} />

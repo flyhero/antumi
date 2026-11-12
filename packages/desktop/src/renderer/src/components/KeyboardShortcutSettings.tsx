@@ -1,11 +1,15 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactElement } from 'react'
 import { ShortcutAction, SHORTCUTS, SHORTCUT_GROUPS, SHORTCUT_GROUP_LABELS, SHORTCUT_SCOPE_LABELS, shortcutBindings, shortcutConflict, reservedActionShortcut, shortcutBinding, shortcutLabel, formatShortcut, withShortcut, type ShortcutBinding } from '../../../shared/keyboard-shortcuts'
 import { messageSearchText, t } from '../i18n'
 import { SHORTCUT_PLATFORM } from '../keyboard-shortcuts'
 import { setPreference, usePreferences } from '../preferences'
 import { SettingsGroup, SettingsRow } from './SettingsControls'
-import { SearchIcon } from './icons'
+import { BoardIcon, ChatIcon, DocumentIcon, FitPanelIcon, GroupChatIcon, MonitorIcon, PencilIcon, SearchIcon, SlidersIcon } from './icons'
 import './keyboard-shortcut-settings.css'
+
+const GROUP_ICONS: Record<(typeof SHORTCUT_GROUPS)[number], () => ReactElement> = {
+  app: MonitorIcon, tasks: BoardIcon, conversations: GroupChatIcon, chat: ChatIcon, files: DocumentIcon, panels: FitPanelIcon, forms: SlidersIcon
+}
 
 export function KeyboardShortcutSettings() {
   const settings = usePreferences((state) => state.panelShortcuts)
@@ -78,7 +82,8 @@ export function KeyboardShortcutSettings() {
     {error && !recording && <p className="keyboard-shortcut-error" role="alert">{error}</p>}
     {SHORTCUT_GROUPS.map((group) => {
       const groupActions = actions.filter((action) => SHORTCUTS[action].group === group)
-      return groupActions.length > 0 && <SettingsGroup key={group} title={t(SHORTCUT_GROUP_LABELS[group])}>
+      const Icon = GROUP_ICONS[group]
+      return groupActions.length > 0 && <SettingsGroup key={group} title={t(SHORTCUT_GROUP_LABELS[group])} icon={<Icon />}>
       {groupActions.map((action) => {
         const keys = shortcutLabel(settings, SHORTCUT_PLATFORM, action)
         const customized = settings[SHORTCUT_PLATFORM]?.[action] !== undefined
@@ -95,7 +100,7 @@ export function KeyboardShortcutSettings() {
           </div>} />
       })}
     </SettingsGroup>})}
-    {visibleReferences.length > 0 && <SettingsGroup title={t('KeyboardShortcuts.groupEditing')}>
+    {visibleReferences.length > 0 && <SettingsGroup title={t('KeyboardShortcuts.groupEditing')} icon={<PencilIcon />}>
       {visibleReferences.map(([key, keys]) => <SettingsRow key={key} label={t(key)} description={t('KeyboardShortcuts.nativeEditing')}
         control={() => <kbd className="keyboard-shortcut-reference">{keys}</kbd>} />)}
     </SettingsGroup>}

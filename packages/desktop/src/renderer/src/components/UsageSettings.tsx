@@ -8,7 +8,7 @@ import { Segmented, SettingsGroup, SettingsRow, Toggle } from './SettingsControl
 import { UsageAutomationSettings } from './UsageAutomationSettings'
 import { SettingsQuotaReadout } from './SettingsQuotaReadout'
 import { SettingsEmptyState } from './SettingsEmptyState'
-import { AgentIcon, GaugeIcon, RefreshIcon } from './icons'
+import { AgentIcon, GaugeIcon, RefreshIcon, SlidersIcon } from './icons'
 
 function QuotaAgentRow({ agent, disabled }: { agent: AgentKind; disabled: boolean }) {
   const labelId = useId()
@@ -40,7 +40,7 @@ export function UsageSettings() {
   const announcements = useCore((s) => s.chatSettings?.resetAnnouncements)
   return (
     <div className="quota-settings">
-      <SettingsGroup title={t('SettingsPage.quotaDisplay')}>
+      <SettingsGroup title={t('SettingsPage.quotaDisplay')} icon={<SlidersIcon />}>
       <SettingsRow
         label={t('SettingsPage.showUsageQuotaInStatusBar')}
         description={t('SettingsPage.subscriptionQuotaWindowsForEachAgentSuchAs')}
@@ -66,10 +66,10 @@ export function UsageSettings() {
       </SettingsGroup>
       <section className="quota-agent-section" aria-labelledby="quota-agent-heading">
         <div className="settings-section-toolbar">
-          <div><h3 id="quota-agent-heading">{t('SettingsPage.quotaAgents')}</h3><p>{showUsage ? t('SettingsPage.quotaAgentsHint') : t('SettingsPage.quotaBarHidden')}</p></div>
+          <div><h3 id="quota-agent-heading"><GaugeIcon />{t('SettingsPage.quotaAgents')}</h3><p>{showUsage ? t('SettingsPage.quotaAgentsHint') : t('SettingsPage.quotaBarHidden')}</p></div>
           <button type="button" className="button ghost" disabled={!connected || refreshing} onClick={() => void refresh()}><RefreshIcon />{refreshing ? t('UsageBar.refreshing') : t('UsageBar.refreshNow')}</button>
         </div>
-        {agents.length ? <div className="quota-agent-list">{agents.map((agent) => <QuotaAgentRow key={agent} agent={agent} disabled={!showUsage} />)}</div> :
+        {agents.length ? <div className="quota-agent-list settings-card">{agents.map((agent) => <QuotaAgentRow key={agent} agent={agent} disabled={!showUsage} />)}</div> :
           <SettingsEmptyState icon={<GaugeIcon />} title={t('AgentAccounts.noUsage')} actions={accountsSupported ? <button type="button" className="button" onClick={() => setSettingsOpen(true, 'accounts')}>{t('AgentAccounts.manage')}</button> : undefined}>{connected ? t('SettingsPage.quotaEmptyHint') : t('ChatCommandSettings.connectToAntumiCoreToView')}</SettingsEmptyState>}
       </section>
       <details className="settings-disclosure">

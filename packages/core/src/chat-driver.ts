@@ -128,6 +128,9 @@ export interface ChatDriver {
   // agent knows the failure; null leaves the output's last lines to say it.
   explainFailure?(stderr: string): string | null
   activity(): ChatTurnActivity
+  // Running only on a command or subagent left in the background, no turn under way: it takes a
+  // message, and a new model or effort, as when idle. Only an agent that runs on between turns.
+  betweenTurns?(): boolean
   activeTurnRef?(): string | null
   providerSessionId(): string | null
   // Frames for the user's actions; each throws a Rejection when the stage cannot take it now.

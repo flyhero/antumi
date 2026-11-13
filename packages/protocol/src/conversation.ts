@@ -58,7 +58,10 @@ export const Conversation = z.object({
     suggestion: z.string().nullable().optional(),
     request: ConversationRequest.nullable().optional(),
     // While the turn runs. Older cores leave it out.
-    doing: ConversationDoing.nullable().optional()
+    doing: ConversationDoing.nullable().optional(),
+    // Running only on what the agent left in the background, its turn over: the model and effort
+    // change and a message starts a turn, as when idle. Older cores leave it out.
+    betweenTurns: z.boolean().optional()
   }).nullable().optional(),
   // What the next chat stage starts with, as chosen or as the last stage left it: the permission
   // mode, and the model and effort of the conversation's agent. Older cores leave it out.

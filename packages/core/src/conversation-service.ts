@@ -2273,10 +2273,11 @@ export class ConversationService {
     const suggestion = turn === 'idle' && this.promptSuggestions ? this.chats.suggestion(conversation.id) : null
     const request = turn ? this.chats.request(conversation.id) : null
     const doing = turn === 'running' ? this.chats.doing(conversation.id) : null
+    const betweenTurns = turn === 'running' && this.chats.betweenTurns(conversation.id)
     const providerId = conversation.modelProvider ?? null
     const route = providerId === null ? null : conversationRoute(providerId, this.routeFor(conversation, conversation.agent), this.providers?.get(providerId)?.name ?? this.store.latestStage(conversation.id, conversation.agent)?.route?.name ?? null)
     const preparing = this.preparingOf(conversation)
-    return { ...conversation, ...(this.delegationStatus ? { delegation: this.delegationStatus(conversation.id) } : {}), ...(preparing ? { preparing } : {}), starting: this.launching.has(conversation.id), chat: turn ? { turn, ...(suggestion ? { suggestion } : {}), ...(request ? { request } : {}), ...(doing ? { doing } : {}) } : null, chatOptions, route }
+    return { ...conversation, ...(this.delegationStatus ? { delegation: this.delegationStatus(conversation.id) } : {}), ...(preparing ? { preparing } : {}), starting: this.launching.has(conversation.id), chat: turn ? { turn, ...(suggestion ? { suggestion } : {}), ...(request ? { request } : {}), ...(doing ? { doing } : {}), ...(betweenTurns ? { betweenTurns } : {}) } : null, chatOptions, route }
   }
 
   private changed(value: Conversation): Conversation {

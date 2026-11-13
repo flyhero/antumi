@@ -852,6 +852,16 @@ describe('ClaudeStream stopping background work', () => {
     expect(() => driver.stopBackground('t:nothing')).toThrow('not running in the background')
   })
 
+  it('is between turns while only the command runs: it takes a message and a new model', () => {
+    const driver = replay(records.slice(0, asked))
+    expect(driver.activity()).toBe('running')
+    expect(driver.betweenTurns()).toBe(true)
+    expect(() => driver.send('next')).not.toThrow()
+    const [state] = ofKind(driver.items.list(), 'state')
+    const model = state!.models.find((each) => each.id !== state!.model)!
+    expect(driver.setOption('model', model.id)).toMatchObject([{ request: { subtype: 'set_model', model: model.id } }])
+  })
+
   it('says the user stopped it, and lets the stage go idle', () => {
     const driver = replay(records)
     const [command] = ofKind(driver.items.list(), 'tool')

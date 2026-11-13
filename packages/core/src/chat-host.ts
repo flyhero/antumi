@@ -69,6 +69,8 @@ type Live = ChatStage & {
   requests: string
   // What the running turn is doing, as last told to the sink.
   doing: string
+  // Whether it ran only on background work, its turn over, as last told to the sink.
+  betweenTurns: boolean
   provider: string | null
   started: { resolve(): void; reject(error: Error): void } | null
   // When anything last went either way, or the user last changed something.
@@ -88,6 +90,15 @@ export function createDriver(stage: ChatStage): ChatDriver {
 const ignore = () => {}
 
 type OpenRequest = Extract<ChatItem, { kind: 'approval' | 'question' }>
+
+function betweenTurns(driver: ChatDriver): boolean {
+  return driver.betweenTurns?.() ?? false
+}
+
+// Whether a turn is under way or waits on the user: not idle, and not just background work.
+function inTurn(driver: ChatDriver): boolean {
+  return driver.activity() !== 'idle' && !betweenTurns(driver)
+}
 
 function openRequests(driver: ChatDriver): OpenRequest[] {
   return driver.items.list().filter((item): item is OpenRequest => (item.kind === 'approval' || item.kind === 'question') && item.resolution === null)
@@ -152,6 +163,7 @@ export class ChatHost {
       suggestion: driver.suggestion?.() ?? null,
       requests: '',
       doing: '',
+      betweenTurns: false,
       provider: null,
       started: null,
       lastActive: records.at(-1)?.at ?? this.now(),
@@ -288,6 +300,11 @@ export class ChatHost {
     return activity === 'idle' || (activity === 'running' && live.driver.activeTurnRef?.() === null)
   }
 
+  betweenTurns(conversationId: string): boolean {
+    const live = this.liveOf(conversationId)
+    return live !== undefined && betweenTurns(live.driver)
+  }
+
   // The watched turn the agent has not answered with a single event yet, by its ref.
   silentTurn(conversationId: string): string | null {
     const watch = this.liveOf(conversationId)?.watch
@@ -325,7 +342,7 @@ export class ChatHost {
   async send(conversationId: string, text: string, images: readonly ChatImage[] = [], queue = false, steer = false, ref: string = randomUUID(), references?: ChatReference[]): Promise<void> {
     const live = this.running(conversationId)
     if (live.driver.items.get(`u:${ref}`) || this.queued(live).some((entry) => entry.ref === ref)) return
-    const busy = live.driver.activity() !== 'idle'
+    const busy = inTurn(live.driver)
     if (busy && queue && !steer) {
       this.enqueue(live, text, images, ref, references)
       return
@@ -437,7 +454,7 @@ export class ChatHost {
     if (reply) {
       this.record(live, { dir: 'reply', at: this.now(), requestId, answers: reply.answers })
       this.flush(live)
-      const busy = live.driver.activity() !== 'idle'
+      const busy = inTurn(live.driver)
       if (reply.text) await this.send(conversationId, reply.text, [], true, busy && live.driver.canSteer())
       return
     }
@@ -569,7 +586,7 @@ export class ChatHost {
 
   // Logged and applied before it is written, so a crash in between cannot send it twice.
   private dispatch(live: Live, message: ChatOutgoing, ref?: string, images: readonly ChatImage[] = [], references?: ChatReference[]): Promise<unknown> {
-    if (ref && live.driver.activity() === 'idle') this.sink.prompt?.(live, ref)
+    if (ref && !inTurn(live.driver)) this.sink.prompt?.(live, ref)
     this.record(live, { dir: 'out', at: this.now(), frame: message.logged, ...(ref ? { ref } : {}), ...(images.length ? { images: [...images] } : {}), ...(references?.length ? { references } : {}) })
     const turns = adapterOf(live.agent).turns
     const timeout = turns?.firstFrameTimeoutMs
@@ -613,11 +630,13 @@ export class ChatHost {
     const suggestion = live.driver.suggestion?.() ?? null
     const requests = [...(activity === 'awaiting' ? openRequests(live.driver).map((item) => item.requestId) : []), ...asksOf(live.driver).map((item) => item.requestId)].join(' ')
     const doing = activity === 'running' ? JSON.stringify(doingOf(live.driver)) : ''
-    if (activity !== live.activity || suggestion !== live.suggestion || requests !== live.requests || doing !== live.doing) {
+    const between = betweenTurns(live.driver)
+    if (activity !== live.activity || suggestion !== live.suggestion || requests !== live.requests || doing !== live.doing || between !== live.betweenTurns) {
       live.activity = activity
       live.suggestion = suggestion
       live.requests = requests
       live.doing = doing
+      live.betweenTurns = between
       this.sink.activity(live.conversationId)
     }
     if (live.driver.ready()) {

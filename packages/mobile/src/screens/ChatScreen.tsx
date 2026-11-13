@@ -112,7 +112,8 @@ function Composer({ conversation, state, onOptions }: { conversation: Conversati
   const setText = (next: string) => setDraft(conversation.id, (draft) => ({ ...draft, text: next }))
   const [uploading, setUploading] = useState(false)
   const [sending, setSending] = useState(false)
-  const running = conversationWorking(conversation)
+  // Only background work left running: the turn is over and a message starts the next one.
+  const running = conversationWorking(conversation) && !conversation.chat?.betweenTurns
   const stopped = conversation.sessionId === null
   const empty = !text.trim() && images.length === 0
   const modelLabel = state ? state.models.find((each) => each.id === state.model)?.label ?? state.model : null

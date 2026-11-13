@@ -59,7 +59,8 @@ export function ChatOptionsBar({ conversation, state, compact = false }: { conve
   const running = conversation.sessionId !== null
   // An older core takes options only from a running agent.
   if (!running && !next) return null
-  const idle = !running || conversation.chat?.turn === 'idle'
+  // Work the agent left in the background runs on between turns, which take a new model as well.
+  const idle = !running || conversation.chat?.turn === 'idle' || Boolean(conversation.chat?.betweenTurns)
   const set = (option: ChatOption, value: string) => void perform((rpc) => rpc.call('conversations.setOption', { id, option, value }))
   const permissionMode = running ? state.permissionMode : (next?.permissionMode ?? state.permissionMode)
   const modelId = running ? state.model : (next?.model ?? state.model)

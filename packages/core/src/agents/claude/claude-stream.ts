@@ -539,6 +539,10 @@ export class ClaudeStream implements ChatDriver {
     return this.pending.size > 0 ? 'awaiting' : 'running'
   }
 
+  betweenTurns(): boolean {
+    return !this.turn && this.activity() === 'running'
+  }
+
   private backgroundAgents(): number {
     return this.items.list().filter((item) => item.kind === 'tool' && SUBAGENT_TOOLS.has(item.name) && item.status === 'running').length
   }

@@ -308,8 +308,10 @@ export function ChatComposer({ conversation, state, compact = false }: { convers
       : state.queued ? [{ ref: '', text: state.queued.text, held: state.queued.held, images: state.queued.images }] : []
   const steerable = Boolean(state?.steerable)
   const turn = conversation.chat?.turn ?? null
-  const idle = running && turn === 'idle'
-  const working = running && (turn === 'running' || turn === 'awaiting')
+  // With only background work left running, the turn is over: a message starts the next one.
+  const betweenTurns = running && Boolean(conversation.chat?.betweenTurns)
+  const idle = running && (turn === 'idle' || betweenTurns)
+  const working = running && !betweenTurns && (turn === 'running' || turn === 'awaiting')
   // An older core takes a message only between turns.
   const queueable = optionsSupported && working
   const stopped = !running

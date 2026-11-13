@@ -647,6 +647,10 @@ export class CodexAppServer implements ChatDriver {
     return this.pending.size > 0 ? 'awaiting' : 'running'
   }
 
+  betweenTurns(): boolean {
+    return !this.turn && this.activity() === 'running'
+  }
+
   private backgroundCommands(): number {
     return this.items.list().filter((item) => item.kind === 'tool' && item.background && item.status === 'running').length
   }

@@ -1092,6 +1092,15 @@ describe('CodexAppServer stopping a background command it asked approval for', (
     expect(JSON.stringify(driver.due())).not.toContain('backgroundTerminals/list')
   })
 
+  it('is between turns while only the command runs: it takes a message and a new model', () => {
+    const driver = replay(records.slice(0, asked))
+    expect(driver.activity()).toBe('running')
+    expect(driver.betweenTurns()).toBe(true)
+    expect(() => driver.send('next')).not.toThrow()
+    // Past the turn check: this recording lists no models, so any name is one Codex lacks.
+    expect(() => driver.setOption('model', 'gpt-next')).toThrow('Codex lists no model')
+  })
+
   it('makes it stoppable once the list names its process, and stops it by that process', () => {
     const driver = replay(records.slice(0, asked))
     const [command] = ofKind(driver.items.list(), 'tool')

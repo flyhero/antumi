@@ -345,7 +345,7 @@ export function ChatComposer({ conversation, state, compact = false }: { convers
     text,
     entries: commandEntries,
     agentLabel: agentLabel(conversation.agent),
-    setText,
+    input: mentionMenu.inputProps.input,
     sendCommand: (command) => void send(false, command)
   })
   // The input as the agent reads it, each mention written out.

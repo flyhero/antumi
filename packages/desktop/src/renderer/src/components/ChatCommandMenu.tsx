@@ -1,5 +1,7 @@
 import { getLocale, t, tr } from '../i18n'
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode, type TextareaHTMLAttributes } from 'react'
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject, type TextareaHTMLAttributes } from 'react'
+import type { EditorView } from '@codemirror/view'
+import { isolateHistory } from '@codemirror/commands'
 import { commandQuery, expandPrompt, matchCommands, typedAntumiCommand, type CommandEntry } from '../chat-commands'
 
 const ANTUMI_LABEL = () => t('ChatCommandMenu.myCommands')
@@ -43,11 +45,11 @@ function CommandOption({ entry, id, active, onHover, onPick }: {
 // The commands whose names match what follows a leading /, above the input: the user's own first,
 // then the agent's. Enter runs the one picked (the user's own expands into the input, an agent's is
 // sent), Tab only completes its name, Esc puts the list away until the text changes.
-export function useChatCommandMenu({ text, entries, agentLabel, setText, sendCommand }: {
+export function useChatCommandMenu({ text, entries, agentLabel, input, sendCommand }: {
   text: string
   entries: readonly CommandEntry[]
   agentLabel: string
-  setText: (text: string) => void
+  input: RefObject<EditorView | null>
   sendCommand: (text: string) => void
 }): {
   menu: ReactNode
@@ -67,11 +69,18 @@ export function useChatCommandMenu({ text, entries, agentLabel, setText, sendCom
   const active = Math.min(highlight, shown.length - 1)
   useEffect(() => setHighlight(0), [query])
 
+  const replace = (next: string) => {
+    const view = input.current
+    if (!view) return
+    // Complete the text and place the caret together; mapping an insertion keeps it before the suffix.
+    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: next }, selection: { anchor: next.length }, annotations: isolateHistory.of('full'), userEvent: 'input.complete' })
+    view.focus()
+  }
   const pick = (entry: CommandEntry, complete: boolean) => {
     if (complete || (entry.source === 'antumi' && entry.argumentHint)) {
-      setText(`/${entry.name} `)
+      replace(`/${entry.name} `)
     } else if (entry.source === 'antumi') {
-      setText(expandPrompt(entry.command.prompt, ''))
+      replace(expandPrompt(entry.command.prompt, ''))
     } else {
       setClosedAt(`/${entry.name}`)
       sendCommand(`/${entry.name}`)

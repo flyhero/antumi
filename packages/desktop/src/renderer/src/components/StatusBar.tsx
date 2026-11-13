@@ -1,5 +1,5 @@
 import { localized, t, tr } from '../i18n'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { PROJECT_GITHUB_URL } from '@antumi/protocol'
 import { openGuide, setAwakeMode, setSchedulesOpen, setSettingsOpen, setWorktreesOpen, toggleBrowserPanel, toggleGitPanel, toggleFilesPanel, togglePortsPanel, toggleTerminalPanel, useAwakeSupported, useFilesScope, useBrowserSupported, useCore, useSchedulesOpen, useSchedulesSupported, useWorktreesSupported, type ConnectionState } from '../core-store'
 import { ALL_TABS, useBrowserTabs } from '../browser-state'
@@ -106,6 +106,7 @@ function FeedbackButton() {
       <span className="statusbar-divider" aria-hidden="true" />
       <a
         className="tool-button statusbar-feedback"
+        aria-label={t('StatusBar.feedback')}
         href={`${PROJECT_GITHUB_URL}/issues/new`}
         target="_blank"
         rel="noreferrer"
@@ -113,7 +114,7 @@ function FeedbackButton() {
         data-tooltip-side="top-end"
       >
         <MegaphoneIcon />
-        <span>{t('StatusBar.feedback')}</span>
+        <span className="statusbar-label">{t('StatusBar.feedback')}</span>
       </a>
     </>
   )
@@ -140,7 +141,7 @@ function BrowserButton() {
     >
       <GlobeIcon />
       {/* The count stands in for the name once there is one, so the bar stays short. */}
-      {count > 0 ? <span className="count">{count}</span> : <span>{t('BrowserSidePanel.browser')}</span>}
+      {count > 0 ? <span className="count">{count}</span> : <span className="statusbar-label">{t('BrowserSidePanel.browser')}</span>}
     </button>
   )
 }
@@ -178,7 +179,7 @@ function FilesButton() {
       onClick={toggleFilesPanel}
     >
       <FilesIcon />
-      <span className="statusbar-files-label">{t('FilesPanel.files')}</span>
+      <span className="statusbar-label">{t('FilesPanel.files')}</span>
       {count > 0 && <span className="count">{count}</span>}
     </button>
   )
@@ -202,7 +203,7 @@ function GitButton() {
       onClick={toggleGitPanel}
     >
       <GitIcon />
-      <span>Git</span>
+      <span className="statusbar-label">Git</span>
     </button>
   )
 }
@@ -224,7 +225,7 @@ function TerminalButton() {
       onClick={() => void toggleTerminalPanel()}
     >
       <TerminalIcon />
-      {count > 0 ? <span className="count">{count}</span> : <span>{t('SettingsPage.terminal')}</span>}
+      {count > 0 ? <span className="count">{count}</span> : <span className="statusbar-label">{t('SettingsPage.terminal')}</span>}
     </button>
   )
 }
@@ -297,14 +298,15 @@ function WorktreeButton() {
     <button
       type="button"
       className="tool-button statusbar-worktrees"
+      aria-label={t('StatusBar.worktrees', { count, value2: bytes > 0 ? ` · ${formatBytes(bytes)}` : '' })}
       aria-pressed={open}
       data-tooltip={t('StatusBar.manageAntumiWorktrees')}
       data-tooltip-side="top-end"
       onClick={() => setWorktreesOpen(!open)}
     >
       <WorktreeIcon />
-      <span>{tr('StatusBar.worktrees', { count: count, value2: bytes > 0 ? ` · ${formatBytes(bytes)}` : '' })}</span>
-      {cleanable > 0 && <span className="statusbar-worktrees-cleanable">{tr('StatusBar.cleanable', { cleanable: cleanable })}</span>}
+      <span className="statusbar-label">{tr('StatusBar.worktrees', { count: count, value2: bytes > 0 ? ` · ${formatBytes(bytes)}` : '' })}</span>
+      {cleanable > 0 && <span className="statusbar-label statusbar-worktrees-cleanable">{tr('StatusBar.cleanable', { cleanable: cleanable })}</span>}
     </button>
   )
 }
@@ -323,21 +325,50 @@ function ScheduleButton() {
     <button
       type="button"
       className="tool-button statusbar-schedules"
+      aria-label={t('StatusBar.manageScheduledTasksAndConversations')}
       aria-pressed={open}
       data-tooltip={t('StatusBar.manageScheduledTasksAndConversations')}
       data-tooltip-side="top-end"
       onClick={() => setSchedulesOpen(!open)}
     >
       <ClockIcon />
-      <span>{waiting > 0 ? t('StatusBar.schedules', { waiting: waiting }) : t('OverviewView.schedules')}</span>
-      {failed > 0 && <span className="statusbar-schedules-failed">{tr('StatusBar.failedToStart', { failed: failed })}</span>}
+      <span className="statusbar-label">{waiting > 0 ? t('StatusBar.schedules', { waiting: waiting }) : t('OverviewView.schedules')}</span>
+      {failed > 0 && <span className="statusbar-label statusbar-schedules-failed">{tr('StatusBar.failedToStart', { failed: failed })}</span>}
     </button>
   )
 }
 
 export function StatusBar() {
+  const bar = useRef<HTMLElement>(null)
+  useLayoutEffect(() => {
+    const element = bar.current
+    if (!element) return
+    // Measure the full labels, even while compact, so widening can restore them without flicker.
+    const measure = () => {
+      element.removeAttribute('data-compact')
+      element.setAttribute('data-measuring', '')
+      const style = getComputedStyle(element)
+      const children = [...element.children]
+      const needed = children.reduce((width, child) => {
+        const childStyle = getComputedStyle(child)
+        return width + child.getBoundingClientRect().width + (parseFloat(childStyle.marginLeft) || 0) + (parseFloat(childStyle.marginRight) || 0)
+      }, parseFloat(style.columnGap) * Math.max(0, children.length - 1))
+      const available = element.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)
+      element.toggleAttribute('data-compact', needed > available + 1)
+      element.removeAttribute('data-measuring')
+    }
+    let frame = 0
+    const schedule = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(measure) }
+    const resize = new ResizeObserver(schedule)
+    resize.observe(element)
+    const content = new MutationObserver(schedule)
+    content.observe(element, { subtree: true, childList: true, characterData: true })
+    void document.fonts.ready.then(schedule)
+    measure()
+    return () => { resize.disconnect(); content.disconnect(); cancelAnimationFrame(frame) }
+  }, [])
   return (
-    <footer className="statusbar">
+    <footer ref={bar} className="statusbar">
       <SettingsButton />
       <HelpButton />
       <ConnectionStatus />

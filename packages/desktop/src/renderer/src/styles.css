@@ -3785,6 +3785,10 @@ div.inspector-empty > p { margin: 0 0 8px; }
   white-space: nowrap;
 }
 
+.statusbar[data-measuring] > * { flex-shrink: 0; }
+.statusbar[data-compact] .statusbar-label { display: none; }
+.statusbar > .tool-button, .statusbar > .menu-anchor { flex-shrink: 0; }
+
 .statusbar .statusbar-terminal {
   display: inline-flex;
   align-items: center;

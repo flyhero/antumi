@@ -53,8 +53,8 @@ export function useComposerHandoff(conversation: Conversation): ComposerHandoff 
   const installed = useInstalledAgents()
   const pending = useHandoffs((s) => s[id])
   const from = task?.agent ?? conversation.agent
-  // A group chat's member keeps the agent it was added as.
-  const targets = (!task || taskSupported) && !conversation.discussionId && !conversation.helperOf ? installed.filter((agent) => agent !== from) : []
+  // Saved agents and group chat members keep the agent they were configured with.
+  const targets = (!task || taskSupported) && !conversation.profile && !conversation.discussionId && !conversation.helperOf ? installed.filter((agent) => agent !== from) : []
   const picked = pending && targets.includes(pending.agent) ? pending : null
   // An agent the conversation's provider serves goes on on it; another, on its own account.
   const providers = useCore((s) => s.modelProviders)

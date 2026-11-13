@@ -15,7 +15,7 @@ import { TaskStore } from './task-store'
 import { CredentialStore } from './credential-store'
 import { ModelProviderStore } from './model-providers'
 import type { ModelProviderInput } from '@antumi/protocol'
-import { ALLOW_SITE_ALWAYS } from '@antumi/protocol'
+import { AgentProfile, ALLOW_SITE_ALWAYS } from '@antumi/protocol'
 
 // The store an image a message names is looked up in; made on the way in.
 function attachmentsAt(root: string): AttachmentStore {
@@ -1189,6 +1189,20 @@ describe('ConversationService', () => {
     const spawned = daemon.spawns.length
     expect((await service.continue(working.id)).sessionId).toBe(working.sessionId)
     expect(daemon.spawns).toHaveLength(spawned)
+  })
+
+  it.each(['develop', 'readOnly'] as const)('rejects handing off a %s profile before stopping or changing its session', async (capability) => {
+    const profile = AgentProfile.parse({ id: randomUUID(), name: 'Reviewer', agent: 'claude', capability, archivedAt: null, createdAt: 1, updatedAt: 1 })
+    const created = await service.create('claude', [], undefined, { profile })
+    const spawned = daemon.spawns.length
+    const killed = daemon.killed.length
+    const options = store.chatOptions(created.id)
+    await expect(service.handoff(created.id, 'codex', 'review this', true, true, { model: 'other' })).rejects.toMatchObject({ reason: 'profile-managed' })
+    expect(service.get(created.id).agent).toBe('claude')
+    expect(service.get(created.id).sessionId).toBe(created.sessionId)
+    expect(store.chatOptions(created.id)).toEqual(options)
+    expect(daemon.spawns).toHaveLength(spawned)
+    expect(daemon.killed).toHaveLength(killed)
   })
 
   const task = { id: 'task-1', title: 'Chat me', agent: 'claude' as const }

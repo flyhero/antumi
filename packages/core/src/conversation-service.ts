@@ -885,7 +885,8 @@ export class ConversationService {
   async handoff(id: string, agent: AgentKind, note: string, stopRunning: boolean, allowBypass?: boolean, choice: HandoffChoice = {}): Promise<Conversation> {
     this.writable(id)
     const current = this.free(id)
-    // A group chat's member is the agent the group chat names; another would speak in its place.
+    // Configured identities keep their agent; another would speak in their place.
+    if (current.profile) throw new Rejection('profile-managed', '智能体会话沿用指定的 Agent，不能移交')
     if (isHelper(current)) throw new Rejection('invalid-params', '小助手不能移交')
     if (current.squadRunId || current.parentConversationId) throw new Rejection('squad-managed')
     if (current.discussionId) throw new Rejection('discussion-member', 'a group chat member keeps its agent')

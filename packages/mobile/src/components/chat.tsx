@@ -6,7 +6,7 @@ import {
 import { isPlanApproval, type AgentKind, type ChatDecision, type ChatImage, type ChatItem, type ChatPermissionMode, type Conversation } from '@antumi/protocol'
 import { t } from '../i18n'
 import { agentName, isCommandTool, modeName, relativePath } from '../labels'
-import { canOperate, imageUri, respond } from '../session'
+import { canOperate, imageUri, respond, viewsOnly } from '../session'
 import { mono, radius, space, type, useTheme } from '../theme'
 import { AgentMark } from './agent-mark'
 import { Markdown } from './markdown'
@@ -217,7 +217,7 @@ export function ApprovalDock({ item, conversation }: { item: Approval; conversat
             {[...allows.slice(1), ...denies].map((option) => <Button key={option.key} label={option.label} kind="secondary" busy={busy === option.key} onPress={() => void answer(option.key, option.decision, option.choice)} style={styles.dockButton} />)}
           </View>
         </>
-      ) : <Text style={[type.caption, { color: theme.textMuted }]}>{t('viewOnly')}</Text>}
+      ) : viewsOnly() ? <Text style={[type.caption, { color: theme.textMuted }]}>{t('viewOnly')}</Text> : null}
     </View>
   )
 }
@@ -258,7 +258,7 @@ export function QuestionDock({ item, conversation }: { item: Question; conversat
           setBusy(true)
           void respond(conversation.id, item.requestId, 'allow', { answers: picked }).finally(() => setBusy(false))
         }} />
-      ) : <Text style={[type.caption, { color: theme.textMuted }]}>{t('viewOnly')}</Text>}
+      ) : viewsOnly() ? <Text style={[type.caption, { color: theme.textMuted }]}>{t('viewOnly')}</Text> : null}
     </View>
   )
 }

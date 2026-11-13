@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { FlatList, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
-import { KeyboardAvoidingView } from 'react-native-keyboard-controller'
+import { KeyboardAvoidingView, useKeyboardState } from 'react-native-keyboard-controller'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as ImagePicker from 'expo-image-picker'
 import { ArrowUp, Check, ChevronDown, MessageSquare, Plus, SlidersHorizontal, Square, X } from 'lucide-react-native'
@@ -12,7 +12,7 @@ import { EmptyState, IconButton, Muted, Screen, confirmTap, tap } from '../compo
 import { t } from '../i18n'
 import { modeName, where } from '../labels'
 import { pop } from '../navigation'
-import { canOperate, continueChat, EMPTY_DRAFT, interrupt, loadOlder, send, setDraft, setOption, unwatch, uploadImage, useSession, watch } from '../session'
+import { canOperate, continueChat, EMPTY_DRAFT, interrupt, loadOlder, send, setDraft, setOption, unwatch, uploadImage, useSession, viewsOnly, watch } from '../session'
 import { radius, space, type, useTheme } from '../theme'
 
 type StateItem = Extract<ChatItem, { kind: 'state' }>
@@ -133,6 +133,8 @@ function OptionsSheet({ id, state, agent, onClose }: { id: string; state: StateI
 function Composer({ conversation, state, onOptions }: { conversation: Conversation; state: StateItem | null; onOptions: () => void }) {
   const theme = useTheme()
   const insets = useSafeAreaInsets()
+  // Over the keyboard, the navigation bar's inset is the keyboard's own.
+  const keyboardOpen = useKeyboardState((state) => state.isVisible)
   const { text, images } = useSession((s) => s.drafts[conversation.id]) ?? EMPTY_DRAFT
   const setText = (next: string) => setDraft(conversation.id, (draft) => ({ ...draft, text: next }))
   const [uploading, setUploading] = useState(false)
@@ -160,7 +162,7 @@ function Composer({ conversation, state, onOptions }: { conversation: Conversati
     setSending(false)
   }
   return (
-    <View style={[styles.composerWrap, { paddingBottom: Math.max(insets.bottom, space.sm) }]}>
+    <View style={[styles.composerWrap, { paddingBottom: keyboardOpen ? space.sm : Math.max(insets.bottom, space.sm) }]}>
       <View style={[styles.composer, { backgroundColor: theme.surface, borderColor: theme.border }]}>
         {images.length > 0 || uploading ? (
           <View style={styles.attachments}>
@@ -237,7 +239,8 @@ export function ChatScreen({ id }: { id: string }) {
       actions={operate && state ? <IconButton icon={SlidersHorizontal} label={t('options')} onPress={() => setOptions(true)} /> : null}
     >
       <ProjectRoots.Provider value={conversation.projectPaths}>
-      <KeyboardAvoidingView style={styles.flex} behavior="padding">
+      {/* automaticOffset: the view sits below the header, and its own layout says only where in its parent. */}
+      <KeyboardAvoidingView style={styles.flex} behavior="padding" automaticOffset>
         <FlatList
           inverted
           data={rows}
@@ -261,9 +264,9 @@ export function ChatScreen({ id }: { id: string }) {
         />
         {request && request.kind === 'approval' ? <ApprovalDock key={request.requestId} item={request} conversation={conversation} /> : null}
         {request && request.kind === 'question' ? <QuestionDock key={request.requestId} item={request} conversation={conversation} /> : null}
-        {operate ? <Composer conversation={conversation} state={state} onOptions={() => setOptions(true)} /> : (
+        {operate ? <Composer conversation={conversation} state={state} onOptions={() => setOptions(true)} /> : viewsOnly() ? (
           <View style={[styles.viewOnly, { borderTopColor: theme.border }]}><Muted center>{t('viewOnly')}</Muted></View>
-        )}
+        ) : null}
       </KeyboardAvoidingView>
       </ProjectRoots.Provider>
       {options && state ? <OptionsSheet id={id} state={state} agent={conversation.agent} onClose={() => setOptions(false)} /> : null}

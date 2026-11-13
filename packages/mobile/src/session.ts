@@ -18,6 +18,7 @@ import {
   type ChatDecision,
   type ChatOption,
   type ChatPermissionMode,
+  type MobileAccess,
   type MobileHello,
   type RpcMethod,
   type RpcParams,
@@ -98,8 +99,18 @@ export function computerOf(state: State = useSession.getState()): Computer | nul
   return state.computers.find((computer) => computer.key === state.current) ?? null
 }
 
+// What the computer lets this phone do: as this link was told, or as last saved while offline.
+function access(): MobileAccess | null {
+  const state = useSession.getState()
+  return state.welcome?.access ?? computerOf(state)?.access ?? null
+}
+
 export function canOperate(): boolean {
-  return useSession.getState().welcome?.access === 'operate'
+  return access() === 'operate'
+}
+
+export function viewsOnly(): boolean {
+  return access() === 'view'
 }
 
 function say(text: string): void {

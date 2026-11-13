@@ -1,5 +1,5 @@
 import { agentDescriptor, type AgentKind, type Conversation, type Task } from '@antumi/protocol'
-import { locale } from './i18n'
+import { locale, strings } from './i18n'
 
 export function agentName(agent: AgentKind): string {
   return agentDescriptor(agent, locale === 'zh' ? 'zh-CN' : 'en').label
@@ -22,7 +22,13 @@ export function relativePath(text: string, roots: readonly string[]): string {
 }
 
 // Whether an approval is for running a command, whose title is then the command itself.
-export function isCommandTool(tool: string | null | undefined): boolean {
+// A reasoning effort as the desktop names it; one it has no name for shows as the agent says it.
+export function effortName(effort: string): string {
+  const names: Record<string, string> = strings.efforts
+  return names[effort] ?? effort
+}
+
+export function isCommandRequest(tool: string | null | undefined): boolean {
   return /bash|command|shell|terminal|exec/i.test(tool ?? '')
 }
 

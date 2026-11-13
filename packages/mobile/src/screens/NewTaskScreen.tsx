@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { StyleSheet, TextInput, View } from 'react-native'
 import { Folder, Plus } from 'lucide-react-native'
-import { AgentPicker, ProjectPicker, useStartChoices } from '../components/pickers'
-import { Button, EmptyState, Screen, confirmTap } from '../components/ui'
+import { AgentPicker, ProjectSheet, useStartChoices } from '../components/pickers'
+import { Button, EmptyState, ListGroup, ListRow, Screen, confirmTap } from '../components/ui'
 import { t } from '../i18n'
+import { folderName } from '../labels'
 import { pop, push } from '../navigation'
 import { createTask } from '../session'
 import { radius, space, type, useTheme } from '../theme'
@@ -15,6 +16,7 @@ export function NewTaskScreen() {
   const [title, setTitle] = useState('')
   const [details, setDetails] = useState('')
   const [busy, setBusy] = useState(false)
+  const [picking, setPicking] = useState(false)
   const create = async () => {
     if (!project || !agent || !title.trim()) return
     confirmTap()
@@ -52,7 +54,10 @@ export function NewTaskScreen() {
         />
       </View>
       <AgentPicker title={t('assignee')} agents={agents} agent={agent} onPick={setAgent} />
-      <ProjectPicker projects={projects} project={project} onPick={setProject} />
+      <ListGroup title={t('project')}>
+        <ListRow leading={<Folder size={20} color={theme.accent} strokeWidth={1.8} />} title={project ? folderName(project) : '…'} subtitle={project} onPress={() => setPicking(true)} />
+      </ListGroup>
+      {picking && projects ? <ProjectSheet projects={projects} project={project} onPick={setProject} onClose={() => setPicking(false)} /> : null}
       <Button label={t('createTask')} kind="primary" icon={Plus} wide busy={busy} disabled={!project || !agent || !title.trim()} onPress={() => void create()} />
     </Screen>
   )

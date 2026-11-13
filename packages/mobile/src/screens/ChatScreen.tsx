@@ -1,16 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
-import { FlatList, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
+import { FlatList, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { KeyboardAvoidingView, useKeyboardState } from 'react-native-keyboard-controller'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as ImagePicker from 'expo-image-picker'
-import { ArrowUp, Check, ChevronDown, MessageSquare, Plus, SlidersHorizontal, Square, X } from 'lucide-react-native'
-import { chatItemKey, conversationWorking, type ChatItem, type ChatOption, type Conversation } from '@antumi/protocol'
+import { ArrowUp, ChevronDown, MessageSquare, Plus, SlidersHorizontal, Square, X } from 'lucide-react-native'
+import { chatItemKey, conversationWorking, isSubagent, type ChatItem, type ChatOption, type Conversation } from '@antumi/protocol'
 import {
-  ApprovalDock, AssistantText, ChatImageView, NoticeLine, ProjectRoots, QuestionDock, ReasoningLine, RequestLine, TodosCard, ToolGroup, TurnHead, UserMessage, WorkingLine, type Approval, type Question, type Tool
+  ApprovalDock, AssistantText, ChatImageView, ChatNotice, NoticeLine, ProjectRoots, QuestionDock, ReasoningLine, RequestLine, TodosCard, ToolGroup, TurnEnd, TurnHead, UsageLimitLine, UserMessage,
+  WorkingLine, type Approval, type Question, type Tool
 } from '../components/chat'
-import { EmptyState, IconButton, Muted, Screen, confirmTap, tap } from '../components/ui'
+import { ChoiceList, Sheet } from '../components/sheet'
+import { EmptyState, IconButton, Muted, Screen, confirmTap } from '../components/ui'
 import { t } from '../i18n'
-import { modeName, where } from '../labels'
+import { effortName, modeName, where } from '../labels'
 import { pop } from '../navigation'
 import { canOperate, continueChat, EMPTY_DRAFT, interrupt, loadOlder, send, setDraft, setOption, unwatch, uploadImage, useSession, viewsOnly, watch } from '../session'
 import { radius, space, type, useTheme } from '../theme'
@@ -19,7 +21,8 @@ type StateItem = Extract<ChatItem, { kind: 'state' }>
 
 type Row =
   | { key: string; kind: 'item'; item: ChatItem }
-  | { key: string; kind: 'tools'; tools: Tool[] }
+  // solo: a call shown on its own, never joined by the next (one that changed files, a subagent).
+  | { key: string; kind: 'tools'; tools: Tool[]; solo: boolean }
   | { key: string; kind: 'turn' }
   | { key: string; kind: 'working' }
 
@@ -47,7 +50,7 @@ function rowsOf(items: readonly ChatItem[], working: boolean, docked: ChatItem |
   let afterUser = true
   for (const item of items) {
     // The open request is answered in the dock; the stream keeps it once it is.
-    if (item.kind === 'state' || (item.kind === 'turn' && !item.error) || item === docked) continue
+    if (item.kind === 'state' || item === docked) continue
     if (item.kind === 'user') {
       afterUser = true
       rows.push({ key: chatItemKey(item), kind: 'item', item })
@@ -59,8 +62,9 @@ function rowsOf(items: readonly ChatItem[], working: boolean, docked: ChatItem |
     }
     const last = rows[rows.length - 1]
     if (item.kind === 'tool') {
-      if (last?.kind === 'tools') last.tools.push(item)
-      else rows.push({ key: `tools:${chatItemKey(item)}`, kind: 'tools', tools: [item] })
+      const solo = item.diffs.length > 0 || isSubagent(item.name)
+      if (last?.kind === 'tools' && !last.solo && !solo) last.tools.push(item)
+      else rows.push({ key: `tools:${chatItemKey(item)}`, kind: 'tools', tools: [item], solo })
       continue
     }
     rows.push({ key: chatItemKey(item), kind: 'item', item })
@@ -72,61 +76,30 @@ function rowsOf(items: readonly ChatItem[], working: boolean, docked: ChatItem |
   return rows
 }
 
-function ItemView({ item }: { item: ChatItem }) {
+function ItemView({ item, conversation }: { item: ChatItem; conversation: Conversation }) {
   switch (item.kind) {
-    case 'user': return <UserMessage item={item} />
+    case 'user': return <UserMessage item={item} agent={conversation.agent} />
     case 'assistant': return <AssistantText text={item.text} />
     case 'reasoning': return <ReasoningLine item={item} />
     case 'approval':
     case 'question': return <RequestLine item={item} />
-    case 'notice': return <NoticeLine text={item.text} tone={item.level} />
-    case 'usageLimit': return <NoticeLine text={item.message ?? item.error ?? ''} tone="warning" />
-    case 'turn': return item.error ? <NoticeLine text={item.error} tone="error" /> : null
+    case 'notice': return <ChatNotice item={item} conversationId={conversation.id} />
+    case 'usageLimit': return <UsageLimitLine item={item} />
+    case 'turn': return <TurnEnd item={item} />
     case 'todos': return <TodosCard item={item} />
     default: return null
   }
 }
 
 function OptionsSheet({ id, state, agent, onClose }: { id: string; state: StateItem; agent: Conversation['agent']; onClose: () => void }) {
-  const theme = useTheme()
-  const insets = useSafeAreaInsets()
   const model = state.models.find((each) => each.id === state.model)
-  const pick = (option: ChatOption, value: string) => {
-    tap()
-    void setOption(id, option, value)
-  }
-  const group = (title: string, option: ChatOption, values: { value: string; label: string; detail?: string | null }[], current: string | null) => values.length === 0 ? null : (
-    <View style={styles.sheetGroup}>
-      <Text style={[type.caption, styles.sheetTitle, { color: theme.textMuted }]}>{title}</Text>
-      <View style={[styles.sheetCard, { backgroundColor: theme.raised }]}>
-        {values.map(({ value, label, detail }, index) => (
-          <Pressable key={value} onPress={() => pick(option, value)} style={[styles.sheetRow, index > 0 && { borderTopColor: theme.border, borderTopWidth: StyleSheet.hairlineWidth }]}>
-            <View style={styles.flex}>
-              <Text style={[type.secondary, { color: theme.text, fontWeight: value === current ? '600' : '400' }]}>{label}</Text>
-              {detail ? <Text style={[type.caption, { color: theme.textMuted }]} numberOfLines={1}>{detail}</Text> : null}
-            </View>
-            {value === current ? <Check size={18} color={theme.accent} /> : null}
-          </Pressable>
-        ))}
-      </View>
-    </View>
-  )
+  const pick = (option: ChatOption) => (value: string) => void setOption(id, option, value)
   return (
-    <Modal transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent navigationBarTranslucent>
-      <Pressable style={[styles.backdrop, { backgroundColor: theme.overlay }]} onPress={onClose} />
-      <View style={[styles.sheet, { backgroundColor: theme.surface, paddingBottom: insets.bottom + space.lg }]}>
-        <View style={[styles.grabber, { backgroundColor: theme.borderStrong }]} />
-        <View style={styles.sheetHead}>
-          <Text style={[type.title, styles.flex, { color: theme.text }]}>{t('options')}</Text>
-          <IconButton icon={X} label={t('close')} onPress={onClose} />
-        </View>
-        <ScrollView contentContainerStyle={styles.sheetBody}>
-          {group(t('permissionMode'), 'permissionMode', state.permissionModes.map((mode) => ({ value: mode, label: modeName(agent, mode) })), state.permissionMode)}
-          {group(t('model'), 'model', state.models.map((each) => ({ value: each.id, label: each.label, detail: each.description })), state.model)}
-          {group(t('effort'), 'effort', (model?.efforts ?? []).map((effort) => ({ value: effort, label: effort })), state.effort)}
-        </ScrollView>
-      </View>
-    </Modal>
+    <Sheet title={t('options')} onClose={onClose}>
+      <ChoiceList title={t('permissionMode')} choices={state.permissionModes.map((mode) => ({ value: mode, label: modeName(agent, mode) }))} current={state.permissionMode} onPick={pick('permissionMode')} />
+      <ChoiceList title={t('model')} choices={state.models.map((each) => ({ value: each.id, label: each.label, detail: each.description }))} current={state.model} onPick={pick('model')} />
+      <ChoiceList title={t('effort')} choices={(model?.efforts ?? []).map((effort) => ({ value: effort, label: effortName(effort) }))} current={state.effort} onPick={pick('effort')} />
+    </Sheet>
   )
 }
 
@@ -252,7 +225,7 @@ export function ChatScreen({ id }: { id: string }) {
               {row.kind === 'turn' ? <TurnHead agent={conversation.agent} />
                 : row.kind === 'tools' ? <ToolGroup tools={row.tools} />
                 : row.kind === 'working' ? <WorkingLine doing={conversation.chat?.doing?.title ?? null} />
-                : <ItemView item={row.item} />}
+                : <ItemView item={row.item} conversation={conversation} />}
             </View>
           )}
           ListFooterComponent={chat?.before || chat?.truncated ? (
@@ -294,14 +267,5 @@ const styles = StyleSheet.create({
   modelChip: { flexShrink: 1, flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, borderRadius: radius.pill, paddingHorizontal: space.md },
   chipText: { flexShrink: 1, fontWeight: '600' },
   send: { width: 36, height: 36, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', marginLeft: 'auto' },
-  viewOnly: { borderTopWidth: StyleSheet.hairlineWidth, padding: space.lg },
-  backdrop: { flex: 1 },
-  sheet: { borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, maxHeight: '78%', paddingTop: space.sm },
-  grabber: { alignSelf: 'center', width: 40, height: 5, borderRadius: radius.pill, marginBottom: space.sm },
-  sheetHead: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.lg, paddingBottom: space.sm },
-  sheetBody: { paddingHorizontal: space.lg, gap: space.lg, paddingBottom: space.lg },
-  sheetGroup: { gap: space.sm },
-  sheetTitle: { fontWeight: '600', paddingHorizontal: space.xs },
-  sheetCard: { borderRadius: radius.lg, overflow: 'hidden' },
-  sheetRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingHorizontal: space.lg, paddingVertical: 13 }
+  viewOnly: { borderTopWidth: StyleSheet.hairlineWidth, padding: space.lg }
 })

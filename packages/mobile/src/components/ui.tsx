@@ -3,7 +3,7 @@ import { ActivityIndicator, Image, Pressable, RefreshControl, StyleSheet, Text, 
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Haptics from 'expo-haptics'
-import { ChevronLeft, ChevronRight, CloudOff, type LucideIcon } from 'lucide-react-native'
+import { ChevronDown, ChevronLeft, ChevronRight, CloudOff, type LucideIcon } from 'lucide-react-native'
 import type { AgentKind } from '@antumi/protocol'
 import { ago, t } from '../i18n'
 import { push } from '../navigation'
@@ -33,6 +33,29 @@ export function IconButton({ icon: Icon, label, onPress, tone = 'plain', disable
       style={({ pressed }) => [styles.iconButton, { backgroundColor: background, opacity: disabled ? 0.4 : pressed ? 0.7 : 1 }]}
     >
       <Icon size={19} color={color} strokeWidth={2} />
+    </Pressable>
+  )
+}
+
+// A small rounded control inside a composer: what something is set to, tapped to change or toggle it.
+// shrink: gives up width to its neighbours when the row is tight, cutting its label short.
+export function Chip({ icon: Icon, label, onPress, active = false, chevron = false, shrink = true }: { icon: LucideIcon; label: string; onPress: () => void; active?: boolean; chevron?: boolean; shrink?: boolean }) {
+  const theme = useTheme()
+  const color = active ? theme.accent : theme.text
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ selected: active }}
+      onPress={() => {
+        tap()
+        onPress()
+      }}
+      style={({ pressed }) => [styles.chip, !shrink && styles.chipFixed, { backgroundColor: active ? theme.accentSoft : theme.raised, opacity: pressed ? 0.7 : 1 }]}
+    >
+      <Icon size={16} color={color} strokeWidth={1.9} />
+      <Text style={[type.caption, styles.chipText, { color }]} numberOfLines={1}>{label}</Text>
+      {chevron ? <ChevronDown size={14} color={theme.textMuted} /> : null}
     </Pressable>
   )
 }
@@ -302,6 +325,9 @@ const styles = StyleSheet.create({
   largeHeading: { gap: space.xs, paddingBottom: space.sm },
   body: { paddingHorizontal: space.lg, paddingTop: space.sm, gap: space.lg },
   iconButton: { width: 40, height: 40, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
+  chip: { flexShrink: 1, flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, borderRadius: radius.pill, paddingHorizontal: space.md },
+  chipFixed: { flexShrink: 0 },
+  chipText: { flexShrink: 1, fontWeight: '600' },
   button: { minHeight: 46, paddingHorizontal: space.lg, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: space.sm },
   buttonWide: { alignSelf: 'stretch' },
   buttonText: { fontSize: 15, fontWeight: '600' },

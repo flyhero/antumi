@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
-import { Check, Folder } from 'lucide-react-native'
-import type { AgentKind } from '@antumi/protocol'
+import { defaultStartMode, startModes, type AgentKind, type ChatCatalog, type ChatPermissionMode } from '@antumi/protocol'
 import { AgentMark } from './agent-mark'
-import { ListGroup, ListRow, Muted, SectionLabel, tap } from './ui'
+import { ChoiceList, Sheet } from './sheet'
+import { Muted, SectionLabel, tap } from './ui'
 import { t } from '../i18n'
 import { agentName, folderName } from '../labels'
-import { readyAgents, recentProjects } from '../session'
+import { agentCatalog, readyAgents, recentProjects } from '../session'
 import { radius, space, type, useTheme } from '../theme'
 
 // What a new conversation or task is made with: an agent the computer has ready, in one of its
@@ -50,16 +50,52 @@ export function AgentPicker({ title, agents, agent, onPick }: { title: string; a
   )
 }
 
-export function ProjectPicker({ projects, project, onPick }: { projects: readonly string[] | null; project: string | null; onPick: (project: string) => void }) {
-  const theme = useTheme()
+// The recent projects in a sheet rather than on the page, so a long list does not push the rest down.
+export function ProjectSheet({ projects, project, onPick, onClose }: { projects: readonly string[]; project: string | null; onPick: (project: string) => void; onClose: () => void }) {
   return (
-    <ListGroup title={t('project')}>
-      {(projects ?? []).map((path) => (
-        <ListRow key={path} leading={<Folder size={20} color={path === project ? theme.accent : theme.textMuted} strokeWidth={1.8} />} title={folderName(path)} subtitle={path}
-          chevron={false} trailing={path === project ? <Check size={18} color={theme.accent} /> : null} onPress={() => onPick(path)} />
-      ))}
-    </ListGroup>
+    <Sheet title={t('project')} onClose={onClose}>
+      <ChoiceList choices={projects.map((path) => ({ value: path, label: folderName(path), detail: path }))} current={project} onPick={(path) => { onPick(path); onClose() }} />
+    </Sheet>
   )
+}
+
+type StartPick = { model?: string; effort?: string; mode?: ChatPermissionMode }
+
+// What a new chat starts with, as on the computer: the agent's default model and mode unless one is
+// picked, and an effort only once picked (the model's own otherwise). Picks are kept per agent, so
+// switching back finds them; a mode or effort the picked model does not take falls back.
+export function useStartOptions(agent: AgentKind | null) {
+  const [catalogs, setCatalogs] = useState<Partial<Record<AgentKind, ChatCatalog | null>>>({})
+  const [picks, setPicks] = useState<Partial<Record<AgentKind, StartPick>>>({})
+  useEffect(() => {
+    if (!agent || agent in catalogs) return
+    let live = true
+    void agentCatalog(agent).then((catalog) => {
+      if (live) setCatalogs((current) => ({ ...current, [agent]: catalog }))
+    })
+    return () => { live = false }
+  }, [agent, catalogs])
+  if (!agent) return null
+  const pick = picks[agent] ?? {}
+  const models = catalogs[agent]?.models ?? []
+  const model = models.find((each) => each.id === pick.model) ?? models.find((each) => each.isDefault) ?? models[0] ?? null
+  const modes = startModes(agent, model ?? undefined)
+  const efforts = model?.efforts ?? []
+  const set = (next: StartPick) => setPicks((current) => ({ ...current, [agent]: { ...current[agent], ...next } }))
+  return {
+    loading: !(agent in catalogs),
+    models,
+    model,
+    modes,
+    mode: pick.mode && modes.includes(pick.mode) ? pick.mode : defaultStartMode(agent, modes),
+    efforts,
+    effort: pick.effort && efforts.includes(pick.effort) ? pick.effort : null,
+    // Sent only when picked: left out, the computer starts the agent's own.
+    picked: { model: pick.model && model?.id === pick.model ? pick.model : undefined, effort: pick.effort && efforts.includes(pick.effort) ? pick.effort : undefined },
+    pickModel: (id: string) => set({ model: id }),
+    pickEffort: (effort: string) => set({ effort }),
+    pickMode: (mode: ChatPermissionMode) => set({ mode })
+  }
 }
 
 const styles = StyleSheet.create({

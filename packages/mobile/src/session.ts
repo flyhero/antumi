@@ -15,6 +15,7 @@ import {
   mergeChatItems,
   prependChatItems,
   replaceChatStage,
+  type ChatCatalog,
   type ChatDecision,
   type ChatOption,
   type ChatPermissionMode,
@@ -379,6 +380,11 @@ export async function respond(id: string, requestId: string, decision: ChatDecis
   return done !== null
 }
 
+// A turn the connection to its agent dropped, sent again; core stops it first where it still runs.
+export async function retryTurn(id: string, stageId: string, itemId: string): Promise<void> {
+  await call('conversations.retryTurn', { id, stageId, itemId })
+}
+
 export async function interrupt(id: string): Promise<void> {
   await call('conversations.interrupt', { id })
 }
@@ -444,8 +450,26 @@ export async function readyAgents(): Promise<AgentKind[]> {
 }
 
 // The way the desktop opens one: made without starting, started, then the first message.
-export async function startConversation(options: { agent: Conversation['agent']; projectPath: string; worktree: boolean; text: string; images: readonly string[] }): Promise<string | null> {
-  const created = await call('conversations.create', { agent: options.agent, projectPaths: [options.projectPath], deferStart: true, ...(options.worktree ? { worktree: true } : {}) })
+// The models an agent offers a new chat; null when the computer cannot say, and the start then
+// takes the agent's own.
+export async function agentCatalog(agent: AgentKind): Promise<ChatCatalog | null> {
+  try {
+    return (await connection?.call('conversations.chatCatalog', { agent })) ?? null
+  } catch {
+    return null
+  }
+}
+
+// A model or effort left out is the agent's own default. allowBypass as from the computer, which
+// still refuses bypass where its settings have it off.
+export async function startConversation(options: {
+  agent: Conversation['agent']; projectPath: string; worktree: boolean; text: string; images: readonly string[]
+  permissionMode: ChatPermissionMode; model?: string; effort?: string
+}): Promise<string | null> {
+  const created = await call('conversations.create', {
+    agent: options.agent, projectPaths: [options.projectPath], deferStart: true, allowBypass: true, permissionMode: options.permissionMode,
+    ...(options.model ? { model: options.model } : {}), ...(options.effort ? { effort: options.effort } : {}), ...(options.worktree ? { worktree: true } : {})
+  })
   if (!created) return null
   useSession.setState((state) => ({ conversations: { ...state.conversations, [created.id]: created } }))
   if (!(await call('conversations.continue', { id: created.id }))) return created.id

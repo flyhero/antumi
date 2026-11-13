@@ -25,7 +25,7 @@
 | 回答请求（全部选项）、回答问答卡 | 内置浏览器 |
 | 发文字和图片、打断本轮、继续已停的会话 | 设置、账号、服务商、MCP、插件、来源凭据 |
 | 改权限模式、模型和推理强度 | 删除会话、添加任意项目路径 |
-| 在最近项目里新建会话（可选 worktree） | 结束 Agent 进程、停后台工具 |
+| 在最近项目里新建会话（可选 worktree、权限模式、模型和推理强度） | 结束 Agent 进程、停后台工具 |
 | 任务看板：在最近项目里新建任务、开始、接受或标记完成、取消 | 不经局域网或 Tailscale 的远程连接 |
 | ntfy 推送、打开时验证指纹或面容、检查更新 | |
 
@@ -152,6 +152,7 @@ Noise 的一条传输消息最多 65535 字节，而一个附件块是 512 KiB�
 
 - 回答请求的选项照着请求里给出的画（`choices`，没有时按 `decisions`），执行计划时可以选它给出的权限模式（`runModes`）。问答卡按电脑上的方式回答（`allow` 加 `answers`）。
 - 手机新建会话时，core 检查每个项目路径都在 `projects.recent()` 里，并且不能带 `helperOf` 和 `profileId`，否则以 `mobile-project-not-recent` 拒绝。`projects.branches` 也只答最近项目，手机用它判断项目是不是 Git 仓库，不是就不提供 worktree（和桌面端一样）；电脑答不了时照旧提供。
+- 新建会话页的模型和推理强度来自 `conversations.chatCatalog`，能选的权限模式和默认模式用 protocol 的 `startModes`、`defaultStartMode`，和电脑上的新会话一样；没选的模型和推理强度不传，由 Agent 用自己的默认。项目放在弹出的列表里选，最近项目再多也不会把发送按钮挤到下面。
 - 「停下」按钮对应 `interrupt`，只结束本轮。
 - 手机新建任务同样只能用最近项目，也不能带 `squadId`（小队连同它用的 Agent 配置都在电脑上设）。开始任务和电脑上从任务详情点开始一样：用任务保存的权限模式，没有就是规划，依赖的任务还没验收时也是规划（`mobile/src/task-start.ts`）；按钮文字也一样（开始规划、开始分析、直接执行）。开始后直接打开任务的会话，规划结果作为确认请求出现在那里。手动改状态只有到完成这一种（`manualMoves`），取消对应 `tasks.cancel`，重新打开、重做、删除留在电脑上。
 - 手机不调 `system.hello`：网关替它做，握手后把服务端版本、能力列表、电脑的主目录和当前地址放进欢迎消息。
@@ -184,6 +185,7 @@ Noise 的一条传输消息最多 65535 字节，而一个附件块是 512 KiB�
 - Noise 是纯 JS，不需要原生模块；相机、安全存储、指纹、选图用 Expo 的模块。因为用了 `expo-build-properties` 等配置插件，要用 development build（`expo prebuild` / `expo run:android`），不能用 Expo Go。
 - Hermes 可能缺的 `crypto.getRandomValues` 和 `TextDecoder` 由 `src/polyfills.ts` 补上（UTF-8 解码器有对照测试）。Noise 的 nonce 计数用普通数字而不是 BigInt 的 `DataView` 方法，避免依赖 Hermes 对它们的支持。
 - 页面：电脑列表 → 扫码配对 → 会话列表（等你、在跑、最近）→ 聊天页（消息、折叠的工具调用和思考、请求卡片、图片、选项）；另有新建会话、任务看板（任务详情、新建任务）、设置。
+- 聊天页照电脑上的样子显示消息流：工具调用用电脑上的名字（命令、编辑、MCP 服务 · 工具、Antumi 自己的工具），连续的几次调用合成一行（「读取 3 个文件，运行 2 个命令」），改了文件的调用显示 +/− 和 diff，子 Agent 显示类型、用量、指令和结果，命令显示非零退出码和后台状态；用户消息里的引用显示成卡片，移交和切换分支的附注去掉；上下文压缩显示成分隔线，可重试的通知带重试按钮，额度用完说明何时恢复，每个回合结束显示用时和 tokens。这些判断和电脑共用 protocol 里的 `tool-calls.ts`、`chat-quotes.ts`、`delegation-delivery.ts`，文字在手机端自己的 `tool-labels.ts`、`chat-text.ts`。
 - 最近打开的 5 个会话（各最近 100 条）缓存在 App 沙盒，离线时可以翻看；取消配对或被撤销时清掉。
 - 聊天页没发出的文字和已上传的图片按会话留在内存里，离开再回来还在；App 被系统结束、换一台电脑、取消配对时清掉。图片在电脑上已经存好，草稿只记它的 ID。
 - 外观是手机自己的一套，不跟 `DESIGN.md`：令牌（颜色、圆角、间距、字号，分浅色和深色）都在 `src/theme.ts`，基础组件（`Screen`、`ListGroup`、`ListRow`、`Button`、`IconButton`、`AgentAvatar`）在 `src/components/ui.tsx`，新页面从这里取。做法参照 t3code、orca 等项目的手机端：大标题、圆角分组列表、右侧气泡的用户消息、工具调用压成一行、等确认的请求固定在输入框上方。

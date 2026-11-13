@@ -4,7 +4,7 @@ import { ListTodo, MessageSquare, Plus, Settings } from 'lucide-react-native'
 import { conversationAsking, conversationCrashed, conversationWaiting, conversationWorking, isHelper, type Conversation } from '@antumi/protocol'
 import { AgentAvatar, Button, EmptyState, IconButton, ListGroup, ListRow, SectionLabel, Screen, StatusPill, confirmTap, tap } from '../components/ui'
 import { ago, t } from '../i18n'
-import { folderName, isCommandTool, relativePath, where } from '../labels'
+import { folderName, isCommandRequest, relativePath, where } from '../labels'
 import { pop, push } from '../navigation'
 import { canOperate, computerOf, refresh, respond, useSession } from '../session'
 import { mono, radius, space, type, useTheme } from '../theme'
@@ -37,7 +37,7 @@ function WaitingCard({ conversation }: { conversation: Conversation }) {
       </View>
       <View style={[styles.ask, { backgroundColor: theme.waitingSoft }]}>
         <Text style={[type.caption, styles.askLabel, { color: theme.waiting }]}>{request?.kind === 'question' ? t('asksYou') : t('needsApproval')}</Text>
-        <Text style={[type.secondary, { color: theme.text }, isCommandTool(request?.tool) && styles.command]} numberOfLines={3}>{request ? relativePath(request.title, conversation.projectPaths) : t('waitingShort')}</Text>
+        <Text style={[type.secondary, { color: theme.text }, isCommandRequest(request?.tool) && styles.command]} numberOfLines={3}>{request ? relativePath(request.title, conversation.projectPaths) : t('waitingShort')}</Text>
       </View>
       {quick ? (
         <View style={styles.quick}>

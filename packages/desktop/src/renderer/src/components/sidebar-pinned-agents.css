@@ -1,5 +1,7 @@
 .sidebar-pinned-agents { flex-shrink: 0; max-height: 30vh; overflow-y: auto; list-style: none; margin: 0 8px 4px; padding: 0; }
 .sidebar-pinned-agent { position: relative; }
+.sidebar-pinned-agent::before { content: ''; position: absolute; top: 0; left: 18px; width: 10px; height: 50%; border-left: 1px solid var(--border-2); border-bottom: 1px solid var(--border-2); border-bottom-left-radius: 8px; pointer-events: none; }
+.sidebar-pinned-agent:not(:last-child)::after { content: ''; position: absolute; top: 50%; bottom: 0; left: 18px; border-left: 1px solid var(--border-2); pointer-events: none; }
 .sidebar-pinned-agent-open { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 36px 8px 28px; border: 1px solid transparent; border-radius: var(--radius-sm); background: transparent; color: var(--text-muted); font: inherit; text-align: left; cursor: pointer; }
 .sidebar-pinned-agent-open > .agent-status-mark { flex-shrink: 0; margin-top: 0; }
 .sidebar-pinned-agent-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -96,6 +96,13 @@ describe('chatCommand', () => {
     expect(chatCommand('claude', 's', false, null, []).args).not.toContain('--append-system-prompt')
   })
 
+  it('lets a read-only Claude worker read anywhere without asking, and only it', () => {
+    const allowed = (args: string[]) => args[args.indexOf('--allowedTools') + 1]?.split(',') ?? []
+    expect(allowed(chatCommand('claude', 's', false, null, [], { readOnly: { dirs: ['/code/app'] }, preferred: { permissionMode: 'ask' } }).args)).toEqual(expect.arrayContaining(['Read', 'Glob', 'Grep']))
+    expect(allowed(chatCommand('claude', 's', false, null, [], { planOnly: { dirs: ['/code/app'] } }).args)).not.toContain('Read')
+    expect(chatCommand('claude', 's', false, null, []).args).not.toContain('--allowedTools')
+  })
+
   it('tells each agent with Antumi\'s tools when to note down what is left for the user, beside its vault', () => {
     const mcp = { command: 'node', args: ['mcp.mjs'] }
     const vault = { path: '/notes/vault', write: true }

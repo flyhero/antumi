@@ -32,6 +32,9 @@ export function claudeEditDenials(dirs: readonly string[]): string[] {
 
 // Read-only git lets the agent look at a dependency's branch without a prompt.
 export const GIT_READ_TOOLS = ['Bash(git log:*)', 'Bash(git diff:*)', 'Bash(git show:*)']
+// A read-only worker reads wherever it needs to without asking, as Codex's read-only sandbox does: in
+// its own folders its edits are denied, elsewhere they still ask, and so do commands that may write.
+export const READ_ANYWHERE_TOOLS = ['Read', 'Glob', 'Grep']
 
 // Claude Code in print mode, speaking stream-json both ways.
 export function claudeCommand(launch: AgentLaunch): AgentCommand {
@@ -49,6 +52,7 @@ export function claudeCommand(launch: AgentLaunch): AgentCommand {
     ...claudeReadRules(readable),
     // Planning around what dependencies left on their branches means reading git history.
     ...(fenced ? GIT_READ_TOOLS : []),
+    ...(readOnly ? READ_ANYWHERE_TOOLS : []),
     // The vault it may not write is readable without asking, and without being a working
     // folder: as one, Claude would load the vault's own skills too.
     ...(knowledgeBase && !knowledgeBase.write ? claudeReadRules([`${knowledgeBase.path}/**`]) : []),

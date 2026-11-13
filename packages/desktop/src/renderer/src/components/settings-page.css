@@ -1,12 +1,12 @@
 .settings {
-  --settings-nav-width: 208px;
   --settings-workspace-width: 1040px;
   --settings-section-gap: 28px;
   background: var(--surface);
 }
 
+/* As wide as the app's sidebar, so the pane's edge stays put going in and out of settings. */
 .settings .settings-nav {
-  width: var(--settings-nav-width);
+  width: min(var(--sidebar-width, 320px), 40vw);
   background: var(--bg);
 }
 
@@ -166,7 +166,6 @@
 }
 
 @media (max-width: 760px) {
-  .settings { --settings-nav-width: 192px; }
   .settings .settings-inner { padding: 32px 24px 64px; }
   .settings .settings-section-header { margin-bottom: 32px; }
   .settings .settings-row { flex-wrap: wrap; }

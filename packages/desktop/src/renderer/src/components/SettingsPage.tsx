@@ -862,6 +862,7 @@ function matches(section: Section, needle: string): boolean {
 export function SettingsPage() {
   useOccludesBrowser()
   const locale = useLocale((state) => state.locale)
+  const sidebarWidth = usePreferences((p) => p.sidebarWidth)
   const content = useRef<HTMLElement>(null)
   const sources = useCore((s) => s.sources)
   const plugins = useCore((s) => s.rpc?.features.includes('plugins') ?? false)
@@ -900,7 +901,7 @@ export function SettingsPage() {
 
   return (
     <div className="settings">
-      <aside className="settings-nav" aria-label={t('SettingsPage.settingsCategories')}>
+      <aside className="settings-nav" aria-label={t('SettingsPage.settingsCategories')} style={{ '--sidebar-width': `${sidebarWidth}px` }}>
         <div className="settings-nav-top">
           <h1>{t('StatusBar.settings')}</h1>
           <button type="button" className="settings-back" onClick={() => setSettingsOpen(false)}>{tr('SettingsPage.back', { value1: <ArrowLeftIcon /> })}</button>

@@ -9,7 +9,7 @@ import { agentLabel } from '../labels'
 import { t } from '../i18n'
 import { timeAgo } from '../conversation-state'
 import { AgentAvatar } from './AgentAvatar'
-import { AgentIcon, InfoIcon, PinIcon, PlusIcon } from './icons'
+import { AgentIcon, ArchiveIcon, InfoIcon, PencilIcon, PinIcon, PlusIcon, RevertIcon } from './icons'
 import { AgentsPageHeader } from './AgentsPageHeader'
 import { AgentModelPicker } from './AgentModelPicker'
 import { ChatPicker } from './ChatPicker'
@@ -96,10 +96,10 @@ function ProfilesView() {
           <footer className="agent-profile-card-actions">
             {item.archivedAt === null && <>
               <button type="button" className="button" onClick={() => newAgentConversation(item.id)}>{t('AgentProfiles.chat')}</button>
-              <button type="button" className="button ghost" aria-pressed={pinned.includes(item.id)} onClick={() => pinAgent(item.id, !pinned.includes(item.id))}><PinIcon />{t(pinned.includes(item.id) ? 'AgentProfiles.unpinFromSidebar' : 'AgentProfiles.pinToSidebar')}</button>
+              <button type="button" className="tool-button" aria-label={t(pinned.includes(item.id) ? 'AgentProfiles.unpinFromSidebar' : 'AgentProfiles.pinToSidebar')} data-tooltip={t(pinned.includes(item.id) ? 'AgentProfiles.unpinFromSidebar' : 'AgentProfiles.pinToSidebar')} aria-pressed={pinned.includes(item.id)} onClick={() => pinAgent(item.id, !pinned.includes(item.id))}><PinIcon /></button>
             </>}
-            <button type="button" className="button ghost" onClick={() => edit(item)}>{t('AgentProfiles.edit')}</button>
-            <button type="button" className="button ghost" disabled={busy} onClick={() => void archive(item)}>{t(item.archivedAt === null ? 'AgentProfiles.archive' : 'AgentProfiles.restore')}</button>
+            <button type="button" className="tool-button" aria-label={t('AgentProfiles.edit')} data-tooltip={t('AgentProfiles.edit')} onClick={() => edit(item)}><PencilIcon /></button>
+            <button type="button" className="tool-button" aria-label={t(item.archivedAt === null ? 'AgentProfiles.archive' : 'AgentProfiles.restore')} data-tooltip={t(item.archivedAt === null ? 'AgentProfiles.archive' : 'AgentProfiles.restore')} disabled={busy} onClick={() => void archive(item)}>{item.archivedAt === null ? <ArchiveIcon /> : <RevertIcon />}</button>
           </footer>
         </article>
       </li>)}

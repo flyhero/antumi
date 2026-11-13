@@ -12,6 +12,9 @@
 .agent-profile-engine { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .agent-profile-card-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 0 16px 12px; }
 .agent-profile-card-actions .button { padding: 4px 8px; font-size: 12px; }
+.agent-profile-card-actions > .button { margin-right: auto; }
+.agent-profile-card-actions .tool-button { flex-shrink: 0; }
+.agent-profile-card-actions .tool-button[aria-pressed='true'] { background: var(--accent-bg); color: var(--accent); }
 .agent-profile-check { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
 .agent-profile-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr)); gap: 12px; }
 .agent-profile-resources { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); align-items: start; gap: 24px; }

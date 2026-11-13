@@ -25,13 +25,8 @@ export function modeTone(mode: string | null): string | undefined {
   return mode === 'plan' || mode === 'bypass' ? mode : undefined
 }
 
-export function defaultStartMode(agent: AgentKind, offered: readonly ChatPermissionMode[]): ChatPermissionMode {
-  const { defaultStartMode: preferred, startModes } = agentDescriptor(agent)
-  return offered.includes(preferred) ? preferred : startModes[0]!
-}
-
-// Shared with core, which starts runs nobody watches in them (unattendedPermission).
-export { startModes } from '@antumi/protocol'
+// Shared with core, which starts runs nobody watches in them (unattendedPermission), and the phone.
+export { defaultStartMode, startModes } from '@antumi/protocol'
 
 const EFFORT_LABEL: Record<string, string> = localized(() => ({
   none: t('ChatOptionsBar.none'),

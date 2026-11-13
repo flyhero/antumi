@@ -247,7 +247,10 @@ export class PluginService {
       if (checked) await this.validateSettings(checked)
       const next: Registry = {
         version: 1,
-        plugins: [...this.registry.plugins.filter((entry) => entry.manifest.id !== id), record],
+        // An update or a switch keeps the plugin where it was; only a new one goes last.
+        plugins: this.registry.plugins.some((entry) => entry.manifest.id === id)
+          ? this.registry.plugins.map((entry) => entry.manifest.id === id ? record : entry)
+          : [...this.registry.plugins, record],
         owners: { ...this.registry.owners, ...Object.fromEntries(ids.map((source) => [source, id])) }
       }
       await writePrivateJson(this.pointer, next)
@@ -260,7 +263,7 @@ export class PluginService {
   }
 
   private publish(ids: readonly string[]): void {
-    this.sources.replaceProviders([...this.builtins, ...[...this.loaded.values()].flatMap((plugin) => plugin.providers)], ids)
+    this.sources.replaceProviders([...this.builtins, ...this.registry.plugins.flatMap((record) => this.loaded.get(record.manifest.id)?.providers ?? [])], ids)
     this.changed(this.list())
   }
 

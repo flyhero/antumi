@@ -235,6 +235,20 @@ describe('plugin installation and activation', () => {
     expect(sources.list()).toEqual([])
   })
 
+  it('keeps installed plugins in their order through updates and switching off and on', async () => {
+    await install('1.0.0')
+    const other = path.join(root, 'input-other')
+    await pluginFixture(other, { id: 'other.source', source: 'other' })
+    await plugins.install({ kind: 'local', path: other })
+    const order = ['demo.source', 'other.source']
+    await install('1.1.0')
+    expect(plugins.list().map((plugin) => plugin.id)).toEqual(order)
+    await plugins.setEnabled('demo.source', false)
+    await plugins.setEnabled('demo.source', true)
+    expect(plugins.list().map((plugin) => plugin.id)).toEqual(order)
+    expect(sources.list().map((source) => source.provider)).toEqual(['demo', 'other'])
+  })
+
   it('keeps the previous active pointer on failed handshake or incompatible settings', async () => {
     await install('1.0.0')
     await config.save({ provider: 'demo', instance: 'default', enabled: true, settings: { query: 'mine' } })

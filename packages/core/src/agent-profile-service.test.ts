@@ -168,6 +168,19 @@ describe('reusable agent roles and delegated work', () => {
     expect(chats.allowsBypass(call.conversationId)).toBe(true)
     expect((await profiles.dispatch(trusted, reviewer.id, 'Only read')).readOnly).toBe(true)
   })
+  it('lets a developing member work in the mode its profile names, but never edit for a caller that may only read', async () => {
+    const trusted = profiles.save({ name: 'Trusted', agent: 'claude', capability: 'develop', delegationMode: 'bypass' })
+    const call = await profiles.dispatch(parentId, trusted.id, 'Implement it')
+    expect(call).toMatchObject({ permissionMode: 'bypass', readOnly: false })
+    await waitFor(() => store.call(call.id).state === 'running')
+    expect(chats.allowsBypass(call.conversationId)).toBe(true)
+    await profiles.cancelForParent(parentId)
+    const planning = (await chats.create('claude', chats.get(parentId).projectPaths, false, { permissionMode: 'plan' })).id
+    expect(await profiles.dispatch(planning, trusted.id, 'Look first')).toMatchObject({ readOnly: true, permissionMode: 'ask' })
+  })
+  it('keeps no delegation mode on a read-only profile', () => {
+    expect(profiles.save({ name: 'Reader', agent: 'claude', capability: 'readOnly', delegationMode: 'bypass' }).delegationMode).toBeNull()
+  })
   it('runs one developer at a time, prevents parent edits and cancels without deleting files', async () => {
     const developer = profiles.save({ name: 'Developer', agent: 'claude', capability: 'develop' })
     const first = await profiles.dispatch(parentId, developer.id, 'Implement part one')
@@ -644,5 +657,10 @@ describe('delegatedMode', () => {
     expect(delegatedMode('auto', false, ['ask', 'acceptEdits', 'bypass'])).toBe('acceptEdits')
     expect(delegatedMode('bypass', true, ['ask', 'readOnly'])).toBe('ask')
     expect(delegatedMode('bypass', false, all)).toBe('acceptEdits')
+  })
+  it('takes the profile\'s mode over the caller\'s, falling down as the caller\'s would', () => {
+    expect(delegatedMode('ask', false, all, 'bypass')).toBe('bypass')
+    expect(delegatedMode('bypass', true, all, 'acceptEdits')).toBe('acceptEdits')
+    expect(delegatedMode('ask', false, ['ask', 'acceptEdits', 'bypass'], 'auto')).toBe('acceptEdits')
   })
 })

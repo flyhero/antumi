@@ -1,9 +1,9 @@
 import { useEffect, useId, useState } from 'react'
 import { create } from 'zustand'
-import { agentDescriptor, AgentProfileFields, type AgentProfile, type SkillRef, type SkillRepo } from '@antumi/protocol'
+import { agentDescriptor, AgentProfileFields, DELEGATION_MODES, type AgentKind, type AgentProfile, type DelegationMode, type SkillRef, type SkillRepo } from '@antumi/protocol'
 import { useAgentCatalog } from '../agent-models'
 import { agentProfileTemplateModel, agentProfileTemplateSeed, type AgentProfileTemplate } from '../agent-profile-templates'
-import { openConversationDraft, perform, selectSquad, useCore } from '../core-store'
+import { openConversationDraft, perform, selectSquad, useCore, useProfileDelegationModeSupported } from '../core-store'
 import { useInstalledAgents } from '../installed-agents'
 import { agentLabel } from '../labels'
 import { t } from '../i18n'
@@ -13,6 +13,7 @@ import { AgentIcon, ArchiveIcon, InfoIcon, PencilIcon, PinIcon, PlusIcon, Revert
 import { AgentsPageHeader } from './AgentsPageHeader'
 import { AgentModelPicker } from './AgentModelPicker'
 import { ChatPicker } from './ChatPicker'
+import { modeOptions } from './ChatOptionsBar'
 import { ProviderPicker } from './ProviderPicker'
 import { SquadsView } from './Squads'
 import { GroupedChecklist } from './GroupedChecklist'
@@ -125,6 +126,10 @@ function skillRefs(ids: readonly string[], repos: readonly SkillRepo[], current:
   return ids.flatMap((id) => known.get(id) ?? [])
 }
 
+// The modes a developing profile can be delegated in: those of its agent's that Antumi may pick for it.
+const delegationModes = (agent: AgentKind): DelegationMode[] => DELEGATION_MODES.filter((mode) => mode in agentDescriptor(agent).modes)
+const CALLER_MODE = 'caller'
+
 function ProfileEditor({ profile, seed, template, onCancel, onDone }: { profile: AgentProfile | null; seed: AgentProfileFields | null; template: AgentProfileTemplate | null; onCancel: () => void; onDone: () => void }) {
   const formId = useId()
   const installed = useInstalledAgents()
@@ -133,6 +138,7 @@ function ProfileEditor({ profile, seed, template, onCancel, onDone }: { profile:
   const repos = useCore((state) => state.skillRepos)
   const servers = useCore((state) => state.mcpServers)
   const provider = useCore((state) => state.modelProviders.find((item) => item.id === fields.modelProvider) ?? null)
+  const modeSupported = useProfileDelegationModeSupported()
   const readOnlyUnsupported = fields.capability !== 'develop' && agentDescriptor(fields.agent).capabilities.readOnly === false
   const catalog = useAgentCatalog(readOnlyUnsupported ? null : fields.agent, true, provider)
   const quickPreference = usePreferences((state) => state.quickModels[fields.agent])
@@ -163,13 +169,17 @@ function ProfileEditor({ profile, seed, template, onCancel, onDone }: { profile:
       <div className="squad-field"><label htmlFor={`${formId}-name`}>{t('AgentProfiles.name')}</label><input id={`${formId}-name`} className="input" required autoFocus maxLength={60} value={fields.name} onChange={(event) => setFields({ ...fields, name: event.target.value })} /></div>
       <div className="squad-field"><label htmlFor={`${formId}-description`}>{t('AgentProfiles.expertise')}</label><textarea id={`${formId}-description`} className="input" rows={2} maxLength={2000} value={fields.description ?? ''} onChange={(event) => setFields({ ...fields, description: event.target.value })} /></div>
       <div className="squad-field"><label htmlFor={`${formId}-instructions`}>{t('AgentProfiles.instructions')}</label><textarea id={`${formId}-instructions`} className="input" rows={6} maxLength={20000} value={fields.instructions ?? ''} onChange={(event) => setFields({ ...fields, instructions: event.target.value })} /></div>
-      <div className="agent-profile-options"><div className="squad-field">{t('AgentProfiles.engine')}<ChatPicker label={t('AgentProfiles.engine')} value={fields.agent} placeholder="" size="field" placement="below" options={agents.map((agent) => ({ value: agent, label: agentLabel(agent), icon: <AgentIcon agent={agent} /> }))} onChange={(value) => { const agent = agents.find((item) => item === value); if (agent) { setFields({ ...fields, agent, model: null, effort: null, modelProvider: null }); setModelPending(Boolean(template)) } }} /></div>
+      <div className="agent-profile-options"><div className="squad-field">{t('AgentProfiles.engine')}<ChatPicker label={t('AgentProfiles.engine')} value={fields.agent} placeholder="" size="field" placement="below" options={agents.map((agent) => ({ value: agent, label: agentLabel(agent), icon: <AgentIcon agent={agent} /> }))} onChange={(value) => { const agent = agents.find((item) => item === value); if (agent) { setFields({ ...fields, agent, model: null, effort: null, modelProvider: null, delegationMode: fields.delegationMode && delegationModes(agent).includes(fields.delegationMode) ? fields.delegationMode : null }); setModelPending(Boolean(template)) } }} /></div>
         <div className="squad-field">{t('AgentModelPicker.model')}<AgentModelPicker catalog={catalog} choice={{ model: fields.model ?? undefined, effort: fields.effort ?? undefined }} size="field" onChange={(choice) => { setModelPending(false); setFields({ ...fields, model: choice.model ?? null, effort: choice.effort ?? null }) }} /></div>
-        <div className="squad-field">{t('Squads.capability_1905')}<ChatPicker label={t('Squads.capability_1905')} value={fields.capability ?? 'readOnly'} placeholder="" size="field" placement="below" options={[{ value: 'readOnly', label: t('Squads.readOnlyAnalysis') }, { value: 'develop', label: t('Squads.developmentTesting') }]} onChange={(value) => setFields({ ...fields, capability: value === 'develop' ? 'develop' : 'readOnly' })} /></div>
+        <div className="squad-field">{t('Squads.capability_1905')}<ChatPicker label={t('Squads.capability_1905')} value={fields.capability ?? 'readOnly'} placeholder="" size="field" placement="below" options={[{ value: 'readOnly', label: t('Squads.readOnlyAnalysis') }, { value: 'develop', label: t('Squads.developmentTesting') }]} onChange={(value) => setFields({ ...fields, ...(value === 'develop' ? { capability: 'develop' } : { capability: 'readOnly', delegationMode: null }) })} /></div>
+        {modeSupported && fields.capability === 'develop' && <div className="squad-field">{t('AgentProfiles.delegationMode')}<ChatPicker label={t('AgentProfiles.delegationMode')} value={fields.delegationMode ?? CALLER_MODE} placeholder="" size="field" placement="below"
+          options={[{ value: CALLER_MODE, label: t('AgentProfiles.delegationModeCaller') }, ...modeOptions(fields.agent, delegationModes(fields.agent))]}
+          onChange={(value) => setFields({ ...fields, delegationMode: delegationModes(fields.agent).find((mode) => mode === value) ?? null })} /></div>}
       </div>
       {template && <p className="squad-block-hint muted">{t('AgentTemplates.modelHint')}</p>}
       <ProviderPicker agent={fields.agent} value={fields.modelProvider ?? null} size="field" placement="below" onChange={(modelProvider) => { setFields({ ...fields, modelProvider, model: null, effort: null }); setModelPending(Boolean(template)) }} />
-      <p className="squad-block-hint muted" role={readOnlyUnsupported ? 'alert' : undefined}>{t(readOnlyUnsupported ? 'AgentTemplates.readOnlyUnsupported' : fields.capability === 'develop' ? 'AgentTemplates.developHint' : 'AgentTemplates.readOnlyHint')}</p>
+      <p className="squad-block-hint muted" role={readOnlyUnsupported ? 'alert' : undefined}>{t(readOnlyUnsupported ? 'AgentTemplates.readOnlyUnsupported' : fields.capability !== 'develop' ? 'AgentTemplates.readOnlyHint'
+        : !modeSupported || !fields.delegationMode ? 'AgentTemplates.developHint' : fields.delegationMode === 'bypass' ? 'AgentTemplates.developBypassHint' : 'AgentTemplates.developModeHint')}</p>
       <p className="squad-block-hint muted">{t('AgentTemplates.toolsHint')}</p>
       <div className="agent-profile-resources">
         <section className="squad-block"><h3 className="agent-profile-resource-heading">{t('AgentProfiles.callable')}<span className="agent-profile-info" tabIndex={0} aria-label={t('AgentProfiles.callableHint')} data-tooltip={t('AgentProfiles.callableHint')} data-tooltip-side="top"><InfoIcon /></span></h3>

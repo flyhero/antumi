@@ -198,6 +198,12 @@ describe('Antumi management MCP', () => {
     expect(output(await use(MANAGEMENT_TOOLS.profileUpdate, { id: profile.id, name: 'reviewer' }))).toContain('已有同名智能体')
     expect(output(await use(MANAGEMENT_TOOLS.profileUpdate, { id: id(9), description: 'x' }))).toContain('找不到')
     expect(profiles.list()).toHaveLength(2)
+    // The mode a profile is delegated in is the user's alone: no tool sets it, and an edit keeps it.
+    expect((await use(MANAGEMENT_TOOLS.profileCreate, { name: 'Free', agent: 'claude', capability: 'develop', delegationMode: 'bypass' })).isError).toBe(true)
+    expect((await use(MANAGEMENT_TOOLS.profileUpdate, { id: profile.id, delegationMode: 'bypass' })).isError).toBe(true)
+    profiles.save({ ...profiles.list().find((each) => each.id === profile.id)!, delegationMode: 'acceptEdits' }, profile.id)
+    expect((await use(MANAGEMENT_TOOLS.profileUpdate, { id: profile.id, description: 'Builds and tests' })).isError).toBe(false)
+    expect(profiles.list().find((each) => each.id === profile.id)?.delegationMode).toBe('acceptEdits')
 
     expect((await use(MANAGEMENT_TOOLS.squadCreate, { ...team, description: 'Ships work' })).isError).toBe(false)
     const squad = squads.list()[0]!

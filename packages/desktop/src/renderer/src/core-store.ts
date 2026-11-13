@@ -1284,6 +1284,11 @@ export function usePlanModesSupported(): boolean {
   return useCore((s) => s.rpc?.features.includes('plan-modes') ?? false)
 }
 
+// A core that lets a developing profile name the mode it works in when delegated to.
+export function useProfileDelegationModeSupported(): boolean {
+  return useCore((s) => s.rpc?.features.includes('agent-profile-delegation-mode') ?? false)
+}
+
 // A core that keeps the mode, model and effort a task starts in (Task.launch).
 export function useTaskLaunchSupported(): boolean {
   return useCore((s) => s.rpc?.features.includes('task-launch') ?? false)

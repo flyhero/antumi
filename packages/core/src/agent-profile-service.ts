@@ -42,10 +42,11 @@ const resetClock = (at: number) => new Date(at).toLocaleString('zh-CN', { month:
 // Most to least left to the agent. Planning and read-only callers never get here: their members read.
 const DEVELOP_MODES = ['bypass', 'auto', 'acceptEdits', 'ask']
 
-// What a developing member works in: the caller's own mode, so delegating neither widens nor narrows
-// what the user allowed there. A mode the member's agent lacks falls to the next one down it has.
-export function delegatedMode(callerMode: string | null | undefined, callerAllowsBypass: boolean, memberModes: readonly string[]): string {
-  const mode = callerMode === 'bypass' && !callerAllowsBypass ? 'acceptEdits' : callerMode ?? 'ask'
+// What a developing member works in: the mode the user set on its profile, or else the caller's own,
+// so delegating neither widens nor narrows what the user allowed there. A mode the member's agent
+// lacks falls to the next one down it has.
+export function delegatedMode(callerMode: string | null | undefined, callerAllowsBypass: boolean, memberModes: readonly string[], profileMode: string | null = null): string {
+  const mode = profileMode ?? (callerMode === 'bypass' && !callerAllowsBypass ? 'acceptEdits' : callerMode ?? 'ask')
   const from = DEVELOP_MODES.indexOf(mode)
   return DEVELOP_MODES.slice(from < 0 ? DEVELOP_MODES.length - 1 : from).find((each) => memberModes.includes(each)) ?? 'ask'
 }
@@ -102,7 +103,8 @@ export class AgentProfileService {
       if (target === id) throw new Rejection('profile-self-call', '不能调用自己')
       this.get(target)
     }
-    const profile = this.store.save(fields, id)
+    // A mode kept on a read-only profile would come back with no say from the user if an agent made it develop.
+    const profile = this.store.save(fields.capability === 'develop' ? fields : { ...fields, delegationMode: null }, id)
     this.events.profile(profile)
     return profile
   }
@@ -211,7 +213,7 @@ export class AgentProfileService {
       if (this.store.calls(id).filter(agentCallOpen).length >= 10) throw new Rejection('agent-call-limit', '请先等待已有委派完成')
       const readOnly = profile.capability === 'readOnly' || callerReadOnly(parent)
       const permissionMode = readOnly ? agentDescriptor(profile.agent).readOnlyMode
-        : delegatedMode(parent.chatOptions?.permissionMode, this.chats.allowsBypass(id), adapterOf(profile.agent).permissionModes)
+        : delegatedMode(parent.chatOptions?.permissionMode, this.chats.allowsBypass(id), adapterOf(profile.agent).permissionModes, profile.delegationMode)
       await this.chats.validateStartOptions(profile.agent, { permissionMode, model: profile.model, effort: profile.effort }, profile.modelProvider ?? undefined)
       if (workspace === 'worktree') await this.checkWorktreeSource(parent, readOnly)
       const at = Date.now()

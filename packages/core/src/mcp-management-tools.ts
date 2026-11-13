@@ -75,6 +75,9 @@ function editTool<M extends RpcMethod>(name: string, feature: string, descriptio
 }
 
 const EditId = z.object({ id: z.string().uuid() })
+// The mode a profile works in when delegated to is the user's to set: an agent setting it could hand
+// its own work to a member asking nothing. An edit keeps what the user set.
+const ProfileInput = AgentProfileFields.omit({ delegationMode: true })
 
 const tools = [
   tool(MANAGEMENT_TOOLS.profileList, 'agent-profiles',
@@ -82,10 +85,10 @@ const tools = [
     'agentProfiles.list', rpcMethods['agentProfiles.list'].params),
   tool(MANAGEMENT_TOOLS.profileCreate, 'agent-profiles',
     '创建「我的智能体」配置，不会启动会话或修改已有配置。name 和 agent 必填，其余沿用现有默认值；capability 默认只读，开发角色需显式设为 develop。创建前先查已有配置；成功返回配置和 ID。',
-    'agentProfiles.save', AgentProfileFields.strict()),
+    'agentProfiles.save', ProfileInput.strict()),
   editTool(MANAGEMENT_TOOLS.profileUpdate, 'agent-profiles',
     '修改已保存的「我的智能体」配置。id 必填，只传要改的字段，未传的字段保持原值；数组字段（skills、mcpServers、callableProfiles）整体替换。先查询配置获取 ID 和当前值；不会启动会话，已在运行的会话不受影响。成功返回修改后的配置。',
-    AgentProfileFields.partial().extend(EditId.shape).strict(), '智能体配置', (rpc) => rpc.call('agentProfiles.list', {}),
+    ProfileInput.partial().extend(EditId.shape).strict(), '智能体配置', (rpc) => rpc.call('agentProfiles.list', {}),
     'agentProfiles.save', rpcMethods['agentProfiles.save'].params),
   tool(MANAGEMENT_TOOLS.squadList, 'squads',
     '列出已保存的团队配置，包含 ID、归档状态、队长、成员和职责；不包含团队运行记录。只读。',

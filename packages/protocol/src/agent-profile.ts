@@ -4,6 +4,11 @@ import { SkillRef } from './skills'
 import { ModelProviderId } from './model-provider'
 import { UsageWindow } from './usage'
 
+// The modes a developing profile may be set to work in when delegated to, least to most left to it.
+export const DELEGATION_MODES = ['ask', 'acceptEdits', 'auto', 'bypass'] as const
+export const DelegationMode = z.enum(DELEGATION_MODES)
+export type DelegationMode = z.infer<typeof DelegationMode>
+
 export const AgentProfileFields = z.object({
   name: z.string().trim().min(1).max(60),
   description: z.string().trim().max(2000).default(''),
@@ -13,6 +18,9 @@ export const AgentProfileFields = z.object({
   effort: z.string().trim().min(1).max(200).nullable().default(null),
   modelProvider: ModelProviderId.nullable().default(null),
   capability: z.enum(['readOnly', 'develop']).default('readOnly'),
+  // What a developing profile works in when delegated to, whatever the caller's mode; null, the
+  // caller's (feature agent-profile-delegation-mode). Only the user sets it: Antumi's MCP tools don't.
+  delegationMode: DelegationMode.nullable().default(null),
   skills: z.array(SkillRef).max(100).nullable().default(null),
   mcpServers: z.array(z.string().min(1).max(200)).max(100).nullable().default(null),
   callableProfiles: z.array(z.string().uuid()).max(100).default([])

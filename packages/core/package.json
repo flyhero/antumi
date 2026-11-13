@@ -1,6 +1,6 @@
 {
   "name": "@antumi/core",
-  "version": "0.21.6-beta.3",
+  "version": "0.21.6",
   "private": true,
   "type": "module",
   "scripts": {

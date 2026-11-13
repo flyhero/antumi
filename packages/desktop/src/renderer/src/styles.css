@@ -8856,6 +8856,9 @@ div.inspector-empty > p { margin: 0 0 8px; }
 }
 
 .chat-draft-title { margin: 0; font-size: 16px; font-weight: 600; }
+.chat-draft-profile { display: flex; flex-direction: column; align-items: center; gap: 12px; max-width: 520px; }
+.chat-draft-profile > .agent-avatar { width: 48px; height: 48px; }
+.chat-draft-profile-description { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .chat-draft:has(> .chat-draft-start[data-investigation]) { justify-content: safe center; }
 .chat-draft-start[data-investigation] { width: 100%; gap: 24px; }
 .chat-draft-source { position: relative; display: flex; flex-direction: column; align-items: center; gap: 12px; width: min(100%, 704px); min-width: 0; padding: 0 32px 8px; }

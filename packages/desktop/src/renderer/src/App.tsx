@@ -62,6 +62,7 @@ export function App() {
   const splitPanes = useSplitPanes()
   const conversationDraft = useCore((s) => s.conversationDraft)
   const conversationDraftFrom = useCore((s) => s.conversationDraftFrom)
+  const draftProfileId = useCore((s) => s.draftProfileId)
   const selectedDiscussionId = useCore((s) => s.selectedDiscussionId)
   const draftMode = useCore((s) => s.conversationDraftMode)
   const discussionDraftFrom = useCore((s) => s.discussionDraftFrom)
@@ -163,7 +164,7 @@ export function App() {
               splitPanes && selectedConversationId ? <ConversationSplit panes={splitPanes} active={selectedConversationId} /> :
               selectedConversationId ? <ConversationView key={selectedConversationId} id={selectedConversationId} /> :
                 conversationDraft && draftMode === 'group' ? <DiscussionDraft key={discussionDraftFrom?.discussion.id ?? 'blank'} from={discussionDraftFrom?.discussion ?? null} /> :
-                conversationDraft ? <ConversationDraft key={conversationDraftFrom?.key ?? 'blank'} /> :
+                conversationDraft ? <ConversationDraft key={draftProfileId ?? conversationDraftFrom?.key ?? 'blank'} /> :
                 <section className="detail-empty"><div className="detail-empty-body">{t('App.chooseOrCreateAConversation')}</div></section>
             ) : selectedId && view === 'chat' ? (
               <TaskChat key={selectedId} taskId={selectedId} />

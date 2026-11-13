@@ -33,6 +33,7 @@ import { rememberedPick, type DraftChoice } from '../draft-choices'
 import { catalogKey, providerFor } from '../model-provider-choice'
 import { ProviderPicker } from './ProviderPicker'
 import { DraftModeSwitch } from './DraftModeSwitch'
+import { AgentAvatar } from './AgentAvatar'
 
 // A new conversation while chats are the default: the agent and projects are picked on the page,
 // and the first message creates the conversation and starts the agent, so none is left empty.
@@ -48,8 +49,7 @@ export function ConversationDraft() {
   const from = useCore((s) => s.conversationDraftFrom)
   const draftProfileId = useCore((state) => state.draftProfileId)
   const profiles = useCore((state) => state.agentProfiles)
-  const [profileId, setProfileId] = useState<string | null>(draftProfileId)
-  const profile = profileId ? profiles[profileId] : null
+  const profile = draftProfileId ? profiles[draftProfileId] : null
   const initial = from?.configuration
   const composerId = from?.key ?? null
   // Back from a group chat draft: its topic, projects and first member come along.
@@ -245,7 +245,7 @@ export function ConversationDraft() {
         <div className="chat-view" data-width={width} {...typeface}>
           <div className="chat-list chat-draft">
             <div className="chat-draft-start" data-investigation={Boolean(issue) || undefined}>
-              <DraftModeSwitch mode="single" carry={toGroup} blocked={groupBlocked} disabled={busy} />
+              {!profile && <DraftModeSwitch mode="single" carry={toGroup} blocked={groupBlocked} disabled={busy} />}
               {issue && (
                 <section className="chat-draft-source" aria-label={t('ConversationDraft.investigationContext')}>
                   <div className="chat-draft-source-meta">
@@ -260,18 +260,14 @@ export function ConversationDraft() {
                     onClick={() => useCore.setState({ conversationDraftIssue: null })}><CloseIcon /></button>
                 </section>
               )}
-              <h2 className="chat-draft-title">{issue ? t('ConversationDraft.chooseInvestigationAgent') : from ? t('ConversationDraft.startANewConversation') : t('ConversationDraft.chooseAnAgentToStart')}</h2>
-              {/* Starting is one choice, the agent below; one of the user's own agents comes along only
-                  from its card on the agents page, and goes with the ×. */}
-              {!issue && profile && (
-                <div className="chat-draft-issue chat-draft-profile">
-                  <span className="muted">{t('ConversationDraft.usingAgent')}</span>
-                  <span className="chat-draft-issue-title" title={profile.description || undefined}>{profile.name}</span>
-                  <button type="button" className="tool-button" aria-label={t('AgentProfiles.noRole')} data-tooltip={t('AgentProfiles.noRole')} disabled={busy}
-                    onClick={() => setProfileId(null)}><CloseIcon /></button>
+              {profile ? (
+                <div className="chat-draft-profile">
+                  <AgentAvatar id={profile.id} />
+                  <h2 className="chat-draft-title">{profile.name}</h2>
+                  {profile.description && <p className="chat-draft-profile-description muted">{profile.description}</p>}
                 </div>
-              )}
-              <div className="chat-draft-agents" role="radiogroup" aria-label="agent">
+              ) : <h2 className="chat-draft-title">{issue ? t('ConversationDraft.chooseInvestigationAgent') : from ? t('ConversationDraft.startANewConversation') : t('ConversationDraft.chooseAnAgentToStart')}</h2>}
+              {!profile && <div className="chat-draft-agents" role="radiogroup" aria-label="agent">
                 {installed.map((kind) => (
                   <button
                     key={kind}
@@ -280,7 +276,7 @@ export function ConversationDraft() {
                     aria-checked={agent === kind}
                     className="chat-draft-agent"
                     disabled={busy}
-                    onClick={() => { setAgent(kind); setProfileId(null) }}
+                    onClick={() => setAgent(kind)}
                   >
                     <AgentIcon agent={kind} />
                     <span>{agentLabel(kind)}</span>
@@ -292,7 +288,7 @@ export function ConversationDraft() {
                     )}
                   </button>
                 ))}
-              </div>
+              </div>}
               {discussionsSupported && !groupBlocked && (
                 <button type="button" className="link-button chat-draft-invite" disabled={busy} onClick={() => switchDraftMode('group', toGroup())}>{t('DraftModeSwitch.invite')}</button>
               )}
@@ -302,7 +298,7 @@ export function ConversationDraft() {
                   : from ? t('ConversationDraft.usingTheConfigurationOfWithAFreshConversation', { value1: from.title }) : t('ConversationDraft.sendingTheFirstMessageCreatesTheConversationAnd')}
               </p>
               <OtherProjectsHint agent={agent} projectCount={projectPaths.length} />
-              {!issue && <ConversationTip agent={agent} agents={installed.length} images={imagesSupported} />}
+              {!issue && !profile && <ConversationTip agent={agent} agents={installed.length} images={imagesSupported} />}
             </div>
           </div>
           <div className="chat-dock">
@@ -345,7 +341,7 @@ export function ConversationDraft() {
                 autoFocus
                 readOnly={busy}
                 aria-label={t('ConversationDraft.firstMessage')}
-                placeholder={!agent ? t('ConversationDraft.chooseAnAgentAboveFirst') : issue ? t('ConversationDraft.additionalInstructionsOptionalEnterToInvestigate', { send: sendHint }) : t('ConversationDraft.sendTheFirstMessageToEnterToSend', { value1: agentLabel(agent), send: sendHint })}
+                placeholder={!agent ? t('ConversationDraft.chooseAnAgentAboveFirst') : issue ? t('ConversationDraft.additionalInstructionsOptionalEnterToInvestigate', { send: sendHint }) : t('ConversationDraft.sendTheFirstMessageToEnterToSend', { value1: profile?.name ?? agentLabel(agent), send: sendHint })}
                 onPasteCapture={(event) => {
                   if (imagesSupported && !busy) attached.handlers.onPaste(event)
                   files.onPasteCapture(event)

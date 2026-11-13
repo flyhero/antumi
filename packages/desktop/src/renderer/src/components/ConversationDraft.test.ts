@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { StateCreator } from 'zustand'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createRpcClient, type RpcConnection } from '@antumi/protocol'
+import { AgentProfile, createRpcClient, type RpcConnection } from '@antumi/protocol'
 import { useCore } from '../core-store'
 import { EMPTY_DRAFT, saveComposerDraft } from '../composer-drafts'
 import { ConversationDraft } from './ConversationDraft'
@@ -47,4 +47,24 @@ describe('investigation draft images', () => {
     expect(render()).toContain('class="chat-add-button"')
     expect(render()).toContain('class="chat-images"')
   })
+})
+
+it('opens an agent-specific draft without agent selection or group chat controls', () => {
+  const profile = AgentProfile.parse({ id: '11111111-1111-4111-8111-111111111111', name: '代码审查', description: '检查代码并提出建议', agent: 'codex', capability: 'readOnly', archivedAt: null, createdAt: 1, updatedAt: 1 })
+  const rpc = useCore.getState().rpc
+  if (!rpc) throw new Error('missing test connection')
+  useCore.setState({ rpc: { ...rpc, features: [...rpc.features, 'discussions'] }, conversationDraftIssue: null, draftProfileId: profile.id, agentProfiles: { [profile.id]: profile } })
+  const html = renderToStaticMarkup(createElement(ConversationDraft))
+  expect(html).toContain('代码审查</h2>')
+  expect(html).toContain('检查代码并提出建议')
+  expect(html).toContain('agent-avatar')
+  expect(html).not.toContain('role="radiogroup"')
+  expect(html).not.toContain('chat-draft-invite')
+  expect(html).not.toContain('chat-draft-agent"')
+
+  useCore.setState({ draftProfileId: null })
+  const ordinary = renderToStaticMarkup(createElement(ConversationDraft))
+  expect(ordinary).toContain('aria-label="agent"')
+  expect(ordinary).toContain('chat-draft-mode')
+  expect(ordinary).toContain('chat-draft-invite')
 })

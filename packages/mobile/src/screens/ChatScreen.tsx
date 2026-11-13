@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { FlatList, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
-import { KeyboardAvoidingView, useKeyboardState } from 'react-native-keyboard-controller'
+import { useKeyboardState, useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller'
+import Animated, { useAnimatedStyle } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as ImagePicker from 'expo-image-picker'
 import { ArrowUp, ChevronDown, MessageSquare, Plus, SlidersHorizontal, Square, X } from 'lucide-react-native'
@@ -185,6 +186,15 @@ function Composer({ conversation, state, onOptions }: { conversation: Conversati
   )
 }
 
+// Padded by the keyboard's height as it is now, the chat reaching the window's bottom edge. The
+// library's KeyboardAvoidingView scales the height an opening set out with instead, so a keyboard
+// that grows a toolbar while it opens (WeChat's, on some phones) ends up over the composer.
+function KeyboardLift({ children }: { children: ReactNode }) {
+  const { height } = useReanimatedKeyboardAnimation()
+  const lift = useAnimatedStyle(() => ({ paddingBottom: Math.max(0, -height.value) }))
+  return <Animated.View style={[styles.flex, lift]}>{children}</Animated.View>
+}
+
 export function ChatScreen({ id }: { id: string }) {
   const theme = useTheme()
   const conversation = useSession((s) => s.conversations[id])
@@ -213,8 +223,7 @@ export function ChatScreen({ id }: { id: string }) {
       actions={operate && state ? <IconButton icon={SlidersHorizontal} label={t('options')} onPress={() => setOptions(true)} /> : null}
     >
       <ProjectRoots.Provider value={conversation.projectPaths}>
-      {/* automaticOffset: the view sits below the header, and its own layout says only where in its parent. */}
-      <KeyboardAvoidingView style={styles.flex} behavior="padding" automaticOffset>
+      <KeyboardLift>
         <FlatList
           inverted
           data={rows}
@@ -241,7 +250,7 @@ export function ChatScreen({ id }: { id: string }) {
         {operate ? <Composer conversation={conversation} state={state} onOptions={() => setOptions(true)} /> : viewsOnly() ? (
           <View style={[styles.viewOnly, { borderTopColor: theme.border }]}><Muted center>{t('viewOnly')}</Muted></View>
         ) : null}
-      </KeyboardAvoidingView>
+      </KeyboardLift>
       </ProjectRoots.Provider>
       {options && state ? <OptionsSheet id={id} state={state} agent={conversation.agent} onClose={() => setOptions(false)} /> : null}
     </Screen>

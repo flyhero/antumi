@@ -302,7 +302,8 @@ function BridgeRow({ bridge, onStatus }: { bridge: MobileBridge | null; onStatus
         label={t('MobileSettings.bridge')}
         description={bridge && !open
           ? <span className={bridge.state === 'failed' ? 'mobile-field-error' : bridge.state === 'connected' ? 'mobile-ready' : undefined}>{bridgeStateText(bridge)}</span>
-          : t('MobileSettings.bridgeDescription')}
+          // Open, the panel itself says how to use the author's bridge.
+          : open ? t('MobileSettings.bridgeDescription') : `${t('MobileSettings.bridgeDescription')}${t('MobileSettings.bridgeNoServer')}`}
         control={() => (
           <button type="button" className="button" aria-expanded={open} onClick={() => setOpen(!open)}>
             {open ? t('MobileSettings.relayHide') : bridge ? t('MobileSettings.relayShow') : t('MobileSettings.relaySetUp')}

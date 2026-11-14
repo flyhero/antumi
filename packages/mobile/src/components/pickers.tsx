@@ -51,17 +51,8 @@ export function AgentPicker({ title, agents, agent, onPick, empty = t('noAgents'
   )
 }
 
-// The recent projects in a sheet rather than on the page, so a long list does not push the rest down.
-export function ProjectSheet({ projects, project, onPick, onClose }: { projects: readonly string[]; project: string | null; onPick: (project: string) => void; onClose: () => void }) {
-  return (
-    <Sheet title={t('project')} onClose={onClose}>
-      <ChoiceList choices={projects.map((path) => ({ value: path, label: folderName(path), detail: path }))} current={project} onPick={(path) => { onPick(path); onClose() }} />
-    </Sheet>
-  )
-}
-
-// Several recent projects for one conversation: the first picked is the primary, where the agent
-// works; picking the primary away hands that to the next. The last one stays.
+// Recent projects in a sheet, several for one conversation or task: the first picked is the
+// primary, where the agent works; picking it away hands that to the next. The last one stays.
 export function ProjectsSheet({ projects, picked, onChange, onClose }: { projects: readonly string[]; picked: readonly string[]; onChange: (picked: string[]) => void; onClose: () => void }) {
   const toggle = (path: string) => {
     if (!picked.includes(path)) return onChange([...picked, path])

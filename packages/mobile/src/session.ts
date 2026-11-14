@@ -425,9 +425,9 @@ function keepTask(task: Task): void {
   useSession.setState((state) => ({ tasks: { ...state.tasks, [task.id]: task } }))
 }
 
-// A task in one recent project, for the computer's agent to plan or carry out once started.
-export async function createTask(options: { title: string; details: string; repo: string; agent: AgentKind }): Promise<Task | null> {
-  const task = await call('tasks.create', { title: options.title, ...(options.details ? { details: options.details } : {}), repos: [options.repo], agent: options.agent })
+// A task in recent projects, the first its primary, for the computer's agent to plan or carry out once started.
+export async function createTask(options: { title: string; details: string; repos: readonly string[]; agent: AgentKind }): Promise<Task | null> {
+  const task = await call('tasks.create', { title: options.title, ...(options.details ? { details: options.details } : {}), repos: [...options.repos], agent: options.agent })
   if (task) keepTask(task)
   return task
 }

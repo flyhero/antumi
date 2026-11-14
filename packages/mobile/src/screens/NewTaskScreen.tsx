@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { StyleSheet, TextInput, View } from 'react-native'
 import { Folder, Plus } from 'lucide-react-native'
-import { AgentPicker, ProjectSheet, useStartChoices } from '../components/pickers'
+import { AgentPicker, ProjectsSheet, useStartChoices } from '../components/pickers'
 import { Button, EmptyState, ListGroup, ListRow, Screen, confirmTap } from '../components/ui'
 import { t } from '../i18n'
 import { folderName } from '../labels'
@@ -12,16 +12,20 @@ import { radius, space, type, useTheme } from '../theme'
 // A task to start later, from its page here or on the computer: written down now, run when ready.
 export function NewTaskScreen() {
   const theme = useTheme()
-  const { projects, project, setProject, agents, agent, setAgent } = useStartChoices()
+  const { projects, project, agents, agent, setAgent } = useStartChoices()
+  // The primary first; until the user picks, the project the choices start on.
+  const [chosen, setChosen] = useState<string[] | null>(null)
+  const picked = chosen ?? (project ? [project] : [])
+  const primary = picked[0] ?? null
   const [title, setTitle] = useState('')
   const [details, setDetails] = useState('')
   const [busy, setBusy] = useState(false)
   const [picking, setPicking] = useState(false)
   const create = async () => {
-    if (!project || !agent || !title.trim()) return
+    if (!primary || !agent || !title.trim()) return
     confirmTap()
     setBusy(true)
-    const task = await createTask({ title: title.trim(), details: details.trim(), repo: project, agent })
+    const task = await createTask({ title: title.trim(), details: details.trim(), repos: picked, agent })
     setBusy(false)
     if (task) {
       pop()
@@ -55,10 +59,11 @@ export function NewTaskScreen() {
       </View>
       <AgentPicker title={t('assignee')} agents={agents} agent={agent} onPick={setAgent} />
       <ListGroup title={t('project')}>
-        <ListRow leading={<Folder size={20} color={theme.accent} strokeWidth={1.8} />} title={project ? folderName(project) : '…'} subtitle={project} onPress={() => setPicking(true)} />
+        <ListRow leading={<Folder size={20} color={theme.accent} strokeWidth={1.8} />} title={primary ? folderName(primary) : '…'}
+          subtitle={picked.length > 1 ? t('alsoProjects', { names: picked.slice(1).map(folderName).join('、') }) : primary} onPress={() => setPicking(true)} />
       </ListGroup>
-      {picking && projects ? <ProjectSheet projects={projects} project={project} onPick={setProject} onClose={() => setPicking(false)} /> : null}
-      <Button label={t('createTask')} kind="primary" icon={Plus} wide busy={busy} disabled={!project || !agent || !title.trim()} onPress={() => void create()} />
+      {picking && projects ? <ProjectsSheet projects={projects} picked={picked} onChange={setChosen} onClose={() => setPicking(false)} /> : null}
+      <Button label={t('createTask')} kind="primary" icon={Plus} wide busy={busy} disabled={!primary || !agent || !title.trim()} onPress={() => void create()} />
     </Screen>
   )
 }

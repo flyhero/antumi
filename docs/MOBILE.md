@@ -182,7 +182,7 @@ Noise 的一条传输消息最多 65535 字节，而一个附件块是 512 KiB�
 
 - 回答请求的选项照着请求里给出的画（`choices`，没有时按 `decisions`），执行计划时可以选它给出的权限模式（`runModes`）。问答卡按电脑上的方式回答（`allow` 加 `answers`）。
 - 手机新建会话时，core 检查每个项目路径都在 `projects.recent()` 里，并且不能带 `helperOf` 和 `profileId`，否则以 `mobile-project-not-recent` 拒绝。`projects.branches` 也只答最近项目，手机用它判断项目是不是 Git 仓库，不是就不提供 worktree（和桌面端一样）；电脑答不了时照旧提供。
-- 新建会话页的模型和推理强度来自 `conversations.chatCatalog`，能选的权限模式和默认模式用 protocol 的 `startModes`、`defaultStartMode`，和电脑上的新会话一样；没选的模型和推理强度不传，由 Agent 用自己的默认。项目放在弹出的列表里选，最近项目再多也不会把发送按钮挤到下面；可以选多个，先选的是主项目（Agent 的工作目录），其他作为附加目录。开 worktree 时 core 给每个项目各建一个，所以选中的都是 Git 仓库才提供。
+- 新建会话页的模型和推理强度来自 `conversations.chatCatalog`，能选的权限模式和默认模式用 protocol 的 `startModes`、`defaultStartMode`，和电脑上的新会话一样；没选的模型和推理强度不传，由 Agent 用自己的默认。项目放在弹出的列表里选，最近项目再多也不会把发送按钮挤到下面；可以选多个，先选的是主项目（Agent 的工作目录），其他作为附加目录。开 worktree 时 core 给每个项目各建一个，所以选中的都是 Git 仓库才提供。新建任务同样可以选多个仓库，第一个是主仓库。
 - 「停下」按钮对应 `interrupt`，只结束本轮。
 - 手机新建任务同样只能用最近项目，也不能带 `squadId`（小队连同它用的 Agent 配置都在电脑上设）。开始任务和电脑上从任务详情点开始一样：用任务保存的权限模式，没有就是规划，依赖的任务还没验收时也是规划（`mobile/src/task-start.ts`）；按钮文字也一样（开始规划、开始分析、直接执行）。开始后直接打开任务的会话，规划结果作为确认请求出现在那里。手动改状态只有到完成这一种（`manualMoves`），取消对应 `tasks.cancel`，重新打开、重做、删除留在电脑上。
 - 手机不调 `system.hello`：网关替它做，握手后把服务端版本、能力列表、电脑的主目录和当前地址放进欢迎消息。

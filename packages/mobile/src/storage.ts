@@ -28,6 +28,27 @@ export type Computer = z.infer<typeof Computer>
 const Settings = z.object({ lock: z.boolean().catch(false) })
 export type Settings = z.infer<typeof Settings>
 
+// When the app last asked GitHub for a newer version, what it found, and the one the user waved away.
+const UpdateCheck = z.object({
+  checkedAt: z.number().catch(0),
+  found: z.object({ version: z.string(), url: z.string() }).nullable().catch(null),
+  dismissed: z.string().nullable().catch(null)
+})
+export type UpdateCheck = z.infer<typeof UpdateCheck>
+
+export async function loadUpdateCheck(): Promise<UpdateCheck> {
+  const saved = await SecureStore.getItemAsync('update-check', SECURE)
+  try {
+    return UpdateCheck.parse(saved ? JSON.parse(saved) : {})
+  } catch {
+    return { checkedAt: 0, found: null, dismissed: null }
+  }
+}
+
+export async function saveUpdateCheck(check: UpdateCheck): Promise<void> {
+  await SecureStore.setItemAsync('update-check', JSON.stringify(check), SECURE)
+}
+
 export async function phoneKey(): Promise<NoiseKeyPair> {
   const saved = await SecureStore.getItemAsync('phone-key', SECURE)
   if (saved) return keyPairFromPrivate(base64Url.decode(saved))

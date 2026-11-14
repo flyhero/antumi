@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { ListTodo, MessageSquare, Plus, Settings } from 'lucide-react-native'
 import { conversationAsking, conversationCrashed, conversationWaiting, conversationWorking, isHelper, type Conversation } from '@antumi/protocol'
 import { QuotaStrip } from '../components/quota'
+import { UpdateBanner } from '../components/update-banner'
 import { AgentAvatar, Button, EmptyState, FloatingButton, IconButton, ListGroup, ListRow, SectionLabel, Screen, StatusPill, confirmTap, tap } from '../components/ui'
 import { ago, t } from '../i18n'
 import { folderName, isCommandRequest, relativePath, where } from '../labels'
@@ -80,6 +81,7 @@ export function ConversationsScreen() {
       </>}
       floating={online && access === 'operate' ? <FloatingButton icon={Plus} label={t('newConversation')} onPress={() => push({ name: 'new' })} /> : undefined}
     >
+      <UpdateBanner />
       {groups.waiting.length > 0 ? (
         <View style={styles.section}>
           <SectionLabel title={t('waiting')} count={groups.waiting.length} />

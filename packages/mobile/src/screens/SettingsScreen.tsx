@@ -7,7 +7,7 @@ import { t } from '../i18n'
 import { pop, reset } from '../navigation'
 import { computerOf, forget, setLock, useSession } from '../session'
 import { radius, type, useTheme } from '../theme'
-import { checkForUpdate, currentVersion, type Update } from '../updates'
+import { checkNow, currentVersion, useUpdate, type Update } from '../updates'
 
 function RowIcon({ icon: Icon, tone = 'plain' }: { icon: typeof Info; tone?: 'plain' | 'danger' | 'accent' }) {
   const theme = useTheme()
@@ -22,17 +22,20 @@ export function SettingsScreen({ app }: { app: boolean }) {
   const current = useSession(computerOf)
   const computer = app ? null : current
   const [lockable, setLockable] = useState<boolean | null>(null)
-  const [update, setUpdate] = useState<Update | null | 'checking' | 'none' | 'failed'>(null)
+  const [checked, setChecked] = useState<Update | null | 'checking' | 'none' | 'failed'>(null)
+  // One the daily check found shows here before anything is checked by hand.
+  const found = useUpdate((s) => s.found)
+  const update = checked ?? found
   useEffect(() => {
     void Promise.all([LocalAuthentication.hasHardwareAsync(), LocalAuthentication.getEnrolledLevelAsync()])
       .then(([hardware, level]) => setLockable(hardware && level !== LocalAuthentication.SecurityLevel.NONE))
   }, [])
   const check = async () => {
-    setUpdate('checking')
+    setChecked('checking')
     try {
-      setUpdate((await checkForUpdate()) ?? 'none')
+      setChecked((await checkNow()) ?? 'none')
     } catch {
-      setUpdate('failed')
+      setChecked('failed')
     }
   }
   const unpair = () => {

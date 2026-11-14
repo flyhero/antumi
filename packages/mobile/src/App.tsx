@@ -10,6 +10,7 @@ import { t } from './i18n'
 import { decodePairingCode } from '@antumi/protocol'
 import { pop, push, reset, useNavigation } from './navigation'
 import { boot, unlock, useSession } from './session'
+import { checkDaily } from './updates'
 import { useTheme } from './theme'
 import { ChatScreen } from './screens/ChatScreen'
 import { ComputersScreen } from './screens/ComputersScreen'
@@ -69,6 +70,7 @@ export function App() {
       if (useSession.getState().current) reset({ name: 'conversations' })
       opened(await Linking.getInitialURL())
     })
+    void checkDaily()
     const back = BackHandler.addEventListener('hardwareBackPress', pop)
     const links = Linking.addEventListener('url', ({ url }) => opened(url))
     return () => {

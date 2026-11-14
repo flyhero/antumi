@@ -246,7 +246,7 @@ Noise 的一条传输消息最多 65535 字节，而一个附件块是 512 KiB�
 **Android：GitHub Releases 提供 APK**
 - 本地用 Gradle 打签名的 APK（没有用 EAS Build），标签 `mobile-vX.Y.Z`，步骤见 `docs/RELEASING.md`。
 - 签名密钥只有一把，离线备份，永远不换：换了密钥，已安装的用户只能卸载重装，本地缓存和配对都会丢。
-- 每种架构一个 APK（`arm64-v8a`、`armeabi-v7a`），每部手机只下载自己那一份。App 的「检查更新」读 GitHub Releases，找到更新的 `mobile-v*` 版本后，按手机支持的架构（`Device.supportedCpuArchitectures`，手机最合适的排在前面）挑对应的 APK（`src/release-apk.ts`），用浏览器打开下载链接，由系统完成安装。没有做 App 内直接下载安装（要额外的安装权限和 FileProvider），也没有接 EAS Update（要 Expo 账号和项目配置）。
+- 每种架构一个 APK（`arm64-v8a`、`armeabi-v7a`），每部手机只下载自己那一份。App 的「检查更新」读 GitHub Releases，找到更新的 `mobile-v*` 版本后，按手机支持的架构（`Device.supportedCpuArchitectures`，手机最合适的排在前面）挑对应的 APK（`src/release-apk.ts`），用浏览器打开下载链接，由系统完成安装。打开 App 时也会在后台查一次，一天最多一次（GitHub 不登录每个地址每小时 60 次）；找到新版本就在电脑列表和会话列表顶部显示横幅，关掉后这个版本不再提示，更新的版本出来才会再提示。查不到时什么都不显示，下次打开再试。检查时间、找到的版本和关掉的版本存在安全存储里（`update-check`）。没有做 App 内直接下载安装（要额外的安装权限和 FileProvider），也没有接 EAS Update（要 Expo 账号和项目配置）。
 - 安装说明要配图：允许「安装未知来源应用」，以及小米、华为、OPPO 等系统和 Play Protect 的风险提示怎么处理。
 - Google 宣布过要求商店外安装的应用也来自经过身份验证的开发者，分地区逐步执行。发布前要确认当时的政策，必要时注册开发者身份（不需要上架）。
 

@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native'
 import { Laptop, Plus, QrCode, Settings } from 'lucide-react-native'
 import { QuotaCards, useNow } from '../components/quota'
+import { UpdateBanner } from '../components/update-banner'
 import { Button, EmptyState, IconButton, ListGroup, ListRow, Screen, SectionLabel } from '../components/ui'
 import { ago, t } from '../i18n'
 import { push } from '../navigation'
@@ -40,6 +41,7 @@ export function ComputersScreen() {
   }
   return (
     <Screen large title={t('computers')} actions={<>{settingsButton}<IconButton icon={Plus} label={t('addComputer')} onPress={() => push({ name: 'pair' })} /></>}>
+      <UpdateBanner />
       <ListGroup>
         {computers.map((computer) => {
           const live = computer.key === current ? status : null

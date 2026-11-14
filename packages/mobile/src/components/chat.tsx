@@ -16,6 +16,7 @@ import { canOperate, imageUri, respond, retryTurn, viewsOnly } from '../session'
 import { runSummary, toolLabel } from '../tool-labels'
 import { mono, radius, space, type, useTheme } from '../theme'
 import { AgentMark } from './agent-mark'
+import { ImageViewer } from './image-viewer'
 import { Markdown } from './markdown'
 import { Button, confirmTap } from './ui'
 
@@ -39,12 +40,16 @@ export function ChatImageView({ image, size }: { image: ChatImage; size?: number
     void imageUri(image.id).then((loaded) => { if (live) setUri(loaded) })
     return () => { live = false }
   }, [image.id])
+  const [viewing, setViewing] = useState(false)
   const width = size ?? Math.min(220, image.width)
   const height = size ?? (width * image.height) / image.width
   return (
-    <View style={[styles.image, { width, height, backgroundColor: theme.raised }]}>
-      {uri ? <Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="cover" /> : <ActivityIndicator color={theme.text3} />}
-    </View>
+    <>
+      <Pressable accessibilityRole="imagebutton" accessibilityLabel={t('viewImage')} disabled={!uri} onPress={() => setViewing(true)} style={[styles.image, { width, height, backgroundColor: theme.raised }]}>
+        {uri ? <Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="cover" /> : <ActivityIndicator color={theme.text3} />}
+      </Pressable>
+      {viewing && uri ? <ImageViewer uri={uri} width={image.width} height={image.height} onClose={() => setViewing(false)} /> : null}
+    </>
   )
 }
 

@@ -7,7 +7,7 @@ export function SettingsRow({
   description,
   control
 }: {
-  label: string
+  label: ReactNode
   description?: ReactNode
   control: (labelId: string) => ReactNode
 }) {

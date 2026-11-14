@@ -363,6 +363,8 @@
 .mobile-qr-modules { fill: var(--text); }
 .mobile-code { margin: 4px 0; font-family: var(--mono); font-size: 28px; letter-spacing: 0.12em; color: var(--text); }
 .mobile-device-controls { display: flex; gap: 8px; align-items: center; }
+.mobile-device-name { display: inline-flex; align-items: center; gap: 6px; }
+.mobile-device-online { flex-shrink: 0; width: 7px; height: 7px; border-radius: 50%; background: var(--status-done); }
 .mobile-ready { color: var(--status-done); }
 .mobile-relay { display: flex; flex-direction: column; gap: 16px; padding: 16px 0; border-bottom: 1px solid var(--border); }
 .mobile-relay-step { display: flex; flex-direction: column; gap: 6px; min-width: 0; }

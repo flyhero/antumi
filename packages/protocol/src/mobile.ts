@@ -41,22 +41,69 @@ export type MobilePairing = z.infer<typeof MobilePairing>
 export const MobileGatewayState = z.enum(['off', 'starting', 'running', 'failed'])
 export type MobileGatewayState = z.infer<typeof MobileGatewayState>
 
+// Relaying through the user's own server over WireGuard (docs/MOBILE.md): core runs wireproxy, a
+// WireGuard client without a network interface, and phones reach this computer at `address`.
+export const MobileRelayState = z.enum(['off', 'downloading', 'waiting', 'connected', 'failed'])
+export type MobileRelayState = z.infer<typeof MobileRelayState>
+export const MobileRelay = z.object({
+  server: z.string(),
+  // The server's WireGuard port, UDP.
+  port: z.number().int(),
+  address: z.string(),
+  state: MobileRelayState,
+  // Why it failed: unsupported-platform, download-failed, or the program's own words.
+  error: z.string().nullable(),
+  // When this computer last completed a handshake with the server.
+  handshakeAt: z.number().nullable(),
+  // The server's bandwidth in Mbit/s, which the tunnel is shaped just under; null for none.
+  bandwidth: z.number().nullable().optional()
+})
+export type MobileRelay = z.infer<typeof MobileRelay>
+
 export const MobileStatus = z.object({
   enabled: z.boolean(),
   port: z.number().int(),
   state: MobileGatewayState,
   error: z.string().nullable(),
-  // Where a phone can reach this computer: private addresses, then Tailscale's name if any.
+  // Where a phone can reach this computer: private addresses, then Tailscale's name if any, then
+  // the user's own.
   addresses: z.array(z.string()),
   pairing: MobilePairing.nullable(),
   devices: z.array(MobileDevice),
   // An ntfy-style address the gateway posts short notices to; null for none.
-  pushUrl: z.string().nullable()
+  pushUrl: z.string().nullable(),
+  // Addresses the user added, which a tunnel or their own server forwards to the port. Absent
+  // from a core that predates them.
+  extraHosts: z.array(z.string()).optional(),
+  // The relay through the user's own server; null when not set up, absent from an older core.
+  relay: MobileRelay.nullable().optional()
 })
 export type MobileStatus = z.infer<typeof MobileStatus>
 
 export const MobilePort = z.number().int().min(1024).max(65535)
 export const MobilePushUrl = z.string().trim().url().max(500).refine((url) => /^https?:\/\//i.test(url), 'http or https only')
+
+// A host the phone joins with the computer's port: a name or an IPv4 address, or an IPv6 one with
+// at least two colons, so that `1.2.3.4:7820` or `host:7820` is not taken for one.
+const HOST_NAME = /^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/i
+const IPV6 = /^[0-9a-f]*:[0-9a-f]*:[0-9a-f:.]*$/i
+export const MobileExtraHost = z.string().trim().refine((host) => HOST_NAME.test(host) || IPV6.test(host), 'a host name or an IP address, without a port')
+export const MOBILE_EXTRA_HOSTS_MAX = 8
+
+export const MOBILE_RELAY_DEFAULT_PORT = 51820
+export const MobileRelayServer = z.object({
+  server: MobileExtraHost,
+  port: z.number().int().min(1).max(65535),
+  bandwidth: z.number().positive().max(100_000).nullable().optional()
+})
+// What only the desktop's setup shows, never sent with the status: both carry a private key.
+export const MobileRelaySetup = z.object({
+  // Pasted into a root shell on the server: installs WireGuard and the tunnel's two peers.
+  serverScript: z.string(),
+  // What the WireGuard app on the phone imports, as a QR code.
+  phoneConfig: z.string()
+})
+export type MobileRelaySetup = z.infer<typeof MobileRelaySetup>
 
 // What the QR code carries. psk is the one-time pairing secret; key the computer's public key,
 // which the phone pins from then on. Binary fields are base64url.

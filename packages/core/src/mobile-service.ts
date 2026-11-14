@@ -16,11 +16,13 @@ import {
   type MobileGatewayState,
   type MobilePairing,
   type MobilePlatform,
+  type MobileRelaySetup,
   type MobileStatus
 } from '@antumi/protocol'
 import { generateKeyPair, keyPairFromPrivate, mobileDeviceId, type NoiseKeyPair } from '@antumi/protocol/mobile'
 import { GatewayToCore, type CoreToGateway } from './gateway-ipc'
 import { isPrivateAddress } from './gateway'
+import { MobileRelay, type RelayDeps } from './mobile-relay'
 import type { MobileSettings, MobileStore } from './mobile-store'
 import { Rejection } from './rejection'
 import type { Connection } from './rpc-server'
@@ -81,6 +83,7 @@ export type MobileServiceOptions = {
   // Interfaces' private addresses, and Tailscale's name for this computer if it has one.
   addresses?: () => Promise<string[]>
   post?: (url: string, body: string) => Promise<void>
+  relay?: Partial<RelayDeps>
 }
 
 export class MobileService {
@@ -98,10 +101,12 @@ export class MobileService {
   private readonly now: () => number
   private readonly seen = new Map<string, Conversation>()
   private readonly pushed = new Map<string, number>()
+  private readonly relay: MobileRelay
 
   constructor(private readonly store: MobileStore, private readonly options: MobileServiceOptions) {
     this.settings = store.settings()
     this.now = options.now ?? Date.now
+    this.relay = new MobileRelay({ dir: options.dir, changed: () => this.notify(), now: this.now, ...(options.relay ? { deps: options.relay } : {}) })
   }
 
   // Once core's own server is up: the gateway connects to it for each phone.
@@ -117,6 +122,7 @@ export class MobileService {
     this.closePairing('shutdown')
     this.link?.stop()
     this.link = null
+    this.relay.stop()
   }
 
   status(): MobileStatus {
@@ -129,10 +135,12 @@ export class MobileService {
       port: this.settings.port,
       state: this.state,
       error: this.error,
-      addresses: this.known,
+      addresses: this.hosts(),
       pairing,
       devices: this.store.devices().map(({ publicKey: _key, ...device }) => ({ ...device, online: online.has(device.id) })),
-      pushUrl: this.settings.pushUrl
+      pushUrl: this.settings.pushUrl,
+      extraHosts: this.settings.extraHosts,
+      relay: this.relay.status()
     }
   }
 
@@ -157,6 +165,34 @@ export class MobileService {
     return this.notify()
   }
 
+  setExtraHosts(hosts: readonly string[]): MobileStatus {
+    this.save({ ...this.settings, extraHosts: [...new Set(hosts)] })
+    this.link?.send({ type: 'hosts', hosts: this.hosts() })
+    return this.notify()
+  }
+
+  async setRelay(server: string, port: number, bandwidth: number | null = null): Promise<MobileStatus> {
+    await this.relay.configure(server, port, bandwidth)
+    if (this.link) {
+      this.relay.stop()
+      this.relay.start(this.settings.port)
+    }
+    this.link?.send({ type: 'hosts', hosts: this.hosts() })
+    return this.notify()
+  }
+
+  async removeRelay(): Promise<MobileStatus> {
+    await this.relay.remove()
+    this.link?.send({ type: 'hosts', hosts: this.hosts() })
+    return this.notify()
+  }
+
+  relaySetup(): MobileRelaySetup {
+    const setup = this.relay.setup()
+    if (!setup) throw new Rejection('mobile-relay-unset', 'set up the relay first')
+    return setup
+  }
+
   async beginPairing(): Promise<MobilePairing> {
     if (this.state !== 'running' || !this.key) throw new Rejection('mobile-not-running', 'turn on phone access first')
     this.closePairing('replaced')
@@ -166,7 +202,7 @@ export class MobileService {
     const expiresAt = this.now() + PAIRING_MS
     const uri = encodePairingCode({
       v: MOBILE_PROTOCOL_VERSION, name: this.computerName(), key: base64Url.encode(this.key.publicKey),
-      pairing: id, psk, port: this.settings.port, hosts: this.known.slice(0, 16)
+      pairing: id, psk, port: this.settings.port, hosts: this.hosts()
     })
     const timer = setTimeout(() => this.closePairing('expired'), PAIRING_MS)
     timer.unref()
@@ -281,10 +317,19 @@ export class MobileService {
     return this.options.computerName ?? hostname().replace(/\.local$/, '')
   }
 
+  // What phones are told to try, at most 16: the interfaces' addresses, then the relay's and the
+  // user's own, which keep their place however many the interfaces have.
+  private hosts(): string[] {
+    const relay = this.relay.address()
+    const added = [...new Set([...(relay ? [relay] : []), ...this.settings.extraHosts])]
+    const own = this.known.filter((host) => !added.includes(host)).slice(0, Math.max(0, 16 - added.length))
+    return [...own, ...added].slice(0, 16)
+  }
+
   private async refreshAddresses(): Promise<void> {
     try {
       this.known = await (this.options.addresses ?? localAddresses)()
-      this.link?.send({ type: 'hosts', hosts: this.known.slice(0, 16) })
+      this.link?.send({ type: 'hosts', hosts: this.hosts() })
     } catch {
       // Keep what was known.
     }
@@ -337,7 +382,8 @@ export class MobileService {
     this.link = link
     link.send({ type: 'start', config: { port: this.settings.port, privateKey: base64Url.encode(key.privateKey), coreUrl: this.coreUrl, computerName: this.computerName() } })
     this.sendDevices()
-    link.send({ type: 'hosts', hosts: this.known.slice(0, 16) })
+    link.send({ type: 'hosts', hosts: this.hosts() })
+    this.relay.start(this.settings.port)
     this.notify()
   }
 
@@ -347,6 +393,7 @@ export class MobileService {
     this.closePairing('shutdown')
     this.link?.stop()
     this.link = null
+    this.relay.stop()
     this.state = 'off'
     this.error = null
   }

@@ -48,7 +48,7 @@ import { AgentPullRequestRun, PullRequestDraft, PullRequestEligibility, PullRequ
 import { Bookmark, BookmarkFields, BookmarkImport, MAX_BOOKMARKS } from './bookmarks'
 import { BrowserHistoryEntry, BrowserHistorySearch } from './browser-history'
 import { BrowserSite } from './browser-sites'
-import { MobileAccess, MobilePairing, MobilePort, MobilePushUrl, MobileStatus } from './mobile'
+import { MOBILE_EXTRA_HOSTS_MAX, MobileAccess, MobileExtraHost, MobilePairing, MobilePort, MobilePushUrl, MobileRelayServer, MobileRelaySetup, MobileStatus } from './mobile'
 
 // Bump only for breaking changes; additive optional fields keep the version.
 export const PROTOCOL_VERSION = 18
@@ -687,6 +687,13 @@ export const rpcMethods = {
   'mobile.setEnabled': { params: z.object({ enabled: z.boolean() }), result: MobileStatus },
   'mobile.setPort': { params: z.object({ port: MobilePort }), result: MobileStatus },
   'mobile.setPushUrl': { params: z.object({ url: MobilePushUrl.nullable() }), result: MobileStatus },
+  // Replaces the user's own addresses; phones learn them on their next connection.
+  'mobile.setExtraHosts': { params: z.object({ hosts: z.array(MobileExtraHost).max(MOBILE_EXTRA_HOSTS_MAX) }), result: MobileStatus },
+  // The relay through the user's own server: keys are made the first time and kept when the
+  // server changes; removing it forgets them.
+  'mobile.setRelay': { params: MobileRelayServer, result: MobileStatus },
+  'mobile.removeRelay': { params: z.object({}), result: MobileStatus },
+  'mobile.relaySetup': { params: z.object({}), result: MobileRelaySetup },
   // A new one-time code, replacing any open pairing. The gateway must be running.
   'mobile.beginPairing': { params: z.object({}), result: MobilePairing },
   'mobile.cancelPairing': { params: z.object({}), result: MobileStatus },

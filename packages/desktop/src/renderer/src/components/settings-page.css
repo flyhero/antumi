@@ -349,6 +349,8 @@
 .mobile-inline-form { display: flex; gap: 8px; align-items: center; }
 .mobile-port { width: 88px; }
 .mobile-push { width: 240px; }
+.mobile-hosts { width: 240px; }
+.mobile-field-error { color: var(--danger); }
 .mobile-state-failed { color: var(--danger); font-size: 12px; }
 .mobile-empty { padding: 12px 0; }
 .mobile-pairing { display: flex; gap: 20px; align-items: center; padding: 16px 0; border-bottom: 1px solid var(--border); }
@@ -360,3 +362,10 @@
 .mobile-qr-modules { fill: var(--text); }
 .mobile-code { margin: 4px 0; font-family: var(--mono); font-size: 28px; letter-spacing: 0.12em; color: var(--text); }
 .mobile-device-controls { display: flex; gap: 8px; align-items: center; }
+.mobile-ready { color: var(--status-done); }
+.mobile-relay { display: flex; flex-direction: column; gap: 16px; padding: 16px 0; border-bottom: 1px solid var(--border); }
+.mobile-relay-step { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.mobile-relay-step p { margin: 0; }
+.mobile-relay-codes { display: flex; gap: 24px; flex-wrap: wrap; margin-top: 4px; }
+.mobile-relay-codes figure { display: flex; flex-direction: column; align-items: center; gap: 6px; margin: 0; }
+.mobile-relay-reveal { width: 168px; height: 168px; }

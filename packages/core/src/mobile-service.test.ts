@@ -2,7 +2,8 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { Conversation } from '@antumi/protocol'
+import { decodePairingCode, type Conversation } from '@antumi/protocol'
+import type { CoreToGateway } from './gateway-ipc'
 import { MobileService, type GatewayLauncher } from './mobile-service'
 import { MobileStore } from './mobile-store'
 import { TaskStore } from './task-store'
@@ -18,6 +19,7 @@ describe('MobileService', () => {
   let store: MobileStore
   let posts: { url: string; body: string }[]
   let launches: number
+  let sent: CoreToGateway[]
   let service: MobileService
 
   beforeEach(() => {
@@ -26,14 +28,16 @@ describe('MobileService', () => {
     store = new MobileStore(path.join(dir, 'antumi.db'))
     posts = []
     launches = 0
+    sent = []
     const launch: GatewayLauncher = (onMessage) => {
       launches += 1
       setImmediate(() => onMessage({ type: 'listening', port: 7820 }))
-      return { send() {}, stop() {} }
+      return { send: (message) => sent.push(message), stop() {} }
     }
     service = new MobileService(store, {
       dir: path.join(dir, 'mobile'), connections: () => [], changed() {}, launch,
-      addresses: async () => ['192.168.1.2'], post: async (url, body) => { posts.push({ url, body }) }
+      addresses: async () => ['192.168.1.2'], post: async (url, body) => { posts.push({ url, body }) },
+      relay: { obtain: async () => '/bin/wireproxy', launch: () => ({ stop() {} }), probe: async () => null, port: async () => 40000 }
     })
   })
 
@@ -55,6 +59,31 @@ describe('MobileService', () => {
     const pairing = await service.beginPairing()
     expect(pairing.uri).toMatch(/^antumi:\/\/pair\?p=/)
     expect(service.status()).toMatchObject({ state: 'running', addresses: ['192.168.1.2'], pairing: { id: pairing.id, request: null } })
+  })
+
+  it('gives phones the user\'s own addresses after the computer\'s, in the code and on each connection', async () => {
+    await service.start('ws://127.0.0.1:1/?token=t')
+    await service.setEnabled(true)
+    await new Promise((resolve) => setImmediate(resolve))
+    service.setExtraHosts(['10.77.0.2', 'relay.example.com', '10.77.0.2'])
+    expect(sent.filter((message) => message.type === 'hosts').at(-1)).toEqual({ type: 'hosts', hosts: ['192.168.1.2', '10.77.0.2', 'relay.example.com'] })
+    expect(store.settings().extraHosts).toEqual(['10.77.0.2', 'relay.example.com'])
+    const pairing = await service.beginPairing()
+    expect(decodePairingCode(pairing.uri)?.hosts).toEqual(['192.168.1.2', '10.77.0.2', 'relay.example.com'])
+    expect(service.status()).toMatchObject({ addresses: ['192.168.1.2', '10.77.0.2', 'relay.example.com'], extraHosts: ['10.77.0.2', 'relay.example.com'] })
+  })
+
+  it('gives phones the relay\'s address once it is set up, and its setup only then', async () => {
+    expect(() => service.relaySetup()).toThrow(expect.objectContaining({ reason: 'mobile-relay-unset' }))
+    await service.start('ws://127.0.0.1:1/?token=t')
+    await service.setEnabled(true)
+    await new Promise((resolve) => setImmediate(resolve))
+    await service.setRelay('8.159.153.95', 51820)
+    expect(service.status()).toMatchObject({ addresses: ['192.168.1.2', '10.77.0.2'], relay: { server: '8.159.153.95', address: '10.77.0.2' } })
+    expect(decodePairingCode((await service.beginPairing()).uri)?.hosts).toEqual(['192.168.1.2', '10.77.0.2'])
+    expect(service.relaySetup().phoneConfig).toContain('Endpoint = 8.159.153.95:51820')
+    await service.removeRelay()
+    expect(service.status()).toMatchObject({ addresses: ['192.168.1.2'], relay: null })
   })
 
   it('pushes only that something happened, once, and only with an address set', () => {

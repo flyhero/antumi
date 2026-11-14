@@ -73,9 +73,22 @@
 1. 电脑和手机都装 Tailscale，登录同一个账号。
 2. 在电脑的 **设置 → 手机** 里看「手机会尝试这些地址」，里面出现一个以 `.ts.net` 结尾的名字，就说明 Antumi 认出了 Tailscale。
 3. 照常扫码配对。已经配对过的手机不用重扫：它下次连上电脑时会自动记下这个名字。
-4. 出门后手机上保持 Tailscale 开着。手机先试局域网地址，连不上再走 Tailscale。
+4. 出门后手机上保持 Tailscale 开着。手机先试局域网地址，连不上会很快改走 Tailscale。
 
 连不上时检查：电脑上的 Tailscale 和 Antumi 都在运行；Tailscale 的 MagicDNS 开着（默认开）；改过 Tailscale 访问控制的话，要允许手机访问电脑的 7820 端口（或你在 **设置 → 手机** 里改过的端口）。Android 同一时间只能开一个 VPN，开着别的 VPN 时 Tailscale 会被关掉。
+
+### 在外面用：经自己的服务器
+
+有一台带公网 IP 的 Linux 服务器（云服务器就行，3Mbps 带宽够用）时，可以让它用 [WireGuard](https://www.wireguard.com) 在手机和电脑之间转发。手机和电脑之间本来就端到端加密，服务器只转发它看不懂的数据。电脑上不用装 VPN，也不要管理员权限：Antumi 自己运行 [wireproxy](https://github.com/windtf/wireproxy)，第一次用时从 GitHub 下载（约 4MB）。macOS、Windows、Linux 做法一样。
+
+1. 在 **设置 → 手机** 的 **连接方式** 里，点「自己的服务器（WireGuard）」的 **设置**，填服务器的公网 IP 或域名（UDP 端口默认 51820）；云服务器有限速的，在带宽一格填它的 Mbps 数（比如 3），电脑发到手机会快好几倍。点 **生成配置**。
+2. 点 **复制服务器脚本**，用 root 登录服务器粘贴执行（Debian、Ubuntu、CentOS、Alibaba Cloud Linux 等都行），它会装好 WireGuard 并设成开机自动启动。再到云控制台的防火墙或安全组放行这个 UDP 端口。
+3. 回到设置页，第 2 步显示「已连上服务器」，电脑这边就通了。
+4. 手机扫设置页左边的码安装 WireGuard（没有 Google Play 的手机选「Download APK File」）。在 WireGuard 里点 **+** → **扫描二维码**，扫设置页上点 **显示配置码** 出来的码，打开开关。只有 10.77.0.x 这一段走服务器，可以一直开着，不影响手机上网。
+
+已经配对过的手机不用重新扫 Antumi 的码，它下次连上电脑时会记下中转地址。
+
+连不上时检查：设置页第 2 步的提示；服务器上 `wg show wg-antumi` 能不能看到电脑和手机最近的握手。Android 同一时间只能开一个 VPN，和 Tailscale 二选一。用别的隧道或端口转发时，把手机在那边连的地址填进 **其他地址**。
 
 ### App 关着时收提醒：ntfy
 

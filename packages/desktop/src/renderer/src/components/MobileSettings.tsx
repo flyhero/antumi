@@ -1,16 +1,20 @@
 import { useEffect, useMemo, useState } from 'react'
 import QRCode from 'qrcode'
-import { MOBILE_DEFAULT_PORT, PROJECT_GITHUB_URL, type MobileAccess, type MobileDevice, type MobilePairing, type MobileStatus } from '@antumi/protocol'
+import {
+  MOBILE_DEFAULT_PORT, MOBILE_EXTRA_HOSTS_MAX, MOBILE_RELAY_DEFAULT_PORT, MobileExtraHost, PROJECT_GITHUB_URL,
+  type MobileAccess, type MobileDevice, type MobilePairing, type MobileRelay, type MobileRelaySetup, type MobileStatus
+} from '@antumi/protocol'
 import { askConfirm } from '../confirm-dialog'
 import { openGuide, perform, useCore } from '../core-store'
 import { t } from '../i18n'
 import { agoText } from '../labels'
 import { CopyButton } from './CopyButton'
 import { Segmented, SettingsGroup, SettingsRow, Toggle } from './SettingsControls'
-import { BellIcon, DownloadIcon, PhoneIcon } from './icons'
+import { BellIcon, DownloadIcon, GlobeIcon, PhoneIcon } from './icons'
 
-// 设置 → 手机 (docs/MOBILE.md): the gateway's switch and port, pairing a phone by QR code and the
-// code both screens show, the paired devices, and the push address.
+// 设置 → 手机 (docs/MOBILE.md): the gateway's switch and port, the ways a phone reaches this computer
+// (the same Wi‑Fi, Tailscale, the user's own server), pairing a phone by QR code and the code both
+// screens show, the paired devices, and the push address.
 
 export function useMobileSupported(): boolean {
   return useCore((s) => s.rpc?.features.includes('mobile') ?? false)
@@ -59,9 +63,15 @@ export function MobileSettings() {
           />
         )}
         <PortRow status={status} onStatus={apply} />
+      </SettingsGroup>
+      <SettingsGroup title={t('MobileSettings.ways')} icon={<GlobeIcon />}>
+        <WifiRow status={status} />
+        <TailscaleRow status={status} />
+        {status.relay !== undefined && <RelayRow relay={status.relay} onStatus={apply} />}
+        {status.extraHosts && <ExtraHostsRow saved={status.extraHosts} onStatus={apply} />}
         <SettingsRow
-          label={t('MobileSettings.away')}
-          description={t('MobileSettings.awayDescription')}
+          label={t('MobileSettings.guide')}
+          description={t('MobileSettings.guideDescription')}
           control={() => <button type="button" className="button" onClick={openGuide}>{t('MobileSettings.openGuide')}</button>}
         />
       </SettingsGroup>
@@ -117,7 +127,192 @@ function PortRow({ status, onStatus }: { status: MobileStatus; onStatus: (status
   )
 }
 
-function QrCode({ text }: { text: string }) {
+// Addresses of this machine's own networks: not Tailscale's, the relay's or ones the user added.
+// 100.64/10 is left out too, being Tailscale's and other VPNs'.
+function localAddresses(status: MobileStatus): string[] {
+  const added = new Set([status.relay?.address, ...(status.extraHosts ?? [])])
+  return status.addresses.filter((address) => !address.endsWith('.ts.net') && !added.has(address) && !/^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(address))
+}
+
+function WifiRow({ status }: { status: MobileStatus }) {
+  const local = localAddresses(status)
+  return (
+    <SettingsRow
+      label={t('MobileSettings.wifi')}
+      description={t('MobileSettings.wifiDescription')}
+      control={() => <span className="muted">{local.length > 0 ? local.join('、') : t('MobileSettings.wifiNone')}</span>}
+    />
+  )
+}
+
+function TailscaleRow({ status }: { status: MobileStatus }) {
+  const name = status.addresses.find((address) => address.endsWith('.ts.net'))
+  return (
+    <SettingsRow
+      label="Tailscale"
+      description={t('MobileSettings.tailscaleDescription')}
+      control={() => name
+        ? <span className="mobile-ready">{t('MobileSettings.tailscaleReady', { name })}</span>
+        : <a className="button" href="https://tailscale.com/download" target="_blank" rel="noreferrer">{t('MobileSettings.tailscaleDownload')}</a>}
+    />
+  )
+}
+
+function relayStateText(relay: MobileRelay): string {
+  if (relay.state === 'off') return t('MobileSettings.relayOff')
+  if (relay.state === 'downloading') return t('MobileSettings.relayDownloading')
+  if (relay.state === 'connected') return t('MobileSettings.relayConnected', { ago: relay.handshakeAt ? agoText(relay.handshakeAt) : '' })
+  if (relay.state === 'waiting') return t('MobileSettings.relayWaiting', { port: relay.port })
+  if (relay.error === 'unsupported-platform') return t('MobileSettings.relayUnsupported')
+  if (relay.error === 'download-failed') return t('MobileSettings.relayDownloadFailed')
+  return t('MobileSettings.relayExited', { error: relay.error ?? '' })
+}
+
+function RelayRow({ relay, onStatus }: { relay: MobileRelay | null; onStatus: (status: MobileStatus | null) => void }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <>
+      <SettingsRow
+        label={t('MobileSettings.relay')}
+        description={relay && !open
+          ? <span className={relay.state === 'failed' ? 'mobile-field-error' : relay.state === 'connected' ? 'mobile-ready' : undefined}>{relayStateText(relay)}</span>
+          : t('MobileSettings.relayDescription')}
+        control={() => (
+          <button type="button" className="button" aria-expanded={open} onClick={() => setOpen(!open)}>
+            {open ? t('MobileSettings.relayHide') : relay ? t('MobileSettings.relayShow') : t('MobileSettings.relaySetUp')}
+          </button>
+        )}
+      />
+      {open && <RelayPanel relay={relay} onStatus={onStatus} />}
+    </>
+  )
+}
+
+function RelayForm({ relay, onStatus, onDone }: { relay: MobileRelay | null; onStatus: (status: MobileStatus | null) => void; onDone: () => void }) {
+  const [server, setServer] = useState(relay?.server ?? '')
+  const [port, setPort] = useState(String(relay?.port ?? MOBILE_RELAY_DEFAULT_PORT))
+  const [bandwidth, setBandwidth] = useState(relay?.bandwidth ? String(relay.bandwidth) : '')
+  const host = MobileExtraHost.safeParse(server)
+  const portNumber = Number(port)
+  const portValid = Number.isInteger(portNumber) && portNumber >= 1 && portNumber <= 65535
+  const mbps = bandwidth.trim() ? Number(bandwidth) : null
+  const bandwidthValid = mbps === null || (Number.isFinite(mbps) && mbps > 0 && mbps <= 100_000)
+  const problem = server.trim() && !host.success ? t('MobileSettings.extraHostsInvalid', { host: server.trim() }) : null
+  return (
+    <form className="mobile-relay-step" onSubmit={(event) => {
+      event.preventDefault()
+      if (!host.success || !portValid || !bandwidthValid) return
+      void perform((rpc) => rpc.call('mobile.setRelay', { server: host.data, port: portNumber, bandwidth: mbps })).then((next) => {
+        onStatus(next)
+        if (next) onDone()
+      })
+    }}>
+      <p className="settings-row-label">{t('MobileSettings.relayServer')}</p>
+      <p className="settings-row-description">{problem ? <span className="mobile-field-error" role="alert">{problem}</span> : t('MobileSettings.relayServerDescription')}</p>
+      <div className="mobile-inline-form">
+        <input className="input mobile-hosts" aria-label={t('MobileSettings.relayServer')} placeholder="8.8.8.8" value={server} onChange={(event) => setServer(event.target.value)} />
+        <input className="input mobile-port" aria-label={t('MobileSettings.relayPort')} title={t('MobileSettings.relayPort')} inputMode="numeric" value={port} onChange={(event) => setPort(event.target.value.replace(/\D/g, ''))} />
+        <input className="input mobile-port" aria-label={t('MobileSettings.relayBandwidth')} title={t('MobileSettings.relayBandwidth')} placeholder={t('MobileSettings.relayBandwidthPlaceholder')} inputMode="decimal" value={bandwidth} onChange={(event) => setBandwidth(event.target.value.replace(/[^\d.]/g, ''))} />
+        <button type="submit" className="button primary" disabled={!host.success || !portValid || !bandwidthValid}>{relay ? t('MobileSettings.save') : t('MobileSettings.relayCreate')}</button>
+        {relay && <button type="button" className="button ghost" onClick={onDone}>{t('MobileSettings.cancel')}</button>}
+      </div>
+    </form>
+  )
+}
+
+function RelayPanel({ relay, onStatus }: { relay: MobileRelay | null; onStatus: (status: MobileStatus | null) => void }) {
+  const [editing, setEditing] = useState(false)
+  const [setup, setSetup] = useState<MobileRelaySetup | null>(null)
+  const [showConfig, setShowConfig] = useState(false)
+  const server = relay?.server
+  const port = relay?.port
+  useEffect(() => {
+    if (!server) return
+    let live = true
+    void perform((rpc) => rpc.call('mobile.relaySetup', {})).then((next) => { if (live) setSetup(next) })
+    return () => { live = false }
+  }, [server, port])
+  if (!relay || editing) return <div className="mobile-relay"><RelayForm relay={relay} onStatus={onStatus} onDone={() => setEditing(false)} /></div>
+  const stop = async () => {
+    const confirmed = await askConfirm({ message: t('MobileSettings.relayRemoveConfirm'), confirm: t('MobileSettings.relayRemove'), danger: true })
+    if (confirmed) onStatus(await perform((rpc) => rpc.call('mobile.removeRelay', {})))
+  }
+  return (
+    <div className="mobile-relay">
+      <div className="mobile-relay-step">
+        <p className="settings-row-label">{t('MobileSettings.relayStep1', { server: relay.server })}</p>
+        <p className="settings-row-description">{t('MobileSettings.relayStep1Description', { port: relay.port })}</p>
+        <div className="mobile-pairing-actions">
+          {setup && <CopyButton text={setup.serverScript} label={t('MobileSettings.relayCopyScript')}>{t('MobileSettings.relayCopyScript')}</CopyButton>}
+        </div>
+      </div>
+      <div className="mobile-relay-step">
+        <p className="settings-row-label">{t('MobileSettings.relayStep2')}</p>
+        <p className="settings-row-description" role="status">{relayStateText(relay)}</p>
+        {relay.state === 'failed' && (
+          <div className="mobile-pairing-actions">
+            <button type="button" className="button" onClick={() => void perform((rpc) => rpc.call('mobile.setRelay', { server: relay.server, port: relay.port, bandwidth: relay.bandwidth ?? null })).then(onStatus)}>{t('MobileSettings.relayRetry')}</button>
+          </div>
+        )}
+      </div>
+      <div className="mobile-relay-step">
+        <p className="settings-row-label">{t('MobileSettings.relayStep3')}</p>
+        <p className="settings-row-description">{t('MobileSettings.relayStep3Description')}</p>
+        <div className="mobile-relay-codes">
+          <figure>
+            <QrCode text={WIREGUARD_INSTALL_URL} label={t('MobileSettings.relayInstallCode')} />
+            <figcaption className="settings-row-description">{t('MobileSettings.relayInstallCode')}</figcaption>
+          </figure>
+          <figure>
+            {showConfig && setup
+              ? <QrCode text={setup.phoneConfig} label={t('MobileSettings.relayConfigCode')} />
+              : <button type="button" className="button mobile-relay-reveal" onClick={() => setShowConfig(true)}>{t('MobileSettings.relayShowConfig')}</button>}
+            <figcaption className="settings-row-description">{t('MobileSettings.relayConfigCode')}</figcaption>
+          </figure>
+        </div>
+      </div>
+      <div className="mobile-pairing-actions">
+        <button type="button" className="button" onClick={() => setEditing(true)}>{t('MobileSettings.relayChangeServer')}</button>
+        <button type="button" className="button ghost" onClick={() => void stop()}>{t('MobileSettings.relayRemove')}</button>
+      </div>
+    </div>
+  )
+}
+
+const WIREGUARD_INSTALL_URL = 'https://www.wireguard.com/install/'
+
+// Typed as one line: commas, spaces or 、 between them.
+function hostsOf(text: string): string[] {
+  return text.split(/[\s,，、]+/).filter(Boolean)
+}
+
+function ExtraHostsRow({ saved, onStatus }: { saved: readonly string[]; onStatus: (status: MobileStatus | null) => void }) {
+  const joined = saved.join(', ')
+  const [draft, setDraft] = useState(joined)
+  useEffect(() => setDraft(joined), [joined])
+  const hosts = hostsOf(draft)
+  const wrong = hosts.find((host) => !MobileExtraHost.safeParse(host).success)
+  const tooMany = hosts.length > MOBILE_EXTRA_HOSTS_MAX
+  const problem = wrong !== undefined ? t('MobileSettings.extraHostsInvalid', { host: wrong }) : tooMany ? t('MobileSettings.extraHostsTooMany', { max: MOBILE_EXTRA_HOSTS_MAX }) : null
+  const changed = hosts.join(', ') !== joined
+  return (
+    <SettingsRow
+      label={t('MobileSettings.extraHosts')}
+      description={problem ? <span className="mobile-field-error" role="alert">{problem}</span> : t('MobileSettings.extraHostsDescription')}
+      control={(labelId) => (
+        <form className="mobile-inline-form" onSubmit={(event) => {
+          event.preventDefault()
+          if (!problem && changed) void perform((rpc) => rpc.call('mobile.setExtraHosts', { hosts })).then(onStatus)
+        }}>
+          <input className="input mobile-hosts" aria-labelledby={labelId} placeholder="10.77.0.2" value={draft} onChange={(event) => setDraft(event.target.value)} />
+          <button type="submit" className="button" disabled={problem !== null || !changed}>{t('MobileSettings.save')}</button>
+        </form>
+      )}
+    />
+  )
+}
+
+function QrCode({ text, label = t('MobileSettings.qrLabel') }: { text: string; label?: string }) {
   // One path of squares, drawn from the code's modules: no image, no innerHTML.
   const { size, path } = useMemo(() => {
     const { modules } = QRCode.create(text, { errorCorrectionLevel: 'M' })
@@ -130,7 +325,7 @@ function QrCode({ text }: { text: string }) {
     return { size: modules.size, path: d }
   }, [text])
   return (
-    <svg className="mobile-qr" viewBox={`-4 -4 ${size + 8} ${size + 8}`} role="img" aria-label={t('MobileSettings.qrLabel')} shapeRendering="crispEdges">
+    <svg className="mobile-qr" viewBox={`-4 -4 ${size + 8} ${size + 8}`} role="img" aria-label={label} shapeRendering="crispEdges">
       <rect x={-4} y={-4} width={size + 8} height={size + 8} className="mobile-qr-back" />
       <path d={path} className="mobile-qr-modules" />
     </svg>

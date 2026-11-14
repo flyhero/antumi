@@ -73,9 +73,22 @@ Off your Wi‑Fi, the phone reaches the computer through [Tailscale](https://tai
 1. Install Tailscale on the computer and the phone and sign in with the same account.
 2. In **Settings → Phone** on the computer, look at the addresses phones try: a name ending in `.ts.net` means Antumi found Tailscale.
 3. Pair as usual. A phone paired before does not need to scan again: it picks up the name the next time it connects.
-4. Keep Tailscale on on the phone when you are out. The phone tries the local addresses first, then Tailscale.
+4. Keep Tailscale on on the phone when you are out. The phone tries the local addresses first and soon moves on to Tailscale.
 
 If it cannot connect, check that Tailscale and Antumi are both running on the computer, that MagicDNS is on (the default), and, if you changed Tailscale's access controls, that the phone may reach the computer's port 7820 (or the port you set in **Settings → Phone**). Android runs one VPN at a time: another VPN turns Tailscale off.
+
+### Away from home: your own server
+
+With a Linux server that has a public IP (a cloud server will do; 3 Mbps is plenty), [WireGuard](https://www.wireguard.com) can relay between the phone and the computer. The phone and the computer already encrypt end to end, so the server only passes on data it cannot read. Nothing to install on the computer and no admin rights: Antumi runs [wireproxy](https://github.com/windtf/wireproxy) itself, downloading it from GitHub the first time (about 4 MB). The same on macOS, Windows and Linux.
+
+1. Under **How phones connect** in **Settings → Phone**, click **Set up** next to “Your own server (WireGuard)”, enter the server's public IP or host name (UDP port 51820 by default); if the cloud server has a bandwidth limit, enter it in Mbps (say 3) and replies reach the phone several times faster. Click **Create**.
+2. Click **Copy server script** and paste it into a root shell on the server (Debian, Ubuntu, CentOS, Alibaba Cloud Linux and the like). It installs WireGuard and starts it at boot. Then allow that UDP port in your cloud provider's firewall or security group.
+3. Back in Settings, step 2 says “Connected to the server” once this computer's side works.
+4. On the phone, scan the left code to install WireGuard (without Google Play, choose “Download APK File”). In WireGuard, tap **+** → **Scan from QR code** and scan the code shown by **Show the code**, then turn the tunnel on. Only 10.77.0.x goes through the server, so it can stay on without touching the phone's other traffic.
+
+A phone paired before needs no new Antumi code: it picks up the relay's address the next time it connects.
+
+If it cannot connect, read step 2 in Settings, and run `wg show wg-antumi` on the server to see recent handshakes from the computer and the phone. Android runs one VPN at a time, so it is this or Tailscale. For another tunnel or a port forward, enter the address phones use there under **Other addresses**.
 
 ### Notices while the app is closed: ntfy
 

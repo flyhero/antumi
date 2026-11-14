@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { MOBILE_METHODS, MOBILE_NOTIFICATIONS, mobileMayCall } from './mobile-access'
-import { decodePairingCode, encodePairingCode, MOBILE_PROTOCOL_VERSION } from './mobile'
+import { decodePairingCode, encodePairingCode, MOBILE_PROTOCOL_VERSION, MobileExtraHost } from './mobile'
 import { isRpcMethod, isRpcNotificationName } from './rpc'
 
 describe('the phone allowlist', () => {
@@ -28,5 +28,13 @@ describe('pairing codes', () => {
     expect(decodePairingCode(encodePairingCode({ ...code, v: MOBILE_PROTOCOL_VERSION + 1 }))).toBeNull()
     expect(decodePairingCode('https://example.com')).toBeNull()
     expect(decodePairingCode('antumi://pair?p=%%%')).toBeNull()
+  })
+})
+
+describe('the user\'s own addresses', () => {
+  it('takes a host name or an IP, and not a port, a scheme or a path', () => {
+    for (const host of ['10.77.0.2', 'relay.example.com', 'my-box', 'fd00::2', '::ffff:10.0.0.1', ' 8.159.153.95 ']) expect(MobileExtraHost.safeParse(host).success, host).toBe(true)
+    for (const host of ['10.77.0.2:7820', 'host:7820', 'http://relay.example.com', 'relay.example.com/x', '-bad.com', '', 'a b']) expect(MobileExtraHost.safeParse(host).success, host).toBe(false)
+    expect(MobileExtraHost.parse(' 8.159.153.95 ')).toBe('8.159.153.95')
   })
 })

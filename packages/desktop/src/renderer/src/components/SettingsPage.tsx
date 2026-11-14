@@ -815,7 +815,7 @@ const MOBILE_SECTION: Section = localized(() => ({
   group: t('SettingsPage.integrations'),
   title: t('MobileSettings.title'),
   description: t('MobileSettings.description'),
-  keywords: ['phone', 'mobile', 'android', 'iPhone', 'Tailscale', 'ntfy', '手机', '配对', '二维码', '推送', t('MobileSettings.addPhone'), t('MobileSettings.push'), t('MobileSettings.port')],
+  keywords: ['phone', 'mobile', 'android', 'iPhone', 'Tailscale', 'WireGuard', 'Wi-Fi', 'ntfy', '手机', '配对', '二维码', '推送', '中转', '服务器', t('MobileSettings.addPhone'), t('MobileSettings.push'), t('MobileSettings.port'), t('MobileSettings.ways'), t('MobileSettings.extraHosts')],
   Icon: PhoneIcon,
   Body: MobileSettings,
   grouped: true

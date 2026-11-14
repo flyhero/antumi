@@ -1,6 +1,7 @@
 import { t, tr } from '../i18n'
 import { useContext, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react'
-import { isPreviewPage, previewLayout, type ChatToolStatus, type PreviewFile, type PreviewLayout } from '@antumi/protocol'
+import { isPreviewPage, previewLayout, type ChatImage, type ChatToolStatus, type PreviewFile, type PreviewLayout } from '@antumi/protocol'
+import { useImageUrl } from '../attachment-images'
 import { openFileInBrowser } from '../browser-state'
 import { useBrowserSupported } from '../core-store'
 import { canRevealFile, revealFile } from '../desktop-bridge'
@@ -12,7 +13,14 @@ import { RefreshIcon } from './icons'
 
 // A file of a set and how the call that showed it went: a set gathered from calls made back to back
 // has one call per file.
-export type PreviewSetFile = PreviewFile & { status: ChatToolStatus; output: string | null }
+export type PreviewSetFile = PreviewFile & { status: ChatToolStatus; output: string | null; stored?: ChatImage | null }
+
+// A picture whose file is gone, from the copy core kept when it was shown.
+export function StoredPicture({ image, path }: { image: ChatImage | null | undefined; path: string }) {
+  const url = useImageUrl(image?.id ?? '')
+  if (!image) return <p className="chat-preview-note muted">{tr('ChatBrowserCard.imageIsNoLongerAvailable', { path })}</p>
+  return url ? <div className="chat-preview-shot"><img src={url} alt="" draggable={false} /></div> : null
+}
 
 // Past two rows of thumbnails the rest wait behind the last one, in the viewer.
 const GRID_SHOWN = 8
@@ -39,7 +47,7 @@ function FileBody({ file, src, awake, onView }: { file: PreviewSetFile; src: str
   if (file.status === 'running') return <p className="chat-preview-note muted">{t('ChatPreviewCard.preparingPreview')}</p>
   if (file.status === 'failed' || file.status === 'denied') return <p className="chat-preview-note muted">{file.output ?? t('ChatPreviewCard.couldNotDisplayThisFile')}</p>
   if (isPreviewPage(file.path)) return <iframe className="chat-preview-frame" title={labelOf(file)} src={src} sandbox="allow-scripts" referrerPolicy="no-referrer" inert={!awake} />
-  if (missing) return <p className="chat-preview-note muted">{tr('ChatBrowserCard.imageIsNoLongerAvailable', { path: file.path })}</p>
+  if (missing) return <StoredPicture image={file.stored} path={file.path} />
   return (
     <button type="button" className="chat-preview-shot" aria-label={t('ChatPreviewCard.viewImage', { label: labelOf(file) })} onClick={onView}>
       <img src={src} alt="" draggable={false} onError={() => setMissing(true)} />

@@ -1,11 +1,21 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { checkPreviewFile, conversationToolLimits, createMcpHandler } from './mcp-server'
+import { takeImageMarkers } from '@antumi/protocol'
+import { AttachmentStore } from './attachment-store'
+import { pngBytes } from './image-fixtures'
+import { checkPreviewFile, conversationToolLimits, createMcpHandler, storingPreview } from './mcp-server'
 
 const frame = (method: string, params?: unknown) => JSON.stringify({ jsonrpc: '2.0', id: 1, method, params })
 const notification = (method: string) => JSON.stringify({ jsonrpc: '2.0', method })
+// The text of a tool call's result.
+const resultText = (response: unknown): string => {
+  const result = typeof response === 'object' && response !== null && 'result' in response ? response.result : null
+  const content = typeof result === 'object' && result !== null && 'content' in result && Array.isArray(result.content) ? result.content : []
+  const first: unknown = content[0]
+  return typeof first === 'object' && first !== null && 'text' in first && typeof first.text === 'string' ? first.text : ''
+}
 
 describe('antumi MCP server', () => {
   const handle = createMcpHandler({ preview: checkPreviewFile })
@@ -76,6 +86,34 @@ describe('antumi MCP server', () => {
     expect(called).toEqual([['screenshot', { fullPage: true }]])
     const unknown = await chat(frame('tools/call', { name: 'browser_fly', arguments: {} }))
     expect(unknown?.error?.code).toBe(-32602)
+  })
+
+  it('stores a picture it shows, so a client without the file can show it, and stores no page', async () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'antumi-preview-'))
+    try {
+      // Made by core at its start, before any agent runs.
+      mkdirSync(path.join(dir, 'attachments'))
+      const store = new AttachmentStore(path.join(dir, 'attachments'))
+      const stored = createMcpHandler({ preview: storingPreview(store) })
+      const shot = path.join(dir, 'shot.png')
+      writeFileSync(shot, pngBytes(4, 3))
+      const page = path.join(dir, 'index.html')
+      writeFileSync(page, '<h1>hi</h1>')
+      const one = await stored(frame('tools/call', { name: 'show_preview', arguments: { path: shot } }))
+      const text = resultText(one)
+      const { images } = takeImageMarkers(text)
+      expect(images).toEqual([{ id: expect.stringMatching(/^[0-9a-f]{64}\.png$/), width: 4, height: 3 }])
+      expect(await store.info(images[0]!.id)).toMatchObject({ width: 4, height: 3 })
+      const set = await stored(frame('tools/call', { name: 'show_preview', arguments: { files: [{ path: page }, { path: shot }] } }))
+      expect(takeImageMarkers(resultText(set)).images).toHaveLength(1)
+      // Not an image the store can read: shown from its path all the same.
+      writeFileSync(shot, 'png bytes')
+      const unreadable = await stored(frame('tools/call', { name: 'show_preview', arguments: { path: shot } }))
+      expect(unreadable?.result).toMatchObject({ isError: false })
+      expect(takeImageMarkers(resultText(unreadable)).images).toEqual([])
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 
   it('shows an HTML file or a picture that exists, and refuses anything else', async () => {

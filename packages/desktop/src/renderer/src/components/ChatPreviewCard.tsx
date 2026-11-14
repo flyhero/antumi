@@ -1,6 +1,6 @@
-import { t, tr } from '../i18n'
+import { t } from '../i18n'
 import { useContext, useState } from 'react'
-import { isPreviewImage, previewLayout, previewRequest, type ChatItem } from '@antumi/protocol'
+import { isPreviewImage, previewLayout, previewRequest, type ChatImage, type ChatItem } from '@antumi/protocol'
 import { openFileInBrowser } from '../browser-state'
 import { useBrowserSupported } from '../core-store'
 import { canRevealFile, revealFile } from '../desktop-bridge'
@@ -9,16 +9,17 @@ import { LocalImageViewer } from './ChatMarkdown'
 import { ChatPaths } from './ChatToolCard'
 import { RefreshIcon } from './icons'
 import { ChatToolIcon } from './ChatToolIcon'
-import { ChatPreviewSet } from './ChatPreviewSet'
+import { ChatPreviewSet, StoredPicture } from './ChatPreviewSet'
+import { withStoredImages } from '../preview-images'
 import { toolRunStatus } from '../chat-tools'
 
 type ToolItem = Extract<ChatItem, { kind: 'tool' }>
 
 // A picture the agent asked to show: fitted to the card, opened full size on a click.
-function PreviewImage({ path, src, label }: { path: string; src: string; label: string }) {
+function PreviewImage({ path, src, label, stored }: { path: string; src: string; label: string; stored: ChatImage | null }) {
   const [viewing, setViewing] = useState(false)
   const [missing, setMissing] = useState(false)
-  if (missing) return <p className="chat-preview-note muted">{tr('ChatBrowserCard.imageIsNoLongerAvailable', { path: path })}</p>
+  if (missing) return <StoredPicture image={stored} path={path} />
   return (
     <>
       <button type="button" className="chat-preview-image" aria-label={t('ChatPreviewCard.viewImage', { label: label })} onClick={() => setViewing(true)}>
@@ -34,7 +35,7 @@ export function ChatPreviewRun({ conversationId, tools }: { conversationId: stri
   // Each call's own title names its file within the set.
   const files = tools.flatMap((tool) => {
     const request = previewRequest(tool.input, tool.title)
-    return request.files.map((file) => ({ path: file.path, title: request.title ?? file.title, status: tool.status, output: tool.output }))
+    return withStoredImages(request.files, tool.images).map((file) => ({ path: file.path, title: request.title ?? file.title, status: tool.status, output: tool.output, stored: file.stored }))
   })
   const [first] = tools
   // A set that grows while the turn runs is laid out anew, the view the user picked with it.
@@ -47,17 +48,17 @@ export function ChatPreviewCard({ conversationId, item }: { conversationId: stri
   const request = previewRequest(item.input, item.title)
   const [only] = request.files
   if (request.files.length > 1 || !only) {
-    const files = request.files.map((file) => ({ ...file, status: item.status, output: item.output }))
+    const files = withStoredImages(request.files, item.images).map((file) => ({ ...file, status: item.status, output: item.output }))
     return <ChatPreviewSet conversationId={conversationId} name={item.name} status={item.status} title={request.title} files={files} layout={request.layout} />
   }
-  return <SinglePreview conversationId={conversationId} item={item} path={only.path} title={request.title ?? only.title} />
+  return <SinglePreview conversationId={conversationId} item={item} path={only.path} title={request.title ?? only.title} stored={withStoredImages([only], item.images)[0]?.stored ?? null} />
 }
 
 // A file the agent asked to show, rendered where it asked. A page or an SVG is a frame that is a
 // page of its own, with no way to the app around it or to the network (main's antumi-preview
 // protocol sets the policy), following the app's light or dark scheme; a picture is an image. It
 // reads the file as it stands now, so a later edit shows on refresh.
-function SinglePreview({ conversationId, item, path, title }: { conversationId: string; item: ToolItem; path: string; title: string | null }) {
+function SinglePreview({ conversationId, item, path, title, stored }: { conversationId: string; item: ToolItem; path: string; title: string | null; stored: ChatImage | null }) {
   const browsable = useBrowserSupported() && !isPreviewImage(path)
   const shorten = useContext(ChatPaths)
   const [generation, setGeneration] = useState(0)
@@ -90,7 +91,7 @@ function SinglePreview({ conversationId, item, path, title }: { conversationId: 
         : pending
           ? <p className="chat-preview-note muted">{t('ChatPreviewCard.preparingPreview')}</p>
           : isPreviewImage(path)
-            ? <PreviewImage key={generation} path={path} src={`${previewUrl(path)}?v=${generation}`} label={title ?? path} />
+            ? <PreviewImage key={generation} path={path} src={`${previewUrl(path)}?v=${generation}`} label={title ?? path} stored={stored} />
             : <iframe key={generation} className="chat-preview-frame" title={title ?? path} src={src} sandbox="allow-scripts" referrerPolicy="no-referrer" inert={!awake} />}
     </div>
   )

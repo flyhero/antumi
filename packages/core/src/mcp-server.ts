@@ -5,10 +5,10 @@ import { todoToolsOverCore } from './mcp-todo-tools'
 import { pullRequestToolsOverCore } from './mcp-pull-request-tools'
 import { managementToolsOverCore } from './mcp-management-tools'
 import readline from 'node:readline'
-import { stat } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import { extname, isAbsolute } from 'node:path'
 import { z } from 'zod'
-import { connectRpc, coreUrl, isPreviewImage, PREVIEW_EXTENSIONS, PREVIEW_FILES_MAX, PREVIEW_LAYOUTS, previewLayout, PreviewInput, SHOW_PREVIEW_TOOL, type Conversation, type PreviewLayout, type RpcConnection } from '@antumi/protocol'
+import { connectRpc, coreUrl, imageMarker, isPreviewImage, PREVIEW_EXTENSIONS, PREVIEW_FILES_MAX, PREVIEW_LAYOUTS, previewLayout, PreviewInput, SHOW_PREVIEW_TOOL, type ChatImage, type Conversation, type PreviewLayout, type RpcConnection } from '@antumi/protocol'
 import { readCoreEndpoint, antumiPaths } from '@antumi/protocol/node'
 import { AttachmentStore } from './attachment-store'
 import { BROWSER_ARGUMENTS, BROWSER_TOOL_SPECS, browserToolsOverCore, type BrowserTools, type ToolOutcome } from './mcp-browser-tools'
@@ -78,7 +78,8 @@ export type McpTools = {
   // offer them only from then on.
   listed?: () => Promise<void>
   // Checks the file may be shown (it exists, and is a page, an SVG or a picture); throws with the reason if not.
-  preview: (path: string) => Promise<void>
+  // Checks a file can be shown; a picture may come back stored, for clients that cannot read the path.
+  preview: (path: string) => Promise<ChatImage | null | void>
   // The browser tools, there when the server was started for a conversation.
   browser?: BrowserTools
   // The user's bookmarks, there with the browser.
@@ -131,22 +132,26 @@ function toolTable({ preview, browser, bookmarks, terminal, history, squad, agen
         if (!args.success) return textResult(`path 需要是文件的绝对路径；files 是 1–${PREVIEW_FILES_MAX} 个 { path, title }。`, true)
         const { path, files, layout } = args.data
         if (Boolean(path) === Boolean(files)) return textResult('path 和 files 二选一：一个文件用 path，几个用 files。', true)
+        // A stored picture rides along as a marker, which the agent's driver turns into the call's image.
+        const withImages = (text: string, images: readonly (ChatImage | null | void)[]) =>
+          [text, ...images.flatMap((image) => (image ? [imageMarker(image)] : []))].join('\n')
         if (path) {
           try {
-            await preview(path)
-            return textResult(isPreviewImage(path)
+            const image = await preview(path)
+            return textResult(withImages(isPreviewImage(path)
               ? '已在对话里展示给用户。用户会在这一条下面看到这张图片。'
-              : '已在对话里展示给用户，不用再截图。用户会在这一条下面看到页面。')
+              : '已在对话里展示给用户，不用再截图。用户会在这一条下面看到页面。', [image]))
           } catch (error) {
             return textResult(`没能展示：${describe(error)}`, true)
           }
         }
         const paths = (files ?? []).map((file) => file.path)
-        const refused = (await Promise.all(paths.map((each) => preview(each).then(() => null, (error: unknown) => `${each}：${describe(error)}`)))).filter((reason) => reason !== null)
+        const shown = await Promise.all(paths.map((each) => preview(each).then((image) => ({ image }), (error: unknown) => ({ refused: `${each}：${describe(error)}` }))))
+        const refused = shown.flatMap((each) => ('refused' in each ? [each.refused] : []))
         if (refused.length > 0) return textResult(`没能展示，一个都没放出来：${refused.join('；')}`, true)
         const used = previewLayout(paths, layout ?? null)
         const changed = layout && layout !== used ? `（${LAYOUT_NAMES[layout]}放不下这一组，改成了${LAYOUT_NAMES[used]}）` : ''
-        return textResult(`已在对话里展示给用户：${paths.length} 个文件，${LAYOUT_NAMES[used]}排列${changed}。用户会在这一条下面看到它们。`)
+        return textResult(withImages(`已在对话里展示给用户：${paths.length} 个文件，${LAYOUT_NAMES[used]}排列${changed}。用户会在这一条下面看到它们。`, shown.map((each) => ('image' in each ? each.image : null))))
       }
     }
   ]
@@ -258,6 +263,22 @@ export async function checkPreviewFile(path: string): Promise<void> {
   if (!info?.isFile()) throw new Error(`文件不存在：${path}`)
 }
 
+// The same check, and a picture put in the attachment store too: a phone, which cannot read the
+// computer's files, shows it from there, and so does the desktop once the file is gone. One the store
+// will not take (too many pixels) still shows from its path.
+export function storingPreview(attachments: Pick<AttachmentStore, 'put'>): (path: string) => Promise<ChatImage | null> {
+  return async (path) => {
+    await checkPreviewFile(path)
+    if (!isPreviewImage(path)) return null
+    try {
+      const info = await attachments.put(await readFile(path))
+      return { id: info.id, width: info.width, height: info.height }
+    } catch {
+      return null
+    }
+  }
+}
+
 // A group chat member only talks: like a read-only workspace it gets no tool that acts, and no to-dos,
 // since its findings go to the group's summary, not onto a list of the user's.
 export function conversationToolLimits(conversation: Pick<Conversation, 'workspaceReadOnly' | 'discussionId' | 'parentConversationId'>): { readOnly: boolean; todos: boolean } {
@@ -286,6 +307,7 @@ export async function serveMcp(home: string | undefined, conversationId?: string
     const run = rpc.features.includes('squads') ? await rpc.call('squads.roster', { id: conversationId }) : null
     return { ...conversationToolLimits(conversation), run, features: rpc.features, delegate: !run && rpc.features.includes('agent-profiles') && !conversation.parentConversationId && !conversation.discussionId && !conversation.squadRunId && !conversation.routineId && !conversation.helperOf }
   }) : null
+  const attachments = new AttachmentStore(antumiPaths(home).attachments)
   const handle = createMcpHandler({
     planOnly: planOnly || scope?.readOnly,
     ...(conversationId ? { management: await managementToolsOverCore(withCore, conversationId, planOnly) } : {}),
@@ -293,9 +315,9 @@ export async function serveMcp(home: string | undefined, conversationId?: string
     ...(conversationId && scope?.delegate ? { agents: agentToolsOverCore(withCore, conversationId, scope.features) } : {}),
     initialized,
     ...(listed ? { listed } : {}),
-    preview: checkPreviewFile,
+    preview: storingPreview(attachments),
     ...(conversationId ? {
-      browser: browserToolsOverCore(withCore, conversationId, new AttachmentStore(antumiPaths(home).attachments)),
+      browser: browserToolsOverCore(withCore, conversationId, attachments),
       bookmarks: bookmarkToolsOverCore(withCore),
       terminal: terminalToolsOverCore(withCore, conversationId),
       ...(todos && scope?.todos !== false ? { todo: todoToolsOverCore(withCore, conversationId) } : {}),

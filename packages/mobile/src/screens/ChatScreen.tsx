@@ -63,7 +63,8 @@ function rowsOf(items: readonly ChatItem[], working: boolean, docked: ChatItem |
     }
     const last = rows[rows.length - 1]
     if (item.kind === 'tool') {
-      const solo = item.diffs.length > 0 || isSubagent(item.name)
+      // A call with changes, a subagent or pictures stands alone, where nothing folds it away.
+      const solo = item.diffs.length > 0 || isSubagent(item.name) || Boolean(item.images?.length)
       if (last?.kind === 'tools' && !last.solo && !solo) last.tools.push(item)
       else rows.push({ key: `tools:${chatItemKey(item)}`, kind: 'tools', tools: [item], solo })
       continue

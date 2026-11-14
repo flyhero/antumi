@@ -73,9 +73,11 @@ type ScreenProps = {
   onRefresh?: () => Promise<void>
   // The screen's main action, floating at the bottom centre where a thumb reaches it.
   floating?: ReactNode
+  // false for a screen about the app rather than the computer, which its link says nothing to.
+  linkBanner?: boolean
 }
 
-export function Screen({ title, subtitle, large = false, onBack, actions, children, scroll = true, onRefresh, floating }: ScreenProps) {
+export function Screen({ title, subtitle, large = false, onBack, actions, children, scroll = true, onRefresh, floating, linkBanner = true }: ScreenProps) {
   const theme = useTheme()
   const insets = useSafeAreaInsets()
   const [refreshing, setRefreshing] = useState(false)
@@ -113,12 +115,12 @@ export function Screen({ title, subtitle, large = false, onBack, actions, childr
           refreshControl={refresh ? <RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} tintColor={theme.textMuted} colors={[theme.accent]} /> : undefined}
         >
           {heading}
-          <LinkBanner />
+          {linkBanner ? <LinkBanner /> : null}
           {children}
         </KeyboardAwareScrollView>
       ) : (
         <View style={styles.fill}>
-          <LinkBanner inset />
+          {linkBanner ? <LinkBanner inset /> : null}
           {children}
         </View>
       )}

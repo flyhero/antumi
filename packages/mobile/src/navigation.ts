@@ -12,7 +12,8 @@ export type Route =
   | { name: 'tasks' }
   | { name: 'task'; id: string }
   | { name: 'newTask' }
-  | { name: 'settings' }
+  // app: opened from the computer list, so about the app alone, not the computer last connected.
+  | { name: 'settings'; app?: boolean }
 
 export const useNavigation = create<{ stack: Route[] }>()(() => ({ stack: [{ name: 'computers' }] }))
 

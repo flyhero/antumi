@@ -32,7 +32,7 @@ function CurrentScreen() {
     case 'tasks': return <TasksScreen />
     case 'task': return <TaskScreen id={route.id} />
     case 'newTask': return <NewTaskScreen />
-    case 'settings': return <SettingsScreen />
+    case 'settings': return <SettingsScreen app={route.app ?? false} />
   }
 }
 

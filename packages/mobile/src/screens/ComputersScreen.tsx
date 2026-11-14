@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native'
-import { Laptop, Plus, QrCode } from 'lucide-react-native'
+import { Laptop, Plus, QrCode, Settings } from 'lucide-react-native'
 import { QuotaCards, useNow } from '../components/quota'
 import { Button, EmptyState, IconButton, ListGroup, ListRow, Screen, SectionLabel } from '../components/ui'
 import { ago, t } from '../i18n'
@@ -24,9 +24,10 @@ export function ComputersScreen() {
   const usage = useSession((s) => s.usage)
   const now = useNow()
   const connected = computers.find((computer) => computer.key === current)
+  const settingsButton = <IconButton icon={Settings} label={t('settings')} onPress={() => push({ name: 'settings', app: true })} />
   if (computers.length === 0) {
     return (
-      <Screen large title={t('appName')}>
+      <Screen large title={t('appName')} actions={settingsButton}>
         <EmptyState
           icon={QrCode}
           image={require('../../assets/icon.png')}
@@ -38,7 +39,7 @@ export function ComputersScreen() {
     )
   }
   return (
-    <Screen large title={t('computers')} actions={<IconButton icon={Plus} label={t('addComputer')} onPress={() => push({ name: 'pair' })} />}>
+    <Screen large title={t('computers')} actions={<>{settingsButton}<IconButton icon={Plus} label={t('addComputer')} onPress={() => push({ name: 'pair' })} /></>}>
       <ListGroup>
         {computers.map((computer) => {
           const live = computer.key === current ? status : null

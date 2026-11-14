@@ -16,10 +16,11 @@ function RowIcon({ icon: Icon, tone = 'plain' }: { icon: typeof Info; tone?: 'pl
   return <View style={[styles.icon, { backgroundColor: background }]}><Icon size={18} color={color} strokeWidth={1.9} /></View>
 }
 
-export function SettingsScreen() {
+export function SettingsScreen({ app }: { app: boolean }) {
   const theme = useTheme()
   const settings = useSession((s) => s.settings)
-  const computer = useSession(computerOf)
+  const current = useSession(computerOf)
+  const computer = app ? null : current
   const [lockable, setLockable] = useState<boolean | null>(null)
   const [update, setUpdate] = useState<Update | null | 'checking' | 'none' | 'failed'>(null)
   useEffect(() => {
@@ -43,7 +44,7 @@ export function SettingsScreen() {
   }
   const updateText = update === 'checking' ? null : update === 'none' ? t('upToDate') : update === 'failed' ? t('updateFailed') : update ? t('updateAvailable', { version: update.version }) : null
   return (
-    <Screen large title={t('settings')} onBack={() => pop()}>
+    <Screen large title={t('settings')} onBack={() => pop()} linkBanner={!app}>
       <ListGroup title={t('security')}>
         <ListRow leading={<RowIcon icon={Fingerprint} />} title={t('lockOnOpen')} subtitle={lockable === false ? t('lockUnavailable') : null} subtitleLines={3} chevron={false}
           trailing={<Switch value={settings.lock} disabled={!lockable} onValueChange={(lock) => void setLock(lock)} trackColor={{ true: theme.accent, false: theme.sunken }} thumbColor="#FFFFFF" />} />

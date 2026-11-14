@@ -3,8 +3,9 @@ import { createServer } from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { PROTOCOL_VERSION, RpcError, base64Url, coreUrl, decodePairingCode, rpcSchemas, type MobileStatus, type RpcMethod } from '@antumi/protocol'
+import { PROTOCOL_VERSION, RpcError, base64Url, coreUrl, decodePairingCode, rpcSchemas, type MobilePairingCode, type MobileStatus, type RpcMethod } from '@antumi/protocol'
 import { connectMobile, generateKeyPair, keyPairFromPrivate, MobileConnectError, type MobileConnection, type NoiseKeyPair } from '@antumi/protocol/mobile'
+import { BridgeServer } from './bridge-server'
 import { Gateway, isPrivateAddress } from './gateway'
 import type { GatewayLauncher } from './mobile-service'
 import { MobileService } from './mobile-service'
@@ -54,7 +55,8 @@ function inProcess(onPort: (port: number) => void): GatewayLauncher {
           gateway = new Gateway({
             port: 0, host: '127.0.0.1', coreUrl: config.coreUrl, computerName: config.computerName,
             staticKey: keyPairFromPrivate(base64Url.decode(config.privateKey)),
-            onPairing: (pairing) => onMessage({ type: 'paired', ...pairing })
+            onPairing: (pairing) => onMessage({ type: 'paired', ...pairing }),
+            onBridge: (state) => onMessage({ type: 'bridge', ...state })
           })
           void gateway.start().then((port) => {
             onPort(port)
@@ -64,6 +66,7 @@ function inProcess(onPort: (port: number) => void): GatewayLauncher {
         else if (message.type === 'hosts') gateway?.setHosts(message.hosts)
         else if (message.type === 'pairing') gateway?.setPairing(message.pairing)
         else if (message.type === 'answer') gateway?.answerPairing(message.pairingId, message.answer)
+        else if (message.type === 'bridge') gateway?.setBridge(message.bridge)
         else gateway?.revoke(message.deviceId)
       },
       stop: () => void gateway?.stop().then(onExit)
@@ -117,12 +120,12 @@ describe('the phone link', () => {
 
   const url = () => [`ws://127.0.0.1:${port}/`]
 
-  async function pair(phone: NoiseKeyPair, access: 'view' | 'operate' | null = 'view') {
+  async function pair(phone: NoiseKeyPair, access: 'view' | 'operate' | null = 'view', urlsOf: (code: MobilePairingCode) => string[] = url) {
     const pairing = await mobile.beginPairing()
     const code = decodePairingCode(pairing.uri)!
     let shown = ''
     const connecting = connectMobile({
-      urls: url(), mode: 'pair', staticKey: phone, computerKey: base64Url.decode(code.key),
+      urls: urlsOf(code), mode: 'pair', staticKey: phone, computerKey: base64Url.decode(code.key),
       pairing: { id: code.pairing, psk: base64Url.decode(code.psk) }, hello: { name: 'Pixel', platform: 'android', app: 'test' },
       onPairingCode: (value) => (shown = value)
     })
@@ -182,6 +185,22 @@ describe('the phone link', () => {
         .rejects.toMatchObject({ reason: 'unreachable' })
     } finally {
       silent.close()
+    }
+  })
+
+  it('pairs and serves a phone through a bridge alone, and tells it where the bridge is', async () => {
+    const bridge = new BridgeServer({ port: 0, host: '127.0.0.1' })
+    const bridgePort = await bridge.start()
+    try {
+      await mobile.setBridge(`127.0.0.1:${bridgePort}`)
+      await until(() => (mobile.status().bridge?.state === 'connected' ? true : undefined))
+      const { connection } = await pair(generateKeyPair(), 'operate', (code) => code.bridges ?? [])
+      expect(connection.url).toContain(`ws://127.0.0.1:${bridgePort}/v1/phone/`)
+      expect(connection.welcome.bridges).toEqual([connection.url])
+      expect(await connection.call('conversations.interrupt', { id: '00000000-0000-4000-8000-000000000000' })).toEqual({ ok: true })
+      expect(await connection.call('projects.recent', {})).toEqual(BIG)
+    } finally {
+      await bridge.stop()
     }
   })
 

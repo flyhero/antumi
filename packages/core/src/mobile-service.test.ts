@@ -86,6 +86,22 @@ describe('MobileService', () => {
     expect(service.status()).toMatchObject({ addresses: ['192.168.1.2'], relay: null })
   })
 
+  it('gives phones the bridge in the code once it is set up, and tells the gateway where it is', async () => {
+    await service.start('ws://127.0.0.1:1/?token=t')
+    await service.setEnabled(true)
+    await new Promise((resolve) => setImmediate(resolve))
+    await service.setBridge('8.159.153.95')
+    const told = sent.filter((message) => message.type === 'bridge').at(-1)
+    expect(told).toMatchObject({ type: 'bridge', bridge: { address: '8.159.153.95' } })
+    const bridges = decodePairingCode((await service.beginPairing()).uri)?.bridges ?? []
+    expect(bridges).toHaveLength(1)
+    expect(bridges[0]).toMatch(/^ws:\/\/8\.159\.153\.95:7830\/v1\/phone\/[A-Za-z0-9_-]{22}$/)
+    expect(service.status().bridge).toMatchObject({ address: '8.159.153.95', state: 'connecting' })
+    await service.removeBridge()
+    expect(sent.at(-1)).toEqual({ type: 'bridge', bridge: null })
+    expect(service.status().bridge).toBeNull()
+  })
+
   it('pushes only that something happened, once, and only with an address set', () => {
     const idle = conversation({ turn: 'running' })
     const waiting = conversation({ turn: 'awaiting', request: { requestId: 'r1', kind: 'approval', tool: 'Bash', title: 'rm -rf build', decisions: ['allow', 'deny'], open: 1 } })

@@ -48,7 +48,7 @@ import { AgentPullRequestRun, PullRequestDraft, PullRequestEligibility, PullRequ
 import { Bookmark, BookmarkFields, BookmarkImport, MAX_BOOKMARKS } from './bookmarks'
 import { BrowserHistoryEntry, BrowserHistorySearch } from './browser-history'
 import { BrowserSite } from './browser-sites'
-import { MOBILE_EXTRA_HOSTS_MAX, MobileAccess, MobileExtraHost, MobilePairing, MobilePort, MobilePushUrl, MobileRelayServer, MobileRelaySetup, MobileStatus } from './mobile'
+import { MOBILE_EXTRA_HOSTS_MAX, MobileAccess, MobileBridgeAddress, MobileExtraHost, MobilePairing, MobilePort, MobilePushUrl, MobileRelayServer, MobileRelaySetup, MobileStatus } from './mobile'
 
 // Bump only for breaking changes; additive optional fields keep the version.
 export const PROTOCOL_VERSION = 18
@@ -694,6 +694,10 @@ export const rpcMethods = {
   'mobile.setRelay': { params: MobileRelayServer, result: MobileStatus },
   'mobile.removeRelay': { params: z.object({}), result: MobileStatus },
   'mobile.relaySetup': { params: z.object({}), result: MobileRelaySetup },
+  // The bridge on the user's own server: its address, and the script that installs it there.
+  'mobile.setBridge': { params: z.object({ address: MobileBridgeAddress }), result: MobileStatus },
+  'mobile.removeBridge': { params: z.object({}), result: MobileStatus },
+  'mobile.bridgeInstallScript': { params: z.object({}), result: z.object({ script: z.string() }) },
   // A new one-time code, replacing any open pairing. The gateway must be running.
   'mobile.beginPairing': { params: z.object({}), result: MobilePairing },
   'mobile.cancelPairing': { params: z.object({}), result: MobileStatus },

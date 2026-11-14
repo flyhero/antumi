@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { MOBILE_METHODS, MOBILE_NOTIFICATIONS, mobileMayCall } from './mobile-access'
-import { decodePairingCode, encodePairingCode, MOBILE_PROTOCOL_VERSION, MobileExtraHost } from './mobile'
+import { decodePairingCode, encodePairingCode, MOBILE_PROTOCOL_VERSION, MobileBridgeAddress, MobileExtraHost } from './mobile'
 import { isRpcMethod, isRpcNotificationName } from './rpc'
 
 describe('the phone allowlist', () => {
@@ -28,6 +28,13 @@ describe('pairing codes', () => {
     expect(decodePairingCode(encodePairingCode({ ...code, v: MOBILE_PROTOCOL_VERSION + 1 }))).toBeNull()
     expect(decodePairingCode('https://example.com')).toBeNull()
     expect(decodePairingCode('antumi://pair?p=%%%')).toBeNull()
+    const bridged = { ...code, bridges: ['ws://8.8.8.8:7830/v1/phone/AAAAAAAAAAAAAAAAAAAAAA'] }
+    expect(decodePairingCode(encodePairingCode(bridged))).toEqual(bridged)
+  })
+
+  it('takes a bridge as a host, with a port when not the default, and nothing more', () => {
+    for (const address of ['8.159.153.95', 'relay.example.com:443', 'my-box:7830']) expect(MobileBridgeAddress.safeParse(address).success, address).toBe(true)
+    for (const address of ['ws://8.8.8.8', '8.8.8.8:99999', 'fd00::2', 'host:', '']) expect(MobileBridgeAddress.safeParse(address).success, address).toBe(false)
   })
 })
 

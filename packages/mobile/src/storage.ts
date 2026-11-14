@@ -16,6 +16,8 @@ export const Computer = z.object({
   name: z.string(),
   port: z.number().int(),
   hosts: z.array(z.string()),
+  // Full ws:// URLs through the computer's bridge; none saved before there were bridges.
+  bridges: z.array(z.string()).catch([]),
   deviceId: z.string().nullable(),
   access: MobileAccess.nullable(),
   pairedAt: z.number(),

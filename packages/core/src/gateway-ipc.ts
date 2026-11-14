@@ -22,13 +22,15 @@ export const CoreToGateway = z.discriminatedUnion('type', [
   z.object({ type: z.literal('pairing'), pairing: GatewayPairing.nullable() }),
   z.object({ type: z.literal('answer'), pairingId: z.string(), answer: PairingAnswer }),
   z.object({ type: z.literal('revoke'), deviceId: z.string() }),
-  z.object({ type: z.literal('hosts'), hosts: z.array(z.string()).max(16) })
+  z.object({ type: z.literal('hosts'), hosts: z.array(z.string()).max(16) }),
+  z.object({ type: z.literal('bridge'), bridge: z.object({ address: z.string(), id: z.string(), secret: z.string() }).nullable() })
 ])
 export type CoreToGateway = z.infer<typeof CoreToGateway>
 
 export const GatewayToCore = z.discriminatedUnion('type', [
   z.object({ type: z.literal('listening'), port: z.number().int() }),
   z.object({ type: z.literal('failed'), reason: z.enum(['port-in-use', 'error']), message: z.string() }),
-  z.object({ type: z.literal('paired'), pairingId: z.string(), publicKey: z.string(), hello: MobileHello, code: z.string() })
+  z.object({ type: z.literal('paired'), pairingId: z.string(), publicKey: z.string(), hello: MobileHello, code: z.string() }),
+  z.object({ type: z.literal('bridge'), state: z.enum(['connecting', 'connected', 'failed']), error: z.string().nullable() })
 ])
 export type GatewayToCore = z.infer<typeof GatewayToCore>

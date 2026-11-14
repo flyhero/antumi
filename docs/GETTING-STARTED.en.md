@@ -77,7 +77,18 @@ Off your Wi‑Fi, the phone reaches the computer through [Tailscale](https://tai
 
 If it cannot connect, check that Tailscale and Antumi are both running on the computer, that MagicDNS is on (the default), and, if you changed Tailscale's access controls, that the phone may reach the computer's port 7820 (or the port you set in **Settings → Phone**). Android runs one VPN at a time: another VPN turns Tailscale off.
 
-### Away from home: your own server
+### Away from home: an Antumi bridge on your own server
+
+With a Linux server that has a public IP, you can install an Antumi bridge on it: the computer stays connected to it, and the phone reaches the computer through it when you are out. Nothing else to install on the phone; it runs over plain TCP and leaves the phone's VPN free. Everything stays encrypted end to end, so the bridge only passes on data it cannot read.
+
+1. Under **How phones connect** in **Settings → Phone**, click **Set up** next to “Your own server (Antumi bridge)”, then **Copy install script**.
+2. Paste it into a root shell on the server (Debian, Ubuntu, CentOS, Alibaba Cloud Linux and the like). It uses the server's Node.js if it is 14 or later and installs one if there is none; the bridge then starts at boot. Allow TCP 7830 in your cloud provider's firewall or security group.
+3. Back in Settings, enter the server's public IP or host name in step 2 and save. Step 3 says “Connected to the bridge” once it works.
+4. Phones paired from now on use the bridge from their QR code; one paired before picks it up the next time it connects at home.
+
+On a 3 Mbps cloud server, a 2 MB picture takes about 5 to 7 seconds through the bridge.
+
+### Away from home: your own server (WireGuard)
 
 With a Linux server that has a public IP (a cloud server will do; 3 Mbps is plenty), [WireGuard](https://www.wireguard.com) can relay between the phone and the computer. The phone and the computer already encrypt end to end, so the server only passes on data it cannot read. Nothing to install on the computer and no admin rights: Antumi runs [wireproxy](https://github.com/windtf/wireproxy) itself, downloading it from GitHub the first time (about 4 MB). The same on macOS, Windows and Linux.
 

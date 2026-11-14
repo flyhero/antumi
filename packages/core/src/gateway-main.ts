@@ -27,7 +27,8 @@ process.on('message', (raw) => {
       staticKey: keyPairFromPrivate(base64Url.decode(config.privateKey)),
       coreUrl: config.coreUrl,
       computerName: config.computerName,
-      onPairing: (pairing) => send({ type: 'paired', ...pairing })
+      onPairing: (pairing) => send({ type: 'paired', ...pairing }),
+      onBridge: (state) => send({ type: 'bridge', ...state })
     })
     gateway.start().then((port) => send({ type: 'listening', port }), (error: unknown) => {
       const inUse = error instanceof Error && 'code' in error && error.code === 'EADDRINUSE'
@@ -38,6 +39,7 @@ process.on('message', (raw) => {
   else if (message.type === 'pairing') gateway?.setPairing(message.pairing)
   else if (message.type === 'answer') gateway?.answerPairing(message.pairingId, message.answer)
   else if (message.type === 'hosts') gateway?.setHosts(message.hosts)
+  else if (message.type === 'bridge') gateway?.setBridge(message.bridge)
   else gateway?.revoke(message.deviceId)
 })
 

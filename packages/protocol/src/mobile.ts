@@ -41,6 +41,18 @@ export type MobilePairing = z.infer<typeof MobilePairing>
 export const MobileGatewayState = z.enum(['off', 'starting', 'running', 'failed'])
 export type MobileGatewayState = z.infer<typeof MobileGatewayState>
 
+// Antumi's own bridge on the user's server (docs/MOBILE.md): this computer keeps a connection open
+// to it, and phones reach the computer through it with what the gateway already encrypts.
+export const MobileBridgeState = z.enum(['off', 'connecting', 'connected', 'failed'])
+export type MobileBridgeState = z.infer<typeof MobileBridgeState>
+export const MobileBridge = z.object({
+  // host:port, as the user gave it.
+  address: z.string(),
+  state: MobileBridgeState,
+  error: z.string().nullable()
+})
+export type MobileBridge = z.infer<typeof MobileBridge>
+
 // Relaying through the user's own server over WireGuard (docs/MOBILE.md): core runs wireproxy, a
 // WireGuard client without a network interface, and phones reach this computer at `address`.
 export const MobileRelayState = z.enum(['off', 'downloading', 'waiting', 'connected', 'failed'])
@@ -76,7 +88,9 @@ export const MobileStatus = z.object({
   // from a core that predates them.
   extraHosts: z.array(z.string()).optional(),
   // The relay through the user's own server; null when not set up, absent from an older core.
-  relay: MobileRelay.nullable().optional()
+  relay: MobileRelay.nullable().optional(),
+  // The bridge, likewise.
+  bridge: MobileBridge.nullable().optional()
 })
 export type MobileStatus = z.infer<typeof MobileStatus>
 
@@ -89,6 +103,15 @@ const HOST_NAME = /^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-
 const IPV6 = /^[0-9a-f]*:[0-9a-f]*:[0-9a-f:.]*$/i
 export const MobileExtraHost = z.string().trim().refine((host) => HOST_NAME.test(host) || IPV6.test(host), 'a host name or an IP address, without a port')
 export const MOBILE_EXTRA_HOSTS_MAX = 8
+
+export const MOBILE_BRIDGE_DEFAULT_PORT = 7830
+// A bridge's host, with its port when not the default.
+export const MobileBridgeAddress = z.string().trim().refine((address) => {
+  const match = /^(.+?)(?::(\d{1,5}))?$/.exec(address)
+  const host = match?.[1] ?? ''
+  const port = match?.[2] === undefined ? MOBILE_BRIDGE_DEFAULT_PORT : Number(match[2])
+  return MobileExtraHost.safeParse(host).success && !host.includes(':') && port >= 1 && port <= 65535
+}, 'a host name or an IPv4 address, with :port if not 7830')
 
 export const MOBILE_RELAY_DEFAULT_PORT = 51820
 export const MobileRelayServer = z.object({
@@ -114,7 +137,9 @@ export const MobilePairingCode = z.object({
   pairing: z.string(),
   psk: z.string(),
   port: z.number().int(),
-  hosts: z.array(z.string()).max(16)
+  hosts: z.array(z.string()).max(16),
+  // Full ws:// URLs through a bridge, tried beside the hosts. Absent from an older computer.
+  bridges: z.array(z.string()).max(4).optional()
 })
 export type MobilePairingCode = z.infer<typeof MobilePairingCode>
 
@@ -184,7 +209,9 @@ export const MobileControl = z.union([
     features: z.array(z.string()),
     home: z.object({ path: z.string(), windows: z.boolean() }).optional(),
     // Where the computer can be reached now, for the phone to keep: its addresses change.
-    hosts: z.array(z.string()).max(16).optional()
+    hosts: z.array(z.string()).max(16).optional(),
+    // The bridges the computer is reachable through now; a phone keeps no others.
+    bridges: z.array(z.string()).max(4).optional()
   }),
   z.object({ type: z.literal('closing'), reason: z.enum(['revoked', 'shutdown', 'replaced', 'error']).catch('error') })
 ])

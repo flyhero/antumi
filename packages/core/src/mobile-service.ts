@@ -22,6 +22,8 @@ import {
 import { generateKeyPair, keyPairFromPrivate, mobileDeviceId, type NoiseKeyPair } from '@antumi/protocol/mobile'
 import { GatewayToCore, type CoreToGateway } from './gateway-ipc'
 import { isPrivateAddress } from './gateway'
+import { bridgeInstallScript, readBridgeBundle } from './bridge-install'
+import { MobileBridgeSettings } from './mobile-bridge'
 import { MobileRelay, type RelayDeps } from './mobile-relay'
 import type { MobileSettings, MobileStore } from './mobile-store'
 import { Rejection } from './rejection'
@@ -102,10 +104,12 @@ export class MobileService {
   private readonly seen = new Map<string, Conversation>()
   private readonly pushed = new Map<string, number>()
   private readonly relay: MobileRelay
+  private readonly bridge: MobileBridgeSettings
 
   constructor(private readonly store: MobileStore, private readonly options: MobileServiceOptions) {
     this.settings = store.settings()
     this.now = options.now ?? Date.now
+    this.bridge = new MobileBridgeSettings(options.dir)
     this.relay = new MobileRelay({ dir: options.dir, changed: () => this.notify(), now: this.now, ...(options.relay ? { deps: options.relay } : {}) })
   }
 
@@ -140,7 +144,8 @@ export class MobileService {
       devices: this.store.devices().map(({ publicKey: _key, ...device }) => ({ ...device, online: online.has(device.id) })),
       pushUrl: this.settings.pushUrl,
       extraHosts: this.settings.extraHosts,
-      relay: this.relay.status()
+      relay: this.relay.status(),
+      bridge: this.bridge.status()
     }
   }
 
@@ -187,6 +192,29 @@ export class MobileService {
     return this.notify()
   }
 
+  async setBridge(address: string): Promise<MobileStatus> {
+    await this.bridge.configure(address)
+    if (this.link) this.bridge.setState('connecting', null)
+    this.link?.send({ type: 'bridge', bridge: this.bridge.gatewayConfig() })
+    return this.notify()
+  }
+
+  async removeBridge(): Promise<MobileStatus> {
+    await this.bridge.remove()
+    this.link?.send({ type: 'bridge', bridge: null })
+    return this.notify()
+  }
+
+  async bridgeInstallScript(): Promise<{ script: string }> {
+    let bundle: Uint8Array
+    try {
+      bundle = await readBridgeBundle()
+    } catch {
+      throw new Rejection('mobile-bridge-unbuilt', 'the bridge is not bundled: run pnpm build')
+    }
+    return { script: bridgeInstallScript(bundle) }
+  }
+
   relaySetup(): MobileRelaySetup {
     const setup = this.relay.setup()
     if (!setup) throw new Rejection('mobile-relay-unset', 'set up the relay first')
@@ -202,7 +230,7 @@ export class MobileService {
     const expiresAt = this.now() + PAIRING_MS
     const uri = encodePairingCode({
       v: MOBILE_PROTOCOL_VERSION, name: this.computerName(), key: base64Url.encode(this.key.publicKey),
-      pairing: id, psk, port: this.settings.port, hosts: this.hosts()
+      pairing: id, psk, port: this.settings.port, hosts: this.hosts(), bridges: this.bridge.phoneUrls()
     })
     const timer = setTimeout(() => this.closePairing('expired'), PAIRING_MS)
     timer.unref()
@@ -383,6 +411,8 @@ export class MobileService {
     link.send({ type: 'start', config: { port: this.settings.port, privateKey: base64Url.encode(key.privateKey), coreUrl: this.coreUrl, computerName: this.computerName() } })
     this.sendDevices()
     link.send({ type: 'hosts', hosts: this.hosts() })
+    link.send({ type: 'bridge', bridge: this.bridge.gatewayConfig() })
+    if (this.bridge.gatewayConfig()) this.bridge.setState('connecting', null)
     this.relay.start(this.settings.port)
     this.notify()
   }
@@ -394,6 +424,7 @@ export class MobileService {
     this.link?.stop()
     this.link = null
     this.relay.stop()
+    this.bridge.setState('off', null)
     this.state = 'off'
     this.error = null
   }
@@ -406,6 +437,8 @@ export class MobileService {
     } else if (message.type === 'failed') {
       this.state = 'failed'
       this.error = message.reason === 'port-in-use' ? 'port-in-use' : message.message
+    } else if (message.type === 'bridge') {
+      this.bridge.setState(message.state, message.error)
     } else {
       this.paired(message)
       return

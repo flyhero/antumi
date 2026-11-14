@@ -92,8 +92,9 @@ function hello(): MobileHello {
   }
 }
 
-function urls(computer: Pick<Computer, 'hosts' | 'port'>): string[] {
-  return computer.hosts.map((host) => `ws://${host.includes(':') && !host.startsWith('[') ? `[${host}]` : host}:${computer.port}/`)
+// The hosts first, which win when near; a bridge, which reaches the computer from anywhere, after.
+function urls(computer: Pick<Computer, 'hosts' | 'port' | 'bridges'>): string[] {
+  return [...computer.hosts.map((host) => `ws://${host.includes(':') && !host.startsWith('[') ? `[${host}]` : host}:${computer.port}/`), ...computer.bridges]
 }
 
 export function computerOf(state: State = useSession.getState()): Computer | null {
@@ -228,8 +229,10 @@ async function connected(link: MobileConnection, computer: Computer): Promise<vo
   attempt = 0
   const { welcome } = link
   const hosts = [...new Set([...(welcome.hosts ?? []), ...computer.hosts])].slice(0, 16)
+  // A computer that says which bridges it has is believed: one it left would only fail.
+  const bridges = welcome.bridges ?? computer.bridges
   await updateComputers((computers) => computers.map((each) => each.key === computer.key
-    ? { ...each, name: welcome.computer, deviceId: welcome.deviceId, access: welcome.access, hosts, lastOnlineAt: Date.now() }
+    ? { ...each, name: welcome.computer, deviceId: welcome.deviceId, access: welcome.access, hosts, bridges, lastOnlineAt: Date.now() }
     : each))
   useSession.setState({ status: 'online', welcome })
   link.on('conversations.changed', ({ conversation }) => {
@@ -537,11 +540,11 @@ export async function pair(text: string, onCode: (code: string) => void): Promis
   disconnect()
   try {
     const link = await connectMobile({
-      urls: urls({ hosts: code.hosts, port: code.port }), mode: 'pair', staticKey: key, computerKey: base64Url.decode(code.key),
+      urls: urls({ hosts: code.hosts, port: code.port, bridges: code.bridges ?? [] }), mode: 'pair', staticKey: key, computerKey: base64Url.decode(code.key),
       pairing: { id: code.pairing, psk: base64Url.decode(code.psk) }, hello: hello(), onPairingCode: onCode, unsupportedItemText: t('unsupported')
     })
     const computer: Computer = {
-      key: code.key, name: link.welcome.computer, port: code.port, hosts: code.hosts, deviceId: link.welcome.deviceId,
+      key: code.key, name: link.welcome.computer, port: code.port, hosts: code.hosts, bridges: code.bridges ?? [], deviceId: link.welcome.deviceId,
       access: link.welcome.access, pairedAt: Date.now(), lastOnlineAt: Date.now()
     }
     await updateComputers((computers) => [computer, ...computers.filter((each) => each.key !== code.key)])

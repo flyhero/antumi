@@ -13,6 +13,8 @@ import {
   type MobileHello as Hello
 } from '@antumi/protocol'
 import { MobileLink, NoiseError, NoiseHandshake, mobileDeviceId, pairingConfirmationCode, type NoiseKeyPair } from '@antumi/protocol/mobile'
+import { BridgeLink, type BridgeLinkState } from './bridge-link'
+import { bridgePhoneUrl } from './bridge-protocol'
 
 // The phone link's listener (docs/MOBILE.md): it owns the port phones reach, runs the Noise
 // handshake and pairing, and carries each paired phone's JSON-RPC to core over a loopback
@@ -29,6 +31,7 @@ const SEND_HIGH_WATER = 4 * 1024 * 1024
 export type GatewayDevice = { id: string; publicKey: string; access: MobileAccess }
 export type GatewayPairing = { id: string; psk: string; expiresAt: number }
 export type PairingAnswer = { deviceId: string; access: MobileAccess } | { rejected: string }
+export type GatewayBridge = { address: string; id: string; secret: string }
 
 export type GatewayOptions = {
   port: number
@@ -39,6 +42,7 @@ export type GatewayOptions = {
   // A completed pairing handshake, for core to confirm with the user.
   onPairing(pairing: { pairingId: string; publicKey: string; hello: Hello; code: string }): void
   onSeen?(deviceId: string): void
+  onBridge?(state: BridgeLinkState): void
   // Bound for tests; any interface otherwise.
   host?: string
   now?: () => number
@@ -77,6 +81,7 @@ export class Gateway {
   private readonly failures = new Map<string, number[]>()
   private timer: NodeJS.Timeout | null = null
   private hosts: string[] = []
+  private toBridge: { config: GatewayBridge; link: BridgeLink } | null = null
   private readonly now: () => number
 
   constructor(private readonly options: GatewayOptions) {
@@ -105,6 +110,8 @@ export class Gateway {
 
   async stop(): Promise<void> {
     if (this.timer) clearInterval(this.timer)
+    this.toBridge?.link.stop()
+    this.toBridge = null
     this.sessions.forEach((session) => session.close('shutdown'))
     await new Promise<void>((resolve) => (this.server ? this.server.close(() => resolve()) : resolve()))
     this.server = null
@@ -131,6 +138,24 @@ export class Gateway {
 
   setHosts(hosts: readonly string[]): void {
     this.hosts = [...hosts]
+  }
+
+  // Keeps a link open to the bridge, whose phones come in like those on the port.
+  setBridge(config: GatewayBridge | null): void {
+    const current = this.toBridge?.config
+    const same = current && config && current.address === config.address && current.id === config.id && current.secret === config.secret
+    if (same) return
+    this.toBridge?.link.stop()
+    this.toBridge = null
+    if (!config) return
+    const link = new BridgeLink({
+      ...config,
+      // Its own failure limits per phone: the bridge's address is every phone's.
+      onSocket: (socket, from) => this.admit(socket, `bridge:${from}`),
+      onState: (state) => this.options.onBridge?.(state)
+    })
+    this.toBridge = { config, link }
+    link.start()
   }
 
   revoke(deviceId: string): void {
@@ -160,7 +185,16 @@ export class Gateway {
 
   private accept(socket: WebSocket, request: IncomingMessage): void {
     const address = request.socket.remoteAddress ?? ''
-    if (!isPrivateAddress(address) || this.blocked(address)) {
+    if (!isPrivateAddress(address)) {
+      socket.terminate()
+      return
+    }
+    this.admit(socket, address)
+  }
+
+  // A phone's socket, from the port or the bridge; `address` keys its failure limits.
+  private admit(socket: WebSocket, address: string): void {
+    if (this.blocked(address)) {
       socket.terminate()
       return
     }
@@ -323,7 +357,8 @@ export class Gateway {
     link.send(JSON.stringify({
       mobile: {
         type: 'welcome', deviceId: device.id, access: device.access, computer: this.options.computerName,
-        serverVersion: hello.serverVersion, features: hello.features ?? [], ...(hello.home ? { home: hello.home } : {}), hosts: this.hosts
+        serverVersion: hello.serverVersion, features: hello.features ?? [], ...(hello.home ? { home: hello.home } : {}), hosts: this.hosts,
+        bridges: this.toBridge ? [bridgePhoneUrl(this.toBridge.config.address, this.toBridge.config.id)] : []
       }
     }))
 

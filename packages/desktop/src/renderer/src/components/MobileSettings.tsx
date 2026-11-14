@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import QRCode from 'qrcode'
 import {
-  MOBILE_DEFAULT_PORT, MOBILE_EXTRA_HOSTS_MAX, MOBILE_RELAY_DEFAULT_PORT, MobileExtraHost, PROJECT_GITHUB_URL,
-  type MobileAccess, type MobileDevice, type MobilePairing, type MobileRelay, type MobileRelaySetup, type MobileStatus
+  MOBILE_BRIDGE_DEFAULT_PORT, MOBILE_DEFAULT_PORT, MOBILE_EXTRA_HOSTS_MAX, MOBILE_RELAY_DEFAULT_PORT, MobileBridgeAddress, MobileExtraHost, PROJECT_GITHUB_URL,
+  type MobileAccess, type MobileBridge, type MobileDevice, type MobilePairing, type MobileRelay, type MobileRelaySetup, type MobileStatus
 } from '@antumi/protocol'
 import { askConfirm } from '../confirm-dialog'
 import { openGuide, perform, useCore } from '../core-store'
@@ -68,6 +68,7 @@ export function MobileSettings() {
         <WifiRow status={status} />
         <TailscaleRow status={status} />
         {status.relay !== undefined && <RelayRow relay={status.relay} onStatus={apply} />}
+        {status.bridge !== undefined && <BridgeRow bridge={status.bridge} onStatus={apply} />}
         {status.extraHosts && <ExtraHostsRow saved={status.extraHosts} onStatus={apply} />}
         <SettingsRow
           label={t('MobileSettings.guide')}
@@ -280,6 +281,87 @@ function RelayPanel({ relay, onStatus }: { relay: MobileRelay | null; onStatus: 
 }
 
 const WIREGUARD_INSTALL_URL = 'https://www.wireguard.com/install/'
+
+function bridgeStateText(bridge: MobileBridge): string {
+  if (bridge.state === 'off') return t('MobileSettings.bridgeOff')
+  if (bridge.state === 'connecting') return t('MobileSettings.bridgeConnecting')
+  if (bridge.state === 'connected') return t('MobileSettings.bridgeConnected', { address: bridge.address })
+  if (bridge.error === 'wrong-secret') return t('MobileSettings.bridgeWrongSecret')
+  return t('MobileSettings.bridgeFailed', { error: bridge.error ?? '' })
+}
+
+function BridgeRow({ bridge, onStatus }: { bridge: MobileBridge | null; onStatus: (status: MobileStatus | null) => void }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <>
+      <SettingsRow
+        label={t('MobileSettings.bridge')}
+        description={bridge && !open
+          ? <span className={bridge.state === 'failed' ? 'mobile-field-error' : bridge.state === 'connected' ? 'mobile-ready' : undefined}>{bridgeStateText(bridge)}</span>
+          : t('MobileSettings.bridgeDescription')}
+        control={() => (
+          <button type="button" className="button" aria-expanded={open} onClick={() => setOpen(!open)}>
+            {open ? t('MobileSettings.relayHide') : bridge ? t('MobileSettings.relayShow') : t('MobileSettings.relaySetUp')}
+          </button>
+        )}
+      />
+      {open && <BridgePanel bridge={bridge} onStatus={onStatus} />}
+    </>
+  )
+}
+
+function BridgePanel({ bridge, onStatus }: { bridge: MobileBridge | null; onStatus: (status: MobileStatus | null) => void }) {
+  const [script, setScript] = useState<string | null>(null)
+  const [address, setAddress] = useState(bridge?.address ?? '')
+  useEffect(() => setAddress(bridge?.address ?? ''), [bridge?.address])
+  useEffect(() => {
+    let live = true
+    void perform((rpc) => rpc.call('mobile.bridgeInstallScript', {})).then((next) => { if (live && next) setScript(next.script) })
+    return () => { live = false }
+  }, [])
+  const parsed = MobileBridgeAddress.safeParse(address)
+  const changed = address.trim() !== (bridge?.address ?? '')
+  const stop = async () => {
+    const confirmed = await askConfirm({ message: t('MobileSettings.bridgeRemoveConfirm'), confirm: t('MobileSettings.relayRemove'), danger: true })
+    if (confirmed) onStatus(await perform((rpc) => rpc.call('mobile.removeBridge', {})))
+  }
+  return (
+    <div className="mobile-relay">
+      <div className="mobile-relay-step">
+        <p className="settings-row-label">{t('MobileSettings.bridgeStep1')}</p>
+        <p className="settings-row-description">{t('MobileSettings.bridgeStep1Description', { port: MOBILE_BRIDGE_DEFAULT_PORT })}</p>
+        <div className="mobile-pairing-actions">
+          {script && <CopyButton text={script} label={t('MobileSettings.bridgeCopyScript')}>{t('MobileSettings.bridgeCopyScript')}</CopyButton>}
+        </div>
+      </div>
+      <form className="mobile-relay-step" onSubmit={(event) => {
+        event.preventDefault()
+        if (parsed.success && changed) void perform((rpc) => rpc.call('mobile.setBridge', { address: parsed.data })).then(onStatus)
+      }}>
+        <p className="settings-row-label">{t('MobileSettings.bridgeStep2')}</p>
+        <p className="settings-row-description">{address.trim() && !parsed.success
+          ? <span className="mobile-field-error" role="alert">{t('MobileSettings.bridgeInvalid', { address: address.trim() })}</span>
+          : t('MobileSettings.bridgeStep2Description', { port: MOBILE_BRIDGE_DEFAULT_PORT })}</p>
+        <div className="mobile-inline-form">
+          <input className="input mobile-hosts" aria-label={t('MobileSettings.bridgeStep2')} placeholder="8.8.8.8" value={address} onChange={(event) => setAddress(event.target.value)} />
+          <button type="submit" className="button primary" disabled={!parsed.success || !changed}>{t('MobileSettings.save')}</button>
+        </div>
+      </form>
+      {bridge && (
+        <div className="mobile-relay-step">
+          <p className="settings-row-label">{t('MobileSettings.bridgeStep3')}</p>
+          <p className="settings-row-description" role="status">{bridgeStateText(bridge)}</p>
+          <p className="settings-row-description">{t('MobileSettings.bridgeStep3Description')}</p>
+        </div>
+      )}
+      {bridge && (
+        <div className="mobile-pairing-actions">
+          <button type="button" className="button ghost" onClick={() => void stop()}>{t('MobileSettings.relayRemove')}</button>
+        </div>
+      )}
+    </div>
+  )
+}
 
 // Typed as one line: commas, spaces or 、 between them.
 function hostsOf(text: string): string[] {

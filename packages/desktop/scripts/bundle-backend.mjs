@@ -42,6 +42,20 @@ for (const [name, entry] of [
   })
 }
 
+// The bridge, which runs on the user's own server rather than here: bridge-install.ts carries it
+// there inside a script, for whatever Node that server has, from 14 on.
+await build({
+  entryPoints: [path.join(repo, 'packages/core/src/bridge-server-main.ts')],
+  outfile: path.join(out, 'bridge-server.mjs'),
+  bundle: true,
+  platform: 'node',
+  format: 'esm',
+  target: 'node14',
+  minify: true,
+  banner: { js: banner },
+  logLevel: 'warning'
+})
+
 // The prebuilt binding next to the bundles, where `import 'node-pty'` resolves it. Only the target
 // platform's prebuilds (--platform, this machine's by default): the rest is 50MB of others. Debug
 // symbols stay behind too. node-pty ships no Linux prebuild, so there install compiled one into

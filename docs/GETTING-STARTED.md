@@ -77,7 +77,18 @@
 
 连不上时检查：电脑上的 Tailscale 和 Antumi 都在运行；Tailscale 的 MagicDNS 开着（默认开）；改过 Tailscale 访问控制的话，要允许手机访问电脑的 7820 端口（或你在 **设置 → 手机** 里改过的端口）。Android 同一时间只能开一个 VPN，开着别的 VPN 时 Tailscale 会被关掉。
 
-### 在外面用：经自己的服务器
+### 在外面用：经自己服务器上的 Antumi 中转
+
+有一台带公网 IP 的 Linux 服务器时，可以在上面装一个 Antumi 中转：电脑一直连着它，手机在外面经它连回电脑。手机上不用装别的 App，走普通的 TCP，也不占手机的 VPN；内容照旧端到端加密，中转只转发它看不懂的数据。
+
+1. 在 **设置 → 手机** 的 **连接方式** 里，点「自己的服务器（Antumi 中转）」的 **设置**，点 **复制安装脚本**。
+2. 用 root 登录服务器粘贴执行（Debian、Ubuntu、CentOS、Alibaba Cloud Linux 等都行）。服务器上已有 Node.js 14 以上就直接用它，没有会自动安装；装好后中转开机自动启动。再到云控制台的防火墙或安全组放行 TCP 7830。
+3. 回到设置页，在第 2 步填服务器的公网 IP 或域名，保存。第 3 步显示「已连上中转」就好了。
+4. 新配对的手机扫码就会用上中转；已经配对的手机在家里连上电脑一次就会记下。
+
+在 3Mbps 的云服务器上，经中转传一张 2MB 的图片大约 5 到 7 秒。
+
+### 在外面用：经自己的服务器（WireGuard）
 
 有一台带公网 IP 的 Linux 服务器（云服务器就行，3Mbps 带宽够用）时，可以让它用 [WireGuard](https://www.wireguard.com) 在手机和电脑之间转发。手机和电脑之间本来就端到端加密，服务器只转发它看不懂的数据。电脑上不用装 VPN，也不要管理员权限：Antumi 自己运行 [wireproxy](https://github.com/windtf/wireproxy)，第一次用时从 GitHub 下载（约 4MB）。macOS、Windows、Linux 做法一样。
 

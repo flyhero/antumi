@@ -505,11 +505,11 @@ export async function handOff(id: string, options: {
 // A model or effort left out is the agent's own default. allowBypass as from the computer, which
 // still refuses bypass where its settings have it off.
 export async function startConversation(options: {
-  agent: Conversation['agent']; projectPath: string; worktree: boolean; text: string; images: readonly string[]
+  agent: Conversation['agent']; projectPaths: readonly string[]; worktree: boolean; text: string; images: readonly string[]
   permissionMode: ChatPermissionMode; model?: string; effort?: string
 }): Promise<string | null> {
   const created = await call('conversations.create', {
-    agent: options.agent, projectPaths: [options.projectPath], deferStart: true, allowBypass: true, permissionMode: options.permissionMode,
+    agent: options.agent, projectPaths: [...options.projectPaths], deferStart: true, allowBypass: true, permissionMode: options.permissionMode,
     ...(options.model ? { model: options.model } : {}), ...(options.effort ? { effort: options.effort } : {}), ...(options.worktree ? { worktree: true } : {})
   })
   if (!created) return null

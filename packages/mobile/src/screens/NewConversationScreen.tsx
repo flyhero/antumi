@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { ArrowUp, Folder, GitBranch } from 'lucide-react-native'
-import { AgentPicker, ProjectSheet, StartOptionsGroup, modelText, useStartChoices, useStartOptions } from '../components/pickers'
+import { AgentPicker, ProjectsSheet, StartOptionsGroup, modelText, useStartChoices, useStartOptions } from '../components/pickers'
 import { QuotaWarning, useNow } from '../components/quota'
 import { Chip, EmptyState, Muted, Screen, confirmTap } from '../components/ui'
 import { t } from '../i18n'
@@ -15,7 +15,11 @@ import { radius, space, type, useTheme } from '../theme'
 // and how it starts follow below.
 export function NewConversationScreen() {
   const theme = useTheme()
-  const { projects, project, setProject, agents, agent, setAgent } = useStartChoices()
+  const { projects, project, agents, agent, setAgent } = useStartChoices()
+  // The primary first; until the user picks, the project the choices start on.
+  const [chosen, setChosen] = useState<string[] | null>(null)
+  const picked = chosen ?? (project ? [project] : [])
+  const primary = picked[0] ?? null
   const options = useStartOptions(agent)
   const [worktree, setWorktree] = useState(false)
   // What the computer said of each project; one it has not answered for yet counts as git, so the
@@ -27,22 +31,25 @@ export function NewConversationScreen() {
   const usage = useSession((s) => s.usage)
   const now = useNow()
   const exhausted = agent ? exhaustedText(usage?.find((each) => each.agent === agent), modelText(options?.model), now) : null
+  const unasked = picked.find((path) => !(path in git))
   useEffect(() => {
-    if (!project || project in git) return
+    if (!unasked) return
     let live = true
-    void isGitProject(project).then((answer) => {
-      if (live && answer !== null) setGit((current) => ({ ...current, [project]: answer }))
+    void isGitProject(unasked).then((answer) => {
+      // Not knowing counts as git, and is not asked again.
+      if (live) setGit((current) => ({ ...current, [unasked]: answer ?? true }))
     })
     return () => { live = false }
-  }, [project, git])
-  const worktreeOffered = project !== null && git[project] !== false
-  const ready = project !== null && agent !== null && options !== null && text.trim() !== '' && !busy
+  }, [unasked])
+  // Core lays out a worktree of every project, so each must be a git repo.
+  const worktreeOffered = picked.length > 0 && picked.every((path) => git[path] !== false)
+  const ready = primary !== null && agent !== null && options !== null && text.trim() !== '' && !busy
   const start = async () => {
-    if (!ready || !project || !agent || !options) return
+    if (!ready || !agent || !options) return
     confirmTap()
     setBusy(true)
     const id = await startConversation({
-      agent, projectPath: project, worktree: worktree && worktreeOffered, text: text.trim(), images: [],
+      agent, projectPaths: picked, worktree: worktree && worktreeOffered, text: text.trim(), images: [],
       permissionMode: options.mode, ...options.picked
     })
     setBusy(false)
@@ -67,7 +74,7 @@ export function NewConversationScreen() {
           autoFocus
         />
         <View style={styles.bar}>
-          <Chip icon={Folder} label={project ? folderName(project) : '…'} chevron onPress={() => setPicking(true)} />
+          <Chip icon={Folder} label={primary ? `${folderName(primary)}${picked.length > 1 ? ` +${picked.length - 1}` : ''}` : '…'} chevron onPress={() => setPicking(true)} />
           {worktreeOffered ? <Chip icon={GitBranch} label={t('newWorktree')} active={worktree} shrink={false} onPress={() => setWorktree(!worktree)} /> : null}
           <Pressable
             accessibilityRole="button"
@@ -80,11 +87,12 @@ export function NewConversationScreen() {
           </Pressable>
         </View>
       </View>
-      {worktree && worktreeOffered ? <Muted>{t('worktreeHint')}</Muted> : null}
+      {worktree && worktreeOffered ? <Muted>{t(picked.length > 1 ? 'worktreesHint' : 'worktreeHint')}</Muted> : null}
+      {worktree && !worktreeOffered ? <Muted>{t('worktreeNeedsGit')}</Muted> : null}
       <AgentPicker title={t('agent')} agents={agents} agent={agent} onPick={setAgent} />
       {exhausted ? <QuotaWarning text={exhausted} /> : null}
       {agent && options ? <StartOptionsGroup agent={agent} options={options} /> : null}
-      {picking && projects ? <ProjectSheet projects={projects} project={project} onPick={setProject} onClose={() => setPicking(false)} /> : null}
+      {picking && projects ? <ProjectsSheet projects={projects} picked={picked} onChange={setChosen} onClose={() => setPicking(false)} /> : null}
     </Screen>
   )
 }

@@ -60,6 +60,25 @@ export function ProjectSheet({ projects, project, onPick, onClose }: { projects:
   )
 }
 
+// Several recent projects for one conversation: the first picked is the primary, where the agent
+// works; picking the primary away hands that to the next. The last one stays.
+export function ProjectsSheet({ projects, picked, onChange, onClose }: { projects: readonly string[]; picked: readonly string[]; onChange: (picked: string[]) => void; onClose: () => void }) {
+  const toggle = (path: string) => {
+    if (!picked.includes(path)) return onChange([...picked, path])
+    if (picked.length > 1) onChange(picked.filter((each) => each !== path))
+  }
+  return (
+    <Sheet title={t('projects')} onClose={onClose}>
+      <Muted>{t('projectsHint')}</Muted>
+      <ChoiceList
+        choices={projects.map((path) => ({ value: path, label: path === picked[0] ? `${folderName(path)} · ${t('primaryProject')}` : folderName(path), detail: path }))}
+        current={picked}
+        onPick={toggle}
+      />
+    </Sheet>
+  )
+}
+
 type StartPick = { model?: string; effort?: string; mode?: ChatPermissionMode }
 
 // What a new chat starts with, as on the computer: the agent's default model and mode unless one is

@@ -27,10 +27,11 @@ export function Sheet({ title, onClose, children }: { title: string; onClose: ()
 
 export type Choice = { value: string; label: string; detail?: string | null }
 
-// One question of a sheet: its answers in a card, the current one checked.
-export function ChoiceList({ title, choices, current, onPick }: { title?: string; choices: readonly Choice[]; current: string | null; onPick: (value: string) => void }) {
+// One question of a sheet: its answers in a card, the current one (or several) checked.
+export function ChoiceList({ title, choices, current, onPick }: { title?: string; choices: readonly Choice[]; current: string | readonly string[] | null; onPick: (value: string) => void }) {
   const theme = useTheme()
   if (choices.length === 0) return null
+  const checked = (value: string) => (typeof current === 'string' ? value === current : current?.includes(value) ?? false)
   return (
     <View style={styles.group}>
       {title ? <Text style={[type.caption, styles.groupTitle, { color: theme.textMuted }]}>{title}</Text> : null}
@@ -38,10 +39,10 @@ export function ChoiceList({ title, choices, current, onPick }: { title?: string
         {choices.map(({ value, label, detail }, index) => (
           <Pressable key={value} onPress={() => { tap(); onPick(value) }} style={[styles.row, index > 0 && { borderTopColor: theme.border, borderTopWidth: StyleSheet.hairlineWidth }]}>
             <View style={styles.flex}>
-              <Text style={[type.secondary, { color: theme.text, fontWeight: value === current ? '600' : '400' }]}>{label}</Text>
+              <Text style={[type.secondary, { color: theme.text, fontWeight: checked(value) ? '600' : '400' }]}>{label}</Text>
               {detail ? <Text style={[type.caption, { color: theme.textMuted }]} numberOfLines={1}>{detail}</Text> : null}
             </View>
-            {value === current ? <Check size={18} color={theme.accent} /> : null}
+            {checked(value) ? <Check size={18} color={theme.accent} /> : null}
           </Pressable>
         ))}
       </View>

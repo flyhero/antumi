@@ -42,6 +42,7 @@ import type { ModelProviderStore } from './model-providers'
 import type { AccountLaunch, AgentAccountStore } from './agent-accounts'
 import type { ProviderLaunch } from './provider-launch'
 import type { QuickProvider } from './quick-request'
+import { FREED_ATTACHMENT_GRACE_MS, type AttachmentSweeper } from './attachment-sweep'
 
 export type ConversationEvent =
   | { type: 'changed'; conversation: Conversation }
@@ -220,6 +221,8 @@ export class ConversationService {
   private readonly heldQuestions = new Map<string, NodeJS.Timeout>()
   // How long such a question waits; a test may shorten it.
   questionWaitMs = UNATTENDED_QUESTION_WAIT_MS
+
+  private sweeper: Pick<AttachmentSweeper, 'mentionedBy' | 'sweep'> | null = null
 
   constructor(
     private readonly store: ConversationStore,
@@ -2031,6 +2034,11 @@ export class ConversationService {
     await this.remove(id)
   }
 
+  // Lets the images a deleted conversation used go, unless something else still refers to them.
+  useAttachmentSweeper(sweeper: Pick<AttachmentSweeper, 'mentionedBy' | 'sweep'>): void {
+    this.sweeper = sweeper
+  }
+
   // A task's chat goes with its task; the worktrees it worked in stay.
   async deleteForTask(taskId: string): Promise<void> {
     const conversation = this.store.byTask(taskId)
@@ -2055,6 +2063,8 @@ export class ConversationService {
       const helper = this.store.helper(id)
       if (helper) await this.remove(helper.id)
       if (current.sessionId) await this.stop(id)
+      // Read before the logs go: what else still refers to these is for the sweep to say.
+      const mentioned = await this.sweeper?.mentionedBy(id).catch(() => null)
       const directory = path.join(this.sessionsRoot, id)
       await rm(path.join(directory, 'handoffs'), { recursive: true, force: true })
       await rm(path.join(directory, 'stages'), { recursive: true, force: true })
@@ -2064,8 +2074,13 @@ export class ConversationService {
       await rmdir(launchRoot(this.sessionsRoot, id)).catch(() => {})
       // The folder goes too, unless it still holds the workspace Antumi made, which stays.
       await rmdir(directory).catch(() => {})
+      await rm(this.attachments.pastedTextDir(id), { recursive: true, force: true }).catch(() => {})
       this.store.delete(id)
       this.emit({ type: 'deleted', id })
+      if (mentioned?.size) {
+        void this.sweeper?.sweep(FREED_ATTACHMENT_GRACE_MS, mentioned)
+          .catch((error: unknown) => console.error('[antumi-core] freeing a deleted conversation\'s images failed', error))
+      }
     } finally { this.retiring.delete(id) }
   }
 

@@ -47,7 +47,7 @@ import {
   BoltIcon,
   RobotIcon,
   PulseIcon,
-  TerminalIcon, PhoneIcon } from './icons'
+  TerminalIcon, PhoneIcon, ArchiveIcon } from './icons'
 import { ChatCommandSettings } from './ChatCommandSettings'
 import { KnowledgeBaseSettings } from './KnowledgeBaseSettings'
 import { SkillsSettingsSection } from './SkillsSettingsSection'
@@ -62,6 +62,7 @@ import { SourceSettingsSection } from './SourceSettingsSection'
 import { projectName } from './ProjectPicker'
 import { Segmented, SettingsGroup, SettingsRow, Stepper, Toggle } from './SettingsControls'
 import { MobileSettings, useMobileSupported } from './MobileSettings'
+import { StorageSettings, useAttachmentSweepSupported } from './StorageSettings'
 import { SupportSettings } from './SupportSettings'
 import { ProjectConfigDialog, projectConfigSummary } from './ProjectConfigDialog'
 import { useOccludesBrowser } from '../browser-occlusion'
@@ -810,6 +811,17 @@ const BROWSER_SECTION: Section = localized(() => ({
   Body: BrowserRows
 }))
 
+// How much stored images take, and sweeping those nothing refers to; on a core that sweeps them.
+const STORAGE_SECTION: Section = localized(() => ({
+  id: 'storage',
+  group: t('ChatFontPicker.other'),
+  title: t('StorageSettings.title'),
+  description: t('StorageSettings.description'),
+  keywords: ['storage', 'disk', 'attachments', 'images', 'clean', '存储', '空间', '附件', '图片', '清理', '磁盘'],
+  Icon: ArchiveIcon,
+  Body: StorageSettings
+}))
+
 const MOBILE_SECTION: Section = localized(() => ({
   id: 'mobile',
   group: t('SettingsPage.integrations'),
@@ -868,6 +880,7 @@ export function SettingsPage() {
   const plugins = useCore((s) => s.rpc?.features.includes('plugins') ?? false)
   const browser = useBrowserSupported()
   const phones = useMobileSupported()
+  const storage = useAttachmentSweepSupported()
   const knowledge = useKnowledgeBaseSupported()
   const skills = useSkillsSupported()
   const mcp = useMcpServersSupported()
@@ -887,8 +900,8 @@ export function SettingsPage() {
         CONVERSATION_SECTION, ...(chatCommands ? [CHAT_COMMANDS_SECTION] : []), ...(sessionImport ? [SESSION_IMPORT_SECTION] : []),
         ...(skills ? [SKILLS_SECTION] : []), ...(mcp ? [MCP_SECTION] : [])
       ] : [section]))
-    return [...own, ...(plugins ? [PLUGINS_SECTION] : []), ...sourceSections(sources ?? []), ...(knowledge ? [KNOWLEDGE_SECTION] : []), ...(browser ? [BROWSER_SECTION] : []), ...(phones ? [MOBILE_SECTION] : []), ...information, ...(wireLog ? [DEBUG_SECTION] : [])]
-  }, [sources, browser, phones, knowledge, skills, mcp, sessionImport, accounts, modelProviders, chatCommands, wireLog, plugins, run, permissions, locale])
+    return [...own, ...(plugins ? [PLUGINS_SECTION] : []), ...sourceSections(sources ?? []), ...(knowledge ? [KNOWLEDGE_SECTION] : []), ...(browser ? [BROWSER_SECTION] : []), ...(phones ? [MOBILE_SECTION] : []), ...(storage ? [STORAGE_SECTION] : []), ...information, ...(wireLog ? [DEBUG_SECTION] : [])]
+  }, [sources, browser, phones, storage, knowledge, skills, mcp, sessionImport, accounts, modelProviders, chatCommands, wireLog, plugins, run, permissions, locale])
   const activeId = useCore((state) => state.settingsSection) ?? SECTIONS[0]?.id ?? ''
   const [query, setQuery] = useState('')
   useEffect(() => { setQuery('') }, [activeId])

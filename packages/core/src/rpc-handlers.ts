@@ -70,6 +70,7 @@ import { AgentPullRequests } from './agent-pull-requests'
 import { parsePullRequestDraft, pullRequestPrompt } from './pull-request-draft'
 import { PullRequestService } from './pull-request-service'
 import type { PullRequestStore } from './pull-request-store'
+import { SWEEP_GRACE_MS, type AttachmentSweeper } from './attachment-sweep'
 
 const OK = { ok: true } as const
 
@@ -81,7 +82,7 @@ export function createRpcHandlers(
   sessions: SessionHost,
   usage: UsageService,
   sources: SourceService,
-  attachments: { store: AttachmentStore; uploads: AttachmentUploads },
+  attachments: { store: AttachmentStore; uploads: AttachmentUploads; sweeper?: AttachmentSweeper },
   terminals: TerminalService,
   worktrees: WorktreeService,
   browser: BrowserService,
@@ -125,7 +126,7 @@ export function createRpcHandlers(
     if (!mobile) throw new Rejection('mobile-unavailable')
     return mobile
   }
-  const hello = () => ({ protocolVersion: PROTOCOL_VERSION, serverVersion: packageJson.version, home: { path: homedir(), windows: process.platform === 'win32' }, features: CORE_FEATURES.filter((feature) => (feature !== 'agent-profiles' || Boolean(profiles)) && (feature !== 'project-star' || Boolean(projectStar)) && (feature !== 'bookmarks' || Boolean(bookmarks)) && (feature !== 'browser-history' || Boolean(browserHistory)) && (feature !== 'browser-sites' || Boolean(browserSites)) && (feature !== 'pets' || Boolean(pets)) && (feature !== 'squads' || Boolean(squads)) && (!['plugins', 'plugin-recommendations'].includes(feature) || Boolean(plugins)) && (!['skills-library', 'skills-search', 'skills-activation'].includes(feature) || Boolean(skills)) && (feature !== 'mcp-servers' || Boolean(mcpServers)) && (feature !== 'small-model-stats' || Boolean(smallModels)) && (!['model-providers', 'model-provider-models'].includes(feature) || Boolean(modelProviders)) && (feature !== 'agent-accounts' || Boolean(accounts)) && (feature !== 'pull-requests' || Boolean(pullRequests)) && (feature !== 'mobile' || Boolean(mobile))) })
+  const hello = () => ({ protocolVersion: PROTOCOL_VERSION, serverVersion: packageJson.version, home: { path: homedir(), windows: process.platform === 'win32' }, features: CORE_FEATURES.filter((feature) => (feature !== 'agent-profiles' || Boolean(profiles)) && (feature !== 'project-star' || Boolean(projectStar)) && (feature !== 'bookmarks' || Boolean(bookmarks)) && (feature !== 'browser-history' || Boolean(browserHistory)) && (feature !== 'browser-sites' || Boolean(browserSites)) && (feature !== 'pets' || Boolean(pets)) && (feature !== 'squads' || Boolean(squads)) && (!['plugins', 'plugin-recommendations'].includes(feature) || Boolean(plugins)) && (!['skills-library', 'skills-search', 'skills-activation'].includes(feature) || Boolean(skills)) && (feature !== 'mcp-servers' || Boolean(mcpServers)) && (feature !== 'small-model-stats' || Boolean(smallModels)) && (!['model-providers', 'model-provider-models'].includes(feature) || Boolean(modelProviders)) && (feature !== 'agent-accounts' || Boolean(accounts)) && (feature !== 'pull-requests' || Boolean(pullRequests)) && (feature !== 'mobile' || Boolean(mobile)) && (feature !== 'attachment-sweep' || Boolean(attachments.sweeper))) })
   // A phone reaches only projects the user already worked in from the computer.
   const requireRecentForPhone = (connection: Connection, paths: readonly string[]): void => {
     if (!connection.mobile) return
@@ -665,6 +666,14 @@ export function createRpcHandlers(
     'attachments.read': async ({ id, offset, length }) => ({
       data: Buffer.from(await attachments.store.read(id, offset, length)).toString('base64')
     }),
+    'attachments.usage': () => {
+      if (!attachments.sweeper) throw new Rejection('unsupported', 'this core does not sweep attachments')
+      return attachments.sweeper.usage(SWEEP_GRACE_MS)
+    },
+    'attachments.sweep': () => {
+      if (!attachments.sweeper) throw new Rejection('unsupported', 'this core does not sweep attachments')
+      return attachments.sweeper.sweep(SWEEP_GRACE_MS)
+    },
     'ports.list': () => ports.list(),
     'ports.stop': async (ref) => { await ports.stop(ref); return OK },
     'terminals.list': () => terminals.list(),

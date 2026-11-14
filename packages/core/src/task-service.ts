@@ -55,6 +55,7 @@ import type { TaskPatch, TaskStore } from './task-store'
 import type { TrustedSetup } from './project-config'
 import type { WorktreeSetup } from './worktree-setup'
 import { normalizeRepoPath, prepareRefineWorkspace, prepareWorkspace, projectHead, removePlanningCheckouts, restartBranches, startOptions, withKnownWorktrees } from './workspace'
+import { FREED_ATTACHMENT_GRACE_MS, type AttachmentSweeper } from './attachment-sweep'
 
 export type TaskEvent = { type: 'changed'; task: Task; sourceOnly?: boolean } | { type: 'deleted'; id: string }
 
@@ -102,6 +103,8 @@ export class TaskService {
   private readonly naming = new Map<string, Promise<void>>()
   setBranchNamer(namer: BranchNamer): void { this.namer = namer }
   isLaunching(id: string): boolean { return this.launching.has(id) || (this.squads?.preparing(id) ?? false) }
+
+  private sweeper: Pick<AttachmentSweeper, 'sweep'> | null = null
 
   constructor(
     private readonly store: TaskStore,
@@ -827,6 +830,11 @@ export class TaskService {
     return task.images.filter((_, index) => images.attached[index]?.path).slice(0, MAX_CHAT_IMAGES).map((image) => image.id)
   }
 
+  // Lets the images a deleted task showed go, unless something else still refers to them.
+  useAttachmentSweeper(sweeper: Pick<AttachmentSweeper, 'sweep'>): void {
+    this.sweeper = sweeper
+  }
+
   async delete(id: string): Promise<void> {
     const task = this.get(id)
     if (this.isLaunching(task.id)) throw new Rejection('run-in-progress')
@@ -838,6 +846,11 @@ export class TaskService {
     await removePlanningCheckouts(task.id, this.worktreesRoot)
     this.store.delete(task.id)
     this.emit({ type: 'deleted', id: task.id })
+    const shown = new Set([...task.images, ...(task.sourceSnapshot?.images ?? [])].map((image) => image.id))
+    if (shown.size > 0) {
+      void this.sweeper?.sweep(FREED_ATTACHMENT_GRACE_MS, shown)
+        .catch((error: unknown) => console.error('[antumi-core] freeing a deleted task\'s images failed', error))
+    }
     // Their dependency edges went with the task.
     dependents.forEach((dependent) => {
       const updated = this.store.get(dependent.id)

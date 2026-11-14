@@ -83,6 +83,7 @@ import { timestampConsole } from './log-timestamps'
 import { useSystemProxy } from './system-proxy'
 import { MobileStore } from './mobile-store'
 import { MobileService } from './mobile-service'
+import { AttachmentSweeper } from './attachment-sweep'
 
 timestampConsole()
 await useSystemProxy()
@@ -271,6 +272,16 @@ const service = new TaskService(
   conversations,
   runs
 )
+
+// Lets stored images go that nothing refers to any more: after a deletion, or when the user sweeps.
+const attachmentSweeper = new AttachmentSweeper({
+  attachments: paths.attachments,
+  sessions: paths.sessions,
+  database: paths.database,
+  conversations: () => conversationsStore.list().map((conversation) => conversation.id)
+})
+conversations.useAttachmentSweeper(attachmentSweeper)
+service.useAttachmentSweeper(attachmentSweeper)
 
 const sourceConfig = new SourceConfigStore(paths.sourcesConfig)
 const credentials = new CredentialStore(paths.credentials)
@@ -698,7 +709,8 @@ server = await startRpcServer({
   token,
   handlers: createRpcHandlers(service, conversations, projects, gitFavorites, daemon, usage, sources, {
     store: attachments,
-    uploads: new AttachmentUploads(attachments)
+    uploads: new AttachmentUploads(attachments),
+    sweeper: attachmentSweeper
   }, terminals, worktrees, browser, awake, terminalCommands, limits, runs, turns, chatSettings, environment, schedules, chatCommands, routines, discussions, wire, () => { server?.broadcast('git.changed', {}); profiles.tick() }, squads, todos, plugins, skills, mcpServers, smallModels, projectConfigs, modelProviders, sessionImports, accounts, cliMaintenance, analytics, automation, pets, new ProjectStar(sources), profiles, bookmarks, browserHistory, sourceUpdates,
     { store: pullRequestStore, changed: (taskId, links) => server?.broadcast('pullRequests.changed', { taskId, links }), ready: (service) => { pullRequests.current = service } }, browserSites, mobile)
 })

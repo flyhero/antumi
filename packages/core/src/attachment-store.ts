@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto'
-import { chmodSync, existsSync, lstatSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
-import { chmod, lstat, mkdir, open, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { chmodSync, existsSync, lstatSync, readFileSync, renameSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
+import { chmod, lstat, mkdir, open, readFile, rename, rm, utimes, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { ATTACHMENT_ID_PATTERN, MAX_ATTACHMENT_BYTES, type AttachmentInfo } from '@antumi/protocol'
 import { IMAGE_MIME, ImageError, inspectImage, type ImageFacts } from './image-file'
@@ -40,6 +40,9 @@ export class AttachmentStore {
         rmSync(tmp, { force: true })
         throw error
       }
+    } else {
+      // Stored again: fresh, so a sweep leaves it alone a while (attachment-sweep.ts).
+      utimesSync(file, new Date(), new Date())
     }
     this.infos.set(info.id, info)
     return info
@@ -77,6 +80,9 @@ export class AttachmentStore {
         await rm(tmp, { force: true })
         throw error
       }
+    } else {
+      // Stored again: fresh, so a sweep leaves it alone a while (attachment-sweep.ts).
+      await utimes(file, new Date(), new Date()).catch(() => {})
     }
     this.infos.set(id, info)
     return info

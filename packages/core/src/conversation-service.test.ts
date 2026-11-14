@@ -802,6 +802,32 @@ describe('ConversationService', () => {
     expect(service.list()).toEqual([])
   })
 
+  it('hands the images a deleted conversation\'s logs mention to the sweep, read before they go, with its pasted text gone', async () => {
+    const swept: { graceMs: number; ids: string[] }[] = []
+    let readWhileThere = false
+    service.useAttachmentSweeper({
+      mentionedBy: async (id) => {
+        readWhileThere = existsSync(path.join(root, 'sessions', id, 'stages'))
+        return new Set(['a'.repeat(64) + '.png'])
+      },
+      sweep: async (graceMs, only) => {
+        swept.push({ graceMs, ids: [...(only ?? [])] })
+        return { files: 0, bytes: 0 }
+      }
+    })
+    const created = await service.create('claude', [])
+    await service.send(created.id, 'Hello')
+    await settle()
+    const pasted = attachmentsAt(root).pastedTextDir(created.id)
+    mkdirSync(pasted, { recursive: true })
+    writeFileSync(path.join(pasted, 'pasted-x.txt'), 'long paste')
+    await service.delete(created.id)
+    await settle()
+    expect(readWhileThere).toBe(true)
+    expect(swept).toEqual([{ graceMs: 60 * 60_000, ids: ['a'.repeat(64) + '.png'] }])
+    expect(existsSync(pasted)).toBe(false)
+  })
+
   it('runs Claude over stream-json and keeps its messages', async () => {
     const announced: unknown[] = []
     service = serve((event) => { if (event.type === 'changed') announced.push(event.conversation.chat) })

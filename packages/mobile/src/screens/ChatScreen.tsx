@@ -5,16 +5,16 @@ import Animated, { useAnimatedStyle } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as ImagePicker from 'expo-image-picker'
 import { ArrowUp, ChevronDown, MessageSquare, Plus, SlidersHorizontal, Square, X } from 'lucide-react-native'
-import { chatItemKey, conversationWorking, isSubagent, type ChatItem, type ChatOption, type Conversation } from '@antumi/protocol'
+import { chatItemKey, conversationAsking, conversationWaiting, conversationWorking, isSubagent, type ChatItem, type ChatOption, type Conversation } from '@antumi/protocol'
 import {
   ApprovalDock, AssistantText, ChatImageView, ChatNotice, NoticeLine, ProjectRoots, QuestionDock, ReasoningLine, RequestLine, TodosCard, ToolGroup, TurnEnd, TurnHead, UsageLimitLine, UserMessage,
   WorkingLine, type Approval, type Question, type Tool
 } from '../components/chat'
 import { ChoiceList, Sheet } from '../components/sheet'
-import { EmptyState, IconButton, Muted, Screen, confirmTap } from '../components/ui'
+import { EmptyState, IconButton, Muted, Screen, confirmTap, tap } from '../components/ui'
 import { t } from '../i18n'
 import { agentName, effortName, modeName, where } from '../labels'
-import { pop, push } from '../navigation'
+import { pop, push, useNavigation } from '../navigation'
 import { canHandOff, canOperate, continueChat, EMPTY_DRAFT, interrupt, loadOlder, send, setDraft, setOption, unwatch, uploadImage, useSession, viewsOnly, watch } from '../session'
 import { radius, space, type, useTheme } from '../theme'
 import { handOffable } from './HandoffScreen'
@@ -208,6 +208,31 @@ function KeyboardLift({ children }: { children: ReactNode }) {
   return <Animated.View style={[styles.flex, lift]}>{children}</Animated.View>
 }
 
+// Back the way the user came when that was the caller's chat, rather than stacking it again.
+function openCaller(id: string): void {
+  const { stack } = useNavigation.getState()
+  const below = stack[stack.length - 2]
+  if (below?.name === 'chat' && below.id === id) pop()
+  else push({ name: 'chat', id })
+}
+
+// Members this conversation delegated to that wait on the user, each a way into its chat to answer.
+function DelegatesWaiting({ id }: { id: string }) {
+  const theme = useTheme()
+  const conversations = useSession((s) => s.conversations)
+  const waiting = useMemo(() => Object.values(conversations).filter((each) => each.parentConversationId === id && (conversationWaiting(each) || conversationAsking(each))), [conversations, id])
+  if (waiting.length === 0) return null
+  return (
+    <View style={[styles.delegates, { borderTopColor: theme.border }]}>
+      {waiting.map((each) => (
+        <Pressable key={each.id} accessibilityRole="button" onPress={() => { tap(); push({ name: 'chat', id: each.id }) }}>
+          <NoticeLine tone="warning" more text={t(each.chat?.request?.kind === 'question' ? 'delegateAsks' : 'delegateNeedsApproval', { name: each.title || where(each) })} />
+        </Pressable>
+      ))}
+    </View>
+  )
+}
+
 export function ChatScreen({ id }: { id: string }) {
   const theme = useTheme()
   const conversation = useSession((s) => s.conversations[id])
@@ -226,6 +251,8 @@ export function ChatScreen({ id }: { id: string }) {
   if (!conversation) {
     return <Screen title={t('appName')} onBack={() => pop()}><Muted>{t('noConversations')}</Muted></Screen>
   }
+  // A delegated member's chat is driven by its caller: here it is only read and its requests answered.
+  const caller = conversation.parentConversationId ?? null
   const operate = canOperate()
   const handoff = canHandOff() && handOffable(conversation)
   return (
@@ -234,7 +261,7 @@ export function ChatScreen({ id }: { id: string }) {
       subtitle={where(conversation)}
       onBack={() => pop()}
       scroll={false}
-      actions={operate && (state || handoff) ? <IconButton icon={SlidersHorizontal} label={t('options')} onPress={() => setOptions(true)} /> : null}
+      actions={operate && !caller && (state || handoff) ? <IconButton icon={SlidersHorizontal} label={t('options')} onPress={() => setOptions(true)} /> : null}
     >
       <ProjectRoots.Provider value={conversation.projectPaths}>
       <KeyboardLift>
@@ -259,14 +286,19 @@ export function ChatScreen({ id }: { id: string }) {
             </View>
           ) : undefined}
         />
+        <DelegatesWaiting id={conversation.id} />
         {request && request.kind === 'approval' ? <ApprovalDock key={request.requestId} item={request} conversation={conversation} /> : null}
         {request && request.kind === 'question' ? <QuestionDock key={request.requestId} item={request} conversation={conversation} /> : null}
-        {operate ? <Composer conversation={conversation} state={state} onOptions={() => setOptions(true)} /> : viewsOnly() ? (
+        {caller ? (
+          <Pressable accessibilityRole="button" onPress={() => { tap(); openCaller(caller) }} style={[styles.viewOnly, { borderTopColor: theme.border }]}>
+            <Text style={[type.secondary, styles.link, { color: theme.accent }]}>{t('backToCaller')}</Text>
+          </Pressable>
+        ) : operate ? <Composer conversation={conversation} state={state} onOptions={() => setOptions(true)} /> : viewsOnly() ? (
           <View style={[styles.viewOnly, { borderTopColor: theme.border }]}><Muted center>{t('viewOnly')}</Muted></View>
         ) : null}
       </KeyboardLift>
       </ProjectRoots.Provider>
-      {options && (state || handoff) ? <OptionsSheet conversation={conversation} state={state} handoff={handoff} onClose={() => setOptions(false)} /> : null}
+      {options && !caller && (state || handoff) ? <OptionsSheet conversation={conversation} state={state} handoff={handoff} onClose={() => setOptions(false)} /> : null}
     </Screen>
   )
 }
@@ -291,5 +323,7 @@ const styles = StyleSheet.create({
   modelChip: { flexShrink: 1, flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, borderRadius: radius.pill, paddingHorizontal: space.md },
   chipText: { flexShrink: 1, fontWeight: '600' },
   send: { width: 36, height: 36, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', marginLeft: 'auto' },
-  viewOnly: { borderTopWidth: StyleSheet.hairlineWidth, padding: space.lg }
+  viewOnly: { borderTopWidth: StyleSheet.hairlineWidth, padding: space.lg },
+  link: { textAlign: 'center', fontWeight: '600' },
+  delegates: { borderTopWidth: StyleSheet.hairlineWidth, paddingHorizontal: space.lg, paddingVertical: space.sm, gap: space.sm }
 })

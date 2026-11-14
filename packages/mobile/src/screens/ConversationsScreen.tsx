@@ -28,13 +28,15 @@ function WaitingCard({ conversation }: { conversation: Conversation }) {
     setBusy(null)
   }
   const project = conversation.projectPaths[0]
+  const caller = useSession((s) => conversation.parentConversationId ? s.conversations[conversation.parentConversationId] : undefined)
+  const context = caller ? t('delegatedBy', { name: caller.title || where(caller) }) : project ? folderName(project) : where(conversation)
   return (
     <Pressable onPress={() => { tap(); push({ name: 'chat', id: conversation.id }) }} style={({ pressed }) => [styles.waiting, { backgroundColor: theme.surface, borderColor: theme.border, opacity: pressed ? 0.85 : 1 }]}>
       <View style={styles.waitingHead}>
         <AgentAvatar agent={conversation.agent} size={34} status="waiting" />
         <View style={styles.flex}>
           <Text style={[type.rowTitle, { color: theme.text }]} numberOfLines={1}>{conversation.title || t('untitled')}</Text>
-          <Text style={[type.caption, { color: theme.textMuted }]} numberOfLines={1}>{project ? folderName(project) : where(conversation)} · {ago(conversation.updatedAt)}</Text>
+          <Text style={[type.caption, { color: theme.textMuted }]} numberOfLines={1}>{context} · {ago(conversation.updatedAt)}</Text>
         </View>
       </View>
       <View style={[styles.ask, { backgroundColor: theme.waitingSoft }]}>
@@ -59,7 +61,9 @@ export function ConversationsScreen() {
   const access = useSession((s) => s.welcome?.access)
   const online = status === 'online'
   const groups = useMemo(() => {
-    const shown = Object.values(conversations).filter((conversation) => !isHelper(conversation) && conversation.archivedAt == null && !conversation.parentConversationId)
+    // A delegated member is reached from its caller's chat, but listed while it waits on the user.
+    const shown = Object.values(conversations).filter((conversation) => !isHelper(conversation) && conversation.archivedAt == null
+      && (!conversation.parentConversationId || conversationWaiting(conversation) || conversationAsking(conversation)))
       .sort((a, b) => b.updatedAt - a.updatedAt)
     const waiting = shown.filter((conversation) => conversationWaiting(conversation) || conversationAsking(conversation))
     const running = shown.filter((conversation) => conversationWorking(conversation) && !waiting.includes(conversation))

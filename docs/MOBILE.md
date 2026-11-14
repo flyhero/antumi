@@ -216,6 +216,7 @@ Noise 的一条传输消息最多 65535 字节，而一个附件块是 512 KiB�
 - Noise 是纯 JS，不需要原生模块；相机、安全存储、指纹、选图用 Expo 的模块。因为用了 `expo-build-properties` 等配置插件，要用 development build（`expo prebuild` / `expo run:android`），不能用 Expo Go。
 - Hermes 可能缺的 `crypto.getRandomValues` 和 `TextDecoder` 由 `src/polyfills.ts` 补上（UTF-8 解码器有对照测试）。Noise 的 nonce 计数用普通数字而不是 BigInt 的 `DataView` 方法，避免依赖 Hermes 对它们的支持。
 - 页面：电脑列表 → 扫码配对 → 会话列表（等你、在跑、最近）→ 聊天页（消息、折叠的工具调用和思考、请求卡片、图片、选项）；另有新建会话、任务看板（任务详情、新建任务）、设置。
+- 委派出去的子会话：会话列表连同它们一起拉（`includeDelegates`），但只在它等你确认或回答时列进「等你」，卡片上写由哪个会话委派；发起委派的会话的聊天页在输入框上方列出等你的子会话，点进去回答。子会话由发起方驱动，和电脑上一样不显示输入框和选项，只给一个回到发起方的链接。
 - 额度：连上后读一次 `usage.list`（四种窗口都要），之后跟 `usage.changed` 更新；电脑没给手机这个权限时就不显示。会话列表在「已连接」下给每个 Agent 一个标签（最紧的窗口，判断用 protocol 的 `quotaVerdict`），点开是各窗口的明细；电脑列表下面是当前电脑的明细卡片；新会话页在选中的 Agent（按所选模型）用满时提示何时重置。没登录、还没读到的 Agent 不显示。文字在 `src/quota-text.ts`。
 - 聊天页照电脑上的样子显示消息流：工具调用用电脑上的名字（命令、编辑、MCP 服务 · 工具、Antumi 自己的工具），连续的几次调用合成一行（「读取 3 个文件，运行 2 个命令」），改了文件的调用显示 +/− 和 diff，子 Agent 显示类型、用量、指令和结果，命令显示非零退出码和后台状态；用户消息里的引用显示成卡片，移交和切换分支的附注去掉；上下文压缩显示成分隔线，可重试的通知带重试按钮，额度用完说明何时恢复，每个回合结束显示用时和 tokens。这些判断和电脑共用 protocol 里的 `tool-calls.ts`、`chat-quotes.ts`、`delegation-delivery.ts`，文字在手机端自己的 `tool-labels.ts`、`chat-text.ts`。
 - 最近打开的 5 个会话（各最近 100 条）缓存在 App 沙盒，离线时可以翻看；取消配对或被撤销时清掉。

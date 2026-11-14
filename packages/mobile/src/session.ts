@@ -293,7 +293,8 @@ export async function refresh(): Promise<void> {
   const link = connection
   if (!link) return
   try {
-    const list = await link.call('conversations.list', { includeTasks: true })
+    // Delegated members too: one waiting on the user is answered here, as on the computer.
+    const list = await link.call('conversations.list', { includeTasks: true, includeDelegates: true })
     useSession.setState({ conversations: Object.fromEntries(list.map((conversation) => [conversation.id, conversation])) })
     const tasks = await link.call('tasks.list', {})
     useSession.setState({ tasks: Object.fromEntries(tasks.map((task) => [task.id, task])) })

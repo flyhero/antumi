@@ -88,6 +88,8 @@
 
 在 3Mbps 的云服务器上，经中转传一张 2MB 的图片大约 5 到 7 秒。
 
+没有服务器的话，可以加作者微信 `Wang_hero2014`（注明 Antumi）申请用作者的中转：拿到地址后跳过第 1、2 步的安装，直接在第 3 步填上。作者的中转由大家共用，带宽有限，不保证一直可用。
+
 ### 在外面用：经自己的服务器（WireGuard）
 
 有一台带公网 IP 的 Linux 服务器（云服务器就行，3Mbps 带宽够用）时，可以让它用 [WireGuard](https://www.wireguard.com) 在手机和电脑之间转发。手机和电脑之间本来就端到端加密，服务器只转发它看不懂的数据。电脑上不用装 VPN，也不要管理员权限：Antumi 自己运行 [wireproxy](https://github.com/windtf/wireproxy)，第一次用时从 GitHub 下载（约 4MB）。macOS、Windows、Linux 做法一样。

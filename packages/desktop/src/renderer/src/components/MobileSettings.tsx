@@ -282,6 +282,9 @@ function RelayPanel({ relay, onStatus }: { relay: MobileRelay | null; onStatus: 
 
 const WIREGUARD_INSTALL_URL = 'https://www.wireguard.com/install/'
 
+// The author's own bridge is shared by invitation: its address is given over WeChat, never built in.
+const AUTHOR_WECHAT = 'Wang_hero2014'
+
 function bridgeStateText(bridge: MobileBridge): string {
   if (bridge.state === 'off') return t('MobileSettings.bridgeOff')
   if (bridge.state === 'connecting') return t('MobileSettings.bridgeConnecting')
@@ -327,6 +330,13 @@ function BridgePanel({ bridge, onStatus }: { bridge: MobileBridge | null; onStat
   }
   return (
     <div className="mobile-relay">
+      <div className="mobile-relay-step">
+        <p className="settings-row-label">{t('MobileSettings.bridgeAuthor')}</p>
+        <p className="settings-row-description">{t('MobileSettings.bridgeAuthorDescription', { wechat: AUTHOR_WECHAT })}</p>
+        <div className="mobile-pairing-actions">
+          <CopyButton text={AUTHOR_WECHAT} label={t('MobileSettings.bridgeCopyWechat')}>{t('MobileSettings.bridgeCopyWechat')}</CopyButton>
+        </div>
+      </div>
       <div className="mobile-relay-step">
         <p className="settings-row-label">{t('MobileSettings.bridgeStep1')}</p>
         <p className="settings-row-description">{t('MobileSettings.bridgeStep1Description', { port: MOBILE_BRIDGE_DEFAULT_PORT })}</p>

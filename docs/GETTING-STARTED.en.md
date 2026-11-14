@@ -88,6 +88,8 @@ With a Linux server that has a public IP, you can install an Antumi bridge on it
 
 On a 3 Mbps cloud server, a 2 MB picture takes about 5 to 7 seconds through the bridge.
 
+No server? Add the author on WeChat, `Wang_hero2014` (mention Antumi), to use the author's bridge: once you have its address, skip the install in steps 1 and 2 and enter it in step 3. It is shared by everyone who uses it, has limited bandwidth, and may not always be up.
+
 ### Away from home: your own server (WireGuard)
 
 With a Linux server that has a public IP (a cloud server will do; 3 Mbps is plenty), [WireGuard](https://www.wireguard.com) can relay between the phone and the computer. The phone and the computer already encrypt end to end, so the server only passes on data it cannot read. Nothing to install on the computer and no admin rights: Antumi runs [wireproxy](https://github.com/windtf/wireproxy) itself, downloading it from GitHub the first time (about 4 MB). The same on macOS, Windows and Linux.

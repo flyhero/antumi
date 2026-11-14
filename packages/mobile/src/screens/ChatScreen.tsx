@@ -13,10 +13,11 @@ import {
 import { ChoiceList, Sheet } from '../components/sheet'
 import { EmptyState, IconButton, Muted, Screen, confirmTap } from '../components/ui'
 import { t } from '../i18n'
-import { effortName, modeName, where } from '../labels'
-import { pop } from '../navigation'
-import { canOperate, continueChat, EMPTY_DRAFT, interrupt, loadOlder, send, setDraft, setOption, unwatch, uploadImage, useSession, viewsOnly, watch } from '../session'
+import { agentName, effortName, modeName, where } from '../labels'
+import { pop, push } from '../navigation'
+import { canHandOff, canOperate, continueChat, EMPTY_DRAFT, interrupt, loadOlder, send, setDraft, setOption, unwatch, uploadImage, useSession, viewsOnly, watch } from '../session'
 import { radius, space, type, useTheme } from '../theme'
+import { handOffable } from './HandoffScreen'
 
 type StateItem = Extract<ChatItem, { kind: 'state' }>
 
@@ -93,14 +94,25 @@ function ItemView({ item, conversation }: { item: ChatItem; conversation: Conver
   }
 }
 
-function OptionsSheet({ id, state, agent, onClose }: { id: string; state: StateItem; agent: Conversation['agent']; onClose: () => void }) {
-  const model = state.models.find((each) => each.id === state.model)
+// The agent leads, for a handoff where the chat's agent is the user's to change; what the stage
+// offers follows, once it has said.
+function OptionsSheet({ conversation, state, handoff, onClose }: { conversation: Conversation; state: StateItem | null; handoff: boolean; onClose: () => void }) {
+  const { id, agent } = conversation
+  const model = state?.models.find((each) => each.id === state.model)
   const pick = (option: ChatOption) => (value: string) => void setOption(id, option, value)
   return (
     <Sheet title={t('options')} onClose={onClose}>
-      <ChoiceList title={t('permissionMode')} choices={state.permissionModes.map((mode) => ({ value: mode, label: modeName(agent, mode) }))} current={state.permissionMode} onPick={pick('permissionMode')} />
-      <ChoiceList title={t('model')} choices={state.models.map((each) => ({ value: each.id, label: each.label, detail: each.description }))} current={state.model} onPick={pick('model')} />
-      <ChoiceList title={t('effort')} choices={(model?.efforts ?? []).map((effort) => ({ value: effort, label: effortName(effort) }))} current={state.effort} onPick={pick('effort')} />
+      {handoff ? (
+        <ChoiceList title={t('agent')} choices={[{ value: agent, label: agentName(agent), detail: t('handOffAction') }]} current={null}
+          onPick={() => { onClose(); push({ name: 'handoff', id }) }} />
+      ) : null}
+      {state ? (
+        <>
+          <ChoiceList title={t('permissionMode')} choices={state.permissionModes.map((mode) => ({ value: mode, label: modeName(agent, mode) }))} current={state.permissionMode} onPick={pick('permissionMode')} />
+          <ChoiceList title={t('model')} choices={state.models.map((each) => ({ value: each.id, label: each.label, detail: each.description }))} current={state.model} onPick={pick('model')} />
+          <ChoiceList title={t('effort')} choices={(model?.efforts ?? []).map((effort) => ({ value: effort, label: effortName(effort) }))} current={state.effort} onPick={pick('effort')} />
+        </>
+      ) : null}
     </Sheet>
   )
 }
@@ -215,13 +227,14 @@ export function ChatScreen({ id }: { id: string }) {
     return <Screen title={t('appName')} onBack={() => pop()}><Muted>{t('noConversations')}</Muted></Screen>
   }
   const operate = canOperate()
+  const handoff = canHandOff() && handOffable(conversation)
   return (
     <Screen
       title={conversation.title || where(conversation)}
       subtitle={where(conversation)}
       onBack={() => pop()}
       scroll={false}
-      actions={operate && state ? <IconButton icon={SlidersHorizontal} label={t('options')} onPress={() => setOptions(true)} /> : null}
+      actions={operate && (state || handoff) ? <IconButton icon={SlidersHorizontal} label={t('options')} onPress={() => setOptions(true)} /> : null}
     >
       <ProjectRoots.Provider value={conversation.projectPaths}>
       <KeyboardLift>
@@ -253,7 +266,7 @@ export function ChatScreen({ id }: { id: string }) {
         ) : null}
       </KeyboardLift>
       </ProjectRoots.Provider>
-      {options && state ? <OptionsSheet id={id} state={state} agent={conversation.agent} onClose={() => setOptions(false)} /> : null}
+      {options && (state || handoff) ? <OptionsSheet conversation={conversation} state={state} handoff={handoff} onClose={() => setOptions(false)} /> : null}
     </Screen>
   )
 }

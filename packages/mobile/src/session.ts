@@ -472,12 +472,34 @@ export async function readyAgents(): Promise<AgentKind[]> {
 // The way the desktop opens one: made without starting, started, then the first message.
 // The models an agent offers a new chat; null when the computer cannot say, and the start then
 // takes the agent's own.
-export async function agentCatalog(agent: AgentKind): Promise<ChatCatalog | null> {
+// With a provider, the models it serves the agent; one that does not serve it leaves the agent on
+// its own account, as core routes a handoff.
+export async function agentCatalog(agent: AgentKind, modelProvider?: string | null): Promise<ChatCatalog | null> {
   try {
-    return (await connection?.call('conversations.chatCatalog', { agent })) ?? null
+    const served = modelProvider ? await connection?.call('conversations.chatCatalog', { agent, modelProvider }) : null
+    return served ?? (await connection?.call('conversations.chatCatalog', { agent })) ?? null
   } catch {
     return null
   }
+}
+
+// Whether the computer takes a handoff from a phone.
+export function canHandOff(): boolean {
+  return canOperate() && (useSession.getState().welcome?.features.includes('mobile-handoff') ?? false)
+}
+
+// The chat goes on with another agent, which is handed what was said and the note. A running turn
+// is stopped for it only with stopRunning; allowBypass as from the computer. A model or effort left
+// out goes back to the agent's default, as shown, not to what it last ran here.
+export async function handOff(id: string, options: {
+  agent: AgentKind; note: string; stopRunning: boolean; permissionMode: ChatPermissionMode; model?: string; effort?: string
+}): Promise<boolean> {
+  const done = await call('conversations.handoff', {
+    id, agent: options.agent, note: options.note, stopRunning: options.stopRunning, allowBypass: true,
+    permissionMode: options.permissionMode, model: options.model ?? null, effort: options.effort ?? null
+  })
+  if (done) useSession.setState((state) => ({ conversations: { ...state.conversations, [done.id]: done } }))
+  return done !== null
 }
 
 // A model or effort left out is the agent's own default. allowBypass as from the computer, which

@@ -174,7 +174,7 @@ Noise 的一条传输消息最多 65535 字节，而一个附件块是 512 KiB�
 | 读其他 | `attachments.stat` `read`、`tasks.list`、`usage.list`、`projects.recent`、`system.environment` | ✓ | ✓ |
 | 回答请求 | `conversations.respond`（全部参数，和电脑上一样） | ✓ | |
 | 发消息 | `conversations.send` `cancelQueued` `sendQueued` `retryTurn`、`attachments.begin` `append` `commit` | ✓ | |
-| 会话控制 | `conversations.interrupt`（结束本轮）、`continue`、`setOption`、`create`（只能用最近项目）、`projects.branches`（同样只限最近项目） | ✓ | |
+| 会话控制 | `conversations.interrupt`（结束本轮）、`continue`、`setOption`、`handoff`（只限独立会话）、`create`（只能用最近项目）、`projects.branches`（同样只限最近项目） | ✓ | |
 | 任务 | `tasks.create`（只能用最近项目）、`start`、`move`（只到完成）、`cancel` | ✓ | |
 | 通知 | `conversations.changed` `deleted` `chatItems` `chatDelta`、`tasks.changed` `deleted`、`usage.changed` | ✓ | ✓ |
 
@@ -207,6 +207,7 @@ Noise 的一条传输消息最多 65535 字节，而一个附件块是 512 KiB�
 
 - 网关作为 core 的客户端照常用 `PROTOCOL_VERSION`，它和 core 总是同一个版本一起发布。
 - 手机端用的是 `@antumi/protocol/mobile` 的 `connectMobile`（握手、分片、欢迎消息），复用 `createRpcClient` 和 schema，不用桌面端的 `connectRpc`。
+- 移交：聊天页的选项面板最上面是当前 Agent，点开是移交页（`HandoffScreen`），选电脑上其他可用的 Agent、它起步的权限模式、模型和推理强度，写补充说明后调 `conversations.handoff`。权限模式默认沿用会话当前的（新 Agent 没有时用它的默认），没选的模型和推理强度传 `null`，回到 Agent 的默认，和页面上显示的一致。会话在服务商上时，模型列表按这个服务商取，服务商不支持该 Agent 时取 Agent 自己的。Agent 还在工作时先确认，再带 `stopRunning` 停下它。任务的聊天、智能体会话、群聊成员、小助手、小队成员和归档的会话不提供移交，和电脑上一致。电脑的 core 要带 `mobile-handoff` 功能，旧电脑上不显示入口。
 - `ChatItemList` 会丢弃不认识的聊天条目，所以 `connectMobile` 在解析之前把它们换成一条提示（「这条内容请在电脑上查看」），新版 core 多了一种条目时，旧手机上那段对话不会无声地少一块。
 
 ## 手机 App

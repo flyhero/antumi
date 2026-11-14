@@ -14,6 +14,7 @@ import { useTheme } from './theme'
 import { ChatScreen } from './screens/ChatScreen'
 import { ComputersScreen } from './screens/ComputersScreen'
 import { ConversationsScreen } from './screens/ConversationsScreen'
+import { HandoffScreen } from './screens/HandoffScreen'
 import { NewConversationScreen } from './screens/NewConversationScreen'
 import { PairScreen } from './screens/PairScreen'
 import { SettingsScreen } from './screens/SettingsScreen'
@@ -28,6 +29,7 @@ function CurrentScreen() {
     case 'pair': return <PairScreen key={route.link ?? ''} link={route.link} />
     case 'conversations': return <ConversationsScreen />
     case 'chat': return <ChatScreen id={route.id} />
+    case 'handoff': return <HandoffScreen id={route.id} />
     case 'new': return <NewConversationScreen />
     case 'tasks': return <TasksScreen />
     case 'task': return <TaskScreen id={route.id} />

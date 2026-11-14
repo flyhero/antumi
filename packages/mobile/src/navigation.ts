@@ -8,6 +8,7 @@ export type Route =
   | { name: 'pair'; link?: string }
   | { name: 'conversations' }
   | { name: 'chat'; id: string }
+  | { name: 'handoff'; id: string }
   | { name: 'new' }
   | { name: 'tasks' }
   | { name: 'task'; id: string }

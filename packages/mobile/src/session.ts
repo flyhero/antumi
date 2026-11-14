@@ -9,6 +9,7 @@ import {
   ChatItem,
   Conversation,
   RpcError,
+  USAGE_WINDOW_KINDS,
   appendChatText,
   base64Url,
   decodePairingCode,
@@ -18,6 +19,7 @@ import {
   type ChatCatalog,
   type ChatDecision,
   type ChatOption,
+  type AgentUsage,
   type ChatPermissionMode,
   type MobileAccess,
   type MobileHello,
@@ -51,6 +53,8 @@ type State = {
   conversations: Record<string, Conversation>
   tasks: Record<string, Task>
   chats: Record<string, ChatView>
+  // Each agent's usage limits on this computer; null until it says, or when it cannot.
+  usage: AgentUsage[] | null
   // What the user wrote in a chat and has not sent, by conversation, while the app runs.
   drafts: Record<string, Draft>
   // A short message for the user, shown once.
@@ -68,6 +72,7 @@ export const useSession = create<State>()(() => ({
   conversations: {},
   tasks: {},
   chats: {},
+  usage: null,
   drafts: {},
   notice: null
 }))
@@ -196,7 +201,7 @@ export async function connect(computerKey: string): Promise<void> {
   if (!computer || !key) return
   const switching = useSession.getState().current !== computerKey
   disconnect()
-  useSession.setState({ current: computerKey, status: 'connecting', ...(switching ? { welcome: null, conversations: {}, tasks: {}, chats: {}, drafts: {} } : {}) })
+  useSession.setState({ current: computerKey, status: 'connecting', ...(switching ? { welcome: null, conversations: {}, tasks: {}, chats: {}, usage: null, drafts: {} } : {}) })
   if (switching) {
     watched.clear()
     await showCached(computerKey)
@@ -221,7 +226,7 @@ export async function connect(computerKey: string): Promise<void> {
 
 function revoked(computerKey: string): void {
   dropCache(computerKey)
-  useSession.setState({ status: 'revoked', conversations: {}, tasks: {}, chats: {}, drafts: {} })
+  useSession.setState({ status: 'revoked', conversations: {}, tasks: {}, chats: {}, usage: null, drafts: {} })
 }
 
 async function connected(link: MobileConnection, computer: Computer): Promise<void> {
@@ -261,6 +266,9 @@ async function connected(link: MobileConnection, computer: Computer): Promise<vo
       return chat ? { chats: { ...state.chats, [conversationId]: { ...chat, items: appendChatText(chat.items, stageId, itemId, append) } } } : {}
     })
   })
+  link.on('usage.changed', ({ usage }) => useSession.setState((state) => ({
+    usage: [...(state.usage ?? []).filter((each) => each.agent !== usage.agent || each.account !== usage.account), usage]
+  })))
   link.on('tasks.changed', ({ task }) => useSession.setState((state) => ({ tasks: { ...state.tasks, [task.id]: task } })))
   link.on('tasks.deleted', ({ id }) => useSession.setState((state) => {
     const { [id]: _gone, ...tasks } = state.tasks
@@ -294,6 +302,15 @@ export async function refresh(): Promise<void> {
   } catch (error) {
     if (connection === link) say(failure(error))
   }
+  await loadUsage(link)
+}
+
+// Apart from the rest: a computer that does not let phones read it still works without.
+async function loadUsage(link: MobileConnection): Promise<void> {
+  try {
+    const usage = await link.call('usage.list', { windowKinds: [...USAGE_WINDOW_KINDS] })
+    if (connection === link) useSession.setState({ usage })
+  } catch {}
 }
 
 async function loadChat(id: string): Promise<void> {
@@ -549,7 +566,7 @@ export async function pair(text: string, onCode: (code: string) => void): Promis
     }
     await updateComputers((computers) => [computer, ...computers.filter((each) => each.key !== code.key)])
     watched.clear()
-    useSession.setState({ current: code.key, status: 'connecting', conversations: {}, tasks: {}, chats: {}, drafts: {} })
+    useSession.setState({ current: code.key, status: 'connecting', conversations: {}, tasks: {}, chats: {}, usage: null, drafts: {} })
     await connected(link, computer)
     return null
   } catch (error) {
@@ -561,7 +578,7 @@ export async function pair(text: string, onCode: (code: string) => void): Promis
 export async function forget(computerKey: string): Promise<void> {
   if (useSession.getState().current === computerKey) {
     disconnect()
-    useSession.setState({ current: null, status: 'idle', welcome: null, conversations: {}, tasks: {}, chats: {}, drafts: {} })
+    useSession.setState({ current: null, status: 'idle', welcome: null, conversations: {}, tasks: {}, chats: {}, usage: null, drafts: {} })
   }
   dropCache(computerKey)
   await updateComputers((computers) => computers.filter((each) => each.key !== computerKey))

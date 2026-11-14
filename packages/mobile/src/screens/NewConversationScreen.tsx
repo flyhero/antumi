@@ -3,12 +3,14 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 
 import { ArrowUp, Brain, Cpu, Folder, GitBranch, ShieldCheck } from 'lucide-react-native'
 import type { ChatPermissionMode } from '@antumi/protocol'
 import { AgentPicker, ProjectSheet, useStartChoices, useStartOptions } from '../components/pickers'
+import { QuotaWarning, useNow } from '../components/quota'
 import { ChoiceList, Sheet } from '../components/sheet'
 import { Chip, EmptyState, ListGroup, ListRow, Muted, Screen, confirmTap } from '../components/ui'
 import { t } from '../i18n'
 import { effortName, folderName, modeName } from '../labels'
 import { pop, push } from '../navigation'
-import { isGitProject, startConversation } from '../session'
+import { exhaustedText } from '../quota-text'
+import { isGitProject, startConversation, useSession } from '../session'
 import { radius, space, type, useTheme } from '../theme'
 
 type Picking = 'project' | 'mode' | 'model' | 'effort'
@@ -26,6 +28,9 @@ export function NewConversationScreen() {
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
   const [picking, setPicking] = useState<Picking | null>(null)
+  const usage = useSession((s) => s.usage)
+  const now = useNow()
+  const exhausted = agent ? exhaustedText(usage?.find((each) => each.agent === agent), modelText(options?.model), now) : null
   useEffect(() => {
     if (!project || project in git) return
     let live = true
@@ -82,6 +87,7 @@ export function NewConversationScreen() {
       </View>
       {worktree && worktreeOffered ? <Muted>{t('worktreeHint')}</Muted> : null}
       <AgentPicker title={t('agent')} agents={agents} agent={agent} onPick={setAgent} />
+      {exhausted ? <QuotaWarning text={exhausted} /> : null}
       {agent && options ? (
         <ListGroup title={t('options')}>
           <ListRow leading={<ShieldCheck size={20} color={theme.textMuted} strokeWidth={1.8} />} title={t('permissionMode')} trailing={value(modeName(agent, options.mode))} onPress={() => setPicking('mode')} />
@@ -111,6 +117,12 @@ export function NewConversationScreen() {
       ) : null}
     </Screen>
   )
+}
+
+// What a model-specific window is matched against, as on the desktop: everything the catalog says
+// of the model, since the default one names the real model only in its description.
+function modelText(model: { id: string; label: string; description?: string | null } | null | undefined): string | null {
+  return model ? [model.id, model.label, model.description].filter(Boolean).join(' ') : null
 }
 
 // A choice list hands back the string it showed; the mode is one of those offered.

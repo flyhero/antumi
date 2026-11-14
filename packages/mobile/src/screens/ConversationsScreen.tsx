@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { ListTodo, MessageSquare, Plus, Settings } from 'lucide-react-native'
 import { conversationAsking, conversationCrashed, conversationWaiting, conversationWorking, isHelper, type Conversation } from '@antumi/protocol'
+import { QuotaStrip } from '../components/quota'
 import { AgentAvatar, Button, EmptyState, FloatingButton, IconButton, ListGroup, ListRow, SectionLabel, Screen, StatusPill, confirmTap, tap } from '../components/ui'
 import { ago, t } from '../i18n'
 import { folderName, isCommandRequest, relativePath, where } from '../labels'
@@ -70,7 +71,7 @@ export function ConversationsScreen() {
     <Screen
       large
       title={computer?.name ?? t('appName')}
-      subtitle={<View style={styles.pill}>{pill}</View>}
+      subtitle={<View style={styles.pill}>{pill}<QuotaStrip /></View>}
       onBack={() => pop()}
       onRefresh={online ? refresh : undefined}
       actions={<>

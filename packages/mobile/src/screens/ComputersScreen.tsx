@@ -1,10 +1,11 @@
 import { StyleSheet, Text, View } from 'react-native'
 import { Laptop, Plus, QrCode } from 'lucide-react-native'
-import { Button, EmptyState, IconButton, ListGroup, ListRow, Screen } from '../components/ui'
+import { QuotaCards, useNow } from '../components/quota'
+import { Button, EmptyState, IconButton, ListGroup, ListRow, Screen, SectionLabel } from '../components/ui'
 import { ago, t } from '../i18n'
 import { push } from '../navigation'
 import { connect, useSession } from '../session'
-import { radius, type, useTheme } from '../theme'
+import { radius, space, type, useTheme } from '../theme'
 
 function ComputerIcon({ online }: { online: boolean }) {
   const theme = useTheme()
@@ -20,6 +21,9 @@ export function ComputersScreen() {
   const computers = useSession((s) => s.computers)
   const current = useSession((s) => s.current)
   const status = useSession((s) => s.status)
+  const usage = useSession((s) => s.usage)
+  const now = useNow()
+  const connected = computers.find((computer) => computer.key === current)
   if (computers.length === 0) {
     return (
       <Screen large title={t('appName')}>
@@ -56,11 +60,18 @@ export function ComputersScreen() {
           )
         })}
       </ListGroup>
+      {connected && usage?.some((each) => each.status !== 'signed-out' && each.windows.length > 0) ? (
+        <View style={styles.quota}>
+          <SectionLabel title={computers.length > 1 ? t('quotaOn', { name: connected.name }) : t('quota')} />
+          <QuotaCards usage={usage} now={now} />
+        </View>
+      ) : null}
     </Screen>
   )
 }
 
 const styles = StyleSheet.create({
   icon: { width: 40, height: 40, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
-  cta: { marginTop: 8, alignSelf: 'stretch' }
+  cta: { marginTop: 8, alignSelf: 'stretch' },
+  quota: { gap: space.sm }
 })

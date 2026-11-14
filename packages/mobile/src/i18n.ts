@@ -211,6 +211,21 @@ const zh = {
   usageLimitResets: '额度已用完 · {time} 恢复',
   claudeUsageLimit: 'Claude 的用量到了上限，{date}{time} 恢复',
   monthDay: '{month}月{day}日 ',
+  quota: '额度',
+  quotaOn: '额度 · {name}',
+  quotaSession: '5 小时',
+  quotaWeekly: '本周',
+  quotaMonthly: '本月',
+  quotaDaily: '今天',
+  quotaUsed: '已用 {percent}%',
+  quotaSpent: '已用完',
+  quotaResetsIn: '{when}后重置',
+  quotaResetsAt: '{time} 重置',
+  quotaResetting: '即将重置',
+  durationDays: '{days} 天',
+  quotaExhausted: '{window}额度已用完',
+  quotaExhaustedResets: '{window}额度已用完，{time} 重置',
+  quotaUpdated: '{when}更新',
   error: '出错了：{message}'
 }
 
@@ -426,6 +441,21 @@ const en: Strings = {
   usageLimitResets: 'Quota exhausted · Resets {time}',
   claudeUsageLimit: "Claude's usage limit was reached. Resets {date}{time}",
   monthDay: '{month}/{day} ',
+  quota: 'Usage limits',
+  quotaOn: 'Usage limits · {name}',
+  quotaSession: '5-hour',
+  quotaWeekly: 'Weekly',
+  quotaMonthly: 'Monthly',
+  quotaDaily: 'Daily',
+  quotaUsed: '{percent}% used',
+  quotaSpent: 'Used up',
+  quotaResetsIn: 'resets in {when}',
+  quotaResetsAt: 'resets {time}',
+  quotaResetting: 'resetting',
+  durationDays: '{days}d',
+  quotaExhausted: '{window} limit reached',
+  quotaExhaustedResets: '{window} limit reached, resets {time}',
+  quotaUpdated: 'updated {when}',
   error: 'Something went wrong: {message}'
 }
 

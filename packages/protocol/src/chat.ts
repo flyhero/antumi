@@ -154,7 +154,10 @@ export const ChatModel = z.object({
   isDefault: z.boolean(),
   // The model takes Claude Code's auto mode, so a chat can start in it. Codex, and older cores,
   // leave it out.
-  autoMode: z.boolean().optional()
+  autoMode: z.boolean().optional(),
+  // Not in the agent's own list: what the stage runs, offered under a name that keeps it (Claude
+  // Code's 1M context of a listed model). A new chat is never offered it. Older cores leave it out.
+  unlisted: z.boolean().optional()
 })
 export type ChatModel = z.infer<typeof ChatModel>
 

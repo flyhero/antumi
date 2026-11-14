@@ -755,6 +755,12 @@ export class ClaudeStream implements ChatDriver {
       ...(row.supportsAutoMode ? { autoMode: true } : {})
     }))
     const current = this.currentModel()
+    // A listed model run with a 1M context shows beside it, so the picker names what runs.
+    if (current && !models.some((model) => model.id === current.value)) {
+      const listed = models.findIndex((model) => `${model.id}[1m]` === current.value)
+      models.splice(listed + 1, 0, { id: current.value, label: current.displayName ?? current.value, description: current.description ?? null,
+        efforts: current.supportedEffortLevels ?? [], isDefault: false, ...(current.supportsAutoMode ? { autoMode: true } : {}), unlisted: true })
+    }
     this.state.set({
       queued: this.queue.first,
       queue: this.queue.view,
@@ -780,11 +786,16 @@ export class ClaudeStream implements ChatDriver {
 
   // The catalog row for the model the CLI says it runs, by alias or by the id an alias resolves to.
   // It says so only once a turn starts; until then, the model it was started with or its default.
+  // A listed model with a 1M context (`opus[1m]`, which the CLI reports as `<its id>[1m]`) is that
+  // row under the alias that keeps the window, so a restart on it keeps the window too.
   private currentModel(): ModelRow | undefined {
     const reported = this.reportedModel ?? this.options.preferred?.model ?? this.catalog.find((row) => row.value === 'default')?.resolvedModel
     if (!reported) return undefined
     const rows = this.catalog.filter((row) => row.value !== 'default')
-    return rows.find((row) => row.value === reported) ?? rows.find((row) => row.resolvedModel === reported)
+    const listed = (name: string) => rows.find((row) => row.value === name) ?? rows.find((row) => row.resolvedModel === name)
+    const found = listed(reported)
+    const base = !found && reported.endsWith('[1m]') ? listed(reported.slice(0, -'[1m]'.length)) : undefined
+    return found ?? (base && { ...base, value: `${base.value}[1m]`, displayName: `${base.displayName ?? base.value} (1M)` })
   }
 
   private reply(requestId: string, response: unknown): unknown {

@@ -22,7 +22,8 @@ const Answer = z.union([
 
 export function catalogOf(items: readonly ChatItem[]): ChatCatalog | null {
   const state = items.findLast((item) => item.kind === 'state')
-  return state?.kind === 'state' && state.models.length > 0 ? { models: state.models } : null
+  const models = state?.kind === 'state' ? state.models.filter((model) => !model.unlisted) : []
+  return models.length > 0 ? { models } : null
 }
 
 // Runs the agent's chat protocol only as far as it lists its models, then lets it go. A probe,

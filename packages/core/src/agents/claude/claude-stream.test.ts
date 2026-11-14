@@ -4,6 +4,7 @@ import type { ChatItem } from '@antumi/protocol'
 import type { ChatRecord, ChatStageOptions } from '../../chat-driver'
 import { parseChatRecord } from '../../chat-log'
 import { ClaudeStream } from './claude-stream'
+import { catalogOf } from '../../chat-catalog'
 
 const OPTIONS: ChatStageOptions = { cwd: '/work/repo', extraDirs: [], resume: null }
 
@@ -349,6 +350,21 @@ describe('ClaudeStream state', () => {
     const before = records.slice(0, init)
     expect(stateOf(replay(before))).toMatchObject({ model: 'opus', permissionModes: ['ask', 'acceptEdits', 'plan', 'auto'] })
     expect(stateOf(replay(before, { ...OPTIONS, preferred: { model: 'sonnet' } }))?.model).toBe('sonnet')
+  })
+
+  it('names a listed model run with a 1M context by the alias that keeps it, offered beside the model', () => {
+    const init = records.findIndex((record) => record.dir === 'in' && JSON.stringify(record.frame).includes('"subtype":"init"'))
+    const listed = stateOf(replay(records.slice(0, init)))?.models.find((model) => model.id === 'opus')
+    const reported = replay(records.slice(0, init + 1).map((record, index): ChatRecord => index === init && record.dir === 'in' && typeof record.frame === 'object' && record.frame
+      ? { ...record, frame: { ...record.frame, model: 'claude-opus-5-5[1m]' } } : record))
+    const state = stateOf(reported)
+    expect(state).toMatchObject({ model: 'opus[1m]', billingModel: 'claude-opus-5-5' })
+    const ids = state?.models.map((model) => model.id) ?? []
+    expect(ids[ids.indexOf('opus') + 1]).toBe('opus[1m]')
+    expect(state?.models.find((model) => model.id === 'opus[1m]')).toEqual({ ...listed, id: 'opus[1m]', label: `${listed?.label} (1M)`, isDefault: false, unlisted: true })
+    expect(stateOf(replay(records.slice(0, init), { ...OPTIONS, preferred: { model: 'opus[1m]' } }))?.model).toBe('opus[1m]')
+    // Not in the CLI's own list, so no new chat is offered it.
+    expect(catalogOf(reported.items.list())?.models.map((model) => model.id)).not.toContain('opus[1m]')
   })
 
   it('reports the effort it was started with, which the settings leave out', () => {

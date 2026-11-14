@@ -71,9 +71,11 @@ type ScreenProps = {
   // Content that scrolls; false for a screen that lays itself out (the chat).
   scroll?: boolean
   onRefresh?: () => Promise<void>
+  // The screen's main action, floating at the bottom centre where a thumb reaches it.
+  floating?: ReactNode
 }
 
-export function Screen({ title, subtitle, large = false, onBack, actions, children, scroll = true, onRefresh }: ScreenProps) {
+export function Screen({ title, subtitle, large = false, onBack, actions, children, scroll = true, onRefresh, floating }: ScreenProps) {
   const theme = useTheme()
   const insets = useSafeAreaInsets()
   const [refreshing, setRefreshing] = useState(false)
@@ -107,7 +109,7 @@ export function Screen({ title, subtitle, large = false, onBack, actions, childr
       {scroll ? (
         <KeyboardAwareScrollView
           keyboardShouldPersistTaps="handled"
-          contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + space.xxl }]}
+          contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + space.xxl + (floating ? FLOATING_ROOM : 0) }]}
           refreshControl={refresh ? <RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} tintColor={theme.textMuted} colors={[theme.accent]} /> : undefined}
         >
           {heading}
@@ -120,6 +122,7 @@ export function Screen({ title, subtitle, large = false, onBack, actions, childr
           {children}
         </View>
       )}
+      {floating ? <View pointerEvents="box-none" style={[styles.floating, { bottom: insets.bottom + space.lg }]}>{floating}</View> : null}
       <NoticeToast />
     </View>
   )
@@ -158,6 +161,28 @@ export function Button({ label, onPress, kind = 'secondary', icon: Icon, disable
     </Pressable>
   )
 }
+
+// The pill a Screen's floating slot takes.
+export function FloatingButton({ icon: Icon, label, onPress }: { icon: LucideIcon; label: string; onPress: () => void }) {
+  const theme = useTheme()
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={() => {
+        tap()
+        onPress()
+      }}
+      style={({ pressed }) => [styles.floatingButton, { backgroundColor: theme.accent, transform: [{ scale: pressed ? 0.96 : 1 }] }]}
+    >
+      <Icon size={20} color={theme.accentText} strokeWidth={2.2} />
+      <Text style={[styles.buttonText, { color: theme.accentText }]}>{label}</Text>
+    </Pressable>
+  )
+}
+
+const FLOATING_HEIGHT = 52
+// What the list keeps clear under its last row, so the button never covers it.
+const FLOATING_ROOM = FLOATING_HEIGHT + space.lg
 
 export function Card({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
   const theme = useTheme()
@@ -331,6 +356,8 @@ const styles = StyleSheet.create({
   button: { minHeight: 46, paddingHorizontal: space.lg, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: space.sm },
   buttonWide: { alignSelf: 'stretch' },
   buttonText: { fontSize: 15, fontWeight: '600' },
+  floating: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
+  floatingButton: { height: FLOATING_HEIGHT, paddingHorizontal: space.xl, borderRadius: radius.pill, flexDirection: 'row', alignItems: 'center', gap: space.sm, elevation: 6, shadowColor: '#000000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.18, shadowRadius: 12 },
   card: { borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, padding: space.lg, gap: space.md, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 1, shadowRadius: 8, elevation: 0 },
   group: { gap: space.sm },
   groupCard: { borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },

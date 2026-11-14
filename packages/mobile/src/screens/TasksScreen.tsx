@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { CircleCheck, CircleDashed, CircleDot, CircleSlash, Eye, ListTodo, Plus } from 'lucide-react-native'
 import { TASK_STATUSES, type TaskStatus } from '@antumi/protocol'
-import { Button, EmptyState, IconButton, ListGroup, ListRow, Screen } from '../components/ui'
+import { EmptyState, FloatingButton, ListGroup, ListRow, Screen } from '../components/ui'
 import { ago, strings, t } from '../i18n'
 import { pop, push } from '../navigation'
 import { taskWhere } from '../labels'
@@ -36,11 +36,8 @@ export function TasksScreen() {
   })).filter((group) => group.tasks.length > 0), [tasks])
   return (
     <Screen large title={t('tasks')} onBack={() => pop()}
-      actions={operates ? <IconButton icon={Plus} label={t('newTask')} tone="accent" onPress={() => push({ name: 'newTask' })} /> : null}>
-      {byStatus.length === 0 ? (
-        <EmptyState icon={ListTodo} title={t('noTasks')}
-          action={operates ? <Button label={t('newTask')} kind="primary" icon={Plus} onPress={() => push({ name: 'newTask' })} /> : undefined} />
-      ) : null}
+      floating={operates ? <FloatingButton icon={Plus} label={t('newTask')} onPress={() => push({ name: 'newTask' })} /> : undefined}>
+      {byStatus.length === 0 ? <EmptyState icon={ListTodo} title={t('noTasks')} /> : null}
       {byStatus.map((group) => (
         <ListGroup key={group.status} title={`${strings.status[group.status]} · ${group.tasks.length}`}>
           {group.tasks.map((task) => (

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { ListTodo, MessageSquare, Plus, Settings } from 'lucide-react-native'
 import { conversationAsking, conversationCrashed, conversationWaiting, conversationWorking, isHelper, type Conversation } from '@antumi/protocol'
-import { AgentAvatar, Button, EmptyState, IconButton, ListGroup, ListRow, SectionLabel, Screen, StatusPill, confirmTap, tap } from '../components/ui'
+import { AgentAvatar, Button, EmptyState, FloatingButton, IconButton, ListGroup, ListRow, SectionLabel, Screen, StatusPill, confirmTap, tap } from '../components/ui'
 import { ago, t } from '../i18n'
 import { folderName, isCommandRequest, relativePath, where } from '../labels'
 import { pop, push } from '../navigation'
@@ -76,8 +76,8 @@ export function ConversationsScreen() {
       actions={<>
         <IconButton icon={ListTodo} label={t('tasks')} onPress={() => push({ name: 'tasks' })} />
         <IconButton icon={Settings} label={t('settings')} onPress={() => push({ name: 'settings' })} />
-        {online && access === 'operate' ? <IconButton icon={Plus} label={t('newConversation')} tone="accent" onPress={() => push({ name: 'new' })} /> : null}
       </>}
+      floating={online && access === 'operate' ? <FloatingButton icon={Plus} label={t('newConversation')} onPress={() => push({ name: 'new' })} /> : undefined}
     >
       {groups.waiting.length > 0 ? (
         <View style={styles.section}>
@@ -103,8 +103,7 @@ export function ConversationsScreen() {
         </ListGroup>
       ) : null}
       {Object.keys(conversations).length === 0 && online ? (
-        <EmptyState icon={MessageSquare} title={t('noConversations')} body={access === 'operate' ? t('noConversationsHint') : undefined}
-          action={access === 'operate' ? <Button label={t('newConversation')} kind="primary" icon={Plus} onPress={() => push({ name: 'new' })} /> : undefined} />
+        <EmptyState icon={MessageSquare} title={t('noConversations')} body={access === 'operate' ? t('noConversationsHint') : undefined} />
       ) : null}
     </Screen>
   )

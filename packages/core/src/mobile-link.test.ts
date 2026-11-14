@@ -1,4 +1,5 @@
 import { mkdtempSync, rmSync, statSync } from 'node:fs'
+import { createServer } from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -160,6 +161,28 @@ describe('the phone link', () => {
     mobile.setAccess(connection.welcome.deviceId, 'operate')
     expect(await connection.call('conversations.interrupt', { id: '00000000-0000-4000-8000-000000000000' })).toEqual({ ok: true })
     expect(calls).toEqual(['interrupt 00000000-0000-4000-8000-000000000000'])
+  })
+
+  it('does not wait out an address that never answers before trying the next', async () => {
+    // Accepts the connection and never answers it, like a home address tried from outside.
+    const silent = createServer(() => {})
+    await new Promise<void>((resolve) => silent.listen(0, '127.0.0.1', resolve))
+    const address = silent.address()
+    const silentPort = typeof address === 'object' && address ? address.port : 0
+    try {
+      const phone = generateKeyPair()
+      const { connection, computerKey } = await pair(phone)
+      connection.close()
+      const startedAt = Date.now()
+      const again = await connectMobile({ urls: [`ws://127.0.0.1:${silentPort}/`, ...url()], mode: 'connect', staticKey: phone, computerKey, hello: { name: 'Pixel', platform: 'android', app: 'test' } })
+      open.push(again)
+      expect(again.url).toBe(url()[0])
+      expect(Date.now() - startedAt).toBeLessThan(2_000)
+      await expect(connectMobile({ urls: [`ws://127.0.0.1:${silentPort}/`], mode: 'connect', staticKey: phone, computerKey, hello: { name: 'Pixel', platform: 'android', app: 'test' }, connectTimeoutMs: 300 }))
+        .rejects.toMatchObject({ reason: 'unreachable' })
+    } finally {
+      silent.close()
+    }
   })
 
   it('carries a frame far over one Noise message both ways', async () => {

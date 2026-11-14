@@ -4,7 +4,7 @@ import { MOBILE_PROTOCOL_VERSION, MobileControl, mobilePrologue, type MobileHell
 import { MobileLink, pairingConfirmationCode } from './link'
 import { NoiseError, NoiseHandshake, type NoiseKeyPair } from './noise'
 
-// The phone's side of the link: try each address the computer gave, run the handshake, pin the
+// The phone's side of the link: race the addresses the computer gave, run the handshake, pin the
 // computer's key, then speak JSON-RPC over the encrypted link like any core client.
 
 export type MobileWelcome = Extract<MobileControl, { type: 'welcome' }>
@@ -122,10 +122,61 @@ export function withUnsupportedItems(text: string, placeholder: string): string 
   return text
 }
 
-async function attempt(url: string, options: MobileConnectOptions): Promise<MobileConnection> {
+// How long an address has to itself before the next one is tried alongside it.
+const HEAD_START_MS = 300
+const OPEN = 1
+
+type Opened = { url: string; socket: WebSocket }
+
+// The first of the urls whose socket opens. Each has a head start before the next joins in, so a
+// near address wins at once while one that never answers holds the others up only briefly.
+function firstOpen(urls: readonly string[], options: MobileConnectOptions): Promise<Opened | null> {
   const Impl = options.WebSocketImpl ?? WebSocket
-  const socket = new Impl(url)
-  socket.binaryType = 'arraybuffer'
+  const timeout = options.connectTimeoutMs ?? 5000
+  return new Promise((resolve) => {
+    const trying = new Set<WebSocket>()
+    const timers = new Set<ReturnType<typeof setTimeout>>()
+    let next = 0
+    let done = false
+    const finish = (winner: Opened | null) => {
+      done = true
+      timers.forEach(clearTimeout)
+      for (const socket of trying) {
+        if (socket === winner?.socket) continue
+        socket.onopen = socket.onclose = socket.onerror = null
+        socket.close()
+      }
+      resolve(winner)
+    }
+    const start = () => {
+      if (done) return
+      const url = urls[next++]
+      if (url === undefined) {
+        if (trying.size === 0) finish(null)
+        return
+      }
+      const socket = new Impl(url)
+      socket.binaryType = 'arraybuffer'
+      trying.add(socket)
+      const giveUp = setTimeout(() => socket.close(), timeout)
+      timers.add(giveUp)
+      socket.onopen = () => {
+        if (!done) finish({ url, socket })
+      }
+      socket.onerror = () => socket.close()
+      socket.onclose = () => {
+        clearTimeout(giveUp)
+        trying.delete(socket)
+        // One that fails gives its turn to the next at once.
+        start()
+      }
+      timers.add(setTimeout(start, HEAD_START_MS))
+    }
+    start()
+  })
+}
+
+async function secure({ url, socket }: Opened, options: MobileConnectOptions): Promise<MobileConnection> {
   let markClosed: () => void = () => {}
   const closed = new Promise<void>((resolve) => (markClosed = resolve))
   const incoming = queue(socket, closed)
@@ -162,22 +213,10 @@ async function attempt(url: string, options: MobileConnectOptions): Promise<Mobi
     }
   }
   const timeout = options.connectTimeoutMs ?? 5000
-  await new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      socket.close()
-      reject(new MobileConnectError(`cannot reach ${url}`, 'unreachable'))
-    }, timeout)
-    socket.onopen = () => {
-      clearTimeout(timer)
-      resolve()
-    }
-    void closed.then(() => {
-      clearTimeout(timer)
-      reject(new MobileConnectError(`cannot reach ${url}`, 'unreachable'))
-    })
-  })
 
   try {
+    // Gone again while the others were being closed.
+    if (socket.readyState !== OPEN) throw new MobileConnectError(`cannot reach ${url}`, 'unreachable')
     const opening: MobileOpening = { antumi: 'mobile', v: MOBILE_PROTOCOL_VERSION, mode: options.mode, ...(options.pairing ? { pairing: options.pairing.id } : {}) }
     socket.send(JSON.stringify(opening))
     const handshake = new NoiseHandshake({
@@ -237,13 +276,20 @@ async function attempt(url: string, options: MobileConnectOptions): Promise<Mobi
   }
 }
 
-// The first address that answers as the paired computer. A refusal or a wrong computer stops at
-// once; an address that does not answer gives way to the next.
+// The first address that answers as the paired computer, the handshake run on that one alone. A
+// refusal or a wrong computer stops at once; an address whose handshake fails gives way to the rest.
 export async function connectMobile(options: MobileConnectOptions): Promise<MobileConnection> {
+  let left = [...options.urls]
   let last: unknown = new MobileConnectError('no address to try', 'unreachable')
-  for (const url of options.urls) {
+  while (left.length > 0) {
+    const opened = await firstOpen(left, options)
+    if (!opened) {
+      last = new MobileConnectError(`cannot reach ${left.join(', ')}`, 'unreachable')
+      break
+    }
+    left = left.filter((url) => url !== opened.url)
     try {
-      return await attempt(url, options)
+      return await secure(opened, options)
     } catch (error) {
       last = error
       if (error instanceof MobileConnectError && (error.reason === 'rejected' || error.reason === 'wrong-computer')) throw error

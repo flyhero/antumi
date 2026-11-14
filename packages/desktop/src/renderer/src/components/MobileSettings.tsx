@@ -65,6 +65,7 @@ export function MobileSettings() {
         <PortRow status={status} onStatus={apply} />
       </SettingsGroup>
       <SettingsGroup title={t('MobileSettings.ways')} icon={<GlobeIcon />}>
+        <p className="settings-row-description mobile-ways-intro">{t('MobileSettings.waysDescription')}</p>
         <WifiRow status={status} />
         <TailscaleRow status={status} />
         {status.relay !== undefined && <RelayRow relay={status.relay} onStatus={apply} />}
@@ -150,7 +151,7 @@ function TailscaleRow({ status }: { status: MobileStatus }) {
   const name = status.addresses.find((address) => address.endsWith('.ts.net'))
   return (
     <SettingsRow
-      label="Tailscale"
+      label={t('MobileSettings.tailscale')}
       description={t('MobileSettings.tailscaleDescription')}
       control={() => name
         ? <span className="mobile-ready">{t('MobileSettings.tailscaleReady', { name })}</span>

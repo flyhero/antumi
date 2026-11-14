@@ -29,6 +29,8 @@ export const MOBILE_METHODS: Partial<Record<RpcMethod, MobileAccess>> = {
   'conversations.interrupt': 'operate',
   'conversations.continue': 'operate',
   'conversations.setOption': 'operate',
+  // A free conversation only, as on the computer (core refuses a task's chat).
+  'conversations.handoff': 'operate',
   // Only in projects already among the recent ones (core checks the paths), as is the next.
   'conversations.create': 'operate',
   // Whether a project is a git repo, for offering a worktree.

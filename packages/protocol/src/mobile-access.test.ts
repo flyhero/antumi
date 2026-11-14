@@ -15,6 +15,8 @@ describe('the phone allowlist', () => {
     expect(mobileMayCall('conversations.send', 'operate')).toBe(true)
     expect(mobileMayCall('tasks.create', 'view')).toBe(false)
     expect(mobileMayCall('tasks.create', 'operate')).toBe(true)
+    expect(mobileMayCall('conversations.handoff', 'view')).toBe(false)
+    expect(mobileMayCall('conversations.handoff', 'operate')).toBe(true)
     for (const method of ['terminals.open', 'files.read', 'git.execute', 'mobile.revoke', 'accounts.list', 'conversations.delete', 'tasks.delete'] as const) {
       expect(mobileMayCall(method, 'operate'), method).toBe(false)
     }

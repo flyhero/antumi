@@ -143,6 +143,17 @@ git push origin vX.Y.Z
 
 打包要本机装好 JDK 17 和 Android SDK，还要一把发布签名密钥。密钥只有一把，离线备份，永远不换：换了密钥，已安装的用户只能卸载重装。
 
+密钥文件和密码不进仓库，写在本机的 `~/.gradle/gradle.properties`（权限 600）：
+
+```properties
+ANTUMI_RELEASE_STORE_FILE=/绝对路径/antumi-release.jks
+ANTUMI_RELEASE_KEY_ALIAS=…
+ANTUMI_RELEASE_STORE_PASSWORD=…
+ANTUMI_RELEASE_KEY_PASSWORD=…
+```
+
+`plugins/release-signing.js` 让 release 包用它签名；没有这几项时退回调试密钥，Gradle 日志里会警告这样的包不能发布。已发布的 APK 证书 SHA-256 是 `1f71e041034775a1f20d8ba1e436f0578d295d6a8274accba0fd919a03536355`，每次发布前核对：`$ANDROID_HOME/build-tools/37.0.0/apksigner verify --print-certs dist/*.apk`。
+
 不装 Android Studio 也行：`brew install openjdk@17` 和 `brew install --cask android-commandlinetools`，接受许可（`sdkmanager --sdk_root=$HOME/Library/Android/sdk --licenses`）后装 `platform-tools`、`platforms;android-37.0`、`build-tools;37.0.0`、`ndk;27.1.12297006`、`cmake;3.22.1`（React Native 0.88 的要求，见 `react-native/gradle/libs.versions.toml`）。要模拟器再装 `emulator`、一个 arm64 系统镜像和 `cmdline-tools;latest`（Homebrew 那份 `avdmanager` 找不到这个 SDK 里的镜像）。
 
 ```bash
@@ -150,8 +161,6 @@ export JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home
 export ANDROID_HOME=$HOME/Library/Android/sdk
 cd packages/mobile
 pnpm prebuild:android          # 生成 android/（不提交）
-# 在 android/app/build.gradle 的 signingConfigs.release 填上密钥，或用 ~/.gradle/gradle.properties 里的变量；
-# 模板默认用调试密钥签 release 包，那样的包不能发布
 cd android
 rm -rf app/build/generated/assets/react app/build/generated/res/react   # 见下
 ./gradlew assembleRelease

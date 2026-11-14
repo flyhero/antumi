@@ -41,6 +41,7 @@
         }
       ],
       "./plugins/abi-splits",
+      "./plugins/release-signing",
       [
         "expo-camera",
         {

@@ -507,6 +507,20 @@ describe('reusable agent roles and delegated work', () => {
       expect(profiles.worktreeCalls()).toEqual([])
     })
 
+    it('forgets a deleted caller\'s calls, but one whose worktree is still there only once it goes', async () => {
+      const plain = await profiles.dispatch(parentId, reviewer.id, 'Review', 'r')
+      const call = await profiles.dispatch(parentId, developer.id, 'Edit', 'e', 'worktree')
+      await waitFor(() => store.call(call.id).state === 'running')
+      await chats.delete(parentId)
+      expect(conversations.get(call.conversationId)).toBeNull()
+      await profiles.forgetCalls(parentId)
+      expect(store.calls(parentId).map((each) => each.id)).toEqual([call.id])
+      expect(profiles.worktreeCalls()).toMatchObject([{ id: call.id, open: false }])
+      await profiles.worktreeRemoved(call.id)
+      expect(store.calls(parentId)).toEqual([])
+      expect(() => store.call(plain.id)).toThrow()
+    })
+
     // A setup that waits to be let go, telling whether it was called off meanwhile.
     const heldSetup = () => {
       let release = () => {}

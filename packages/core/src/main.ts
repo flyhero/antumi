@@ -174,6 +174,7 @@ const conversations = new ConversationService(
       sources.tasksChanged()
       todos.drop(event.id)
       void browser.closeForConversation(event.id)
+      void profiles.forgetCalls(event.id).catch((error: unknown) => console.error('[antumi-core] forgetting agent calls failed', error))
     }
     else if (event.type === 'prompt') {
       const helper = conversations.get(event.conversationId)
@@ -638,6 +639,8 @@ daemon.onConnect(() => {
       await discussions.reconcile()
       await squads.reconcile()
       await profiles.reconcile()
+      await conversations.tidyDelegates()
+      await profiles.forgetCalls()
       void environment.check(true).catch((error: unknown) => console.error('[antumi-core] agent discovery failed', error))
       // What came due while core or the daemon was away goes now, not at the next tick.
       await schedules.tick()

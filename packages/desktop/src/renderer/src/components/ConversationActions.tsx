@@ -150,14 +150,24 @@ export async function archiveConversation(id: string, archived: boolean) {
   return result
 }
 
+// What deleting it also deletes: the conversations it delegated to go with it.
+async function delegatesNote(id: string): Promise<string> {
+  const rpc = useCore.getState().rpc
+  if (!rpc?.features.includes('agent-profiles')) return ''
+  const all = await rpc.call('conversations.list', { includeTasks: true, includeDelegates: true }).catch(() => [])
+  const count = all.filter((each) => each.parentConversationId === id).length
+  return count > 0 ? `\n\n${t('ConversationActions.alsoDeletesItsDelegates', { count })}` : ''
+}
+
 export async function deleteConversation(conversation: Conversation): Promise<boolean> {
   const worktrees = await worktreesToOffer(conversation.id)
+  const delegates = await delegatesNote(conversation.id)
   let clean = false
   if (worktrees.length > 0) {
-    const answer = await askConfirmWithOption({ message: t('ConversationActions.deleteThisConversationWithItsWorktree'), confirm: t('ChatCommandSettings.delete'), danger: true, option: { label: t('ConversationActions.alsoCleanItsWorktree'), checked: true } })
+    const answer = await askConfirmWithOption({ message: t('ConversationActions.deleteThisConversationWithItsWorktree') + delegates, confirm: t('ChatCommandSettings.delete'), danger: true, option: { label: t('ConversationActions.alsoCleanItsWorktree'), checked: true } })
     if (!answer) return false
     clean = answer.option
-  } else if (!await askConfirm({ message: t('ConversationActions.deleteThisConversationAndItsChatHistoryProject'), confirm: t('ChatCommandSettings.delete'), danger: true })) {
+  } else if (!await askConfirm({ message: t('ConversationActions.deleteThisConversationAndItsChatHistoryProject') + delegates, confirm: t('ChatCommandSettings.delete'), danger: true })) {
     return false
   }
   const deleted = (await perform((rpc) => rpc.call('conversations.delete', { id: conversation.id }))) !== null

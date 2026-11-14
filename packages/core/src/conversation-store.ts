@@ -96,6 +96,13 @@ export class ConversationStore {
     return row ? conversation(row) : null
   }
 
+  // The members a conversation delegated to, or every delegated member.
+  children(parentId?: string): Conversation[] {
+    const rows = parentId ? this.db.prepare(`${SELECT} WHERE parent_conversation_id = ?`).all(parentId)
+      : this.db.prepare(`${SELECT} WHERE parent_conversation_id IS NOT NULL`).all()
+    return rows.map(conversation)
+  }
+
   byTask(taskId: string): Conversation | null {
     const row = this.db.prepare(`${SELECT} WHERE task_id = ? ORDER BY created_at DESC LIMIT 1`).get(taskId)
     return row ? conversation(row) : null

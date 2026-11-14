@@ -13117,6 +13117,7 @@ export const MESSAGES = {
   "ConversationActions.archiveThisConversationWithItsWorktree": {"zh": "归档这条会话？归档后它的 worktree 就用不上了，之后取出归档会从分支重新建好。", "en": "Archive this conversation? Its worktree is no longer needed once it is archived; unarchiving lays it out again from its branch."},
   "ConversationActions.deleteThisConversationWithItsWorktree": {"zh": "删除这条会话及其聊天记录？项目目录会保留，不会改动其中的文件。", "en": "Delete this conversation and its chat history? Project directories and their files will be kept."},
   "ConversationActions.alsoCleanItsWorktree": {"zh": "同时清理它的 worktree（分支和提交都保留）", "en": "Also clean up its worktree (its branch and commits stay)"},
+  "ConversationActions.alsoDeletesItsDelegates": {"zh": "它委派出去的 {count} 个会话也会一起删除。", "en": "The {count} conversations it delegated to are deleted with it."},
   "labels.conversationInUseArchiveOrDeleteBeforeCleaning": {"zh": "会话还在使用，归档或删除会话后才能清理它的 worktree", "en": "The conversation is still in use. Archive or delete it before cleaning its worktree"},
   "BranchHolder.heldByArchivedConversationCleanable": {"zh": "「{branch}」仍被已归档会话「{title}」的 worktree 占用。清理那个 worktree 就能释放这个分支，分支和提交都保留，之后取出那个会话会重新建好。", "en": "{branch} is still checked out in the worktree of archived “{title}”. Cleaning up that worktree frees the branch; the branch and its commits stay, and unarchiving the conversation lays it out again."},
   "BranchHolder.cleanAndSwitch": {"zh": "清理那个 worktree 并切换", "en": "Clean up that worktree and switch"},

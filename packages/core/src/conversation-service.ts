@@ -816,11 +816,37 @@ export class ConversationService {
         if (current.sessionId) await this.stop(id)
         const helper = this.store.helper(id)
         if (helper) await this.remove(helper.id)
+        await this.archiveDelegates(id)
         return this.changed(this.store.setArchived(id, archived))
       } finally { this.retiring.delete(id) }
     }
     await this.restoreWorktrees(id)
-    return this.changed(this.store.setArchived(id, archived))
+    const restored = this.changed(this.store.setArchived(id, archived))
+    for (const child of this.store.children(id)) if (child.archivedAt != null) this.changed(this.store.setArchived(child.id, false))
+    return restored
+  }
+
+  // A delegated member goes with its caller: put away with it, taken out with it, deleted with it.
+  private async archiveDelegates(parentId: string): Promise<void> {
+    for (const child of this.store.children(parentId)) {
+      if (child.archivedAt != null) continue
+      if (child.sessionId) await this.stop(child.id)
+      this.changed(this.store.setArchived(child.id, true))
+    }
+  }
+
+  // Members older versions left behind their caller: deleted with a deleted one, put away with an
+  // archived one.
+  async tidyDelegates(): Promise<void> {
+    for (const child of this.store.children()) {
+      const parent = child.parentConversationId ? this.store.get(child.parentConversationId) : null
+      try {
+        if (!parent) await this.remove(child.id)
+        else if (parent.archivedAt != null && child.archivedAt == null) await this.archiveDelegates(parent.id)
+      } catch (error) {
+        console.error(`[antumi-core] tidying delegated conversation ${child.id} failed`, error)
+      }
+    }
   }
 
   // Lays out again, where they stood, the worktrees cleaned while it was archived; one another
@@ -2062,6 +2088,7 @@ export class ConversationService {
       await this.callCleanup?.(id)
       const helper = this.store.helper(id)
       if (helper) await this.remove(helper.id)
+      for (const child of this.store.children(id)) await this.remove(child.id)
       if (current.sessionId) await this.stop(id)
       // Read before the logs go: what else still refers to these is for the sweep to say.
       const mentioned = await this.sweeper?.mentionedBy(id).catch(() => null)

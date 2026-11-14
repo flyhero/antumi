@@ -45,4 +45,5 @@ export class AgentProfileStore {
     return parsed
   }
   patchCall(id: string, patch: Partial<AgentCall>): AgentCall { return this.saveCall({ ...this.call(id), ...patch }) }
+  deleteCall(id: string): void { this.db.prepare('DELETE FROM agent_calls WHERE id = ?').run(id) }
 }

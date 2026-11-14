@@ -147,6 +147,17 @@ export class AgentProfileService {
     await this.serially(async () => {
       const call = this.store.call(callId)
       if (call.worktree) this.patch(call.id, { worktree: { ...call.worktree, removed: true } })
+      if (!this.lookup(call.parentId)) this.store.deleteCall(call.id)
+    })
+  }
+  // The calls of a caller that is gone, or of every one gone: each goes once nothing is left on
+  // disk of it, as the cleanup page tells a worktree's delegation by its call.
+  async forgetCalls(parentId?: string): Promise<void> {
+    await this.serially(async () => {
+      for (const call of this.store.calls(parentId)) {
+        if (call.worktree && !call.worktree.removed) continue
+        if (!this.lookup(call.parentId)) this.store.deleteCall(call.id)
+      }
     })
   }
   private canDelegate(parent: Conversation): boolean {

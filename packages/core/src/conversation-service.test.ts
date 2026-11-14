@@ -366,6 +366,47 @@ describe('ConversationService', () => {
     expect(daemon.killed).toHaveLength(1)
   })
 
+  const delegateOf = async (parentId: string) => {
+    const child = await service.create('claude', [], false, { deferStart: true })
+    store.setProfile(child.id, AgentProfile.parse({ id: randomUUID(), name: 'Reviewer', agent: 'claude', archivedAt: null, createdAt: 1, updatedAt: 1 }), parentId, randomUUID())
+    return child
+  }
+
+  it('puts delegated members away and takes them out with their caller', async () => {
+    const parent = await service.create('claude', [root], false, { deferStart: true })
+    const child = await delegateOf(parent.id)
+    await service.continue(child.id)
+    await service.setArchived(parent.id, true)
+    expect(store.get(child.id)).toMatchObject({ sessionId: null, archivedAt: expect.any(Number) })
+    expect(daemon.killed).toHaveLength(1)
+    await service.setArchived(parent.id, false)
+    expect(store.get(child.id)?.archivedAt).toBeNull()
+  })
+
+  it('deletes delegated members with their caller', async () => {
+    const parent = await service.create('claude', [root], false, { deferStart: true })
+    const child = await delegateOf(parent.id)
+    const other = await delegateOf((await service.create('claude', [], false, { deferStart: true })).id)
+    await service.continue(child.id)
+    await service.delete(parent.id)
+    expect(store.get(child.id)).toBeNull()
+    expect(store.get(other.id)).not.toBeNull()
+    expect(daemon.killed).toHaveLength(1)
+  })
+
+  it('tidies members a caller left behind: deleted with a deleted one, put away with an archived one', async () => {
+    const archived = await service.create('claude', [], false, { deferStart: true })
+    const live = await service.create('claude', [], false, { deferStart: true })
+    const stray = await delegateOf(randomUUID())
+    const shelved = await delegateOf(archived.id)
+    const kept = await delegateOf(live.id)
+    store.setArchived(archived.id, true)
+    await service.tidyDelegates()
+    expect(store.get(stray.id)).toBeNull()
+    expect(store.get(shelved.id)?.archivedAt).toEqual(expect.any(Number))
+    expect(store.get(kept.id)?.archivedAt).toBeNull()
+  })
+
   it('does not start or send an agent turn while Git holds its repository', async () => {
     const created = await service.create('claude', [], false, { deferStart: true })
     service.setGitGuard(async () => { throw new Error('Git is busy') })

@@ -1,6 +1,8 @@
 import { spawn } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { createServer } from 'node:net'
+import os from 'node:os'
+import path from 'node:path'
 import { createInterface } from 'node:readline'
 import { z } from 'zod'
 import { CodeartsApiError, CodeartsBridge } from './agents/codearts/codearts-bridge'
@@ -45,6 +47,17 @@ function readable(printed: string): string {
 const port = await freePort()
 const env: NodeJS.ProcessEnv = { ...process.env, CODEARTS_SERVER_USERNAME: user, CODEARTS_SERVER_PASSWORD: password }
 delete env.ELECTRON_RUN_AS_NODE
+
+// Its project skills, then the user's, then Antumi's library: the first folder of a name wins, and
+// the project's goes first in the config too so its server loads the same skill.
+const projectSkills = path.join(process.cwd(), '.codeartsdoer', 'skills')
+const userSkills = path.join(os.homedir(), '.codeartsdoer', 'skills')
+const ConfigSchema = z.looseObject({ skills: z.looseObject({ paths: z.array(z.string()).optional() }).optional() })
+const config = (() => { try { return ConfigSchema.safeParse(JSON.parse(env.OPENCODE_CONFIG_CONTENT ?? '')).data } catch { return undefined } })()
+const librarySkills = config?.skills?.paths ?? []
+if (config && env.OPENCODE_CONFIG_CONTENT) env.OPENCODE_CONFIG_CONTENT = JSON.stringify({ ...config, skills: { ...(config.skills ?? {}), paths: [projectSkills, ...librarySkills.filter((dir) => dir !== projectSkills)] } })
+const skillDirs = [...new Set([projectSkills, userSkills, ...librarySkills])]
+
 const server = spawn(executable, ['serve', '--port', String(port), '--hostname', '127.0.0.1'], { cwd: process.cwd(), env, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true })
 let printed = ''
 let stopping = false
@@ -86,7 +99,7 @@ let streamOpen: () => void = () => {}
 const streaming = new Promise<void>((resolve) => { streamOpen = resolve })
 const ready = Promise.all([listening, streaming]).then(() => {})
 ready.catch(() => {})
-const bridge = new CodeartsBridge(api, write, ready, process.env.npm_package_version ?? '1')
+const bridge = new CodeartsBridge(api, write, ready, process.env.npm_package_version ?? '1', skillDirs)
 
 async function stream(): Promise<void> {
   // A server that never listened has said why already.

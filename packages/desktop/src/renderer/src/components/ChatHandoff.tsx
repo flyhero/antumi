@@ -7,7 +7,7 @@ import { perform, useCore, useTaskHandoffSupported } from '../core-store'
 import { useInstalledAgents } from '../installed-agents'
 import { agentLabel, reasonText } from '../labels'
 import { confirmQuota, modelText } from './AgentQuota'
-import { ChatModelPicker, ChatPicker } from './ChatPicker'
+import { ChatModelPicker, ChatPicker, modelMeta } from './ChatPicker'
 import { AgentIcon } from './icons'
 import { defaultStartMode, effortLabel, modeOptions, modeTone, startModes } from './ChatOptionsBar'
 import { startOptions } from './ConversationActions'
@@ -146,7 +146,7 @@ export function HandoffModelPicker({ conversationId, agent }: { conversationId: 
   if (!catalog?.models.length) return null
   return (
     <ChatModelPicker
-      models={catalog.models.map((each) => ({ value: each.id, label: each.label, description: each.description, efforts: each.efforts.map((one) => ({ value: one, label: effortLabel(one) })) }))}
+      models={catalog.models.map((each) => ({ value: each.id, label: each.label, description: each.description, suffix: modelMeta(each), efforts: each.efforts.map((one) => ({ value: one, label: effortLabel(one) })) }))}
       model={modelId ?? defaultModel?.id ?? null}
       effort={effort ?? null}
       onModel={(model) => {

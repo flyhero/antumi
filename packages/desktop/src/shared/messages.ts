@@ -1911,6 +1911,10 @@ export const MESSAGES = {
     "zh": "{agentLabel} 命令",
     "en": "{agentLabel} {agentLabel, plural, one {command} other {commands}}"
   },
+  "ChatCommandMenu.skills": {
+    "zh": "技能",
+    "en": "Skills"
+  },
   "ChatCommandMenu.navigateSelectCompleteClose": {
     "zh": "{value1} 选择 {value2} 选用 {value3} 补全 {value4} 关闭",
     "en": "{value1} Navigate {value2} Select {value3} Complete {value4} Close"

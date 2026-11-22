@@ -1,4 +1,7 @@
+import { readdir, readFile } from 'node:fs/promises'
+import path from 'node:path'
 import { z } from 'zod'
+import { parseSkillFrontmatter } from '../../skill-manifest'
 
 // CodeArts' CLI ships OpenCode 1's ACP server but refuses to start it (`codearts acp` is on its
 // list of commands the CLI does not support). Its local server (`codearts serve`, documented) is
@@ -29,8 +32,20 @@ const Prompt = z.looseObject({ sessionId: z.string(), prompt: z.array(PromptBloc
 const Outcome = z.looseObject({ outcome: z.looseObject({ outcome: z.string(), optionId: z.string().optional() }) })
 
 const Info = z.looseObject({ id: z.string(), parentID: z.string().optional() })
-const Model = z.looseObject({ id: z.string(), name: z.string().catch(''), limit: z.looseObject({ context: z.number() }).optional() })
+const Model = z.looseObject({
+  id: z.string(),
+  name: z.string().catch(''),
+  // The display name its `models --verbose` prints; `name` is often empty.
+  model_name: z.string().optional(),
+  limit: z.looseObject({ context: z.number() }).optional(),
+  // Its billing rate, as CodeArts' own UI shows it (`0.12x`).
+  options: z.looseObject({ creditRatioDisplay: z.string().optional() }).optional(),
+  // The reasoning levels it takes, by name; the service fills each with its reasoningEffort.
+  variants: z.record(z.string(), z.unknown()).optional()
+})
 const Providers = z.looseObject({ providers: z.array(z.looseObject({ id: z.string(), name: z.string().catch(''), models: z.record(z.string(), Model).catch({}) })).catch([]), default: z.record(z.string(), z.string()).catch({}) })
+const Command = z.looseObject({ name: z.string(), description: z.string().catch(''), template: z.string().optional() })
+const Commands = z.array(Command).catch([])
 const Agents = z.array(z.looseObject({ name: z.string(), description: z.string().optional(), mode: z.string().optional(), hidden: z.boolean().optional() }))
 const Config = z.looseObject({ model: z.string().optional(), default_agent: z.string().optional() })
 const ToolState = z.looseObject({ status: z.string(), input: z.record(z.string(), z.unknown()).catch({}), output: z.unknown().optional(), title: z.string().optional(), error: z.string().optional(), metadata: z.record(z.string(), z.unknown()).catch({}) })
@@ -68,7 +83,8 @@ function locationsOf(tool: string, input: Record<string, unknown>): { path: stri
 
 const text = (value: unknown) => typeof value === 'string' ? value : value === undefined ? '' : JSON.stringify(value)
 
-type SessionState = { id: string; cwd: string; model: string | null; mode: string | null; cancelled: boolean; error: string | null; busy: boolean; idle: (() => void) | null }
+type SessionState = { id: string; cwd: string; model: string | null; variant: string | null; mode: string | null; cancelled: boolean; error: string | null; busy: boolean; idle: (() => void) | null }
+type Skill = { name: string; display: string; description: string; path: string }
 
 
 
@@ -83,9 +99,14 @@ export class CodeartsBridge {
   private readonly queues = new Map<string, Promise<void>>()
   // Each model's context window, as its provider list says.
   private readonly contexts = new Map<string, number>()
+  // Each model's reasoning levels, by name.
+  private readonly variants = new Map<string, string[]>()
+  private commands: z.infer<typeof Command>[] = []
+  private skills: Skill[] = []
+  private offeredRead = false
   private serial = 0
 
-  constructor(private readonly api: CodeartsApi, private readonly send: (frame: unknown) => void, private readonly ready: Promise<void>, private readonly version = '0') {}
+  constructor(private readonly api: CodeartsApi, private readonly send: (frame: unknown) => void, private readonly ready: Promise<void>, private readonly version = '0', private readonly skillDirs: readonly string[] = []) {}
 
   // A frame from Antumi.
   async receive(raw: unknown): Promise<void> {
@@ -125,9 +146,14 @@ export class CodeartsBridge {
         const change = ConfigChange.parse(params)
         const session = this.session(change.sessionId)
         if (typeof change.value !== 'string') throw new AcpError(-32602, `${change.configId} must be a string`)
-        if (change.configId === 'model') session.model = change.value
-        else if (change.configId === 'mode') session.mode = await this.agent(session.cwd, change.value)
-        else throw new AcpError(-32602, `Unknown config option: ${change.configId}`)
+        if (change.configId === 'model') {
+          session.model = change.value
+          session.variant = null
+        } else if (change.configId === 'mode') session.mode = await this.agent(session.cwd, change.value)
+        else if (change.configId === 'variant') {
+          if (!(this.variants.get(session.model ?? '') ?? []).includes(change.value)) throw new AcpError(-32602, `Unknown reasoning level: ${change.value}`)
+          session.variant = change.value
+        } else throw new AcpError(-32602, `Unknown config option: ${change.configId}`)
         return { configOptions: await this.configOptions(session) }
       }
       case 'session/set_mode': {
@@ -164,7 +190,7 @@ export class CodeartsBridge {
     else if (!params.sessionId) throw new AcpError(-32602, 'sessionId is required')
     else if (how === 'fork') id = Info.parse(await this.api('POST', `/session/${params.sessionId}/fork`, cwd, {})).id
     else id = Info.parse(await this.api('GET', `/session/${params.sessionId}`, cwd)).id
-    const session: SessionState = { id, cwd, model: null, mode: null, cancelled: false, error: null, busy: false, idle: null }
+    const session: SessionState = { id, cwd, model: null, variant: null, mode: null, cancelled: false, error: null, busy: false, idle: null }
     this.sessions.set(id, session)
     // Added to this server alone, never to its config: each process has its own.
     for (const entry of params.mcpServers) {
@@ -180,15 +206,74 @@ export class CodeartsBridge {
       if (last?.agent && (await this.agents(cwd)).some((agent) => agent.name === last.agent)) session.mode = last.agent
       for (const message of messages) this.replay(id, message)
     }
-    return { ...(how === 'load' ? {} : { sessionId: id }), configOptions: await this.configOptions(session) }
+    await this.readOffered(cwd)
+    const opened = { ...(how === 'load' ? {} : { sessionId: id }), configOptions: await this.configOptions(session) }
+    this.announce(session)
+    return opened
+  }
+
+  // The commands it offers and the skills it loads, as ACP names them: once per bridge, then told
+  // to each session as it opens.
+  private async readOffered(cwd: string): Promise<void> {
+    if (this.offeredRead) return
+    this.offeredRead = true
+    this.commands = Commands.parse(await this.api('GET', '/command', cwd).catch(() => []))
+    const seen = new Set<string>()
+    for (const dir of this.skillDirs) {
+      for (const folder of await readdir(dir).catch(() => [])) {
+        if (folder.startsWith('.')) continue
+        const at = path.join(dir, folder)
+        const content = await readFile(path.join(at, 'SKILL.md'), 'utf8').catch(() => null)
+        if (content === null) continue
+        const fields = parseSkillFrontmatter(content)
+        const display = (fields?.name ?? folder).trim()
+        const name = display.replace(/\s+/g, '-')
+        if (!name || seen.has(name)) continue
+        seen.add(name)
+        this.skills.push({ name, display, description: (fields?.description ?? '').replace(/\s+/g, ' ').trim(), path: path.join(at, 'SKILL.md') })
+      }
+    }
+  }
+
+  private announce(session: SessionState): void {
+    const availableCommands = [
+      ...this.commands.map((command) => ({ name: command.name, description: command.description })),
+      ...this.skills.map((skill) => ({ name: skill.name, description: skill.description, kind: 'skill' }))
+    ]
+    if (availableCommands.length) this.send({ jsonrpc: '2.0', method: 'session/update', params: { sessionId: session.id, update: { sessionUpdate: 'available_commands_update', availableCommands } } })
+  }
+
+  // A slash command of its own expands as its TUI expands it; a skill names its SKILL.md instead,
+  // which its server would not take as a command.
+  private expanded(text: string): string {
+    const match = /(?:^|\n\n)\/([^\s/][^\s]*)(?:[ \t]+([\s\S]*))?$/.exec(text)
+    const name = match?.[1]
+    if (!match || !name) return text
+    const args = (match[2] ?? '').trim()
+    const at = match.index + match[0].indexOf('/')
+    const command = this.commands.find((entry) => entry.name === name)
+    if (command?.template) {
+      const body = command.template.includes('$ARGUMENTS') ? command.template.split('$ARGUMENTS').join(args) : args ? `${command.template}\n\n${args}` : command.template
+      return `${text.slice(0, at)}${body}`
+    }
+    const skill = this.skills.find((entry) => entry.name === name)
+    if (!skill) return text
+    const note = `请使用技能「${skill.display}」，说明在 ${skill.path}`
+    return `${text.slice(0, at)}${args ? `${note}。${args}` : note}`
   }
 
   // The session's model and mode as ACP config options, filling in what it has not chosen yet from
   // CodeArts' own defaults.
   private async configOptions(session: SessionState) {
     const providers = Providers.parse(await this.api('GET', '/config/providers', session.cwd))
-    for (const provider of providers.providers) for (const model of Object.values(provider.models)) if (model.limit) this.contexts.set(`${provider.id}/${model.id}`, model.limit.context)
-    const models = providers.providers.flatMap((provider) => Object.values(provider.models).map((model) => ({ value: `${provider.id}/${model.id}`, name: `${provider.name || provider.id}/${model.name || model.id}` })))
+    this.variants.clear()
+    for (const provider of providers.providers) for (const model of Object.values(provider.models)) {
+      const value = `${provider.id}/${model.id}`
+      if (model.limit) this.contexts.set(value, model.limit.context)
+      const variants = Object.keys(model.variants ?? {})
+      if (variants.length) this.variants.set(value, variants)
+    }
+    const models = providers.providers.flatMap((provider) => Object.values(provider.models).map((model) => ({ value: `${provider.id}/${model.id}`, name: model.model_name || model.name || model.id, ...(model.limit ? { contextWindow: model.limit.context } : {}), ...(model.options?.creditRatioDisplay ? { costRate: model.options.creditRatioDisplay } : {}) })))
     if (!session.model) {
       const configured = Config.parse(await this.api('GET', '/config', session.cwd))
       const [provider, model] = Object.entries(providers.default)[0] ?? []
@@ -199,9 +284,13 @@ export class CodeartsBridge {
       const configured = Config.parse(await this.api('GET', '/config', session.cwd)).default_agent
       session.mode = agents.find((agent) => agent.name === configured)?.name ?? agents.find((agent) => agent.name === 'build')?.name ?? agents[0]?.name ?? null
     }
+    const levels = this.variants.get(session.model ?? '') ?? []
+    const level = levels.includes(session.variant ?? '') ? session.variant : levels[0] ?? null
+    session.variant = level
     return [
       { id: 'model', name: 'Model', category: 'model', type: 'select', currentValue: session.model ?? '', options: models },
-      { id: 'mode', name: 'Session Mode', category: 'mode', type: 'select', currentValue: session.mode ?? '', options: agents.map((agent) => ({ value: agent.name, name: agent.name, ...(agent.description ? { description: agent.description } : {}) })) }
+      { id: 'mode', name: 'Session Mode', category: 'mode', type: 'select', currentValue: session.mode ?? '', options: agents.map((agent) => ({ value: agent.name, name: agent.name, ...(agent.description ? { description: agent.description } : {}) })) },
+      ...(levels.length ? [{ id: 'variant', name: 'Reasoning', category: 'thought_level', type: 'select', currentValue: level ?? '', options: levels.map((value) => ({ value, name: value })) }] : [])
     ]
   }
 
@@ -217,7 +306,7 @@ export class CodeartsBridge {
     const idle = new Promise<void>((resolve) => { session.idle = resolve })
     try {
       const parts = params.prompt.flatMap((block): Record<string, string>[] => {
-        if (block.type === 'text' && block.text) return [{ type: 'text', text: block.text }]
+        if (block.type === 'text' && block.text) return [{ type: 'text', text: this.expanded(block.text) }]
         if (block.type === 'image' && block.data && block.mimeType) return [{ type: 'file', url: `data:${block.mimeType};base64,${block.data}`, filename: 'image', mime: block.mimeType }]
         return []
       })
@@ -225,7 +314,8 @@ export class CodeartsBridge {
       await this.api('POST', `/session/${session.id}/prompt_async`, session.cwd, {
         parts,
         ...(providerID && rest.length ? { model: { providerID, modelID: rest.join('/') } } : {}),
-        ...(session.mode ? { agent: session.mode } : {})
+        ...(session.mode ? { agent: session.mode } : {}),
+        ...(session.variant ? { variant: session.variant } : {})
       })
       await idle
       const messages = z.array(Message).safeParse(await this.api('GET', `/session/${session.id}/message`, session.cwd).catch(() => [])).data ?? []

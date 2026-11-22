@@ -1,11 +1,19 @@
 import { t } from '../i18n'
+import type { ChatModel } from '@antumi/protocol'
 import { useCallback, useRef, useState, type ReactNode } from 'react'
 import { ContextMenu, type MenuPoint } from './ContextMenu'
 import { CheckIcon, ChevronDownIcon } from './icons'
 
 // `icon`: a mark before the label, in the menu and on the button, as an agent's.
-export type PickerOption = { value: string; label: string; description?: string | null; disabled?: boolean; icon?: ReactNode }
+export type PickerOption = { value: string; label: string; description?: string | null; suffix?: string; disabled?: boolean; icon?: ReactNode }
 export type PickerSize = 'large' | 'field'
+
+// What a model takes and what it costs, where its agent tells: "1M · 0.12x".
+export function modelMeta(model: Pick<ChatModel, 'contextWindow' | 'costRate'>): string | undefined {
+  const window = model.contextWindow ? model.contextWindow >= 1_000_000 ? `${Math.round(model.contextWindow / 1_000_000)}M` : `${Math.round(model.contextWindow / 1000)}K` : null
+  const parts = [window, model.costRate].filter(Boolean)
+  return parts.length ? parts.join(' · ') : undefined
+}
 
 // A choice in the composer's toolbar: its value as a small button as wide as its words, and a menu
 // above it. A native select is as wide as its longest option, which left most values far from their
@@ -78,7 +86,10 @@ export function PickerItem({ option, checked, onSelect }: { option: PickerOption
     >
       {option.icon && <span className="chat-picker-icon" aria-hidden="true">{option.icon}</span>}
       <span className="chat-picker-item-text">
-        <span className="chat-picker-item-label" title={option.label}>{option.label}</span>
+        <span className="chat-picker-item-line">
+          <span className="chat-picker-item-label" title={option.label}>{option.label}</span>
+          {option.suffix && <span className="chat-picker-item-suffix">{option.suffix}</span>}
+        </span>
         {option.description && <span className="chat-picker-item-description" title={option.description}>{option.description}</span>}
       </span>
       {checked && <span className="menu-check"><CheckIcon /></span>}

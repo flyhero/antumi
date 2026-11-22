@@ -2,7 +2,7 @@ import { getLocale, localized, t } from '../i18n'
 import { agentDescriptor, agentModeText, helperAllowsMode, isHelper, type AgentKind, type ChatItem, type ChatModel, type ChatOption, type ChatPermissionMode, type Conversation } from '@antumi/protocol'
 import { perform, setConversationAccount } from '../core-store'
 import { AccountPicker } from './AccountPicker'
-import { ChatModelPicker, ChatPicker, type PickerOption } from './ChatPicker'
+import { ChatModelPicker, ChatPicker, modelMeta, type PickerOption } from './ChatPicker'
 import { ContextUsage } from './ContextUsage'
 
 type StateItem = Extract<ChatItem, { kind: 'state' }>
@@ -105,7 +105,7 @@ export function ChatOptionsBar({ conversation, state, compact = false }: { conve
       <span className="chat-dock-spacer" />
       {models.length > 0 && (
         <ChatModelPicker
-          models={models.map((each) => ({ value: each.id, label: each.label, description: each.description, efforts: each.efforts.map((one) => ({ value: one, label: effortLabel(one) })) }))}
+          models={models.map((each) => ({ value: each.id, label: each.label, description: each.description, suffix: modelMeta(each), efforts: each.efforts.map((one) => ({ value: one, label: effortLabel(one) })) }))}
           model={modelId}
           effort={effort}
           disabled={managed || !idle}

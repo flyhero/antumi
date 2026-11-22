@@ -11,7 +11,7 @@ import { usePreferences } from '../preferences'
 import { useChatTypeface } from '../chat-typeface'
 import { useShortcutLabel } from '../keyboard-shortcuts'
 import { effortLabel } from './ChatOptionsBar'
-import { ChatModelPicker, ChatPicker } from './ChatPicker'
+import { ChatModelPicker, ChatPicker, modelMeta } from './ChatPicker'
 import { sendsMessage } from './ChatComposer'
 import { AgentIcon, ChevronDownIcon, CloseIcon, EnterIcon } from './icons'
 import { ProjectPicker } from './ProjectPicker'
@@ -75,7 +75,7 @@ function MemberRow({ member, index, agents, providersSupported, chair, author, b
       {catalog && (
         <ChatModelPicker
           align="start"
-          models={catalog.models.map((each) => ({ value: each.id, label: each.label, description: each.description, efforts: each.efforts.map((one) => ({ value: one, label: effortLabel(one) })) }))}
+          models={catalog.models.map((each) => ({ value: each.id, label: each.label, description: each.description, suffix: modelMeta(each), efforts: each.efforts.map((one) => ({ value: one, label: effortLabel(one) })) }))}
           model={model?.id ?? null}
           effort={effort ?? null}
           disabled={busy}

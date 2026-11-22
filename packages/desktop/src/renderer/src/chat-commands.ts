@@ -6,7 +6,7 @@ import { isInside } from './terminal-commands'
 // which goes to the agent as typed.
 export type CommandEntry =
   | { source: 'antumi'; name: string; description: string; argumentHint: string | null; command: SavedChatCommand }
-  | { source: 'agent'; name: string; description: string; argumentHint: string | null }
+  | { source: 'agent'; name: string; description: string; argumentHint: string | null; kind: 'command' | 'skill' }
 
 export function antumiEntries(commands: readonly SavedChatCommand[], projectPaths: readonly string[]): CommandEntry[] {
   return commands
@@ -28,7 +28,7 @@ export function pinnedCommands(commands: readonly SavedChatCommand[], projectPat
 }
 
 export function agentEntries(commands: readonly ChatCommand[]): CommandEntry[] {
-  return commands.map((command) => ({ source: 'agent', ...command }))
+  return commands.map((command) => ({ source: 'agent', name: command.name, description: command.description, argumentHint: command.argumentHint, kind: command.kind === 'skill' ? 'skill' : 'command' }))
 }
 
 export function takesArguments(command: Pick<SavedChatCommand, 'prompt'>): boolean {

@@ -152,6 +152,10 @@ export const ChatModel = z.object({
   // The reasoning efforts it takes, in the agent's own words; empty when it takes none.
   efforts: z.array(z.string()),
   isDefault: z.boolean(),
+  // What it takes at once, in tokens, where the agent tells. Older cores leave it out.
+  contextWindow: z.number().int().positive().nullable().optional(),
+  // What running it costs, in the agent's own words (CodeArts' `0.12x`), not a price per token.
+  costRate: z.string().nullable().optional(),
   // The model takes Claude Code's auto mode, so a chat can start in it. Codex, and older cores,
   // leave it out.
   autoMode: z.boolean().optional(),
@@ -167,7 +171,9 @@ export const ChatCommand = z.object({
   name: z.string(),
   description: z.string(),
   // What the command takes after its name ("[branch]"), or null when it takes nothing.
-  argumentHint: z.string().nullable()
+  argumentHint: z.string().nullable(),
+  // A command of its own, or one of its skills. Older cores leave it out.
+  kind: z.enum(['command', 'skill']).optional()
 })
 export type ChatCommand = z.infer<typeof ChatCommand>
 

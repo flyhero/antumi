@@ -1,9 +1,14 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { CodeartsApiError, CodeartsBridge, type CodeartsApi } from './codearts-bridge'
 
+const PROVIDERS = { providers: [{ id: 'huaweicloud-maas', name: 'HuaweiCloud', models: { 'glm-5.3': { id: 'glm-5.3', name: 'GLM-5.3', limit: { context: 128000, output: 8192 } } } }], default: { 'huaweicloud-maas': 'glm-5.3' } }
+
 // The server as the bridge sees it, answering as CodeArts 26.11.11's did: its requests are kept,
 // and the events are the ones it streamed.
-function server(messages: unknown[] = []) {
+function server(messages: unknown[] = [], commands: unknown[] = [], providers: unknown = PROVIDERS, skillDirs: string[] = []) {
   const calls: { method: string; path: string; directory: string; body?: unknown }[] = []
   const api: CodeartsApi = async (method, path, directory, body) => {
     calls.push({ method, path, directory, ...(body === undefined ? {} : { body }) })
@@ -13,13 +18,14 @@ function server(messages: unknown[] = []) {
     if (path === '/session/ses_gone') throw new CodeartsApiError(404, 'Session not found: ses_gone')
     if (path === '/session/ses_1/fork') return { id: 'ses_2' }
     if (path.endsWith('/message')) return messages
-    if (path === '/config/providers') return { providers: [{ id: 'huaweicloud-maas', name: 'HuaweiCloud', models: { 'glm-5.3': { id: 'glm-5.3', name: 'GLM-5.3', limit: { context: 128000, output: 8192 } } } }], default: { 'huaweicloud-maas': 'glm-5.3' } }
+    if (path === '/config/providers') return providers
+    if (path === '/command') return commands
     if (path === '/config') return { model: 'huaweicloud-maas/glm-5.3' }
     if (path === '/agent') return [{ name: 'build', mode: 'primary' }, { name: 'antumi-auto', mode: 'primary', description: 'Automatic' }, { name: 'general', mode: 'subagent' }, { name: 'title', mode: 'primary', hidden: true }]
     return {}
   }
   const sent: Record<string, unknown>[] = []
-  const bridge = new CodeartsBridge(api, (frame) => sent.push(JSON.parse(JSON.stringify(frame))), Promise.resolve(), '26.11.11')
+  const bridge = new CodeartsBridge(api, (frame) => sent.push(JSON.parse(JSON.stringify(frame))), Promise.resolve(), '26.11.11', skillDirs)
   const event = (type: string, properties: unknown) => bridge.event({ directory: '/work', payload: { type, properties } })
   const updates = () => sent.flatMap((frame) => frame.method === 'session/update' ? [(frame.params as { update: Record<string, unknown> }).update] : [])
   const answer = (id: string) => sent.find((frame) => frame.id === id && frame.method === undefined)
@@ -42,12 +48,59 @@ describe('CodeArts bridge', () => {
     expect(answer('new')?.result).toEqual({
       sessionId: 'ses_1',
       configOptions: [
-        { id: 'model', name: 'Model', category: 'model', type: 'select', currentValue: 'huaweicloud-maas/glm-5.3', options: [{ value: 'huaweicloud-maas/glm-5.3', name: 'HuaweiCloud/GLM-5.3' }] },
+        { id: 'model', name: 'Model', category: 'model', type: 'select', currentValue: 'huaweicloud-maas/glm-5.3', options: [{ value: 'huaweicloud-maas/glm-5.3', name: 'GLM-5.3', contextWindow: 128000 }] },
         { id: 'mode', name: 'Session Mode', category: 'mode', type: 'select', currentValue: 'build', options: [{ value: 'build', name: 'build' }, { value: 'antumi-auto', name: 'antumi-auto', description: 'Automatic' }] }
       ]
     })
     await bridge.receive({ jsonrpc: '2.0', id: 'mode', method: 'session/set_config_option', params: { sessionId: 'ses_1', configId: 'mode', value: 'general' } })
     expect(answer('mode')).toMatchObject({ error: { message: 'Mode not found: general' } })
+  })
+
+  it('says what each model takes and costs, offers its reasoning levels, and sends the chosen one', async () => {
+    const providers = { providers: [{ id: 'huaweicloud-maas', name: 'HuaweiCloud', models: { 'glm-5.3': { id: 'glm-5.3', name: 'GLM-5.3', limit: { context: 1048576 }, options: { creditRatioDisplay: '0.12x' }, variants: { low: { reasoningEffort: 'low' }, high: { reasoningEffort: 'high' } } } } }], default: { 'huaweicloud-maas': 'glm-5.3' } }
+    const { bridge, calls, answer, event } = server([], [], providers)
+    await bridge.receive(newSession())
+    expect(answer('new')?.result).toMatchObject({
+      configOptions: [
+        { id: 'model', options: [{ value: 'huaweicloud-maas/glm-5.3', contextWindow: 1048576, costRate: '0.12x' }] },
+        { id: 'mode' },
+        { id: 'variant', category: 'thought_level', currentValue: 'low' }
+      ]
+    })
+    await bridge.receive({ jsonrpc: '2.0', id: 'v', method: 'session/set_config_option', params: { sessionId: 'ses_1', configId: 'variant', value: 'high' } })
+    const turn = bridge.receive(prompt('hi'))
+    await flush()
+    expect(calls.find((call) => call.path === '/session/ses_1/prompt_async')?.body).toMatchObject({ variant: 'high' })
+    await event('session.idle', { sessionID: 'ses_1' })
+    await turn
+  })
+
+  it('offers its commands and the skills it loads, and expands either before it prompts', async () => {
+    const root = mkdtempSync(path.join(os.tmpdir(), 'codearts-skills-'))
+    mkdirSync(path.join(root, 'demo'))
+    writeFileSync(path.join(root, 'demo', 'SKILL.md'), '---\nname: demo\ndescription: Demo skill\n---\nDo it.\n')
+    try {
+      const { bridge, calls, updates, event } = server([], [{ name: 'compact', description: 'Compact the chat', template: 'Compact: $ARGUMENTS' }], PROVIDERS, [root])
+      await bridge.receive(newSession())
+      expect(updates().find((update) => update.sessionUpdate === 'available_commands_update')).toMatchObject({
+        availableCommands: [
+          { name: 'compact', description: 'Compact the chat' },
+          { name: 'demo', description: 'Demo skill', kind: 'skill' }
+        ]
+      })
+      const first = bridge.receive(prompt('/compact now'))
+      await flush()
+      expect(calls.find((call) => call.path === '/session/ses_1/prompt_async')?.body).toMatchObject({ parts: [{ text: 'Compact: now' }] })
+      await event('session.idle', { sessionID: 'ses_1' })
+      await first
+      const second = bridge.receive(prompt('/demo go'))
+      await flush()
+      expect(calls.filter((call) => call.path === '/session/ses_1/prompt_async').at(-1)?.body).toMatchObject({ parts: [{ text: `请使用技能「demo」，说明在 ${path.join(root, 'demo', 'SKILL.md')}。go` }] })
+      await event('session.idle', { sessionID: 'ses_1' })
+      await second
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 
   it('sends a prompt without waiting on it, streams its words and thoughts, and answers once the session is idle', async () => {

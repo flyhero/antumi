@@ -23,7 +23,7 @@ const Configs = z.looseObject({ configOptions: AcpConfigs.optional() })
 const Opened = Configs.extend({
   sessionId: z.string().optional(),
   modes: z.looseObject({ currentModeId: z.string(), availableModes: z.array(z.looseObject({ id: z.string(), name: z.string(), description: z.string().nullish() })) }).optional(),
-  models: z.looseObject({ currentModelId: z.string(), availableModels: z.array(z.looseObject({ modelId: z.string(), name: z.string(), description: z.string().nullish() })) }).optional()
+  models: z.looseObject({ currentModelId: z.string(), availableModels: z.array(z.looseObject({ modelId: z.string(), name: z.string(), description: z.string().nullish(), contextWindow: z.number().nullish(), costRate: z.string().nullish() })) }).optional()
 })
 const Initialized = z.looseObject({
   protocolVersion: z.union([z.literal(1), z.literal('1')]),
@@ -35,7 +35,7 @@ const Update = z.looseObject({
   sessionUpdate: z.string(), content: z.unknown().optional(), toolCallId: z.string().optional(), name: z.string().optional(), title: z.string().optional(), kind: z.string().optional(),
   status: z.string().optional(), rawInput: z.unknown().optional(), rawOutput: z.unknown().optional(), locations: z.array(z.looseObject({ path: z.string(), line: z.number().optional() })).optional(),
   entries: z.array(z.looseObject({ content: z.string(), status: z.string() })).optional(), currentModeId: z.string().optional(), configOptions: AcpConfigs.optional(),
-  availableCommands: z.array(z.looseObject({ name: z.string(), description: z.string(), input: z.looseObject({ hint: z.string().optional() }).nullish() })).optional()
+  availableCommands: z.array(z.looseObject({ name: z.string(), description: z.string(), kind: z.string().optional(), input: z.looseObject({ hint: z.string().optional() }).nullish() })).optional()
 })
 const Permission = z.looseObject({ toolCall: Update.omit({ sessionUpdate: true }), options: z.array(z.looseObject({ optionId: z.string(), name: z.string(), kind: z.enum(['allow_once', 'allow_always', 'reject_once', 'reject_always']) })).min(1) })
 const Questions = z.looseObject({ title: z.string().optional(), toolCallId: z.string(), questions: z.array(z.looseObject({ id: z.string(), prompt: z.string(), allowMultiple: z.boolean().optional(), options: z.array(z.looseObject({ id: z.string(), label: z.string() })).catch([]) })).min(1) })
@@ -586,13 +586,13 @@ export class AcpDriver implements ChatDriver {
     return this.config.find((entry) => entry.category === category)?.currentValue ?? null
   }
 
-  private readModels(models: { value: string; name: string; configOptions: AcpConfig[] }[]): void {
+  private readModels(models: { value: string; name: string; contextWindow?: number | null; costRate?: string | null; configOptions: AcpConfig[] }[]): void {
     this.thoughts.clear()
     this.models = models.map((model) => {
       const thought = model.configOptions.find((config) => config.category === 'thought_level')
       const values = thought ? valuesOf(thought) : []
       if (thought && values.length) this.thoughts.set(model.value, { id: thought.id, name: thought.name, values })
-      return { id: model.value, label: model.name, description: null, efforts: values.map((entry) => entry.value), isDefault: false }
+      return { id: model.value, label: model.name, description: null, efforts: values.map((entry) => entry.value), isDefault: false, ...(model.contextWindow != null ? { contextWindow: model.contextWindow } : {}), ...(model.costRate != null ? { costRate: model.costRate } : {}) }
     })
   }
 
@@ -608,7 +608,7 @@ export class AcpDriver implements ChatDriver {
     const models = opened.models
     const legacy: AcpConfig[] = [
       ...(modes ? [{ id: 'mode', name: 'Mode', category: 'mode', currentValue: modes.currentModeId, options: modes.availableModes.map((mode) => ({ value: mode.id, name: mode.name, description: mode.description })) }] : []),
-      ...(models ? [{ id: 'model', name: 'Model', category: 'model', currentValue: models.currentModelId, options: models.availableModels.map((model) => ({ value: model.modelId, name: model.name, description: model.description })) }] : [])
+      ...(models ? [{ id: 'model', name: 'Model', category: 'model', currentValue: models.currentModelId, options: models.availableModels.map((model) => ({ value: model.modelId, name: model.name, description: model.description, ...(model.contextWindow != null ? { contextWindow: model.contextWindow } : {}), ...(model.costRate != null ? { costRate: model.costRate } : {}) })) }] : [])
     ]
     const next = [...config, ...legacy.filter((entry) => !config.some((one) => one.category === entry.category))]
     this.config = [...this.config.filter((entry) => !next.some((one) => one.id === entry.id || one.category === entry.category)), ...next]
@@ -643,7 +643,7 @@ export class AcpDriver implements ChatDriver {
       permissionMode: mode ? this.antumiMode(mode.currentValue) : null,
       permissionModes: mode ? valuesOf(mode).flatMap((entry) => { const mapped = this.antumiMode(entry.value); return mapped && (!this.options.planOnly || mapped === 'plan') && (!this.options.readOnly || mapped === 'readOnly') ? [mapped] : [] }) : [],
       model: model?.currentValue ?? null,
-      models: model ? this.offered(valuesOf(model)).map((entry) => ({ id: entry.value, label: entry.name, description: entry.description ?? null, efforts: this.models.find((one) => one.id === entry.value)?.efforts ?? (entry.value === model.currentValue && effort ? valuesOf(effort).map((one) => one.value) : []), isDefault: entry.value === model.currentValue })) : [],
+      models: model ? this.offered(valuesOf(model)).map((entry) => ({ id: entry.value, label: entry.name, description: entry.description ?? null, ...(entry.contextWindow != null ? { contextWindow: entry.contextWindow } : {}), ...(entry.costRate != null ? { costRate: entry.costRate } : {}), efforts: this.models.find((one) => one.id === entry.value)?.efforts ?? (entry.value === model.currentValue && effort ? valuesOf(effort).map((one) => one.value) : []), isDefault: entry.value === model.currentValue })) : [],
       effort: effort?.currentValue ?? null
     })
     if (this.options.planOnly && mode && mode.currentValue !== 'plan' && this.setup && !this.initial.size && !this.initialChoices.length) this.startError = `${this.name} 离开了仅规划模式`
@@ -685,7 +685,7 @@ export class AcpDriver implements ChatDriver {
       this.publishConfig(); return
     }
     if (update.sessionUpdate === 'available_commands_update') {
-      this.state.set({ commands: (update.availableCommands ?? []).map((command) => ({ name: command.name, description: command.description, argumentHint: command.input?.hint ?? null })) }); return
+      this.state.set({ commands: (update.availableCommands ?? []).map((command) => ({ name: command.name, description: command.description, argumentHint: command.input?.hint ?? null, kind: command.kind === 'skill' ? 'skill' : 'command' })) }); return
     }
     // session/load can replay the entire provider history before its response.
     if (!this.turn) return

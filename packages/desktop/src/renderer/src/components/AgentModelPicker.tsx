@@ -1,7 +1,7 @@
 import { t } from '../i18n'
 import type { ChatCatalog } from '@antumi/protocol'
 import { resolveModel, type ModelChoice } from '../agent-models'
-import { ChatModelPicker, ChatPicker, type PickerSize } from './ChatPicker'
+import { ChatModelPicker, ChatPicker, modelMeta, type PickerSize } from './ChatPicker'
 import { effortLabel } from './ChatOptionsBar'
 
 // An agent's model and effort, picked the way the composer picks them: one picker for both, the
@@ -23,7 +23,7 @@ export function AgentModelPicker({ catalog, choice, onChange, size, placement = 
   const current = modelId ?? defaultModel?.id
   return (
     <ChatModelPicker
-      models={catalog.models.map((each) => ({ value: each.id, label: each.label, description: each.description, efforts: each.efforts.map((one) => ({ value: one, label: effortLabel(one) })) }))}
+      models={catalog.models.map((each) => ({ value: each.id, label: each.label, description: each.description, suffix: modelMeta(each), efforts: each.efforts.map((one) => ({ value: one, label: effortLabel(one) })) }))}
       model={current ?? null}
       effort={effort ?? null}
       size={size}

@@ -23,7 +23,7 @@ import { useChatMentionMenu } from './ChatMentionMenu'
 import { MentionField, useMentionedText } from './ChatMentionField'
 import { messageReferences, writeMentionedText } from '../chat-mentions'
 import { defaultStartMode, effortLabel, modeOptions, modeTone, startModes } from './ChatOptionsBar'
-import { ChatModelPicker, ChatPicker } from './ChatPicker'
+import { ChatModelPicker, ChatPicker, modelMeta } from './ChatPicker'
 import { AgentIcon, CloseIcon, EnterIcon, ExternalIcon, SourceIcon } from './icons'
 import { ProjectPicker } from './ProjectPicker'
 import { DraftBranchPicker, useNonGitProjects, useProjectBranches } from './DraftBranchPicker'
@@ -398,7 +398,7 @@ export function ConversationDraft() {
                     {catalog === null && !provider && <ModelsUnavailableNote agent={agent} />}
                     {catalog && (
                       <ChatModelPicker
-                        models={catalog.models.map((each) => ({ value: each.id, label: each.label, description: each.description, efforts: each.efforts.map((one) => ({ value: one, label: effortLabel(one) })) }))}
+                        models={catalog.models.map((each) => ({ value: each.id, label: each.label, description: each.description, suffix: modelMeta(each), efforts: each.efforts.map((one) => ({ value: one, label: effortLabel(one) })) }))}
                         model={modelId}
                         effort={effort}
                         disabled={busy}

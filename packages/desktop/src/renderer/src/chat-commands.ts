@@ -35,10 +35,14 @@ export function takesArguments(command: Pick<SavedChatCommand, 'prompt'>): boole
   return command.prompt.includes(CHAT_COMMAND_ARGUMENTS)
 }
 
-// What the menu filters by: the name being typed, while the input holds nothing else.
-export function commandQuery(text: string): string | null {
-  const match = /^\/(\S*)$/.exec(text)
-  return match ? (match[1] ?? '') : null
+// What the menu filters by: the name being typed after the last slash, wherever the slash is. A
+// `//` is a URL, not a command, so it stays out.
+export function commandQuery(text: string): { query: string; start: number } | null {
+  const start = text.lastIndexOf('/')
+  if (start < 0) return null
+  const query = text.slice(start + 1)
+  if (/\s/.test(query) || text[start - 1] === '/') return null
+  return { query, start }
 }
 
 // Names that start with the query first, then names with it inside, then descriptions with it;

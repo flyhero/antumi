@@ -12,11 +12,12 @@ const saved = (name: string, prompt: string, projectPath: string | null = null):
 })
 
 describe('commandQuery', () => {
-  it('reads the name being typed while the input holds nothing else', () => {
-    expect(commandQuery('/')).toBe('')
-    expect(commandQuery('/rev')).toBe('rev')
+  it('reads the name being typed after the last slash, anywhere in the input', () => {
+    expect(commandQuery('/')).toEqual({ query: '', start: 0 })
+    expect(commandQuery('/rev')).toEqual({ query: 'rev', start: 0 })
     expect(commandQuery('/review main')).toBeNull()
-    expect(commandQuery('hi /rev')).toBeNull()
+    expect(commandQuery('hi /rev')).toEqual({ query: 'rev', start: 3 })
+    expect(commandQuery('https://example')).toBeNull()
     expect(commandQuery('')).toBeNull()
   })
 })

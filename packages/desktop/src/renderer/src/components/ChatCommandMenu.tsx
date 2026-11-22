@@ -42,15 +42,14 @@ function CommandOption({ entry, id, active, onHover, onPick }: {
   )
 }
 
-// The commands whose names match what follows a leading /, above the input: the user's own first,
-// then the agent's. Enter runs the one picked (the user's own expands into the input, an agent's is
-// sent), Tab only completes its name, Esc puts the list away until the text changes.
-export function useChatCommandMenu({ text, entries, agentLabel, input, sendCommand }: {
+// The commands whose names match what follows the last / anywhere in the input: the user's own
+// first, then the agent's commands, then its skills. Enter puts the one picked into the input, Tab
+// only its name, Esc puts the list away until the text changes.
+export function useChatCommandMenu({ text, entries, agentLabel, input }: {
   text: string
   entries: readonly CommandEntry[]
   agentLabel: string
   input: RefObject<EditorView | null>
-  sendCommand: (text: string) => void
 }): {
   menu: ReactNode
   inputProps: InputProps
@@ -61,30 +60,31 @@ export function useChatCommandMenu({ text, entries, agentLabel, input, sendComma
   const [highlight, setHighlight] = useState(0)
   const [closedAt, setClosedAt] = useState<string | null>(null)
   const query = commandQuery(text)
+  const needle = query?.query ?? null
   const shown = useMemo(() => {
-    const matches = query === null ? [] : matchCommands(entries, query)
+    const matches = needle === null ? [] : matchCommands(entries, needle)
     const agent = matches.flatMap((entry) => entry.source === 'agent' ? [entry] : [])
     return [...matches.filter((entry) => entry.source === 'antumi'), ...agent.filter((entry) => entry.kind !== 'skill'), ...agent.filter((entry) => entry.kind === 'skill')]
-  }, [entries, query, getLocale()])
-  const open = query !== null && text !== closedAt && shown.length > 0
+  }, [entries, needle, getLocale()])
+  const open = needle !== null && text !== closedAt && shown.length > 0
   const active = Math.min(highlight, shown.length - 1)
-  useEffect(() => setHighlight(0), [query])
+  useEffect(() => setHighlight(0), [needle])
 
-  const replace = (next: string) => {
+  const replace = (from: number, next: string) => {
     const view = input.current
     if (!view) return
     // Complete the text and place the caret together; mapping an insertion keeps it before the suffix.
-    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: next }, selection: { anchor: next.length }, annotations: isolateHistory.of('full'), userEvent: 'input.complete' })
+    view.dispatch({ changes: { from, to: view.state.doc.length, insert: next }, selection: { anchor: from + next.length }, annotations: isolateHistory.of('full'), userEvent: 'input.complete' })
     view.focus()
   }
   const pick = (entry: CommandEntry, complete: boolean) => {
+    const from = query?.start ?? 0
     if (complete || (entry.source === 'antumi' && entry.argumentHint)) {
-      replace(`/${entry.name} `)
+      replace(from, `/${entry.name} `)
     } else if (entry.source === 'antumi') {
-      replace(expandPrompt(entry.command.prompt, ''))
+      replace(from, expandPrompt(entry.command.prompt, ''))
     } else {
-      setClosedAt(`/${entry.name}`)
-      sendCommand(`/${entry.name}`)
+      replace(from, `/${entry.name} `)
     }
   }
 
@@ -114,8 +114,8 @@ export function useChatCommandMenu({ text, entries, agentLabel, input, sendComma
   }
 
   const optionId = (index: number) => `${listId}-${index}`
-  const group = (id: string, label: string, pick: (entry: CommandEntry) => boolean) => {
-    const rows = shown.map((entry, index) => ({ entry, index })).filter(({ entry }) => pick(entry))
+  const group = (id: string, label: string, accept: (entry: CommandEntry) => boolean) => {
+    const rows = shown.map((entry, index) => ({ entry, index })).filter(({ entry }) => accept(entry))
     if (rows.length === 0) return null
     return (
       <li role="presentation" className="chat-command-group">

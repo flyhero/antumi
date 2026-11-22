@@ -12,13 +12,23 @@ const saved = (name: string, prompt: string, projectPath: string | null = null):
 })
 
 describe('commandQuery', () => {
-  it('reads the name being typed after the last slash, anywhere in the input', () => {
-    expect(commandQuery('/')).toEqual({ query: '', start: 0 })
-    expect(commandQuery('/rev')).toEqual({ query: 'rev', start: 0 })
+  it('reads the name being typed while the input holds nothing else', () => {
+    expect(commandQuery('/')).toBe('')
+    expect(commandQuery('/rev')).toBe('rev')
     expect(commandQuery('/review main')).toBeNull()
-    expect(commandQuery('hi /rev')).toEqual({ query: 'rev', start: 3 })
-    expect(commandQuery('https://example')).toBeNull()
+    expect(commandQuery('hi /rev')).toBeNull()
+    expect(commandQuery('请检查 /tmp/rev')).toBeNull()
+    expect(commandQuery('https://example.com/docs')).toBeNull()
     expect(commandQuery('')).toBeNull()
+  })
+})
+
+describe('agentEntries', () => {
+  it('tells an agent\'s skills from its commands, older cores\' all being commands', () => {
+    expect(agentEntries([
+      { name: 'compact', description: '', argumentHint: null },
+      { name: 'demo', description: '', argumentHint: null, kind: 'skill' }
+    ]).map((entry) => entry.source === 'agent' && entry.kind)).toEqual(['command', 'skill'])
   })
 })
 

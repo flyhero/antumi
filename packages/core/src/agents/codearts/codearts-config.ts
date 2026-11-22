@@ -1,4 +1,3 @@
-import os from 'node:os'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { AgentLaunch } from '../agent-adapter'
@@ -43,9 +42,7 @@ export function codeartsConfig(launch: Pick<AgentLaunch, 'allowBypass' | 'planOn
         }
       } : {})
     },
-    // Antumi's skills bundle, and the user's own CodeArts skills, in the Agent Skills layout it scans
-    // for SKILL.md. The user's folder is written out in full so the bridge lists it even where the
-    // process' own home is not the user's.
-    skills: { paths: [...(launch.skills ? [path.join(launch.skills.dir, '.agents', 'skills')] : []), path.join(os.homedir(), '.codeartsdoer', 'skills')] }
+    // Antumi's skills bundle, in the Agent Skills layout it scans for SKILL.md.
+    ...(launch.skills ? { skills: { paths: [path.join(launch.skills.dir, '.agents', 'skills')] } } : {})
   })
 }

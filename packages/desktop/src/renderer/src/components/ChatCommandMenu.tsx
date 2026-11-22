@@ -42,14 +42,16 @@ function CommandOption({ entry, id, active, onHover, onPick }: {
   )
 }
 
-// The commands whose names match what follows the last / anywhere in the input: the user's own
-// first, then the agent's commands, then its skills. Enter puts the one picked into the input, Tab
-// only its name, Esc puts the list away until the text changes.
-export function useChatCommandMenu({ text, entries, agentLabel, input }: {
+// The commands whose names match what follows a leading /, above the input: the user's own first,
+// then the agent's commands, then its skills. Enter runs the one picked (the user's own expands
+// into the input, an agent's command is sent, a skill waits in the input for what it is to do),
+// Tab only completes its name, Esc puts the list away until the text changes.
+export function useChatCommandMenu({ text, entries, agentLabel, input, sendCommand }: {
   text: string
   entries: readonly CommandEntry[]
   agentLabel: string
   input: RefObject<EditorView | null>
+  sendCommand: (text: string) => void
 }): {
   menu: ReactNode
   inputProps: InputProps
@@ -60,31 +62,30 @@ export function useChatCommandMenu({ text, entries, agentLabel, input }: {
   const [highlight, setHighlight] = useState(0)
   const [closedAt, setClosedAt] = useState<string | null>(null)
   const query = commandQuery(text)
-  const needle = query?.query ?? null
   const shown = useMemo(() => {
-    const matches = needle === null ? [] : matchCommands(entries, needle)
+    const matches = query === null ? [] : matchCommands(entries, query)
     const agent = matches.flatMap((entry) => entry.source === 'agent' ? [entry] : [])
     return [...matches.filter((entry) => entry.source === 'antumi'), ...agent.filter((entry) => entry.kind !== 'skill'), ...agent.filter((entry) => entry.kind === 'skill')]
-  }, [entries, needle, getLocale()])
-  const open = needle !== null && text !== closedAt && shown.length > 0
+  }, [entries, query, getLocale()])
+  const open = query !== null && text !== closedAt && shown.length > 0
   const active = Math.min(highlight, shown.length - 1)
-  useEffect(() => setHighlight(0), [needle])
+  useEffect(() => setHighlight(0), [query])
 
-  const replace = (from: number, next: string) => {
+  const replace = (next: string) => {
     const view = input.current
     if (!view) return
     // Complete the text and place the caret together; mapping an insertion keeps it before the suffix.
-    view.dispatch({ changes: { from, to: view.state.doc.length, insert: next }, selection: { anchor: from + next.length }, annotations: isolateHistory.of('full'), userEvent: 'input.complete' })
+    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: next }, selection: { anchor: next.length }, annotations: isolateHistory.of('full'), userEvent: 'input.complete' })
     view.focus()
   }
   const pick = (entry: CommandEntry, complete: boolean) => {
-    const from = query?.start ?? 0
-    if (complete || (entry.source === 'antumi' && entry.argumentHint)) {
-      replace(from, `/${entry.name} `)
+    if (complete || (entry.source === 'antumi' && entry.argumentHint) || (entry.source === 'agent' && entry.kind === 'skill')) {
+      replace(`/${entry.name} `)
     } else if (entry.source === 'antumi') {
-      replace(from, expandPrompt(entry.command.prompt, ''))
+      replace(expandPrompt(entry.command.prompt, ''))
     } else {
-      replace(from, `/${entry.name} `)
+      setClosedAt(`/${entry.name}`)
+      sendCommand(`/${entry.name}`)
     }
   }
 

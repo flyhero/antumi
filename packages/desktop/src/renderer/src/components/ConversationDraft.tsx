@@ -125,7 +125,7 @@ export function ConversationDraft() {
   const commandEntries = useMemo(() => antumiEntries(chatCommands, projectPaths), [chatCommands, projectPaths, getLocale()])
   // The agent will work in the first project picked.
   const mentionMenu = useChatMentionMenu({ value, setText, setValue, roots: projectPaths, cwd: projectPaths[0] ?? null, agent })
-  const commandMenu = useChatCommandMenu({ text, entries: commandEntries, agentLabel: agent ? agentLabel(agent) : '', input: mentionMenu.inputProps.input })
+  const commandMenu = useChatCommandMenu({ text, entries: commandEntries, agentLabel: agent ? agentLabel(agent) : '', input: mentionMenu.inputProps.input, sendCommand: () => {} })
   // An issue's note goes with the conversation's start, so a long paste in it stays text.
   const files = useComposerFiles({
     conversationId: null, cwd: projectPaths[0] ?? null, input: mentionMenu.inputProps.input, setValue, addImages: attached.add,

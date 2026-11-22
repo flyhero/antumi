@@ -1,9 +1,8 @@
 import { execFile } from 'node:child_process'
-import { readFile, realpath, stat } from 'node:fs/promises'
+import { realpath, stat } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
-import { z } from 'zod'
 import type { AgentCliInstallation, ChatCatalog } from '@antumi/protocol'
 import { findOnPath, parseVersion } from '../../environment-check'
 import { probeChatCatalog } from '../../chat-catalog'
@@ -98,25 +97,7 @@ export function codeartsBridge(executable: string, env: Record<string, string> =
 }
 
 export async function codeartsCatalog(cwd: string): Promise<ChatCatalog | null> {
-  const probed = await probeChatCatalog(new AcpDriver(codeartsDialect, 'catalog', { cwd, extraDirs: [], resume: null }), codeartsBridge(await requireCodearts()), cwd)
-  return probed ?? cachedCatalog()
-}
-
-const ModelsCache = z.looseObject({ models: z.record(z.string(), z.looseObject({ id: z.string(), name: z.string().optional(), limit: z.looseObject({ context: z.number() }).optional(), credit: z.array(z.looseObject({ ratio_display: z.string().optional() })).catch([]) })).catch({}) })
-
-// What its own cache holds, for a probe that could not start: no reasoning levels, which only its
-// service names. shortcut: the cache has no provider, so the model reads under CodeArts' own,
-// until the user opens a chat and the probe can run.
-async function cachedCatalog(home = os.homedir()): Promise<ChatCatalog | null> {
-  const text = await readFile(path.join(home, '.cache', 'codeartsdoer', 'models-cache.json'), 'utf8').catch(() => null)
-  if (text === null) return null
-  let parsed: unknown
-  try { parsed = JSON.parse(text) } catch { return null }
-  const models = Object.entries(ModelsCache.safeParse(parsed).data?.models ?? {}).flatMap(([key, model]) => model.limit?.context ? [{
-    id: `huaweicloud-maas/${key}`, label: model.name || model.id || key, description: null, efforts: [], isDefault: false, contextWindow: model.limit.context,
-    ...(model.credit[0]?.ratio_display ? { costRate: model.credit[0].ratio_display } : {})
-  }] : [])
-  return models.length ? { models } : null
+  return probeChatCatalog(new AcpDriver(codeartsDialect, 'catalog', { cwd, extraDirs: [], resume: null }), codeartsBridge(await requireCodearts()), cwd)
 }
 
 // Its official install scripts (码道 CLI 用户指南, 安装).

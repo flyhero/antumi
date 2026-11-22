@@ -56,33 +56,50 @@ describe('CodeArts bridge', () => {
     expect(answer('mode')).toMatchObject({ error: { message: 'Mode not found: general' } })
   })
 
-  it('says what each model takes and costs, offers its reasoning levels, and sends the chosen one', async () => {
-    const providers = { providers: [{ id: 'huaweicloud-maas', name: 'HuaweiCloud', models: { 'glm-5.3': { id: 'glm-5.3', name: 'GLM-5.3', limit: { context: 1048576 }, options: { creditRatioDisplay: '0.12x' }, variants: { low: { reasoningEffort: 'low' }, high: { reasoningEffort: 'high' } } } } }], default: { 'huaweicloud-maas': 'glm-5.3' } }
+  it('says what each model takes and costs, offers its reasoning levels, and sends only a chosen one', async () => {
+    const providers = { providers: [{ id: 'huaweicloud-maas', name: 'HuaweiCloud', models: {
+      'glm-5.3': { id: 'glm-5.3', name: 'GLM-5.3', limit: { context: 1048576 }, options: { creditRatioDisplay: '0.12x' }, variants: { low: { reasoningEffort: 'low' }, high: { reasoningEffort: 'high' } } },
+      'glm-mini': { id: 'glm-mini', name: 'GLM Mini', limit: { context: 0 } }
+    } }], default: { 'huaweicloud-maas': 'glm-5.3' } }
     const { bridge, calls, answer, event } = server([], [], providers)
     await bridge.receive(newSession())
     expect(answer('new')?.result).toMatchObject({
       configOptions: [
-        { id: 'model', options: [{ value: 'huaweicloud-maas/glm-5.3', contextWindow: 1048576, costRate: '0.12x' }] },
+        { id: 'model', options: [{ value: 'huaweicloud-maas/glm-5.3', contextWindow: 1048576, costRate: '0.12x' }, { value: 'huaweicloud-maas/glm-mini', name: 'GLM Mini' }] },
         { id: 'mode' },
-        { id: 'variant', category: 'thought_level', currentValue: 'low' }
+        { id: 'variant', category: 'thought_level', currentValue: 'default', options: [{ value: 'low' }, { value: 'high' }, { value: 'default' }] }
       ]
     })
-    await bridge.receive({ jsonrpc: '2.0', id: 'v', method: 'session/set_config_option', params: { sessionId: 'ses_1', configId: 'variant', value: 'high' } })
-    const turn = bridge.receive(prompt('hi'))
+    const options = (answer('new')?.result as { configOptions: { options: Record<string, unknown>[] }[] }).configOptions[0]?.options
+    expect(options?.[1]).not.toHaveProperty('contextWindow')
+    const first = bridge.receive(prompt('hi'))
     await flush()
-    expect(calls.find((call) => call.path === '/session/ses_1/prompt_async')?.body).toMatchObject({ variant: 'high' })
+    expect(calls.findLast((call) => call.path === '/session/ses_1/prompt_async')?.body).not.toHaveProperty('variant')
     await event('session.idle', { sessionID: 'ses_1' })
-    await turn
+    await first
+    await bridge.receive({ jsonrpc: '2.0', id: 'v', method: 'session/set_config_option', params: { sessionId: 'ses_1', configId: 'variant', value: 'high' } })
+    const second = bridge.receive(prompt('again'))
+    await flush()
+    expect(calls.findLast((call) => call.path === '/session/ses_1/prompt_async')?.body).toMatchObject({ variant: 'high' })
+    await event('session.idle', { sessionID: 'ses_1' })
+    await second
+    await bridge.receive({ jsonrpc: '2.0', id: 'd', method: 'session/set_config_option', params: { sessionId: 'ses_1', configId: 'variant', value: 'default' } })
+    expect(answer('d')?.result).toMatchObject({ configOptions: [{ id: 'model' }, { id: 'mode' }, { id: 'variant', currentValue: 'default' }] })
+    await bridge.receive({ jsonrpc: '2.0', id: 'x', method: 'session/set_config_option', params: { sessionId: 'ses_1', configId: 'variant', value: 'ultra' } })
+    expect(answer('x')).toMatchObject({ error: { message: 'Unknown reasoning level: ultra' } })
   })
 
   it('offers its commands and the skills it loads, and expands either before it prompts', async () => {
     const root = mkdtempSync(path.join(os.tmpdir(), 'codearts-skills-'))
     mkdirSync(path.join(root, 'demo'))
     writeFileSync(path.join(root, 'demo', 'SKILL.md'), '---\nname: demo\ndescription: Demo skill\n---\nDo it.\n')
+    mkdirSync(path.join(root, 'compact'))
+    writeFileSync(path.join(root, 'compact', 'SKILL.md'), '---\nname: compact\ndescription: Never offered\n---\n')
     try {
       const { bridge, calls, updates, event } = server([], [{ name: 'compact', description: 'Compact the chat', template: 'Compact: $ARGUMENTS' }], PROVIDERS, [root])
       await bridge.receive(newSession())
-      expect(updates().find((update) => update.sessionUpdate === 'available_commands_update')).toMatchObject({
+      expect(updates().find((update) => update.sessionUpdate === 'available_commands_update')).toEqual({
+        sessionUpdate: 'available_commands_update',
         availableCommands: [
           { name: 'compact', description: 'Compact the chat' },
           { name: 'demo', description: 'Demo skill', kind: 'skill' }

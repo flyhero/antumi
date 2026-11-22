@@ -46,3 +46,9 @@ export function codeartsConfig(launch: Pick<AgentLaunch, 'allowBypass' | 'planOn
     ...(launch.skills ? { skills: { paths: [path.join(launch.skills.dir, '.agents', 'skills')] } } : {})
   })
 }
+
+// The folders it finds skills in, a name's first folder winning: the project's, the user's, then
+// Antumi's library. The bridge lists skills in this order and gives its server the same one.
+export function codeartsSkillDirs(cwd: string, home: string, library: readonly string[]): string[] {
+  return [...new Set([path.join(cwd, '.codeartsdoer', 'skills'), path.join(home, '.codeartsdoer', 'skills'), ...library])]
+}

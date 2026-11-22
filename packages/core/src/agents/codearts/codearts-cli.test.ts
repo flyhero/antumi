@@ -4,6 +4,7 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { codeartsEnv, codeartsInstallation, codeartsSignedIn, findCodearts } from './codearts-cli'
 import { codearts } from './codearts-adapter'
+import { codeartsSkillDirs } from './codearts-config'
 
 let root: string
 let home: string
@@ -65,5 +66,14 @@ describe('CodeArts CLI', () => {
     const command = codearts.command({ providerSessionId: null, resume: false, handoffPath: null, extraProjects: [], skills: { dir: '/skills' } })
     expect(command).toMatchObject({ command: process.execPath, args: expect.arrayContaining([expect.stringMatching(/codearts-bridge-main\.ts$/)]), env: { SCENARIO: 'codeartsdoer' } })
     expect(JSON.parse(command.env?.OPENCODE_CONFIG_CONTENT ?? '{}')).toMatchObject({ skills: { paths: [path.join('/skills', '.agents', 'skills')] } })
+  })
+})
+
+describe('CodeArts skill folders', () => {
+  it('puts the project\'s first, then the user\'s, then Antumi\'s library, each once', () => {
+    const library = path.join('/skills', '.agents', 'skills')
+    expect(codeartsSkillDirs('/work', '/home/me', [library, path.join('/work', '.codeartsdoer', 'skills')])).toEqual([
+      path.join('/work', '.codeartsdoer', 'skills'), path.join('/home/me', '.codeartsdoer', 'skills'), library
+    ])
   })
 })

@@ -83,6 +83,9 @@ function locationsOf(tool: string, input: Record<string, unknown>): { path: stri
 
 const text = (value: unknown) => typeof value === 'string' ? value : value === undefined ? '' : JSON.stringify(value)
 
+// The level that sends no variant, so its service picks, as OpenCode's own ACP session offers it.
+const DEFAULT_VARIANT = 'default'
+
 type SessionState = { id: string; cwd: string; model: string | null; variant: string | null; mode: string | null; cancelled: boolean; error: string | null; busy: boolean; idle: (() => void) | null }
 type Skill = { name: string; display: string; description: string; path: string }
 
@@ -151,8 +154,8 @@ export class CodeartsBridge {
           session.variant = null
         } else if (change.configId === 'mode') session.mode = await this.agent(session.cwd, change.value)
         else if (change.configId === 'variant') {
-          if (!(this.variants.get(session.model ?? '') ?? []).includes(change.value)) throw new AcpError(-32602, `Unknown reasoning level: ${change.value}`)
-          session.variant = change.value
+          if (change.value !== DEFAULT_VARIANT && !(this.variants.get(session.model ?? '') ?? []).includes(change.value)) throw new AcpError(-32602, `Unknown reasoning level: ${change.value}`)
+          session.variant = change.value === DEFAULT_VARIANT ? null : change.value
         } else throw new AcpError(-32602, `Unknown config option: ${change.configId}`)
         return { configOptions: await this.configOptions(session) }
       }
@@ -228,7 +231,8 @@ export class CodeartsBridge {
         const fields = parseSkillFrontmatter(content)
         const display = (fields?.name ?? folder).trim()
         const name = display.replace(/\s+/g, '-')
-        if (!name || seen.has(name)) continue
+        // A skill named as one of its commands could never be picked: the command expands first.
+        if (!name || seen.has(name) || this.commands.some((command) => command.name === name)) continue
         seen.add(name)
         this.skills.push({ name, display, description: (fields?.description ?? '').replace(/\s+/g, ' ').trim(), path: path.join(at, 'SKILL.md') })
       }
@@ -273,7 +277,7 @@ export class CodeartsBridge {
       const variants = Object.keys(model.variants ?? {})
       if (variants.length) this.variants.set(value, variants)
     }
-    const models = providers.providers.flatMap((provider) => Object.values(provider.models).map((model) => ({ value: `${provider.id}/${model.id}`, name: model.model_name || model.name || model.id, ...(model.limit ? { contextWindow: model.limit.context } : {}), ...(model.options?.creditRatioDisplay ? { costRate: model.options.creditRatioDisplay } : {}) })))
+    const models = providers.providers.flatMap((provider) => Object.values(provider.models).map((model) => ({ value: `${provider.id}/${model.id}`, name: model.model_name || model.name || model.id, ...(model.limit && model.limit.context > 0 ? { contextWindow: model.limit.context } : {}), ...(model.options?.creditRatioDisplay ? { costRate: model.options.creditRatioDisplay } : {}) })))
     if (!session.model) {
       const configured = Config.parse(await this.api('GET', '/config', session.cwd))
       const [provider, model] = Object.entries(providers.default)[0] ?? []
@@ -285,12 +289,11 @@ export class CodeartsBridge {
       session.mode = agents.find((agent) => agent.name === configured)?.name ?? agents.find((agent) => agent.name === 'build')?.name ?? agents[0]?.name ?? null
     }
     const levels = this.variants.get(session.model ?? '') ?? []
-    const level = levels.includes(session.variant ?? '') ? session.variant : levels[0] ?? null
-    session.variant = level
+    if (!levels.includes(session.variant ?? '')) session.variant = null
     return [
       { id: 'model', name: 'Model', category: 'model', type: 'select', currentValue: session.model ?? '', options: models },
       { id: 'mode', name: 'Session Mode', category: 'mode', type: 'select', currentValue: session.mode ?? '', options: agents.map((agent) => ({ value: agent.name, name: agent.name, ...(agent.description ? { description: agent.description } : {}) })) },
-      ...(levels.length ? [{ id: 'variant', name: 'Reasoning', category: 'thought_level', type: 'select', currentValue: level ?? '', options: levels.map((value) => ({ value, name: value })) }] : [])
+      ...(levels.length ? [{ id: 'variant', name: 'Reasoning', category: 'thought_level', type: 'select', currentValue: session.variant ?? DEFAULT_VARIANT, options: [...new Set([...levels, DEFAULT_VARIANT])].map((value) => ({ value, name: value })) }] : [])
     ]
   }
 

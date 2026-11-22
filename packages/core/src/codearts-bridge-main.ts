@@ -2,10 +2,10 @@ import { spawn } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { createServer } from 'node:net'
 import os from 'node:os'
-import path from 'node:path'
 import { createInterface } from 'node:readline'
 import { z } from 'zod'
 import { CodeartsApiError, CodeartsBridge } from './agents/codearts/codearts-bridge'
+import { codeartsSkillDirs } from './agents/codearts/codearts-config'
 
 // What an agent stage runs for CodeArts: its local server, started for this process alone on a
 // port of its own with a password no one else has, and the bridge between it and the ACP Antumi
@@ -48,15 +48,11 @@ const port = await freePort()
 const env: NodeJS.ProcessEnv = { ...process.env, CODEARTS_SERVER_USERNAME: user, CODEARTS_SERVER_PASSWORD: password }
 delete env.ELECTRON_RUN_AS_NODE
 
-// Its project skills, then the user's, then Antumi's library: the first folder of a name wins, and
-// the project's goes first in the config too so its server loads the same skill.
-const projectSkills = path.join(process.cwd(), '.codeartsdoer', 'skills')
-const userSkills = path.join(os.homedir(), '.codeartsdoer', 'skills')
+// Where Antumi passes its library, the server takes the order the bridge lists skills in.
 const ConfigSchema = z.looseObject({ skills: z.looseObject({ paths: z.array(z.string()).optional() }).optional() })
 const config = (() => { try { return ConfigSchema.safeParse(JSON.parse(env.OPENCODE_CONFIG_CONTENT ?? '')).data } catch { return undefined } })()
-const librarySkills = config?.skills?.paths ?? []
-if (config && env.OPENCODE_CONFIG_CONTENT) env.OPENCODE_CONFIG_CONTENT = JSON.stringify({ ...config, skills: { ...(config.skills ?? {}), paths: [projectSkills, ...librarySkills.filter((dir) => dir !== projectSkills)] } })
-const skillDirs = [...new Set([projectSkills, userSkills, ...librarySkills])]
+const skillDirs = codeartsSkillDirs(process.cwd(), os.homedir(), config?.skills?.paths ?? [])
+if (config?.skills?.paths) env.OPENCODE_CONFIG_CONTENT = JSON.stringify({ ...config, skills: { ...config.skills, paths: skillDirs } })
 
 const server = spawn(executable, ['serve', '--port', String(port), '--hostname', '127.0.0.1'], { cwd: process.cwd(), env, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true })
 let printed = ''

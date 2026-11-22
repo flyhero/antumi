@@ -102,6 +102,27 @@ describe('CLI install identity and release versions', () => {
     expect((await resolveCliTarget('cursor', cursor, { ...native, run: async () => '2026.10.19-abc' }))?.command).toBeNull()
   })
 
+  it.each(['darwin', 'linux'] as const)('recognizes a linked Codex standalone installation on %s', async (platform) => {
+    const selected = '/home/.local/bin/codex'
+    const standalone: Environment = { ...environment, checks: [{ tool: 'codex', status: 'ok', version: '0.160.1', path: selected, signedIn: true }] }
+    const native = host({
+      platform,
+      canonical: async (file) => file === selected ? '/home/.codex/packages/standalone/releases/0.160.1/bin/codex' : file,
+      run: async ({ command, args }) => {
+        if (command !== selected) throw new Error('missing')
+        if (args[0] === '--version') return 'codex-cli 0.160.1'
+        if (args[0] === '--help') return 'Commands:\n  update  Update Codex to the latest version'
+        throw new Error('unexpected command')
+      }
+    })
+    expect(await resolveCliTarget('codex', standalone, native)).toMatchObject({
+      channel: 'native', version: '0.160.1', command: { command: selected, args: ['update'] },
+      latestUrl: 'https://api.github.com/repos/openai/codex/releases/latest', tagPrefix: 'rust-v'
+    })
+    expect(await resolveCliTarget('codex', standalone, { ...native, run: async () => 'codex-cli 0.160.1' })).toMatchObject({ channel: 'unknown', command: null })
+    expect(await resolveCliTarget('codex', standalone, { ...native, canonical: async () => '/home/.codex/packages/standalone-other/bin/codex' })).toMatchObject({ channel: 'unknown', command: null })
+  })
+
   it('reads versions only from successful official metadata responses', async () => {
     const target = await resolveCliTarget('codex', environment, host())
     if (!target) throw new Error('no target')

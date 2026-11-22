@@ -4,11 +4,12 @@
 
 **让已经装好的 Claude Code、Codex 等 Agent 自动排查 bug、替你在群里答疑、几个一起把活做完。**
 
-Bug 自动排查 · 智能体替你答疑 · 多 Agent 自由协作
-
 [![Release](https://img.shields.io/github/v/release/flyhero/antumi?include_prereleases&label=release&color=blue)](https://github.com/flyhero/antumi/releases)
 [![Downloads](https://img.shields.io/github/downloads/flyhero/antumi/total?color=blue)](https://github.com/flyhero/antumi/releases)
-![Platform](https://img.shields.io/badge/platform-macOS%20%C2%B7%20Windows%20%C2%B7%20Linux-lightgrey)
+![macOS](https://img.shields.io/badge/macOS-000000?logo=apple&logoColor=white)
+![Windows](https://img.shields.io/badge/Windows-0078D4?logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0iI2ZmZiIgZD0iTTAgMy40IDkuOCAydjkuNUgwek0xMSAxLjggMjQgMHYxMS40SDExek0wIDEyLjVoOS44VjIyTDAgMjAuNnpNMTEgMTIuNWgxM1YyNGwtMTMtMS44eiIvPjwvc3ZnPg==)
+![Linux](https://img.shields.io/badge/Linux-FCC624?logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGVsbGlwc2UgY3g9IjEyIiBjeT0iMTMiIHJ4PSI3IiByeT0iMTAiIGZpbGw9IiMxMTEiLz48ZWxsaXBzZSBjeD0iMTIiIGN5PSIxNS41IiByeD0iNC42IiByeT0iNi41IiBmaWxsPSIjZmZmIi8+PGNpcmNsZSBjeD0iOS44IiBjeT0iNy4yIiByPSIxLjUiIGZpbGw9IiNmZmYiLz48Y2lyY2xlIGN4PSIxNC4yIiBjeT0iNy4yIiByPSIxLjUiIGZpbGw9IiNmZmYiLz48Y2lyY2xlIGN4PSIxMCIgY3k9IjcuNCIgcj0iLjciIGZpbGw9IiMxMTEiLz48Y2lyY2xlIGN4PSIxNCIgY3k9IjcuNCIgcj0iLjciIGZpbGw9IiMxMTEiLz48cGF0aCBkPSJNOS44IDkuNmg0LjRMMTIgMTEuNnoiIGZpbGw9IiNGN0E0MUQiLz48ZWxsaXBzZSBjeD0iOCIgY3k9IjIyLjQiIHJ4PSIzIiByeT0iMS40IiBmaWxsPSIjRjdBNDFEIi8+PGVsbGlwc2UgY3g9IjE2IiBjeT0iMjIuNCIgcng9IjMiIHJ5PSIxLjQiIGZpbGw9IiNGN0E0MUQiLz48L3N2Zz4=)
+[![Android](https://img.shields.io/badge/Android-3DDC84?logo=android&logoColor=white)](docs/MOBILE.md)
 [![License](https://img.shields.io/github/license/flyhero/antumi?color=lightgrey)](LICENSE)
 
 [下载](https://github.com/flyhero/antumi/releases) · [三分钟开始](#三分钟开始) · [主要能力](#主要能力) · [支持的 Agent](#支持的-agent) · [文档](#文档)
@@ -29,6 +30,8 @@ Bug 自动排查 · 智能体替你答疑 · 多 Agent 自由协作
   <a href="#支持的-agent" title="CodeBuddy"><img src="docs/assets/agents/codebuddy.svg" alt="CodeBuddy" width="32" height="32" /></a>&nbsp;&nbsp;
   <a href="#支持的-agent" title="CodeArts"><img src="docs/assets/agents/codearts.svg" alt="CodeArts" width="32" height="32" /></a>
 </p>
+
+<img src="docs/assets/showcase.png" alt="Antumi 桌面端，同一个会话在手机上接着做，同事在 Slack、飞书、钉钉群里 @ 智能体" />
 
 **一分钟看完：** 三个 bug，从收件箱一路做到合并。
 
@@ -184,9 +187,17 @@ ANTUMI_HOME=~/.antumi-demo pnpm dev
 | **开发** | [技术架构](docs/ARCHITECTURE.md) · [聊天平台接入](docs/CHANNELS.md) · [手机端](docs/MOBILE.md) · [WSL](docs/WSL.md) · [AGENTS.md](AGENTS.md) · [DESIGN.md](DESIGN.md) |
 | **发布** | [发版与打包](docs/RELEASING.md) · [更新日志](CHANGELOG.md) |
 
-## 参与
+## 社区与支持
 
-用下来哪里别扭、想接哪个 Agent，欢迎提 [issue](https://github.com/flyhero/antumi/issues)。
+- **微信群**：扫码加入交流群，聊用法、提反馈、看更新：
+
+  <img src="docs/assets/wechat-group.jpg" alt="Antumi 微信交流群" width="200" />
+
+- **Issues**：用下来哪里别扭、想接哪个 Agent，欢迎提 [issue](https://github.com/flyhero/antumi/issues)。
+- **LINUX DO**：感谢 [LINUX DO](https://linux.do) 社区的支持。
+- **V2EX**：感谢 [V2EX](https://www.v2ex.com) 社区的支持。
+
+## 参与
 
 改代码前先读 [AGENTS.md](AGENTS.md) 和 [DESIGN.md](DESIGN.md)。提交前跑：
 
@@ -195,7 +206,3 @@ pnpm typecheck && pnpm test
 ```
 
 桌面端改动再加 `pnpm build`。
-
-## 友情链接
-
-- [LINUX DO](https://linux.do)：新的理想型社区

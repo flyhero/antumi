@@ -240,15 +240,10 @@
 
 /* Experimental backdrops, after Slack's themes: the window's frame is a gradient of two shades
    (a radial wash over a conic sweep, as Slack draws it), and the sidebar and status bar sit on it
-   while the panes float above. A light gradient keeps dark ink on the frame; every other one, and
-   every gradient in dark, takes light ink. See backdrops.ts. */
-[data-backdrop='aubergine'] { --backdrop-primary: light-dark(#4a154b, #431349); --backdrop-highlight: light-dark(#39063a, #200221); }
-[data-backdrop='lagoon'] { --backdrop-primary: light-dark(#0b527b, #003d61); --backdrop-highlight: light-dark(#1c405f, #001a2d); }
-[data-backdrop='mood-indigo'] { --backdrop-primary: light-dark(#112377, #12206c); --backdrop-highlight: light-dark(#091861, #040b3d); }
+   while the panes float above. Light gradients keep dark ink on the frame; dark gradients take
+   light ink. See backdrops.ts. */
 [data-backdrop='sea-glass'] { --backdrop-primary: light-dark(#a9edef, #053c48); --backdrop-highlight: light-dark(#df9ff4, #200221); --backdrop-ink-light: light; }
-[data-backdrop='kind-of-blue'] { --backdrop-primary: light-dark(#1f407d, #002d63); --backdrop-highlight: light-dark(#002034, #00101c); }
 [data-backdrop='funky-fresh'] { --backdrop-primary: light-dark(#c5b8ff, #272665); --backdrop-highlight: light-dark(#5bbb7b, #001204); --backdrop-ink-light: light; }
-[data-backdrop='sunglasses-inside'] { --backdrop-primary: #2e1331; --backdrop-highlight: #1c0227; }
 [data-backdrop] {
   --backdrop:
     radial-gradient(circle at 50% 50%, var(--backdrop-primary) 20%, transparent 80%),
@@ -5574,6 +5569,7 @@ div.inspector-empty > p { margin: 0 0 8px; }
 .support-share-status { display: block; }
 .support-share-status:not(:empty) { margin-top: 8px; }
 .support-share-status[data-error] { color: var(--danger); }
+.support-wechat-qr { display: block; height: auto; border-radius: var(--radius-sm); }
 
 .task-launch-dialog { width: min(420px, calc(100vw - 32px)); border-radius: var(--radius-lg); }
 .task-launch-dialog .modal-body { padding: 24px; gap: 16px; }
@@ -8823,9 +8819,10 @@ div.inspector-empty > p { margin: 0 0 8px; }
 /* Beside the send button while the agent works: the message goes in now rather than waiting. */
 .chat-steer-button { height: 24px; padding: 0 8px; font-size: 12px; }
 /* A message the user put into a running turn, as against one that started it. */
-.chat-user[data-steer] { display: flex; flex-direction: column; gap: 4px; }
 .chat-user-steer {
-  align-self: flex-start;
+  display: block;
+  width: fit-content;
+  margin-bottom: 4px;
   padding: 0 8px;
   border-radius: 999px;
   background: var(--accent-bg);
@@ -10615,8 +10612,26 @@ button.island-compact:focus-visible { outline: 2px solid var(--focus); outline-o
 .agent-status-mark[data-glyph='failed'] .agent-status-ring { border-color: var(--danger); }
 .agent-status-mark[data-glyph='awaiting'] .agent-status-ring { border-color: var(--warning); }
 .conversation-row:has(> .agent-status-mark:not([data-glyph='idle'])) { --mark-clearance: 4px; }
+.conversation-row:has(> .agent-status-mark[data-glyph='awaiting']) { position: relative; isolation: isolate; }
+/* Behind the row's content and above its hover/selection fill, without moving either. */
+.conversation-row:has(> .agent-status-mark[data-glyph='awaiting'])::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--warning) 10%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warning) 18%, transparent);
+  pointer-events: none;
+  animation: awaiting-row-breathe 2.4s ease-in-out infinite;
+}
+@keyframes awaiting-row-breathe {
+  0%, 100% { opacity: 0.2; }
+  50% { opacity: 1; }
+}
 @media (prefers-reduced-motion: reduce) {
-  .agent-status-mark[data-glyph='running'] .agent-status-ring { animation: none; }
+  .agent-status-mark[data-glyph='running'] .agent-status-ring,
+  .conversation-row:has(> .agent-status-mark[data-glyph='awaiting'])::after { animation: none; }
 }
 /* The task's status in the row's meta line: a word in the status's colour, no heavier than the rest. */
 .conversation-task-status { font-weight: 500; }
@@ -11142,6 +11157,7 @@ button.squad-member-main { cursor: pointer; }
 :root[data-resting] .chat-assistant[data-streaming] .chat-markdown > :last-child::after,
 :root[data-resting] .chat-reasoning-body[data-streaming]::before,
 :root[data-resting] .chat-input-card[data-working]::before,
+:root[data-resting] .conversation-row:has(> .agent-status-mark[data-glyph='awaiting'])::after,
 :root[data-resting] .chat-turn-head-icon[data-live]::before { animation-play-state: paused; }
 
 /* How to spend the window's quota against its clock, under the window it is about. */

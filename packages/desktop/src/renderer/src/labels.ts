@@ -35,10 +35,11 @@ const SOURCE_FAILURE_TEXT: Record<SourceFailure, string> = localized(() => ({
 }))
 
 // The tracker's own words say which part is wrong, or what the network did.
+const SOURCE_FAILURES_WITH_DETAIL: readonly SourceFailure[] = ['invalid-settings', 'bad-query', 'request-failed']
+
 export function sourceProblemText(problem: SourceProblem): string {
   const text = SOURCE_FAILURE_TEXT[problem.code]
-  const specific = ['invalid-settings', 'bad-query', 'request-failed'].includes(problem.code)
-  return specific ? `${text}（${problem.message}）` : text
+  return SOURCE_FAILURES_WITH_DETAIL.includes(problem.code) ? `${text}（${problem.message}）` : text
 }
 
 const PULL_REQUEST_FAILURE_TEXT: Record<PullRequestFailure, string> = localized(() => ({
@@ -300,6 +301,10 @@ const REASON_WITH_DETAIL: Record<string, string> = localized(() => ({
   // Chromium's own word on it (net::ERR_NAME_NOT_RESOLVED, a certificate), which says what to fix.
   'browser-navigation-failed': t('labels.cannotOpenPage'),
   'git-commit-failed': t('labels.commitFailed'),
+  // A setting refused on save names the field, as the same failure does in the inbox. A failed
+  // request stays plain here: its detail is often the network's own words, not the user's to fix.
+  'source-invalid-settings': SOURCE_FAILURE_TEXT['invalid-settings'],
+  'source-bad-query': SOURCE_FAILURE_TEXT['bad-query'],
   'git-push-failed': t('labels.commitWasKeptLocallyButPushFailed'),
   // core's own words name the branches involved.
   'git-push-name-mismatch': t('labels.notPushed'),

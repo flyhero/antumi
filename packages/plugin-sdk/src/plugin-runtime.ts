@@ -43,6 +43,7 @@ export function runPlugin(options: Omit<SourceOptions, 'sources'> & { sources?: 
   let bytes = 0
   let pending: { id: string; resolve(value: string): void; reject(error: Error): void } | undefined
   let browserSupported = false
+  let binarySupported = false
   let browserPending: { id: string; resolve(value: PluginBrowserResult): void; reject(error: Error): void } | undefined
   const close = () => {
     if (closed) return
@@ -76,6 +77,7 @@ export function runPlugin(options: Omit<SourceOptions, 'sources'> & { sources?: 
       if (handshaken || protocolVersion !== PLUGIN_PROTOCOL_VERSION) throw new SourceError('request-failed', '不支持的插件协议版本')
       handshaken = true
       browserSupported = features?.includes('browser-sessions') ?? false
+      binarySupported = features?.includes('browser-binary') ?? false
       return pluginSchemas.handshake.result.parse({ protocolVersion: PLUGIN_PROTOCOL_VERSION, id: manifest.id, version: manifest.version, sources: expected, pages: expectedPages })
     }
     if (!handshaken || called) throw new SourceError('request-failed', '每个插件进程必须先握手，再执行一个操作')
@@ -89,6 +91,7 @@ export function runPlugin(options: Omit<SourceOptions, 'sources'> & { sources?: 
       const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(30_000)])
       const browser = (raw: PluginBrowserRequest): Promise<PluginBrowserResult> => {
         if (!browserSupported) return Promise.reject(new SourceError('request-failed', '当前 Antumi 不支持插件登录，请升级 Antumi'))
+        if (raw.action === 'request' && raw.bodyEncoding === 'base64' && !binarySupported) return Promise.reject(new SourceError('request-failed', '当前 Antumi 不支持上传文件，请升级 Antumi'))
         if (browserPending) return Promise.reject(new SourceError('request-failed', '请等待上一个浏览器请求完成'))
         signal.throwIfAborted()
         const request = PluginBrowserRequest.parse(raw)

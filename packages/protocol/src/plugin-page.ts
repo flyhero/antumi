@@ -7,7 +7,8 @@ import { PluginPageMethod } from './plugin'
 // carries the token the desktop gave the frame in its URL fragment.
 export const PLUGIN_PAGE_SCHEME = 'antumi-plugin'
 export const MAX_PLUGIN_PAGE_STATE = 32 * 1024
-export const MAX_PLUGIN_PAGE_PARAMS = 64 * 1024
+// Room for a picture a page hands its backend to upload, compressed to a few megabytes first.
+export const MAX_PLUGIN_PAGE_PARAMS = 3 * 1024 * 1024
 
 // The app's look, for a page to match: the colour scheme and the design tokens by their CSS names.
 export const PluginPageTheme = z.object({ scheme: z.enum(['light', 'dark']), variables: z.record(z.string().max(64), z.string().max(500)) })
@@ -33,6 +34,9 @@ export const PluginPageHostMessage = z.intersection(Token, z.discriminatedUnion(
   // The answer to ready.
   z.object({ kind: z.literal('init'), theme: PluginPageTheme, state: z.unknown(), locale: UiLocale }),
   z.object({ kind: z.literal('theme'), theme: PluginPageTheme }),
+  // Whether the page is on screen. A page the user left may stay loaded but hidden for a while;
+  // it is told, and the SDK reports it through document.visibilityState.
+  z.object({ kind: z.literal('visibility'), visible: z.boolean() }),
   z.object({ kind: z.literal('response'), id: z.number().int(), result: z.unknown().optional(), error: z.string().max(2000).optional() })
 ]))
 export type PluginPageHostMessage = z.infer<typeof PluginPageHostMessage>

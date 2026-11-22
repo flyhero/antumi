@@ -1,6 +1,6 @@
 {
   "name": "@antumi/protocol",
-  "version": "0.21.8-beta.4",
+  "version": "0.21.8",
   "private": true,
   "type": "module",
   "exports": {

@@ -36,6 +36,17 @@ describe('authenticated plugin requests', () => {
     expect(h.native.end).toHaveBeenCalledTimes(1)
   })
 
+  it('sends a base64 body as the bytes it encodes, and a text body as it is', async () => {
+    const bytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0xff])
+    const binary = fixture('ok')
+    await pluginSessionRequest('https://forum.test', PluginBrowserRequest.options[3].parse({ action: 'request', site: 'forum', path: '/uploads.json', method: 'POST', bodyEncoding: 'base64', body: bytes.toString('base64') }), AbortSignal.timeout(1000), binary.create)
+    expect(binary.native.end).toHaveBeenCalledWith(bytes)
+    const text = fixture('ok')
+    await pluginSessionRequest('https://forum.test', request, AbortSignal.timeout(1000), text.create)
+    expect(text.native.end).toHaveBeenCalledWith('hello')
+    expect(PluginBrowserRequest.safeParse({ action: 'request', site: 'forum', path: '/u', method: 'POST', bodyEncoding: 'base64', body: 'not base64!' }).success).toBe(false)
+  })
+
   it('reads a complete response and strips private headers', async () => {
     const h = fixture('response')
     expect(await pluginSessionRequest('https://forum.test', request, AbortSignal.timeout(1000), h.create)).toEqual({ status: 200, headers: { 'content-type': 'text/html' }, body: 'response' })

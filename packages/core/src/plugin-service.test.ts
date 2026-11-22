@@ -70,7 +70,7 @@ describe('plugin installation and activation', () => {
     const calls = Array.from({ length: 4 }, () => plugins.pageCall(info.id, 'demo', 'echo', null).catch((error: unknown) => error))
     await expect(plugins.pageCall(info.id, 'demo', 'echo', null)).rejects.toThrow('4')
     expect((await Promise.all(calls)).every((error) => error instanceof Error && error.message === 'Readable backend failure')).toBe(true)
-    await expect(plugins.pageCall(info.id, 'demo', 'echo', '界'.repeat(22_000))).rejects.toThrow('64 KiB')
+    await expect(plugins.pageCall(info.id, 'demo', 'echo', '界'.repeat(1_100_000))).rejects.toThrow('3 MiB')
     const circular: { self?: unknown } = {}; circular.self = circular
     await expect(plugins.pageCall(info.id, 'demo', 'echo', circular)).rejects.toThrow()
     let release: (response: Response) => void = () => {}

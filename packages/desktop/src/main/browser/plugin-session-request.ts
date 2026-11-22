@@ -16,7 +16,7 @@ export interface PluginSessionRequest {
   on(event: 'redirect', listener: (status: number, method: string, url: string, headers: ResponseHeaders) => void): unknown
   on(event: 'response', listener: (response: NativeResponse) => void): unknown
   on(event: 'error', listener: (error: Error) => void): unknown
-  end(body?: string): void
+  end(body?: string | Buffer): void
   abort(): void
 }
 
@@ -74,6 +74,6 @@ export async function pluginSessionRequest(origin: string, request: Request, sig
       response.on('end', () => finish({ status: response.statusCode, headers: exposedHeaders(response.headers), body: Buffer.concat(chunks).toString('utf8') }))
     })
     if (signal.aborted) abort()
-    else native.end(request.body)
+    else native.end(request.bodyEncoding === 'base64' ? Buffer.from(request.body ?? '', 'base64') : request.body)
   })
 }

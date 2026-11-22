@@ -1,7 +1,7 @@
 import { getLocale, t } from '../i18n'
 import { useCallback, useRef, useState, type FormEvent } from 'react'
 import { AGENT_KINDS, DEFAULT_ACCOUNT, accountUsage, accountsSupported, activeAccount, agentDescriptor, type AccountKey, type AgentAccount, type AgentKind } from '@antumi/protocol'
-import { activateAccount, addAccount, removeAccount, renameAccount, setAccountAutoSwitch, setAccountKey, signInAccount, useAccountKeysSupported, useCore } from '../core-store'
+import { activateAccount, addAccount, removeAccount, renameAccount, setAccountAutoSwitch, setAccountKey, setSettingsOpen, signInAccount, useAccountKeysSupported, useCore } from '../core-store'
 import { accountName, accountsOf } from '../agent-accounts'
 import { agentLabel } from '../labels'
 import { SettingsQuotaReadout } from './SettingsQuotaReadout'
@@ -175,7 +175,13 @@ function TerminalAccount({ agent }: { agent: AgentKind }) {
 export function AgentAccountSettings() {
   const connected = useCore((s) => s.connection === 'connected')
   const accounts = useCore((s) => s.accounts)
-  if (!connected || !accounts) return <SettingsEmptyState icon={<PersonIcon />} title={connected ? t('SettingsPage.accountsLoading') : t('SettingsPage.accountsDisconnected')}>{connected ? t('SettingsPage.accountsLoadingHint') : t('ChatCommandSettings.connectToAntumiCoreToView')}</SettingsEmptyState>
+  const environment = useCore((s) => s.environment)
+  if (!connected || !accounts || !environment) return <SettingsEmptyState icon={<PersonIcon />} title={connected ? t('SettingsPage.accountsLoading') : t('SettingsPage.accountsDisconnected')}>{connected ? t('SettingsPage.accountsLoadingHint') : t('ChatCommandSettings.connectToAntumiCoreToView')}</SettingsEmptyState>
+  // Core supplies a default account even without a CLI; its account list also bounds older cores' support.
+  const agents = AGENT_KINDS.filter((agent) => accountsSupported(agent)
+    && environment.checks.some((check) => check.tool === agent && check.status !== 'missing')
+    && accounts.accounts.some((account) => account.agent === agent))
+  if (!agents.length) return <SettingsEmptyState icon={<PersonIcon />} title={t('SettingsPage.noAccountAgents')} actions={<button type="button" className="button" onClick={() => setSettingsOpen(true, 'agents')}>{t('SettingsPage.viewAgents')}</button>}>{t('SettingsPage.noAccountAgentsHint')}</SettingsEmptyState>
   return (
     <div className="account-settings">
       <SettingsGroup>
@@ -185,7 +191,7 @@ export function AgentAccountSettings() {
           control={(labelId) => <Toggle labelId={labelId} checked={accounts.autoSwitch} onChange={(next) => void setAccountAutoSwitch(next)} />}
         />
       </SettingsGroup>
-      {AGENT_KINDS.filter(accountsSupported).map((agent) => {
+      {agents.map((agent) => {
         const own = accountsOf(accounts, agent)
         const active = activeAccount(accounts, agent)
         return <section key={agent} className="account-agent-group" aria-label={agentLabel(agent)}>

@@ -4,6 +4,7 @@ import { t } from '../i18n'
 import { ProjectStarSettings } from './ProjectStarSettings'
 import { SettingsRow } from './SettingsControls'
 import { CheckIcon, CopyIcon } from './icons'
+import wechatContact from '../assets/wechat-contact.jpg'
 
 export function SupportSettings() {
   const [result, setResult] = useState<'idle' | 'success' | 'error'>('idle')
@@ -52,7 +53,7 @@ export function SupportSettings() {
     )} />
     <SettingsRow label={t('SupportSettings.name')} description={t('SupportSettings.nameDescription')} control={() => null} />
     <SettingsRow label={t('SupportSettings.community')} description={t('SupportSettings.communityDescription')} control={() => (
-      <span className="muted">{t('SupportSettings.comingSoon')}</span>
+      <img className="support-wechat-qr" src={wechatContact} alt={t('SupportSettings.wechatQr')} width={140} />
     )} />
   </>
 }

@@ -193,7 +193,7 @@ export class PluginProcess {
         else if ('error' in outcome) reject(outcome.error)
         else resolve(outcome.value)
       })
-      send({ type: 'call', id: 'hello', method: 'handshake', params: { protocolVersion: PLUGIN_PROTOCOL_VERSION, ...(browser ? { features: ['browser-sessions'] } : {}) } })
+      send({ type: 'call', id: 'hello', method: 'handshake', params: { protocolVersion: PLUGIN_PROTOCOL_VERSION, ...(browser ? { features: ['browser-sessions', 'browser-binary'] } : {}) } })
     })
   }
 

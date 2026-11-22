@@ -4,7 +4,7 @@
   background: var(--surface);
 }
 
-/* As wide as the app's sidebar, so the pane's edge stays put going in and out of settings. */
+/* Wide windows keep the pane aligned with the app's sidebar. */
 .settings .settings-nav {
   width: min(var(--sidebar-width, 320px), 40vw);
   background: var(--bg);
@@ -165,6 +165,15 @@
 @container settings-content (max-width: 680px) {
   .appearance-layout { grid-template-columns: minmax(0, 1fr); gap: 24px; }
   .appearance-preview { position: static; grid-row: 2; max-height: none; overflow: visible; max-width: 480px; width: 100%; }
+}
+
+@media (max-width: 1280px) {
+  .settings .settings-nav { width: min(var(--sidebar-width, 320px), 224px, 40vw); }
+  .settings .settings-nav-top { gap: 8px; padding-inline: 16px; }
+  .settings .settings-groups { padding-inline: 8px; }
+  .settings .settings-group-title { padding-inline: 8px; }
+  .settings .settings-nav-item { padding-inline: 8px; gap: 8px; }
+  .settings-nav-footer { margin-inline: 16px; }
 }
 
 @media (max-width: 760px) {

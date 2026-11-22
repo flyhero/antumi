@@ -22,8 +22,11 @@ export const PluginBrowserRequest = z.discriminatedUnion('action', [
     timeoutMs: z.number().int().min(1000).max(40_000).optional(),
     method: z.enum(['GET', 'POST']).default('GET'),
     headers: z.record(z.string().max(80), z.string().max(4096)).default({}),
-    body: z.string().max(128 * 1024).optional()
-  })
+    // base64: the body is bytes (an upload's multipart form), decoded by the host before sending.
+    // Needs a core that declares browser-binary; an older one would send the text as it is.
+    bodyEncoding: z.enum(['text', 'base64']).optional(),
+    body: z.string().max(4 * 1024 * 1024).optional()
+  }).refine((request) => request.bodyEncoding !== 'base64' || /^[A-Za-z0-9+/]*={0,2}$/.test(request.body ?? ''), { message: 'base64 正文格式不对', path: ['body'] })
 ])
 export type PluginBrowserRequest = z.input<typeof PluginBrowserRequest>
 export const PluginBrowserResponse = z.object({ status: z.number().int(), headers: z.record(z.string(), z.string()), body: z.string().max(4 * 1024 * 1024) })

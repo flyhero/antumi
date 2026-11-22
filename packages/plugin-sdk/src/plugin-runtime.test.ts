@@ -184,6 +184,21 @@ describe('plugin SDK pages', () => {
     await h.tick()
     expect(h.messages.at(-1)).toMatchObject({ type: 'result', result: { result: { connected: true } } })
   })
+  it('sends a binary body only to a host that decodes it', async () => {
+    const upload = { action: 'request' as const, site: 'forum', path: '/uploads.json', method: 'POST' as const, bodyEncoding: 'base64' as const, body: 'AAEC' }
+    const pages: PluginPages = { dashboard: { upload: (_params, context) => context.browser(upload) } }
+    const old = pageHarness(pages)
+    await old.hello(['browser-sessions'])
+    old.call('page', { page: 'dashboard', method: 'upload', params: null })
+    await old.tick()
+    expect(old.messages.at(-1)).toMatchObject({ type: 'error', error: { message: expect.stringContaining('上传文件') } })
+    const h = pageHarness(pages)
+    await h.hello(['browser-sessions', 'browser-binary'])
+    h.call('page', { page: 'dashboard', method: 'upload', params: null })
+    await h.tick()
+    expect(h.messages.at(-1)).toMatchObject({ type: 'browser', request: { bodyEncoding: 'base64', body: 'AAEC' } })
+  })
+
   it('handshakes pages alone and permits just one operation', async () => {
     const h = pageHarness({ dashboard: { echo: (params) => params } })
     await h.hello()

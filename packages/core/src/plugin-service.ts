@@ -149,7 +149,7 @@ export class PluginService {
     try {
       const { loaded, record } = this.page(id, page)
       const json = JSON.stringify(params)
-      if (json === undefined || Buffer.byteLength(json) > MAX_PLUGIN_PAGE_PARAMS) throw new Error('插件页面参数必须是 JSON，且不超过 64 KiB')
+      if (json === undefined || Buffer.byteLength(json) > MAX_PLUGIN_PAGE_PARAMS) throw new Error('插件页面参数必须是 JSON，且不超过 3 MiB')
       const calls = this.pageCalls.get(id) ?? 0
       if (calls >= 4) throw new Error('插件页面同时调用不能超过 4 个，请稍后重试')
       this.pageCalls.set(id, calls + 1)

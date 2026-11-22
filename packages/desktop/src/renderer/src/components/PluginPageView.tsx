@@ -15,6 +15,9 @@ import './plugin-page.css'
 // run a shortcut on every message. Human clicks and key presses are never this close together.
 const OPEN_SPACING_MS = 300
 const KEY_SPACING_MS = 150
+// A call a hidden page makes waits until it is shown, but not past the SDK's own 60 s timeout:
+// sent after the page gave up on it, a write would land with nobody told.
+const HOLD_MS = 50_000
 
 function webAddress(url: string): boolean {
   try { return ['http:', 'https:'].includes(new URL(url).protocol) } catch { return false }
@@ -29,7 +32,9 @@ const reason = (error: unknown) => (error instanceof Error ? error.message : Str
 // The largest message a page may send: a call's params, with room for the rest of it.
 const MAX_FRAME_MESSAGE = MAX_PLUGIN_PAGE_PARAMS + 1024
 
-export function PluginPageView({ plugin, page }: PluginPageRef) {
+// A hidden page (one left, kept loaded) is told so, and may neither open a link, run a shortcut,
+// leave nor reach its backend until it is shown again.
+export function PluginPageView({ plugin, page, visible = true }: PluginPageRef & { visible?: boolean }) {
   const rpc = useCore((s) => s.rpc)
   const version = useCore((s) => findPluginPage(s.plugins, { plugin, page })?.version ?? null)
   const info = useCore((s) => findPluginPage(s.plugins, { plugin, page })?.info ?? null)
@@ -42,6 +47,9 @@ export function PluginPageView({ plugin, page }: PluginPageRef) {
   const typefaceProbe = useRef<HTMLDivElement>(null)
   const frame = useRef<HTMLIFrameElement>(null)
   const sendTheme = useRef<(() => void) | null>(null)
+  const shown = useRef(visible)
+  shown.current = visible
+  const sendVisibility = useRef<(() => void) | null>(null)
   const [generation, setGeneration] = useState(0)
   const [src, setSrc] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -74,6 +82,26 @@ export function PluginPageView({ plugin, page }: PluginPageRef) {
       const current = ready ? theme() : null
       if (current) post({ kind: 'theme', theme: current })
     }
+    type Call = Extract<PluginPageFrameMessage, { kind: 'call' }>
+    const held: Array<{ message: Call; at: number }> = []
+    const call = (message: Call) => {
+      // The page shows its own failures; the app's error toast stays out of it.
+      const connection = useCore.getState().rpc
+      if (!connection) { post({ kind: 'response', id: message.id, error: t('coreStore.notConnectedToAntumiCore') }); return }
+      connection.call('plugins.pageCall', { id: plugin, page, method: message.method, params: message.params }).then(
+        (answer) => { if (!canceled) post({ kind: 'response', id: message.id, result: answer.result }) },
+        (failure: unknown) => { if (!canceled) post({ kind: 'response', id: message.id, error: reason(failure) }) }
+      )
+    }
+    sendVisibility.current = () => {
+      if (ready) post({ kind: 'visibility', visible: shown.current })
+      if (!shown.current) return
+      const now = Date.now()
+      for (const { message, at } of held.splice(0)) {
+        if (now - at < HOLD_MS) call(message)
+        else post({ kind: 'response', id: message.id, error: t('PluginPage.heldInBackground') })
+      }
+    }
     const onMessage = (event: MessageEvent<unknown>) => {
       if (event.source !== frame.current?.contentWindow) return
       // Bound what the frame sends before the recursive JSON schemas see it.
@@ -86,14 +114,12 @@ export function PluginPageView({ plugin, page }: PluginPageRef) {
         if (!current) return
         ready = true
         post({ kind: 'init', theme: current, state: restored(stateKey), locale: getLocale() })
+        if (!shown.current) post({ kind: 'visibility', visible: false })
       } else if (message.kind === 'call') {
-        // The page shows its own failures; the app's error toast stays out of it.
-        const connection = useCore.getState().rpc
-        if (!connection) { post({ kind: 'response', id: message.id, error: t('coreStore.notConnectedToAntumiCore') }); return }
-        connection.call('plugins.pageCall', { id: plugin, page, method: message.method, params: message.params }).then(
-          (answer) => { if (!canceled) post({ kind: 'response', id: message.id, result: answer.result }) },
-          (failure: unknown) => { if (!canceled) post({ kind: 'response', id: message.id, error: reason(failure) }) }
-        )
+        if (shown.current) call(message)
+        else held.push({ message, at: Date.now() })
+      } else if (!shown.current) {
+        // Hidden, it is not the page the user is looking at: what it asks of the app waits for nothing.
       } else if (message.kind === 'open') {
         const now = Date.now()
         if (!webAddress(message.url) || now - opened < OPEN_SPACING_MS) return
@@ -121,6 +147,7 @@ export function PluginPageView({ plugin, page }: PluginPageRef) {
     return () => {
       canceled = true
       sendTheme.current = null
+      sendVisibility.current = null
       window.removeEventListener('message', onMessage)
       observer.disconnect()
       appearance.removeEventListener('change', onAppearance)
@@ -130,8 +157,9 @@ export function PluginPageView({ plugin, page }: PluginPageRef) {
 
   // The chat's typeface lives in the preferences, drawn onto the probe: send it once it is.
   useEffect(() => { sendTheme.current?.() }, [reading, width])
+  useEffect(() => { sendVisibility.current?.() }, [visible])
 
-  return <section ref={container} className="plugin-page" aria-label={label}>
+  return <section ref={container} className="plugin-page" aria-label={label} hidden={!visible}>
     <div ref={typefaceProbe} className="chat-view plugin-page-typeface" data-width={width} {...typeface} aria-hidden="true" />
     {!supported ? <div className="detail-empty"><div className="detail-empty-body">{t('PluginPage.unavailable')}</div></div>
       : error ? <div className="detail-empty" role="alert"><div className="detail-empty-body">

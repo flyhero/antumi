@@ -30,7 +30,7 @@ import { WorktreeManager } from './components/WorktreeManager'
 import { RoutinesView } from './components/RoutinesView'
 import { RoutinesEntry } from './components/RoutinesEntry'
 import { PluginPageEntries } from './components/PluginPageEntries'
-import { PluginPageView } from './components/PluginPageView'
+import { PluginPageStack } from './components/PluginPageStack'
 import { DiscussionView } from './components/DiscussionView'
 import { DiscussionDraft } from './components/DiscussionDraft'
 import { OverviewEntry } from './components/OverviewEntry'
@@ -176,7 +176,8 @@ export function App() {
             ) : section === 'squads' ? (
               <AgentsView />
             ) : section === 'plugin' ? (
-              pluginPage ? <PluginPageView key={`${pluginPage.plugin}/${pluginPage.page}`} plugin={pluginPage.plugin} page={pluginPage.page} /> :
+              // Drawn by PluginPageStack below, which keeps it loaded across these switches.
+              pluginPage ? null :
                 <section className="detail-empty"><div className="detail-empty-body">{t('App.chooseOrCreateAConversation')}</div></section>
             ) : section === 'discussions' ? (
               selectedDiscussionId ? <DiscussionView key={selectedDiscussionId} id={selectedDiscussionId} /> :
@@ -196,6 +197,7 @@ export function App() {
             )}
           </>
         )}
+        <PluginPageStack open={!settingsOpen && !overviewOpen && !inboxOpen && !worktreesOpen && !routinesOpen && section === 'plugin' ? pluginPage : null} />
         {(portsPanelOpen || browserPanelOpen || terminalPanelOpen || filesPanelOpen || gitPanelOpen) && (
           <UtilityPanelDock
             open={{ browser: browserPanelOpen, terminal: terminalPanelOpen, ports: portsPanelOpen, files: filesPanelOpen, git: gitPanelOpen }}

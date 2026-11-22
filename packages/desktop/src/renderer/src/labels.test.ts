@@ -6,6 +6,12 @@ it('preserves skill validation and conflict details from core', () => {
   expect(reasonText('skills-none-found', 'skills/tdd：缺少 description')).toContain('缺少 description')
 })
 
+it('keeps the source plugin explanation when settings are refused', () => {
+  expect(reasonText('source-invalid-settings', '空间地址应以 https:// 开头')).toContain('空间地址应以 https:// 开头')
+  expect(reasonText('source-bad-query', 'JQL 有误')).toContain('JQL 有误')
+  expect(reasonText('source-auth-failed', 'token secret detail')).not.toContain('secret')
+})
+
 describe('messageTime', () => {
   const now = new Date(2026, 9, 3, 10, 30).getTime()
 

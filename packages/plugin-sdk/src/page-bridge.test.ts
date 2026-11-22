@@ -12,7 +12,16 @@ function frame() {
   vi.stubGlobal('parent', parent)
   vi.stubGlobal('window', { addEventListener, removeEventListener })
   vi.stubGlobal('location', { hash: '#raw%20token' })
-  vi.stubGlobal('document', { documentElement: { style, dataset } })
+  // The browser's own visibility lives on the prototype, as it does on a real document.
+  class FakeDocument {
+    documentElement = { style, dataset }
+    windowHidden = false
+    events: string[] = []
+    get visibilityState(): string { return this.windowHidden ? 'hidden' : 'visible' }
+    dispatchEvent(event: { type: string }) { this.events.push(event.type); return true }
+  }
+  const document = new FakeDocument()
+  vi.stubGlobal('document', document)
   // Dispatch through the fake browser without pulling DOM types into Node tests.
   const emit = (name: string, event: unknown) => {
     const handler = handlers.get(name)
@@ -22,7 +31,7 @@ function frame() {
   const send = (value: Record<string, unknown>) => message({ antumiPluginPage: 'raw%20token', ...value })
   const init = () => send({ kind: 'init', theme: { scheme: 'dark', variables: { '--background': '#123' } }, locale: 'zh-CN', state: { saved: true } })
   const key = (value: Record<string, unknown>) => emit('keydown', { key: 'a', code: 'KeyA', metaKey: false, ctrlKey: false, altKey: false, shiftKey: false, isComposing: false, repeat: false, preventDefault: vi.fn(), ...value })
-  return { messages, parent, message, send, init, key, style, dataset, addEventListener, removeEventListener }
+  return { messages, parent, message, send, init, key, style, dataset, addEventListener, removeEventListener, document }
 }
 
 beforeEach(() => vi.useFakeTimers())
@@ -57,6 +66,23 @@ describe('page bridge', () => {
     expect(listener).toHaveBeenCalledTimes(1)
   })
 
+  it('reports a page the app hides as hidden, through the standard property and event', async () => {
+    const f = frame(); const connected = connect(); f.init(); await connected
+    f.send({ kind: 'visibility', visible: false })
+    expect(f.document.visibilityState).toBe('hidden')
+    expect(Reflect.get(f.document, 'hidden')).toBe(true)
+    expect(f.document.events).toEqual(['visibilitychange'])
+    f.send({ kind: 'visibility', visible: false })
+    expect(f.document.events).toHaveLength(1)
+    f.send({ kind: 'visibility', visible: true })
+    expect(f.document.visibilityState).toBe('visible')
+    // Shown by the app, a minimized window still reads hidden.
+    f.document.windowHidden = true
+    expect(f.document.visibilityState).toBe('hidden')
+    f.send({ kind: 'visibility', visible: 'no' })
+    expect(f.document.events).toHaveLength(2)
+  })
+
   it('matches responses, passes errors and times calls out', async () => {
     const f = frame(); const connected = connect(); f.init(); const host = await connected
     const call = host.call<{ ok: boolean }>('echo', { value: 1 })
@@ -89,7 +115,7 @@ describe('page bridge', () => {
     expect(f.messages.at(-1)).toMatchObject({ kind: 'state', value: { text: 'saved' } })
     expect(() => host.setState('界'.repeat(12_000))).toThrow()
     expect(() => host.setState(undefined)).toThrow()
-    await expect(host.call('large', '界'.repeat(22_000))).rejects.toThrow()
+    await expect(host.call('large', '界'.repeat(1_100_000))).rejects.toThrow()
     host.open('https://example.test/'); host.leave()
     expect(f.messages.slice(-2)).toMatchObject([{ kind: 'open', url: 'https://example.test/' }, { kind: 'leave' }])
     expect(() => host.open('javascript:alert(1)')).toThrow()

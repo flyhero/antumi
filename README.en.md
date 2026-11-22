@@ -4,11 +4,12 @@
 
 **Put the Claude Code, Codex and other agents you already have to work: investigating bugs, answering your colleagues in chat, and building together.**
 
-Bugs investigated automatically · An agent that answers for you · Agents working together freely
-
 [![Release](https://img.shields.io/github/v/release/flyhero/antumi?include_prereleases&label=release&color=blue)](https://github.com/flyhero/antumi/releases)
 [![Downloads](https://img.shields.io/github/downloads/flyhero/antumi/total?color=blue)](https://github.com/flyhero/antumi/releases)
-![Platform](https://img.shields.io/badge/platform-macOS%20%C2%B7%20Windows%20%C2%B7%20Linux-lightgrey)
+![macOS](https://img.shields.io/badge/macOS-000000?logo=apple&logoColor=white)
+![Windows](https://img.shields.io/badge/Windows-0078D4?logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0iI2ZmZiIgZD0iTTAgMy40IDkuOCAydjkuNUgwek0xMSAxLjggMjQgMHYxMS40SDExek0wIDEyLjVoOS44VjIyTDAgMjAuNnpNMTEgMTIuNWgxM1YyNGwtMTMtMS44eiIvPjwvc3ZnPg==)
+![Linux](https://img.shields.io/badge/Linux-FCC624?logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGVsbGlwc2UgY3g9IjEyIiBjeT0iMTMiIHJ4PSI3IiByeT0iMTAiIGZpbGw9IiMxMTEiLz48ZWxsaXBzZSBjeD0iMTIiIGN5PSIxNS41IiByeD0iNC42IiByeT0iNi41IiBmaWxsPSIjZmZmIi8+PGNpcmNsZSBjeD0iOS44IiBjeT0iNy4yIiByPSIxLjUiIGZpbGw9IiNmZmYiLz48Y2lyY2xlIGN4PSIxNC4yIiBjeT0iNy4yIiByPSIxLjUiIGZpbGw9IiNmZmYiLz48Y2lyY2xlIGN4PSIxMCIgY3k9IjcuNCIgcj0iLjciIGZpbGw9IiMxMTEiLz48Y2lyY2xlIGN4PSIxNCIgY3k9IjcuNCIgcj0iLjciIGZpbGw9IiMxMTEiLz48cGF0aCBkPSJNOS44IDkuNmg0LjRMMTIgMTEuNnoiIGZpbGw9IiNGN0E0MUQiLz48ZWxsaXBzZSBjeD0iOCIgY3k9IjIyLjQiIHJ4PSIzIiByeT0iMS40IiBmaWxsPSIjRjdBNDFEIi8+PGVsbGlwc2UgY3g9IjE2IiBjeT0iMjIuNCIgcng9IjMiIHJ5PSIxLjQiIGZpbGw9IiNGN0E0MUQiLz48L3N2Zz4=)
+[![Android](https://img.shields.io/badge/Android-3DDC84?logo=android&logoColor=white)](docs/MOBILE.md)
 [![License](https://img.shields.io/github/license/flyhero/antumi?color=lightgrey)](LICENSE)
 
 [Download](https://github.com/flyhero/antumi/releases) · [Start in three minutes](#start-in-three-minutes) · [Highlights](#highlights) · [Supported agents](#supported-agents) · [Docs](#docs)
@@ -29,6 +30,8 @@ Bugs investigated automatically · An agent that answers for you · Agents worki
   <a href="#supported-agents" title="CodeBuddy"><img src="docs/assets/agents/codebuddy.svg" alt="CodeBuddy" width="32" height="32" /></a>&nbsp;&nbsp;
   <a href="#supported-agents" title="CodeArts"><img src="docs/assets/agents/codearts.svg" alt="CodeArts" width="32" height="32" /></a>
 </p>
+
+<img src="docs/assets/showcase.png" alt="Antumi on the desktop, the same conversation carried on from a phone, and colleagues asking an agent in Slack, Feishu and DingTalk" />
 
 **One minute:** three bugs, from the inbox all the way to a merge.
 
@@ -184,9 +187,17 @@ Shortcuts you will use: <kbd>N</kbd> on the board to note a task, <kbd>⌘</kbd>
 | **Developing** | [Architecture](docs/ARCHITECTURE.md) (Chinese) · [Chat platforms](docs/CHANNELS.md) (Chinese) · [Phone app](docs/MOBILE.md) (Chinese) · [WSL](docs/WSL.md) (Chinese) · [AGENTS.md](AGENTS.md) · [DESIGN.md](DESIGN.md) |
 | **Releasing** | [Releasing and packaging](docs/RELEASING.md) · [Changelog](CHANGELOG.md) |
 
-## Contributing
+## Community & Support
 
-If something feels awkward, or you want another agent connected, open an [issue](https://github.com/flyhero/antumi/issues).
+- **WeChat**: scan the QR code to join our group for discussions, feedback and updates:
+
+  <img src="docs/assets/wechat-group.jpg" alt="Antumi WeChat group" width="200" />
+
+- **Issues**: if something feels awkward, or you want another agent connected, open an [issue](https://github.com/flyhero/antumi/issues).
+- **LINUX DO**: thanks to the [LINUX DO](https://linux.do) community for their support.
+- **V2EX**: thanks to the [V2EX](https://www.v2ex.com) community for their support.
+
+## Contributing
 
 Read [AGENTS.md](AGENTS.md) and [DESIGN.md](DESIGN.md) before changing code. Before a commit:
 
@@ -195,7 +206,3 @@ pnpm typecheck && pnpm test
 ```
 
 Add `pnpm build` when the desktop app changed.
-
-## Links
-
-- [LINUX DO](https://linux.do): a Chinese community for developers and AI enthusiasts

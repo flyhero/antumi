@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { chromeUserAgent, mobileUserAgent } from './user-agent'
+import { chromeUserAgent, mobileUserAgent, wantsChromeUserAgent } from './user-agent'
 
 describe('chromeUserAgent', () => {
   it('drops the app and Electron, keeping the platform and Chrome major', () => {
@@ -21,5 +21,12 @@ describe('mobileUserAgent', () => {
   it('says Android Chrome, with Mobile only for a phone', () => {
     expect(mobileUserAgent('146.0.7680.65', true)).toBe('Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Mobile Safari/537.36')
     expect(mobileUserAgent('146.0.7680.65', false)).toBe('Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36')
+  })
+})
+
+describe('wantsChromeUserAgent', () => {
+  it('claims Chrome on Google alone, where its sign-in refuses an embedded browser', () => {
+    for (const url of ['https://accounts.google.com/v3/signin', 'https://www.google.com/', 'https://google.com/', 'https://accounts.youtube.com/accounts/SetSID']) expect(wantsChromeUserAgent(url)).toBe(true)
+    for (const url of ['https://www.v2ex.com/signin', 'https://linux.do/login', 'https://google.com.evil.test/', 'https://notgoogle.com/', 'about:blank', 'file:///google.com', 'nonsense']) expect(wantsChromeUserAgent(url)).toBe(false)
   })
 })

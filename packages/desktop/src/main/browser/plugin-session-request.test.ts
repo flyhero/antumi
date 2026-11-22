@@ -4,7 +4,7 @@ import { PluginBrowserRequest } from '@antumi/protocol'
 import { pluginSessionRequest } from './plugin-session-request'
 
 const request = PluginBrowserRequest.options[3].parse({ action: 'request', site: 'forum', path: '/posts', method: 'POST', body: 'hello', headers: { 'x-csrf-token': 'csrf' } })
-function fixture(body = '', redirect = false) {
+function fixture(body = '', redirect = false, headers: Record<string, string | string[]> = {}) {
   const native = Object.assign(new EventEmitter(), {
     end: vi.fn(() => queueMicrotask(() => {
       // Chromium may close the request's writable side before delivering the response.
@@ -13,7 +13,7 @@ function fixture(body = '', redirect = false) {
         native.emit('redirect', 302, 'GET', 'https://other.test/t/1', { location: ['https://other.test/t/1'], 'set-cookie': ['secret=value'] })
         native.emit('error', new Error('Redirect was cancelled'))
       } else {
-        const response = Object.assign(new EventEmitter(), { statusCode: 200, headers: { 'content-type': 'text/html', 'set-cookie': ['secret=value'] } })
+        const response = Object.assign(new EventEmitter(), { statusCode: 200, headers: { 'content-type': 'text/html', 'set-cookie': ['secret=value'], ...headers } })
         native.emit('response', response)
         response.emit('data', Buffer.from(body))
         response.emit('end')
@@ -50,6 +50,12 @@ describe('authenticated plugin requests', () => {
   it('reads a complete response and strips private headers', async () => {
     const h = fixture('response')
     expect(await pluginSessionRequest('https://forum.test', request, AbortSignal.timeout(1000), h.create)).toEqual({ status: 200, headers: { 'content-type': 'text/html' }, body: 'response' })
+  })
+
+  it('exposes challenge and rate-limit diagnostics without exposing session headers', async () => {
+    const h = fixture('challenge', false, { 'CF-Mitigated': ['challenge'], 'CF-Ray': 'ray-id', 'Discourse-Rate-Limit-Error-Code': 'user_10_secs_limit', 'retry-after': '15', authorization: 'private', 'x-shared-session-key': 'private' })
+    const result = await pluginSessionRequest('https://forum.test', request, AbortSignal.timeout(1000), h.create)
+    expect(result.headers).toEqual({ 'content-type': 'text/html', 'cf-mitigated': 'challenge', 'cf-ray': 'ray-id', 'discourse-rate-limit-error-code': 'user_10_secs_limit', 'retry-after': '15' })
   })
 
   it('requests an explicitly declared companion origin with the login origin as referrer', async () => {

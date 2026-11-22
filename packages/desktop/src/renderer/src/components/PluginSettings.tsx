@@ -4,7 +4,7 @@ import { githubRepository, type PluginInfo, type PluginInstallSource, type Recom
 import { perform, receivePlugins, showError, useCore } from '../core-store'
 import { pluginPageLabel } from '../plugin-pages'
 import { pickPlugin } from '../desktop-bridge'
-import { SettingsGroup, Toggle } from './SettingsControls'
+import { Segmented, SettingsGroup, Toggle } from './SettingsControls'
 import { ChatPicker } from './ChatPicker'
 import { DownloadIcon, PuzzleIcon, StarIcon } from './icons'
 
@@ -22,10 +22,16 @@ function pluginName(plugin: PluginInfo): string {
 
 export function PluginSettings() {
   const ids = useId()
+  const [tab, setTab] = useState<'installed' | 'recommended' | null>(null)
+  const [filter, setFilter] = useState('')
+  const [installOpen, setInstallOpen] = useState(false)
   const rpc = useCore((state) => state.rpc)
   const [recommended, setRecommended] = useState<RecommendedPlugin[]>([])
   // Kept by the store, which loads them on connect and follows plugins.changed.
   const plugins = useCore((state) => state.plugins)
+  const activeTab = recommended.length === 0 ? 'installed' : tab ?? (plugins?.length === 0 ? 'recommended' : 'installed')
+  const query = filter.trim().toLocaleLowerCase()
+  const visible = recommended.filter((entry) => [entry.name, entry.id, entry.description, entry.descriptionEn, entry.repository].some((text) => text.toLocaleLowerCase().includes(query)))
   const [busy, setBusy] = useState(false)
   const [kind, setKind] = useState<'local' | 'github'>('local')
   const [location, setLocation] = useState('')
@@ -35,7 +41,7 @@ export function PluginSettings() {
   const [looking, setLooking] = useState(false)
   const [trusted, setTrusted] = useState(false)
   const [remove, setRemove] = useState<string | null>(null)
-  // Install's result shows by its button: the top of the page is scrolled out of view there.
+  // Keep manual installation feedback beside its submit button.
   const [status, setStatus] = useState<{ text: string, at: 'top' | 'install' } | null>(null)
 
   useEffect(() => {
@@ -113,23 +119,79 @@ export function PluginSettings() {
   return (
     <div className="plugin-settings">
       <p className="settings-note">{t('PluginSettings.notAgentPlugins')}</p>
+      <div className="plugin-settings-toolbar">
+        <span id={`${ids}-tabs`} hidden>{t('SettingsPage.plugins')}</span>
+        <Segmented<'installed' | 'recommended'> labelId={`${ids}-tabs`} value={activeTab} options={[
+          { value: 'installed', label: plugins === null ? t('PluginSettings.installed') : t('PluginSettings.installedCount', { count: plugins.length }) },
+          ...(recommended.length > 0 ? [{ value: 'recommended' as const, label: t('PluginSettings.recommended') }] : [])
+        ]} onChange={setTab} />
+        <button type="button" className="button" aria-expanded={installOpen} aria-controls={`${ids}-install`} disabled={busy || looking} onClick={() => setInstallOpen(!installOpen)}><DownloadIcon />{t('PluginSettings.manualInstall')}</button>
+      </div>
       {status?.at === 'top' && <p className="settings-status" role="status" data-ok>{status.text}</p>}
-      {recommended.length > 0 && <SettingsGroup title={t('PluginSettings.recommended')} icon={<StarIcon />}>
-        {recommended.map((entry) => {
-          const installed = plugins?.find((plugin) => plugin.id === entry.id)
-          return <div className="settings-row" key={entry.id}>
-            <div className="settings-row-text">
-              <span className="settings-row-label">{entry.name}</span>
-              <p className="settings-row-description">{getLocale() === 'en' ? entry.descriptionEn : entry.description}</p>
-              <p className="settings-row-description">GitHub · <RepositoryLink repository={entry.repository} /></p>
+      <div id={`${ids}-install`} className="plugin-install-panel" hidden={!installOpen}>
+        <SettingsGroup title={t('PluginSettings.installFromElsewhere')} icon={<DownloadIcon />}>
+          <form className="plugin-install" onSubmit={(event) => { event.preventDefault(); install() }}>
+            <div className="settings-field">
+              <label className="settings-field-label" htmlFor={`${ids}-kind`}>{t('PluginSettings.installationSource')}</label>
+              <select id={`${ids}-kind`} className="input" value={kind} disabled={busy} onChange={(event) => {
+                setKind(event.target.value === 'github' ? 'github' : 'local'); setLocation(''); setPackages(null); setAsset(''); setTrusted(false)
+              }}>
+                <option value="local">{t('PluginSettings.localDirectoryOrZip')}</option>
+                <option value="github">GitHub Release</option>
+              </select>
             </div>
-            <div className="settings-row-control"><button className="button" aria-label={installed ? `${entry.name} · ${t('PluginSettings.installed')}` : t('PluginSettings.installNamedPlugin', { name: entry.name })} disabled={busy || plugins === null || Boolean(installed)} onClick={() => {
-              void run((connection) => connection.call('plugins.installRecommended', { id: entry.id }), t('PluginSettings.pluginInstalled'))
-            }}>{installed ? t('PluginSettings.installed') : t('PluginSettings.installPlugin')}</button></div>
-          </div>
-        })}
-      </SettingsGroup>}
-      <SettingsGroup title={t('PluginSettings.installedPlugins')} icon={<PuzzleIcon />}>
+            <div className="settings-field">
+              <label className="settings-field-label" htmlFor={`${ids}-location`}>{kind === 'local' ? t('PluginSettings.pluginPath') : t('PluginSettings.githubRepository')}</label>
+              <input id={`${ids}-location`} className="input mono" value={location} required disabled={busy} placeholder={kind === 'local' ? t('PluginSettings.fullPathToPluginDirectoryOrZip') : 'https://github.com/owner/repository'} onChange={(event) => { setLocation(event.target.value); setTrusted(false) }} />
+              {kind === 'local' && window.antumi?.pickPlugin && <div className="plugin-actions">
+                <button className="button ghost" type="button" disabled={busy} onClick={() => { void pickPlugin('directory').then((path) => { if (path) { setLocation(path); setTrusted(false) } }) }}>{t('PluginSettings.chooseDirectory')}</button>
+                <button className="button ghost" type="button" disabled={busy} onClick={() => { void pickPlugin('zip').then((path) => { if (path) { setLocation(path); setTrusted(false) } }) }}>{t('PluginSettings.chooseZip')}</button>
+              </div>}
+            </div>
+            {kind === 'github' && <>
+              {looking && <p className="settings-note">{t('PluginSettings.findingPackages')}</p>}
+              {packages?.repository === repository && packages.names.length === 1 && <p className="settings-note">{t('PluginSettings.packageFound', { name: packages.names[0] ?? '', tag: packages.tag })}</p>}
+              {packages?.repository === repository && packages.names.length > 1 && <div className="settings-field">
+                <label className="settings-field-label" htmlFor={`${ids}-package`}>{t('PluginSettings.choosePackage')}</label>
+                <select id={`${ids}-package`} className="input" value={packages.names.includes(asset) ? asset : ''} disabled={busy || looking} onChange={(event) => setAsset(event.target.value)}>
+                  <option value="">{t('PluginSettings.chooseOnePackage')}</option>
+                  {packages.names.map((name) => <option key={name} value={name}>{name}</option>)}
+                </select>
+              </div>}
+            </>}
+            <p className="settings-note">{t('PluginSettings.pluginsRunLocalCodeAndReceiveCredentialsFor')}</p>
+            <label className="plugin-trust">{tr('PluginSettings.iTrustThisPluginAndItsSource', { value1: <input type="checkbox" checked={trusted} disabled={busy} onChange={(event) => setTrusted(event.target.checked)} /> })}</label>
+            <div className="plugin-actions">
+              <button className="button primary" type="submit" disabled={busy || looking || !location.trim() || !trusted || (packages?.repository === repository && packages.names.length > 1 && !packages.names.includes(asset))}>{busy || looking ? t('PluginSettings.processing') : t('PluginSettings.installPlugin')}</button>
+              {status?.at === 'install' && <p className="settings-status" role="status" data-ok>{status.text}</p>}
+            </div>
+          </form>
+        </SettingsGroup>
+      </div>
+      {activeTab === 'recommended' && <>
+        <div className="settings-list-toolbar">
+          <input className="input" type="search" value={filter} onChange={(event) => setFilter(event.target.value)} placeholder={t('PluginSettings.searchRecommended')} aria-label={t('PluginSettings.searchRecommended')} />
+          <p className="settings-list-count" role="status">{t('PluginSettings.filteredCount', { count: visible.length, total: recommended.length })}</p>
+        </div>
+        <SettingsGroup title={t('PluginSettings.recommended')} icon={<StarIcon />}>
+          {visible.map((entry) => {
+            const installed = plugins?.find((plugin) => plugin.id === entry.id)
+            return <div className="settings-row" key={entry.id}>
+              <div className="settings-row-text">
+                <span className="settings-row-label">{entry.name}</span>
+                <p className="settings-row-description">{getLocale() === 'en' ? entry.descriptionEn : entry.description}</p>
+                <p className="settings-row-description">GitHub · <RepositoryLink repository={entry.repository} /></p>
+              </div>
+              <div className="settings-row-control"><button className="button" aria-label={installed ? `${entry.name} · ${t('PluginSettings.installed')}` : t('PluginSettings.installNamedPlugin', { name: entry.name })} disabled={busy || plugins === null || Boolean(installed)} onClick={() => {
+                setTab('recommended')
+                void run((connection) => connection.call('plugins.installRecommended', { id: entry.id }), t('PluginSettings.pluginInstalled'))
+              }}>{installed ? t('PluginSettings.installed') : t('PluginSettings.installPlugin')}</button></div>
+            </div>
+          })}
+          {visible.length === 0 && <div className="settings-filter-empty"><p>{t('PluginSettings.noMatchingPlugins')}</p><button type="button" className="button ghost" onClick={() => setFilter('')}>{t('SidebarSearch.clear')}</button></div>}
+        </SettingsGroup>
+      </>}
+      {activeTab === 'installed' && <SettingsGroup title={t('PluginSettings.installedPlugins')} icon={<PuzzleIcon />}>
         {plugins === null ? <p className="muted">{t('PluginSettings.loadingPlugins')}</p> : plugins.length === 0 ? <p className="muted">{t('PluginSettings.noPluginsInstalledYet')}</p> : plugins.map((plugin) => (
           <div key={plugin.id} className="plugin-row">
             <div className="settings-row">
@@ -156,45 +218,7 @@ export function PluginSettings() {
             </div>}
           </div>
         ))}
-      </SettingsGroup>
-      <SettingsGroup title={t('PluginSettings.installFromElsewhere')} icon={<DownloadIcon />}>
-        <form className="plugin-install" onSubmit={(event) => { event.preventDefault(); install() }}>
-          <div className="settings-field">
-            <label className="settings-field-label" htmlFor={`${ids}-kind`}>{t('PluginSettings.installationSource')}</label>
-            <select id={`${ids}-kind`} className="input" value={kind} disabled={busy} onChange={(event) => {
-              setKind(event.target.value === 'github' ? 'github' : 'local'); setLocation(''); setPackages(null); setAsset(''); setTrusted(false)
-            }}>
-              <option value="local">{t('PluginSettings.localDirectoryOrZip')}</option>
-              <option value="github">GitHub Release</option>
-            </select>
-          </div>
-          <div className="settings-field">
-            <label className="settings-field-label" htmlFor={`${ids}-location`}>{kind === 'local' ? t('PluginSettings.pluginPath') : t('PluginSettings.githubRepository')}</label>
-            <input id={`${ids}-location`} className="input mono" value={location} required disabled={busy} placeholder={kind === 'local' ? t('PluginSettings.fullPathToPluginDirectoryOrZip') : 'https://github.com/owner/repository'} onChange={(event) => { setLocation(event.target.value); setTrusted(false) }} />
-            {kind === 'local' && window.antumi?.pickPlugin && <div className="plugin-actions">
-              <button className="button ghost" type="button" disabled={busy} onClick={() => { void pickPlugin('directory').then((path) => { if (path) { setLocation(path); setTrusted(false) } }) }}>{t('PluginSettings.chooseDirectory')}</button>
-              <button className="button ghost" type="button" disabled={busy} onClick={() => { void pickPlugin('zip').then((path) => { if (path) { setLocation(path); setTrusted(false) } }) }}>{t('PluginSettings.chooseZip')}</button>
-            </div>}
-          </div>
-          {kind === 'github' && <>
-            {looking && <p className="settings-note">{t('PluginSettings.findingPackages')}</p>}
-            {packages?.repository === repository && packages.names.length === 1 && <p className="settings-note">{t('PluginSettings.packageFound', { name: packages.names[0] ?? '', tag: packages.tag })}</p>}
-            {packages?.repository === repository && packages.names.length > 1 && <div className="settings-field">
-              <label className="settings-field-label" htmlFor={`${ids}-package`}>{t('PluginSettings.choosePackage')}</label>
-              <select id={`${ids}-package`} className="input" value={packages.names.includes(asset) ? asset : ''} disabled={busy || looking} onChange={(event) => setAsset(event.target.value)}>
-                <option value="">{t('PluginSettings.chooseOnePackage')}</option>
-                {packages.names.map((name) => <option key={name} value={name}>{name}</option>)}
-              </select>
-            </div>}
-          </>}
-          <p className="settings-note">{t('PluginSettings.pluginsRunLocalCodeAndReceiveCredentialsFor')}</p>
-          <label className="plugin-trust">{tr('PluginSettings.iTrustThisPluginAndItsSource', { value1: <input type="checkbox" checked={trusted} disabled={busy} onChange={(event) => setTrusted(event.target.checked)} /> })}</label>
-          <div className="plugin-actions">
-            <button className="button primary" type="submit" disabled={busy || looking || !location.trim() || !trusted || (packages?.repository === repository && packages.names.length > 1 && !packages.names.includes(asset))}>{busy || looking ? t('PluginSettings.processing') : t('PluginSettings.installPlugin')}</button>
-            {status?.at === 'install' && <p className="settings-status" role="status" data-ok>{status.text}</p>}
-          </div>
-        </form>
-      </SettingsGroup>
+      </SettingsGroup>}
     </div>
   )
 }

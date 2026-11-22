@@ -243,7 +243,7 @@ function AgentSettings() {
   )
 }
 
-// What the run rows need from core; with none of them there is no 运行 section.
+// Older cores may only offer one of the two settings groups.
 function useRunSettingsShown(): boolean {
   const awakeSupported = useAwakeSupported()
   const awake = useCore((s) => s.awake)
@@ -364,6 +364,17 @@ function PermissionSettings() {
           )}
         />
       )}
+    </>
+  )
+}
+
+function RunPermissionSettings() {
+  const run = useRunSettingsShown()
+  const permissions = usePermissionSettingsShown()
+  return (
+    <>
+      {run && <SettingsGroup title={t('ChatCodeRun.run')} icon={<PulseIcon />}><RunSettings /></SettingsGroup>}
+      {permissions && <SettingsGroup title={t('SettingsPage.permissions')} icon={<LockIcon />}><PermissionSettings /></SettingsGroup>}
     </>
   )
 }
@@ -651,7 +662,7 @@ const SECTIONS: readonly Section[] = localized(() => ([
   },
   {
     id: 'agents',
-    group: 'Agent',
+    group: t('AgentProfiles.title'),
     title: t('SettingsPage.localAgents'),
     description: t('SettingsPage.installationSignInAndDefaultsForAgentExecution'),
     keywords: ['agent', '本机 Agent', 'Local Agents', '编程智能体', 'coding agents', t('ConversationList.agent'), t('SettingsPage.local'), t('InstalledAgentsSettings.installed'), t('AgentPicker.notInstalled'), t('SettingsPage.install'), t('SettingsPage.signIn'), t('SettingsPage.version'), t('SettingsPage.scan'), t('SettingsPage.environment'), t('SettingsPage.check'), 'path', t('SettingsPage.notFound'), t('RoutinesSection.enable'), t('SettingsPage.disable'), ...AGENT_KINDS],
@@ -661,7 +672,7 @@ const SECTIONS: readonly Section[] = localized(() => ([
   },
   {
     id: 'projects',
-    group: t('ChatMentionMenu.project'),
+    group: t('SettingsPage.workspace'),
     title: t('ChatMentionMenu.project'),
     description: t('SettingsPage.recentProjectsFilesCopiedIntoNewWorktreesSetup'),
     keywords: [t('ChatMentionMenu.project'), t('SettingsPage.repository'), t('ProjectPicker.recent'), t('SettingsPage.path'), t('SettingsPage.folder'), t('ProjectConfigDialog.projectConfiguration'), 'setup', 'check', 'worktree', t('CopyButton.copy'), '.env', t('SettingsPage.installDependencies'), t('SettingsPage.tests'), t('SettingsPage.review')],
@@ -688,32 +699,27 @@ const SECTIONS: readonly Section[] = localized(() => ([
   }
 ]))
 
-// How many agents run at once and keeping the computer awake; it follows 服务商.
-const RUN_SECTION: Section = localized(() => ({
-  id: 'run',
-  group: 'Agent',
-  title: t('ChatCodeRun.run'),
-  description: t('SettingsPage.runDescription'),
-  keywords: [t('SettingsPage.maximumConcurrentAgents'), t('SettingsPage.perAgentLimits'), t('SettingsPage.keepComputerAwake'), '并发', 'concurrency', 'awake', t('ChatPlan.execute'), t('GitInspector.task'), t('SettingsPage.planning'), ...AGENT_KINDS],
-  Icon: PulseIcon,
-  Body: RunSettings
-}))
-
-// What agents may do unattended and what of the user's they reach; it follows 运行.
-const PERMISSIONS_SECTION: Section = localized(() => ({
+// Keep the permissions id for links from scheduled runs and the setup guide.
+const RUN_PERMISSIONS_SECTION: Section = localized(() => ({
   id: 'permissions',
-  group: 'Agent',
-  title: t('SettingsPage.permissions'),
-  description: t('SettingsPage.permissionsDescription'),
-  keywords: [t('SettingsPage.permissions'), 'permission', t('SettingsPage.scheduledRunPermissions'), t('SettingsPage.unattended'), t('OverviewView.schedules'), t('SettingsPage.access'), 'chrome', t('SettingsPage.letClaudeCodeUseYourChrome'), t('SettingsPage.letAgentsReadYourAntumiRecords'), t('SettingsPage.records'), t('SettingsPage.history')],
-  Icon: LockIcon,
-  Body: PermissionSettings
+  group: t('AgentProfiles.title'),
+  title: t('SettingsPage.runAndPermissions'),
+  description: t('SettingsPage.runAndPermissionsDescription'),
+  keywords: [
+    t('ChatCodeRun.run'), t('SettingsPage.runDescription'), t('SettingsPage.maximumConcurrentAgents'), t('SettingsPage.perAgentLimits'), t('SettingsPage.keepComputerAwake'),
+    '并发', 'concurrency', 'awake', t('ChatPlan.execute'), t('GitInspector.task'), t('SettingsPage.planning'), ...AGENT_KINDS,
+    t('SettingsPage.permissions'), t('SettingsPage.permissionsDescription'), 'permission', t('SettingsPage.scheduledRunPermissions'), t('SettingsPage.unattended'),
+    t('OverviewView.schedules'), t('SettingsPage.access'), 'chrome', t('SettingsPage.letClaudeCodeUseYourChrome'), t('SettingsPage.letAgentsReadYourAntumiRecords'), t('SettingsPage.records'), t('SettingsPage.history')
+  ],
+  Icon: PulseIcon,
+  Body: RunPermissionSettings,
+  grouped: true
 }))
 
 // How conversations behave: suggestions, to-dos, titles, archiving, translation, the quick-task model.
 const CONVERSATION_SECTION: Section = localized(() => ({
   id: 'conversation',
-  group: t('sidebar.conversations'),
+  group: t('SettingsPage.workspace'),
   title: t('sidebar.conversations'),
   description: t('SettingsPage.conversationDescription'),
   keywords: [
@@ -735,7 +741,7 @@ const CONVERSATION_SECTION: Section = localized(() => ({
 // On a core that keeps them: the user's own slash commands; it follows 会话.
 const CHAT_COMMANDS_SECTION: Section = localized(() => ({
   id: 'chat-commands',
-  group: t('sidebar.conversations'),
+  group: t('SettingsPage.workspace'),
   title: t('SettingsPage.chatCommands'),
   description: t('SettingsPage.savedPromptsAvailableWithInTheComposerEdit'),
   keywords: [t('chatTools.command'), t('SettingsPage.slash'), '/', t('ChatCommandSettings.prompt'), t('RoutinesSection.templates'), t('ChatCommandSettings.pin'), 'prompt', t('SettingsPage.chat'), t('BrowserPanel.conversation'), t('SettingsPage.shortcut')],
@@ -771,7 +777,7 @@ const MCP_SECTION: Section = localized(() => ({
 // On a core that keeps them: the agents' accounts and switching between them; it follows 外部智能体.
 const ACCOUNTS_SECTION: Section = localized(() => ({
   id: 'accounts',
-  group: 'Agent',
+  group: t('AgentProfiles.title'),
   title: t('AgentAccounts.title'),
   description: t('AgentAccounts.description'),
   keywords: [t('AgentAccounts.title'), 'account', 'login', t('AgentAccounts.signIn'), t('AgentAccounts.autoSwitch'), 'quota', 'CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'claude', 'codex'],
@@ -783,7 +789,7 @@ const ACCOUNTS_SECTION: Section = localized(() => ({
 // On a core that reads them: sessions the agents ran in a terminal, taken in as conversations; it follows 聊天命令.
 const SESSION_IMPORT_SECTION: Section = localized(() => ({
   id: 'session-import',
-  group: t('sidebar.conversations'),
+  group: t('SettingsPage.workspace'),
   title: t('SettingsPage.sessionImport'),
   description: t('SettingsPage.sessionImportDescription'),
   keywords: [t('SettingsPage.sessionImport'), t('SettingsPage.import'), t('BrowserPanel.conversation'), t('SettingsPage.terminal'), 'import', 'session', 'resume', 'terminal', 'cli', ...AGENT_KINDS],
@@ -794,7 +800,7 @@ const SESSION_IMPORT_SECTION: Section = localized(() => ({
 // On a core that keeps them: third-party coding plans agents can run on; it follows 账号.
 const MODEL_PROVIDERS_SECTION: Section = localized(() => ({
   id: 'model-providers',
-  group: 'Agent',
+  group: t('AgentProfiles.title'),
   title: t('SettingsPage.modelProviders'),
   description: t('SettingsPage.modelProvidersDescription'),
   keywords: [t('SettingsPage.modelProviders'), 'provider', 'api key', 'key', t('ModelProviderSettings.plan'), 'coding plan', '火山', 'volcengine', 'ark', 'glm', '智谱', 'z.ai', 'kimi', 'minimax', 'anthropic', 'openai', ...AGENT_KINDS],
@@ -934,13 +940,14 @@ export function SettingsPage() {
     const support = SECTIONS.filter((section) => section.id === 'support')
     const own = SECTIONS.filter((section) => section.id !== 'about' && section.id !== 'support' && (section.id !== 'notifications' || canNotify() || canShowRequestPopup()))
       .flatMap((section) => (section.id === 'agents' ? [
-        section, ...(accounts ? [ACCOUNTS_SECTION] : []), ...(modelProviders ? [MODEL_PROVIDERS_SECTION] : []), ...(run ? [RUN_SECTION] : []), ...(permissions ? [PERMISSIONS_SECTION] : []),
+        section, ...(accounts ? [ACCOUNTS_SECTION] : []), ...(modelProviders ? [MODEL_PROVIDERS_SECTION] : []), ...(run || permissions ? [RUN_PERMISSIONS_SECTION] : []),
         CONVERSATION_SECTION, ...(chatCommands ? [CHAT_COMMANDS_SECTION] : []), ...(sessionImport ? [SESSION_IMPORT_SECTION] : []),
         ...(skills ? [SKILLS_SECTION] : []), ...(mcp ? [MCP_SECTION] : [])
       ] : [section]))
     return [...own, ...(plugins ? [PLUGINS_SECTION] : []), ...sourceSections(sources ?? []), ...(knowledge ? [KNOWLEDGE_SECTION] : []), ...(browser ? [BROWSER_SECTION] : []), ...(phones ? [MOBILE_SECTION] : []), ...update, ...(storage ? [STORAGE_SECTION] : []), ...(backendLocation ? [BACKEND_LOCATION_SECTION] : []), ...support, ...(wireLog ? [DEBUG_SECTION] : [])]
   }, [sources, browser, phones, storage, knowledge, skills, mcp, sessionImport, accounts, modelProviders, chatCommands, wireLog, plugins, run, permissions, backendLocation, locale])
-  const activeId = useCore((state) => state.settingsSection) ?? SECTIONS[0]?.id ?? ''
+  const requestedId = useCore((state) => state.settingsSection)
+  const activeId = requestedId === 'run' ? 'permissions' : requestedId ?? SECTIONS[0]?.id ?? ''
   const [query, setQuery] = useState('')
   useEffect(() => { setQuery('') }, [activeId])
   const needle = query.trim().toLowerCase()

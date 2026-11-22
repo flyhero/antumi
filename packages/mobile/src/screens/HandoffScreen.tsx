@@ -1,15 +1,15 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { ActivityIndicator, Alert, Pressable, StyleSheet, TextInput, View } from 'react-native'
 import { ArrowUp } from 'lucide-react-native'
-import type { AgentKind, Conversation } from '@antumi/protocol'
-import { AgentPicker, StartOptionsGroup, modelText, useStartOptions } from '../components/pickers'
+import type { Conversation } from '@antumi/protocol'
+import { AgentPicker, StartOptionsGroup, modelText, useReadyAgents, useStartOptions } from '../components/pickers'
 import { QuotaWarning, useNow } from '../components/quota'
 import { Muted, Screen, confirmTap } from '../components/ui'
 import { t } from '../i18n'
 import { agentName } from '../labels'
 import { pop } from '../navigation'
 import { exhaustedText } from '../quota-text'
-import { handOff, readyAgents, useSession } from '../session'
+import { handOff, useSession } from '../session'
 import { radius, space, type, useTheme } from '../theme'
 
 // Whether a conversation's agent is the user's to change, as on the computer: saved agents, group
@@ -23,22 +23,12 @@ export function handOffable(conversation: Conversation): boolean {
 export function HandoffScreen({ id }: { id: string }) {
   const theme = useTheme()
   const conversation = useSession((s) => s.conversations[id])
-  const [agents, setAgents] = useState<AgentKind[] | null>(null)
-  const [agent, setAgent] = useState<AgentKind | null>(null)
+  const { agents, agent, setAgent, agentsFailed, retryAgents } = useReadyAgents(conversation?.agent)
   const options = useStartOptions(agent, { modelProvider: conversation?.modelProvider, mode: conversation?.chatOptions?.permissionMode })
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
   const usage = useSession((s) => s.usage)
   const now = useNow()
-  const from = conversation?.agent
-  useEffect(() => {
-    if (!from) return
-    void readyAgents().then((list) => {
-      const others = list.filter((each) => each !== from)
-      setAgents(others)
-      setAgent((current) => current ?? others[0] ?? null)
-    })
-  }, [from])
   if (!conversation) return <Screen title={t('handoff')} onBack={() => pop()}><Muted>{t('noConversations')}</Muted></Screen>
   // On a provider the agent's own account is not what it spends, so its limits say nothing.
   const exhausted = agent && !conversation.modelProvider ? exhaustedText(usage?.find((each) => each.agent === agent), modelText(options?.model), now) : null
@@ -85,7 +75,7 @@ export function HandoffScreen({ id }: { id: string }) {
         </View>
       </View>
       <Muted>{t('handoffHint', { agent: agentName(conversation.agent) })}</Muted>
-      <AgentPicker title={t('handOffTo')} agents={agents} agent={agent} onPick={setAgent} empty={t('noOtherAgents')} />
+      <AgentPicker title={t('handOffTo')} agents={agents} agent={agent} onPick={setAgent} failed={agentsFailed} onRetry={retryAgents} empty={t('noOtherAgents')} />
       {exhausted ? <QuotaWarning text={exhausted} /> : null}
       {agent && options ? <StartOptionsGroup agent={agent} options={options} /> : null}
     </Screen>

@@ -12,7 +12,7 @@ import { radius, space, type, useTheme } from '../theme'
 // A task to start later, from its page here or on the computer: written down now, run when ready.
 export function NewTaskScreen() {
   const theme = useTheme()
-  const { projects, project, agents, agent, setAgent } = useStartChoices()
+  const { projects, project, agents, agent, setAgent, agentsFailed, retryAgents } = useStartChoices()
   // The primary first; until the user picks, the project the choices start on.
   const [chosen, setChosen] = useState<string[] | null>(null)
   const picked = chosen ?? (project ? [project] : [])
@@ -57,7 +57,7 @@ export function NewTaskScreen() {
           multiline
         />
       </View>
-      <AgentPicker title={t('assignee')} agents={agents} agent={agent} onPick={setAgent} />
+      <AgentPicker title={t('assignee')} agents={agents} agent={agent} onPick={setAgent} failed={agentsFailed} onRetry={retryAgents} />
       <ListGroup title={t('project')}>
         <ListRow leading={<Folder size={20} color={theme.accent} strokeWidth={1.8} />} title={primary ? folderName(primary) : '…'}
           subtitle={picked.length > 1 ? t('alsoProjects', { names: picked.slice(1).map(folderName).join('、') }) : primary} onPress={() => setPicking(true)} />

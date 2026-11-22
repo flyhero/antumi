@@ -27,7 +27,7 @@ export async function applyViewport(webContents: WebContents, viewport: BrowserV
     await debug.sendCommand('Emulation.clearDeviceMetricsOverride')
   }
   await debug.sendCommand('Emulation.setTouchEmulationEnabled', { enabled: mobile, ...(mobile ? { maxTouchPoints: 5 } : {}) })
-  // An empty user agent lifts the override: the session's own, Chrome on this machine, again.
+  // An empty user agent lifts the override: the tab's own again, which follows the site it is on.
   await debug.sendCommand('Emulation.setUserAgentOverride', mobile
     ? { userAgent: mobileUserAgent(process.versions.chrome, device === 'phone'), platform: 'Linux armv8l', userAgentMetadata: clientHints(device === 'phone') }
     : { userAgent: '' })

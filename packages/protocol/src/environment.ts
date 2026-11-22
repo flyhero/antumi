@@ -50,11 +50,15 @@ export const AgentCliInstallation = z.object({
 })
 export type AgentCliInstallation = z.infer<typeof AgentCliInstallation>
 
+// A newer core can report agents this client cannot run; keep the checks it understands.
+const UnknownEnvironmentCheck = z.object({ tool: z.string().refine((tool) => !EnvironmentTool.safeParse(tool).success) }).transform(() => null)
+const UnknownCliInstallation = z.object({ agent: z.string().refine((agent) => !AgentKind.safeParse(agent).success) }).transform(() => null)
+
 export const Environment = z.object({
-  checks: z.array(EnvironmentCheck),
+  checks: z.array(EnvironmentCheck.or(UnknownEnvironmentCheck)).transform((checks) => checks.filter((check) => check !== null)),
   // Older cores only report checks for the two agents they can run.
   detectedAgents: z.array(DetectedAgent).optional(),
-  cliInstallations: z.array(AgentCliInstallation).optional(),
+  cliInstallations: z.array(AgentCliInstallation.or(UnknownCliInstallation)).transform((installations) => installations.filter((installation) => installation !== null)).optional(),
   // The directories looked in, in order: the PATH core starts agents with.
   searchPath: z.array(z.string()),
   checkedAt: z.number()

@@ -23,7 +23,7 @@ export interface PluginSessionRequest {
 function exposedHeaders(headers: ResponseHeaders): Record<string, string> {
   const result: Record<string, string> = {}
   for (const [name, value] of Object.entries(headers)) {
-    if (['content-type', 'location', 'retry-after'].includes(name.toLowerCase())) result[name.toLowerCase()] = Array.isArray(value) ? value[0] ?? '' : value
+    if (['content-type', 'location', 'retry-after', 'cf-mitigated', 'cf-ray', 'discourse-rate-limit-error-code'].includes(name.toLowerCase())) result[name.toLowerCase()] = Array.isArray(value) ? value[0] ?? '' : value
   }
   return result
 }

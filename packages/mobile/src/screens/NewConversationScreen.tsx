@@ -15,7 +15,7 @@ import { radius, space, type, useTheme } from '../theme'
 // and how it starts follow below.
 export function NewConversationScreen() {
   const theme = useTheme()
-  const { projects, project, agents, agent, setAgent } = useStartChoices()
+  const { projects, project, agents, agent, setAgent, agentsFailed, retryAgents } = useStartChoices()
   // The primary first; until the user picks, the project the choices start on.
   const [chosen, setChosen] = useState<string[] | null>(null)
   const picked = chosen ?? (project ? [project] : [])
@@ -89,7 +89,7 @@ export function NewConversationScreen() {
       </View>
       {worktree && worktreeOffered ? <Muted>{t(picked.length > 1 ? 'worktreesHint' : 'worktreeHint')}</Muted> : null}
       {worktree && !worktreeOffered ? <Muted>{t('worktreeNeedsGit')}</Muted> : null}
-      <AgentPicker title={t('agent')} agents={agents} agent={agent} onPick={setAgent} />
+      <AgentPicker title={t('agent')} agents={agents} agent={agent} onPick={setAgent} failed={agentsFailed} onRetry={retryAgents} />
       {exhausted ? <QuotaWarning text={exhausted} /> : null}
       {agent && options ? <StartOptionsGroup agent={agent} options={options} /> : null}
       {picking && projects ? <ProjectsSheet projects={projects} picked={picked} onChange={setChosen} onClose={() => setPicking(false)} /> : null}

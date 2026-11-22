@@ -4,7 +4,7 @@ import { Brain, Cpu, ShieldCheck } from 'lucide-react-native'
 import { defaultStartMode, startModes, type AgentKind, type ChatCatalog, type ChatPermissionMode } from '@antumi/protocol'
 import { AgentMark } from './agent-mark'
 import { ChoiceList, Sheet } from './sheet'
-import { ListGroup, ListRow, Muted, SectionLabel, tap } from './ui'
+import { Button, ListGroup, ListRow, Muted, SectionLabel, tap } from './ui'
 import { t } from '../i18n'
 import { agentName, effortName, folderName, modeName } from '../labels'
 import { agentCatalog, readyAgents, recentProjects } from '../session'
@@ -14,28 +14,45 @@ import { radius, space, type, useTheme } from '../theme'
 // recent projects (core takes no other path from a phone). Each starts on the first offered.
 export function useStartChoices() {
   const [projects, setProjects] = useState<string[] | null>(null)
-  const [agents, setAgents] = useState<AgentKind[] | null>(null)
   const [project, setProject] = useState<string | null>(null)
-  const [agent, setAgent] = useState<AgentKind | null>(null)
+  const choices = useReadyAgents()
   useEffect(() => {
     void recentProjects().then((list) => {
       setProjects(list)
       setProject((current) => current ?? list[0] ?? null)
     })
-    void readyAgents().then((list) => {
-      setAgents(list)
-      setAgent((current) => current ?? list[0] ?? null)
-    })
   }, [])
-  return { projects, project, setProject, agents, agent, setAgent }
+  return { projects, project, setProject, ...choices }
 }
 
-export function AgentPicker({ title, agents, agent, onPick, empty = t('noAgents') }: { title: string; agents: readonly AgentKind[] | null; agent: AgentKind | null; onPick: (agent: AgentKind) => void; empty?: string }) {
+export function useReadyAgents(exclude?: AgentKind) {
+  const [agents, setAgents] = useState<AgentKind[] | null>(null)
+  const [agent, setAgent] = useState<AgentKind | null>(null)
+  const [agentsFailed, setFailed] = useState(false)
+  const [attempt, setAttempt] = useState(0)
+  useEffect(() => {
+    let live = true
+    setAgents(null)
+    setAgent(null)
+    setFailed(false)
+    void readyAgents().then((list) => {
+      if (!live) return
+      setFailed(list === null)
+      const offered = list?.filter((each) => each !== exclude) ?? null
+      setAgents(offered)
+      setAgent(offered?.[0] ?? null)
+    })
+    return () => { live = false }
+  }, [exclude, attempt])
+  return { agents, agent, setAgent, agentsFailed, retryAgents: () => setAttempt((current) => current + 1) }
+}
+
+export function AgentPicker({ title, agents, agent, onPick, failed = false, onRetry, empty = t('noAgents') }: { title: string; agents: readonly AgentKind[] | null; agent: AgentKind | null; onPick: (agent: AgentKind) => void; failed?: boolean; onRetry?: () => void; empty?: string }) {
   const theme = useTheme()
   return (
     <View style={styles.section}>
       <SectionLabel title={title} />
-      {agents?.length === 0 ? <Muted>{empty}</Muted> : null}
+      {failed ? <><Muted>{t('agentsUnavailable')}</Muted>{onRetry ? <Button label={t('retry')} onPress={onRetry} /> : null}</> : agents?.length === 0 ? <Muted>{empty}</Muted> : null}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.agentScroll} contentContainerStyle={styles.agents}>
         {agents?.map((kind) => {
           const selected = kind === agent

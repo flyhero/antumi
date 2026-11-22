@@ -34,4 +34,24 @@ describe('createRpcClient', () => {
 
     expect(seen).toEqual(['x'])
   })
+
+  it('loads known agents from a newer core in both environment results and notifications', async () => {
+    const sent: string[] = []
+    const client = createRpcClient((frame) => sent.push(frame))
+    const check = { tool: 'codex', status: 'ok', version: '1.0.0', path: '/bin/codex', signedIn: true }
+    const environment = {
+      checks: [check, { ...check, tool: 'future-agent' }],
+      cliInstallations: [{ agent: 'future-agent', command: 'install future', shell: 'bash' }],
+      searchPath: [], checkedAt: 0
+    }
+    const result = client.call('system.environment', {})
+    const request = JSON.parse(sent[0]!)
+    client.receive(JSON.stringify({ jsonrpc: '2.0', id: request.id, result: environment }))
+    const expected = { ...environment, checks: [check], cliInstallations: [] }
+    await expect(result).resolves.toEqual(expected)
+    const seen: unknown[] = []
+    client.on('system.environmentChanged', ({ environment }) => seen.push(environment))
+    client.receive(JSON.stringify({ jsonrpc: '2.0', method: 'system.environmentChanged', params: { environment } }))
+    expect(seen).toEqual([expected])
+  })
 })

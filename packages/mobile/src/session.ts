@@ -8,7 +8,6 @@ import {
   AgentKind,
   ChatItem,
   Conversation,
-  RpcError,
   USAGE_WINDOW_KINDS,
   appendChatText,
   base64Url,
@@ -30,6 +29,7 @@ import {
 } from '@antumi/protocol'
 import { connectMobile, MobileConnectError, type MobileConnection, type MobileWelcome, type NoiseKeyPair } from '@antumi/protocol/mobile'
 import { t } from './i18n'
+import { requestFailure as failure } from './request-failure'
 import { dropCache, loadComputers, loadSettings, phoneKey, readCache, saveComputers, saveSettings, writeCache, type Computer, type Settings } from './storage'
 
 // The phone's one link to a computer at a time, and what it holds of it. After every connect it
@@ -122,11 +122,6 @@ export function viewsOnly(): boolean {
 
 function say(text: string): void {
   useSession.setState({ notice: text })
-}
-
-function failure(error: unknown): string {
-  if (error instanceof RpcError) return error.reason === 'chat-request-gone' ? t('requestGone') : t('error', { message: error.message })
-  return t('error', { message: error instanceof Error ? error.message : String(error) })
 }
 
 async function updateComputers(change: (computers: Computer[]) => Computer[]): Promise<void> {
@@ -462,12 +457,12 @@ export async function isGitProject(path: string): Promise<boolean | null> {
   }
 }
 
-export async function readyAgents(): Promise<AgentKind[]> {
+export async function readyAgents(): Promise<AgentKind[] | null> {
   const environment = await call('system.environment', {})
   return environment?.checks.flatMap((check) => {
     const agent = AgentKind.safeParse(check.tool)
     return check.status === 'ok' && agent.success ? [agent.data] : []
-  }) ?? []
+  }) ?? null
 }
 
 // The way the desktop opens one: made without starting, started, then the first message.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { blocksEverything, environmentProblems, type EnvironmentCheck } from './environment'
+import { Environment, blocksEverything, environmentProblems, type EnvironmentCheck } from './environment'
 
 const check = (tool: EnvironmentCheck['tool'], status: EnvironmentCheck['status'], signedIn: boolean | null = null): EnvironmentCheck => ({
   tool,
@@ -7,6 +7,32 @@ const check = (tool: EnvironmentCheck['tool'], status: EnvironmentCheck['status'
   version: status === 'ok' ? '1.0.0' : null,
   path: status === 'missing' ? null : `/usr/bin/${tool}`,
   signedIn
+})
+
+describe('environment compatibility', () => {
+  const known = { checks: [check('git', 'ok'), check('codex', 'ok', true)], checkedAt: 0, searchPath: ['/usr/bin'] }
+
+  it('keeps known agents when a newer core includes unknown checks and installations', () => {
+    const installation = { agent: 'codex', command: 'npm install -g @openai/codex', shell: 'bash' }
+    const detected = { id: 'future-agent', name: 'Future Agent', locations: [] }
+    expect(Environment.parse({
+      ...known,
+      checks: [...known.checks, { ...check('codex', 'ok'), tool: 'future-agent' }],
+      cliInstallations: [installation, { agent: 'future-agent', command: 'future install', shell: 'bash' }],
+      detectedAgents: [detected]
+    })).toEqual({ ...known, cliInstallations: [installation], detectedAgents: [detected] })
+  })
+
+  it('still accepts an older core without the optional inventory', () => {
+    expect(Environment.parse(known)).toEqual(known)
+  })
+
+  it('does not hide malformed entries for known agents', () => {
+    expect(Environment.safeParse({ ...known, checks: [{ ...check('codex', 'ok'), status: 'future-status' }] }).success).toBe(false)
+    expect(Environment.safeParse({ ...known, cliInstallations: [{ agent: 'codex', command: '', shell: 'bash' }] }).success).toBe(false)
+    expect(Environment.safeParse({ ...known, checks: [{}] }).success).toBe(false)
+    expect(Environment.safeParse({ ...known, cliInstallations: [{ agent: 7 }] }).success).toBe(false)
+  })
 })
 
 describe('environmentProblems', () => {

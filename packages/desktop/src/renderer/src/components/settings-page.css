@@ -230,6 +230,11 @@
 .settings-list-toolbar > .input { flex: 1; min-width: 160px; max-width: 400px; }
 .settings-list-count { margin: 0 0 12px; font-size: 12px; color: var(--text-muted); }
 .settings-list-toolbar > .settings-list-count { margin: 0; }
+.plugin-settings-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin: 16px 0 20px; }
+.plugin-settings-toolbar .segmented { max-width: 100%; flex-wrap: wrap; }
+.plugin-settings-toolbar > .button { display: inline-flex; align-items: center; gap: 8px; }
+.plugin-settings-toolbar > .button svg { width: 16px; height: 16px; }
+.plugin-install-panel > .settings-subsection { margin-bottom: var(--settings-section-gap); }
 .settings-filter-empty { display: flex; align-items: center; gap: 16px; padding: 24px 0; color: var(--text-muted); }
 .settings-filter-empty p { margin: 0; }
 .command-library-row { padding: 20px 0; border-bottom: 1px solid var(--border); }

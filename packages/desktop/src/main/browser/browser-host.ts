@@ -1,6 +1,6 @@
 import { mkdir, rm } from 'node:fs/promises'
 import path from 'node:path'
-import { app, net, session, shell, WebContentsView, type DownloadItem, type Event, type WebContents } from 'electron'
+import { app, net, session, shell, WebContentsView, type DownloadItem, type Event, type Session, type WebContents } from 'electron'
 import { chromium } from 'playwright-core'
 import { BROWSER_HOST_PROTOCOL_VERSION, writePrivateJson, type BrowserHostResult } from '@antumi/protocol/node'
 import { BROWSER_VIEWPORT, normalizeBrowserUrl, type BrowserNavigateTo, type BrowserStatus, type BrowserViewport } from '@antumi/protocol'
@@ -10,7 +10,7 @@ import { HostGate } from './host-gate'
 import { startHostServer, type HostServer } from './host-server'
 import { startTabProxy } from './tab-cdp-proxy'
 import { TabRegistry, type Tab } from './tabs'
-import { chromeUserAgent } from './user-agent'
+import { chromeUserAgent, wantsChromeUserAgent } from './user-agent'
 import { applyViewport } from './viewport'
 import type { WindowSlot } from './window-slot'
 import { bindBrowserShortcuts } from './browser-shortcuts'
@@ -27,6 +27,30 @@ const READY: BrowserStatus = { state: 'ready', running: true }
 
 type Navigation = BrowserHostResult<'navigate'>
 
+// A session's two names for itself: its own (Electron's), and Chrome's for Google (see
+// wantsChromeUserAgent). Requests to Google say Chrome here; a tab's pages there do so through
+// followSiteUserAgent. Set up once a session: Electron keeps one header listener per session.
+const sessionAgents = new WeakMap<Session, { own: string; chrome: string }>()
+function siteUserAgents(target: Session): { own: string; chrome: string } {
+  const known = sessionAgents.get(target)
+  if (known) return known
+  const own = target.getUserAgent()
+  const agents = { own, chrome: chromeUserAgent(own, process.versions.chrome) }
+  sessionAgents.set(target, agents)
+  target.webRequest.onBeforeSendHeaders({ urls: ['*://google.com/*', '*://*.google.com/*', '*://accounts.youtube.com/*'] }, (request, callback) => {
+    callback({ requestHeaders: { ...request.requestHeaders, 'User-Agent': agents.chrome } })
+  })
+  return agents
+}
+
+// What a page reads as navigator.userAgent follows the site it is on, set as each navigation starts.
+function followSiteUserAgent(contents: WebContents): void {
+  const agents = siteUserAgents(contents.session)
+  const pick = (url: string) => contents.setUserAgent(wantsChromeUserAgent(url) ? agents.chrome : agents.own)
+  contents.on('did-start-navigation', (details) => { if (details.isMainFrame && !details.isSameDocument) pick(details.url) })
+  contents.on('did-redirect-navigation', (details) => { if (details.isMainFrame) pick(details.url) })
+}
+
 export type BrowserHost = {
   server: HostServer
   viewOf(tabId: string): WebContentsView | null
@@ -40,7 +64,7 @@ export type BrowserHost = {
 // confirmLeave: asks the user, there and then, whether to leave a page that asks before it is left.
 export async function startBrowserHost(slot: WindowSlot, hostFile: string, confirmLeave: () => boolean): Promise<BrowserHost> {
   const tabSession = session.fromPartition(PARTITION)
-  tabSession.setUserAgent(chromeUserAgent(tabSession.getUserAgent(), process.versions.chrome))
+  siteUserAgents(tabSession)
   const views = new Map<string, WebContentsView>()
   const captures = new Map<string, BrowserCapture>()
   const pluginPartitions = new Map<string, string>()
@@ -101,6 +125,7 @@ export async function startBrowserHost(slot: WindowSlot, hostFile: string, confi
     view.setBounds({ x: 0, y: 0, ...BROWSER_VIEWPORT })
     const contents = view.webContents
     gate.install(contents.session)
+    followSiteUserAgent(contents)
     await contents.loadURL('about:blank')
     let proxy = await startTabProxy(contents)
     let browser = await chromium.connectOverCDP(proxy.endpoint).catch((error: unknown) => {
@@ -248,7 +273,7 @@ export async function startBrowserHost(slot: WindowSlot, hostFile: string, confi
     'plugin.session': async ({ key, site, request }) => {
       const partition = `persist:antumi-plugin-${key}`
       const current = session.fromPartition(partition)
-      current.setUserAgent(chromeUserAgent(current.getUserAgent(), process.versions.chrome))
+      siteUserAgents(current)
       if (request.action === 'disconnect') {
         for (const controller of pluginRequests.get(key) ?? []) controller.abort()
         await Promise.all(registry.all().filter((tab) => pluginPartitions.get(tab.id) === partition).map((tab) => tab.attachment.close()))

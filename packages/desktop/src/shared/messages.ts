@@ -6766,6 +6766,11 @@ export const MESSAGES = {
     "zh": "已安装",
     "en": "Installed"
   },
+  "PluginSettings.installedCount": {"zh": "已安装 · {count}", "en": "Installed · {count}"},
+  "PluginSettings.manualInstall": {"zh": "手动安装", "en": "Manual install"},
+  "PluginSettings.searchRecommended": {"zh": "搜索插件名称或描述", "en": "Search plugin names or descriptions"},
+  "PluginSettings.filteredCount": {"zh": "{count} / {total} 个插件", "en": "{count} / {total} plugins"},
+  "PluginSettings.noMatchingPlugins": {"zh": "没有匹配的插件", "en": "No matching plugins"},
   "PluginSettings.installedPlugins": {
     "zh": "已安装的插件",
     "en": "Installed plugins"
@@ -7966,6 +7971,10 @@ export const MESSAGES = {
     "zh": "界面",
     "en": "Interface"
   },
+  "SettingsPage.workspace": {
+    "zh": "工作区",
+    "en": "Workspace"
+  },
   "SettingsPage.appearance": {
     "zh": "外观",
     "en": "Appearance"
@@ -8111,6 +8120,8 @@ export const MESSAGES = {
     "en": "Approval"
   },
   "SettingsPage.runDescription": {"zh": "同时运行的 Agent 数量，以及 Agent 工作时是否保持电脑唤醒。", "en": "How many agents run at once, and whether the computer stays awake while they work."},
+  "SettingsPage.runAndPermissions": {"zh": "运行与权限", "en": "Run & permissions"},
+  "SettingsPage.runAndPermissionsDescription": {"zh": "并发上限、保持电脑唤醒、预约运行权限，以及浏览器和记录访问。", "en": "Concurrency limits, keeping the computer awake, scheduled run permissions, and access to your browser and Antumi records."},
   "SettingsPage.perAgentLimits": {"zh": "各 Agent 的上限", "en": "Per-agent limits"},
   "SettingsPage.adjust": {"zh": "调整", "en": "Adjust"},
   "SettingsPage.permissions": {"zh": "权限", "en": "Permissions"},

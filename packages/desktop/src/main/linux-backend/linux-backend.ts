@@ -143,8 +143,8 @@ async function install(target: LinuxTarget, place: LinuxBackendPlace, folder: st
 }
 
 // Starts one of them the way launch() in backend.ts does: so that quitting the app never touches it.
-export function launchLinuxBackend(target: LinuxTarget, place: LinuxBackendPlace, name: 'daemon' | 'core'): void {
-  target.launch(name, [place.node, `${place.dir}/${name}.mjs`], { PATH: place.path, ANTUMI_MCP_JS: `${place.dir}/mcp.mjs` })
+export async function launchLinuxBackend(target: LinuxTarget, place: LinuxBackendPlace, name: 'daemon' | 'core'): Promise<void> {
+  await target.launch(name, [place.node, `${place.dir}/${name}.mjs`], { PATH: place.path, ANTUMI_MCP_JS: `${place.dir}/mcp.mjs` })
 }
 
 // The core serving that machine's home, if one answers there. Null when none does or it could not
@@ -157,7 +157,7 @@ export async function linuxCoreEndpoint(target: LinuxTarget, place: LinuxBackend
 // `keepNewer` for a machine several apps reach, whose newer daemon stays (docs/REMOTE.md 版本).
 export async function replaceOldLinuxDaemon(target: LinuxTarget, place: LinuxBackendPlace, version: string, keepNewer = false): Promise<void> {
   const { answer } = await control(target, place, Started, ['replace-daemon', version, ...(keepNewer ? ['--keep-newer'] : [])])
-  for (const name of answer?.start ?? []) launchLinuxBackend(target, place, name)
+  for (const name of answer?.start ?? []) await launchLinuxBackend(target, place, name)
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -190,7 +190,11 @@ export async function ensureLinuxBackend(options: LinuxBackendOptions): Promise<
 
   const prepared = await control(target, place, Started, ['prepare', options.version, ...(options.keepNewer ? ['--keep-newer'] : [])])
   if (!prepared.answer) return { ok: false, problem: { kind: 'start', detail: said(prepared.result) } }
-  for (const name of prepared.answer.start) launchLinuxBackend(target, place, name)
+  try {
+    for (const name of prepared.answer.start) await launchLinuxBackend(target, place, name)
+  } catch (error) {
+    return { ok: false, problem: { kind: 'start', detail: String(error) } }
+  }
 
   const launched = Date.now()
   const until = launched + (options.startWaitMs ?? START_WAIT_MS)

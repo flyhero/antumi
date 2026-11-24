@@ -30,5 +30,5 @@ export type LinuxTarget = {
   spawn(argv: readonly string[], options?: { env?: LinuxEnv }): ChildProcess
   // Starts daemon or core so that it outlives the app and whatever reached the machine, its output
   // in ~/.antumi/logs/<name>.log there.
-  launch(name: 'daemon' | 'core', argv: readonly string[], env: LinuxEnv): void
+  launch(name: 'daemon' | 'core', argv: readonly string[], env: LinuxEnv): void | Promise<void>
 }

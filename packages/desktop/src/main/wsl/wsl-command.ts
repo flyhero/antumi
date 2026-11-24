@@ -3,6 +3,7 @@ import { statSync } from 'node:fs'
 import path from 'node:path'
 import { envValue } from '@antumi/protocol/node'
 import type { LinuxEnv, LinuxResult } from '../linux-backend/linux-target'
+import { planWslLaunch } from './wsl-launch'
 
 export type { LinuxEnv }
 
@@ -41,11 +42,6 @@ export type WslRunOptions = {
 
 export type WslSpawnOptions = {
   env?: LinuxEnv
-  // A process that outlives the app, with no stdio: a detached wsl.exe runs its program but
-  // drops what it prints, into a file handed to it too, so the program redirects its own output
-  // inside the distro. Without it the streams are piped, and carry bytes as they are (no encoding
-  // is set on them).
-  detached?: boolean
   host?: WslHost
 }
 
@@ -110,6 +106,11 @@ export function runWsl(args: readonly string[], options: Omit<WslRunOptions, 'en
   const host = options.host ?? nodeWslHost
   const file = wslExecutable(host)
   if (!file) return Promise.resolve({ code: null, stdout: '', stderr: 'wsl.exe not found', timedOut: false })
+  return runWindows(file, args, options)
+}
+
+function runWindows(file: string, args: readonly string[], options: Omit<WslRunOptions, 'env'>, launcher = false): Promise<WslResult> {
+  const host = options.host ?? nodeWslHost
   return new Promise((resolve) => {
     const out: Buffer[] = []
     const err: Buffer[] = []
@@ -136,6 +137,14 @@ export function runWsl(args: readonly string[], options: Omit<WslRunOptions, 'en
     child.stderr?.on('data', (chunk: Buffer) => err.push(chunk))
     child.on('error', (error) => settle(null, false, String(error)))
     child.on('close', (code) => settle(code, false))
+    if (launcher) child.on('exit', (code) => {
+      if (code !== 0) return
+      // wsl.exe inherits these pipes: `close` would wait for the backend, not the launcher.
+      child.stdin?.destroy()
+      child.stdout?.destroy()
+      child.stderr?.destroy()
+      settle(0, false)
+    })
     // A program that exits without reading its input must not surface as an EPIPE crash.
     child.stdin?.on('error', () => {})
     child.stdin?.end(options.input)
@@ -148,14 +157,23 @@ export async function runInDistro(distro: string | null, argv: readonly string[]
   return runWsl(distroArgs(distro, argv, env), rest)
 }
 
-// A long-lived program in the distro. Detached it is the backend's launch: in no window, with no
-// stdio (the caller unrefs it, as launch() in backend.ts does). Otherwise a piped child,
-// binary-clean. Throws `wsl-not-found` when there is no wsl.exe to start.
+// A piped, binary-clean child for the tunnel. Backend launches go through launchInDistro.
 export function spawnInDistro(distro: string | null, argv: readonly string[], options: WslSpawnOptions = {}): ChildProcess {
   const host = options.host ?? nodeWslHost
   const file = wslExecutable(host)
   if (!file) throw new Error('wsl-not-found')
   const args = distroArgs(distro, argv, options.env)
-  if (options.detached) return host.spawn(file, args, { ...baseOptions(host), detached: true, stdio: 'ignore' })
   return host.spawn(file, args, { ...baseOptions(host), stdio: ['pipe', 'pipe', 'pipe'] })
+}
+
+// Wait only for the hidden launcher, not the Linux program. Its stdio is unused: the backend
+// redirects output inside the distro, while wsl.exe stays to keep the distro running.
+export async function launchInDistro(distro: string | null, argv: readonly string[], options: WslSpawnOptions = {}): Promise<void> {
+  const host = options.host ?? nodeWslHost
+  const file = wslExecutable(host)
+  if (!file) throw new Error('wsl-not-found')
+  const launch = planWslLaunch(file, distroArgs(distro, argv, options.env), systemRoot(host))
+  if (!host.isFile(launch.file)) throw new Error('wsl-launcher-not-found')
+  const result = await runWindows(launch.file, launch.args, { host, input: launch.input }, true)
+  if (result.code !== 0) throw new Error(`wsl-launch: ${result.timedOut ? 'timed out' : result.stderr.trim() || 'launcher failed'}`)
 }

@@ -1,8 +1,7 @@
 import type { LinuxTarget } from '../linux-backend/linux-target'
-import { nodeWslHost, runInDistro, spawnInDistro, type WslHost } from './wsl-command'
+import { launchInDistro, nodeWslHost, runInDistro, spawnInDistro, type WslHost } from './wsl-command'
 
-// Runs the program with its output in the distro's own logs: a detached wsl.exe hands a program no
-// stdio. From the home folder, not the Windows one wsl.exe would start it in. $1 names the log.
+// The background program writes its own logs, from the distro's home rather than Windows' cwd.
 const LAUNCH_SCRIPT = [
   'logs="$HOME/.antumi/logs"',
   'mkdir -p -m 700 "$logs"',
@@ -20,7 +19,7 @@ export function wslTarget(distro: string | null, host: WslHost = nodeWslHost): L
     spawn: (argv, options = {}) => spawnInDistro(distro, argv, { ...options, host }),
     // Its wsl.exe stays for as long as the program runs, which is what keeps the distro up.
     launch(name, argv, env) {
-      spawnInDistro(distro, ['/bin/sh', '-c', LAUNCH_SCRIPT, 'sh', name, ...argv], { host, detached: true, env }).unref()
+      return launchInDistro(distro, ['/bin/sh', '-c', LAUNCH_SCRIPT, 'sh', name, ...argv], { host, env })
     }
   }
 }

@@ -18,7 +18,7 @@ import { join } from 'node:path'
 import { coreUrl, PROTOCOL_VERSION, type CoreEndpoint } from '@antumi/protocol'
 import { connectTunnelHelper } from '@antumi/protocol/node'
 import { ensureWslBackend, replaceOldWslDaemon, wslCoreEndpoint, type WslBackendPlace } from './wsl-backend'
-import { decodeWslOutput, runInDistro, runWsl, spawnInDistro, wslExecutable } from './wsl-command'
+import { decodeWslOutput, launchInDistro, runInDistro, runWsl, spawnInDistro, wslExecutable } from './wsl-command'
 import { isDistroRunning, listDistros, parseDistroList } from './wsl-distros'
 import { findLinuxExecutable, loginEnvironment } from './wsl-login-environment'
 
@@ -44,7 +44,7 @@ function launchProgram(seconds: number): string[] {
 // --launch starts that stand-in the way the app starts its backend and leaves at once; a later
 // --check-launch, from another process, says whether it and its distro outlived this one.
 async function launch(): Promise<void> {
-  spawnInDistro(distro, launchProgram(901), { detached: true }).unref()
+  await launchInDistro(distro, launchProgram(901))
   await sleep(3000)
   report('launched', (await runInDistro(distro, ['/usr/bin/pgrep', '-f', 'sleep 901'])).code === 0)
 }
@@ -86,6 +86,24 @@ async function main(): Promise<void> {
   const windowsLikePath = '/mnt/c/Program Files (x86)/Some Tool/bin:/usr/local/bin:/usr/bin:/bin'
   const env = await runInDistro(distro, ['/usr/bin/printenv', 'PATH', 'ANTUMI_SMOKE'], { env: { PATH: windowsLikePath, ANTUMI_SMOKE: 'v a"l $x' } })
   report('env with spaces and quotes arrives unchanged', env.stdout === `${windowsLikePath}\nv a"l $x\n`, JSON.stringify(env))
+
+  const folder = (await runInDistro(distro, ['/bin/mktemp', '-d', '/tmp/antumi-wsl-launch-XXXXXX'])).stdout.trim()
+  if (!folder.startsWith('/tmp/antumi-wsl-launch-')) throw new Error('could not create launch test folder')
+  try {
+    const file = `${folder}/arguments`
+    const argv = [...tricky, 'line one\nline two', 'slash before quote\\"', 'space and slash \\']
+    const value = '中文 "\' $HOME %PATH% ; | &'
+    await launchInDistro(distro, ['/bin/sh', '-c', 'file=$1; shift; printf \'%s\\n\' "$@" > "$file"; printf \'%s\\n\' "$PATH" "$ANTUMI_SMOKE" >> "$file"', 'sh', file, ...argv], { env: { PATH: windowsLikePath, ANTUMI_SMOKE: value } })
+    let received = ''
+    for (let retry = 0; retry < 20; retry++) {
+      received = (await runInDistro(distro, ['/bin/cat', file])).stdout
+      if (received) break
+      await sleep(100)
+    }
+    report('background launch keeps arguments and env unchanged', received === `${[...argv, windowsLikePath, value].join('\n')}\n`, JSON.stringify(received))
+  } finally {
+    await runInDistro(distro, ['/bin/rm', '-r', '--', folder])
+  }
 
   const seven = await runInDistro(distro, ['/bin/sh', '-c', 'exit 7'])
   report('exit code passes through', seven.code === 7, String(seven.code))
@@ -131,11 +149,11 @@ async function main(): Promise<void> {
   report('piped child is binary-clean for 2MB', sha(Buffer.concat(back)) === sha(binary), `${Buffer.concat(back).length} bytes back`)
 
   note('HOME under --exec', (await runInDistro(distro, ['/usr/bin/printenv', 'HOME'])).stdout.trim())
-  // The backend's launch: detached, no stdio, its output redirected inside the distro.
-  spawnInDistro(distro, launchProgram(47), { detached: true }).unref()
+  // The backend's hidden launch, with its output redirected inside the distro.
+  await launchInDistro(distro, launchProgram(47))
   await sleep(2500)
   const said = (await runInDistro(distro, ['/bin/sh', '-c', 'cat "$HOME/.antumi-smoke/launch-47.log"'])).stdout
-  report('detached launch runs and logs in the distro', said.includes('started /') && (await runInDistro(distro, ['/usr/bin/pgrep', '-f', 'sleep 47'])).code === 0, JSON.stringify(said))
+  report('hidden launch runs and logs in the distro', said.includes('started /') && (await runInDistro(distro, ['/usr/bin/pgrep', '-f', 'sleep 47'])).code === 0, JSON.stringify(said))
   await runInDistro(distro, ['/usr/bin/pkill', '-f', 'sleep 47'])
 
   if (tunnelFile) await tunnel(tunnelFile)
@@ -181,7 +199,7 @@ async function backend(folder: string): Promise<void> {
 
   // Folders as other builds would have left them: one nothing runs from, one a process still does.
   await runInDistro(distro, ['/bin/sh', '-c', 'root="$HOME/.antumi/backend"; mkdir -p "$root/0.0.1-idle" "$root/0.0.2-busy"; : > "$root/0.0.1-idle/core.mjs"; : > "$root/0.0.2-busy/daemon.mjs"'])
-  spawnInDistro(distro, ['/bin/sh', '-c', 'exec tail -f /dev/null "$HOME/.antumi/backend/0.0.2-busy/daemon.mjs"'], { detached: true }).unref()
+  await launchInDistro(distro, ['/bin/sh', '-c', 'exec tail -f /dev/null "$HOME/.antumi/backend/0.0.2-busy/daemon.mjs"'])
   await sleep(1500)
 
   const began = Date.now()

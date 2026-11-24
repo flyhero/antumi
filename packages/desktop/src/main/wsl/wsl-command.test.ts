@@ -1,7 +1,7 @@
 import { ChildProcess, type SpawnOptions } from 'node:child_process'
 import { PassThrough } from 'node:stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { decodeWslOutput, distroArgs, runInDistro, runWsl, spawnInDistro, wslExecutable, type WslHost } from './wsl-command'
+import { decodeWslOutput, distroArgs, launchInDistro, runInDistro, runWsl, spawnInDistro, wslExecutable, type WslHost } from './wsl-command'
 
 class FakeChild extends ChildProcess {
   signals: (NodeJS.Signals | number | undefined)[] = []
@@ -35,7 +35,7 @@ function windowsHost(env: NodeJS.ProcessEnv = { SYSTEMROOT: 'D:\\Win', Path: 'C:
   const host: WslHost = {
     platform: 'win32',
     env,
-    isFile: (file) => file === 'D:\\Win\\System32\\wsl.exe' || file === 'C:\\Windows\\System32\\wsl.exe',
+    isFile: (file) => ['D:\\Win', 'C:\\Windows'].some((root) => file === `${root}\\System32\\wsl.exe` || file === `${root}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe`),
     spawn(file, args, options) {
       const child = new FakeChild()
       spawned.push({ file, args, options, child })
@@ -184,23 +184,69 @@ describe('runWsl', () => {
   })
 })
 
-describe('spawnInDistro', () => {
-  it('launches detached and window-less with no stdio', () => {
+describe('launchInDistro', () => {
+  afterEach(() => vi.useRealTimers())
+
+  it('waits for a hidden launcher with the distro arguments only on stdin', async () => {
     const { host, last } = windowsHost()
-    const child = spawnInDistro('Ubuntu', ['node', '/home/me/.antumi/backend/1.0.0/core.mjs'], { host, env: { PATH: '/home/me/.nvm/bin:/usr/bin' }, detached: true })
+    let finished = false
+    const started = launchInDistro('Ubuntu', ['node', '/home/me/.antumi/backend/1.0.0/core.mjs'], { host, env: { PATH: '/home/me/.nvm/bin:/usr/bin' } }).then(() => { finished = true })
     const { file, args, options } = last()
-    expect(child).toBe(last().child)
-    expect(file).toBe('D:\\Win\\System32\\wsl.exe')
-    expect(args).toEqual(['-d', 'Ubuntu', '--exec', '/usr/bin/env', 'PATH=/home/me/.nvm/bin:/usr/bin', 'node', '/home/me/.antumi/backend/1.0.0/core.mjs'])
+    expect(file).toBe('D:\\Win\\System32\\WindowsPowerShell\\v1.0\\powershell.exe')
+    expect(args.slice(0, 3)).toEqual(['-NoProfile', '-NonInteractive', '-EncodedCommand'])
+    await flush()
+    expect(finished).toBe(false)
+    expect(JSON.parse(Buffer.concat(last().child.input).toString())).toEqual({
+      file: 'D:\\Win\\System32\\wsl.exe',
+      args: ['-d', 'Ubuntu', '--exec', '/usr/bin/env', 'PATH=/home/me/.nvm/bin:/usr/bin', 'node', '/home/me/.antumi/backend/1.0.0/core.mjs'],
+      cwd: 'D:\\Win'
+    })
     expect(options).toEqual({
       cwd: 'D:\\Win',
       env: { SYSTEMROOT: 'D:\\Win', Path: 'C:\\bin', WSL_UTF8: '1' },
       windowsHide: true,
-      detached: true,
-      stdio: 'ignore'
+      stdio: ['pipe', 'pipe', 'pipe']
     })
+    last().child.emit('exit', 0, null)
+    await started
+    expect(finished).toBe(true)
+    expect(last().child.stdout?.destroyed).toBe(true)
+    expect(last().child.stderr?.destroyed).toBe(true)
   })
 
+  it('keeps metacharacters, Unicode, empty arguments and multiline scripts as data', async () => {
+    const { host, last } = windowsHost()
+    const argv = ['printf', '', '中文', 'a"b', 'trail\\', '$HOME', '%PATH%', "'; Stop-Process -Id $PID; '", 'one\ntwo']
+    const result = launchInDistro(null, argv, { host, env: { ANTUMI_TEST: 'value " $ % \n' } })
+    await flush()
+    expect(JSON.parse(Buffer.concat(last().child.input).toString()).args).toEqual(distroArgs(null, argv, { ANTUMI_TEST: 'value " $ % \n' }))
+    expect(last().args.join(' ')).not.toContain('Stop-Process')
+    expect(last().args.join(' ')).not.toContain('ANTUMI_TEST')
+    last().child.finish(0)
+    await result
+  })
+
+  it('reports launcher errors instead of waiting for a backend that was never launched', async () => {
+    const { host, last } = windowsHost()
+    const failed = launchInDistro('Ubuntu', ['node', 'core.mjs'], { host })
+    last().child.finish(1, '', 'Access is denied\r\n')
+    await expect(failed).rejects.toThrow('wsl-launch: Access is denied')
+  })
+
+  it('rejects a missing launcher and times out a stuck one', async () => {
+    const { host } = windowsHost()
+    await expect(launchInDistro('Ubuntu', ['true'], { host: { ...host, isFile: (file) => file.endsWith('wsl.exe') } })).rejects.toThrow('wsl-launcher-not-found')
+    vi.useFakeTimers()
+    const stuck = windowsHost()
+    const result = launchInDistro('Ubuntu', ['true'], { host: stuck.host })
+    const rejected = expect(result).rejects.toThrow('wsl-launch: timed out')
+    vi.advanceTimersByTime(15_000)
+    await rejected
+    expect(stuck.last().child.signals).toEqual([undefined])
+  })
+})
+
+describe('spawnInDistro', () => {
   it('pipes a tunnel with no encoding on its streams', () => {
     const { host, last } = windowsHost()
     spawnInDistro(null, ['node', 'tunnel.mjs'], { host })

@@ -59,8 +59,8 @@ export async function findWslBackendPlace(distro: string, folder: string, host: 
   return { ok: true, place: { ...found.place, distro: entry.name } }
 }
 
-export function launchInWsl(place: WslBackendPlace, name: 'daemon' | 'core', host: WslHost = nodeWslHost): void {
-  launchLinuxBackend(wslTarget(place.distro, host), place, name)
+export function launchInWsl(place: WslBackendPlace, name: 'daemon' | 'core', host: WslHost = nodeWslHost): Promise<void> {
+  return launchLinuxBackend(wslTarget(place.distro, host), place, name)
 }
 
 // The core serving the distro's home, if one answers there. Null when none does or it could not

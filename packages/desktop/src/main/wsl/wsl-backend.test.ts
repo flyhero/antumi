@@ -11,7 +11,7 @@ import type { WslHost } from './wsl-command'
 type Reply = { code?: number; stdout?: string; stderr?: string }
 // What a call asked of the distro: the program and its arguments after --exec, the Linux env set
 // for it, and what it was fed.
-type Call = { argv: string[]; env: Record<string, string>; input: string; options: SpawnOptions }
+type Call = { argv: string[]; env: Record<string, string>; input: string; options: SpawnOptions; launching: boolean }
 
 class FakeChild extends ChildProcess {
   unreffed = false
@@ -26,19 +26,20 @@ function windows(answer: (call: Call) => Reply | undefined) {
   const host: WslHost = {
     platform: 'win32',
     env: { SystemRoot: 'C:\\Windows' },
-    isFile: (file) => file === 'C:\\Windows\\System32\\wsl.exe',
+    isFile: (file) => file === 'C:\\Windows\\System32\\wsl.exe' || file === 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
     spawn(_file, args, options) {
       const child = new FakeChild()
-      const exec = args.indexOf('--exec')
-      const rest = exec === -1 ? args : args.slice(exec + 1)
-      const env: Record<string, string> = {}
-      let argv = rest
-      if (rest[0] === '/usr/bin/env') {
+      const launching = args.includes('-EncodedCommand')
+      function command(args: string[]): { argv: string[]; env: Record<string, string> } {
+        const exec = args.indexOf('--exec')
+        const rest = exec === -1 ? args : args.slice(exec + 1)
+        const env: Record<string, string> = {}
+        if (rest[0] !== '/usr/bin/env') return { argv: rest, env }
         const first = rest.findIndex((each, index) => index > 0 && !/^[A-Z_]+=/.test(each))
         for (const each of rest.slice(1, first)) env[each.slice(0, each.indexOf('='))] = each.slice(each.indexOf('=') + 1)
-        argv = rest.slice(first)
+        return { argv: rest.slice(first), env }
       }
-      const call: Call = { argv, env, input: '', options }
+      const call: Call = { ...command(args), input: '', options, launching }
       calls.push(call)
       if (options.stdio === 'ignore') return child
       const stdin = new PassThrough()
@@ -49,6 +50,7 @@ function windows(answer: (call: Call) => Reply | undefined) {
       stdin.on('data', (chunk: Buffer) => chunks.push(chunk))
       stdin.on('finish', () => {
         call.input = Buffer.concat(chunks).toString()
+        if (launching) Object.assign(call, command(JSON.parse(call.input).args))
         const reply = answer(call) ?? {}
         child.stdout?.emit('data', Buffer.from(reply.stdout ?? ''))
         child.stderr?.emit('data', Buffer.from(reply.stderr ?? ''))
@@ -142,7 +144,7 @@ describe('findWslBackendPlace', () => {
 })
 
 describe('ensureWslBackend', () => {
-  it('installs, starts what is asked for detached, and answers with the core it finds', async () => {
+  it('installs, starts what is asked for hidden, and answers with the core it finds', async () => {
     const { host, calls } = distro()
     const packed = archive()
     const folder = backendFolder('1.2.3', packed)
@@ -157,12 +159,12 @@ describe('ensureWslBackend', () => {
     expect(prepare?.argv).toEqual([NODE, `/home/me/.antumi/backend/${folder}/backend-control.mjs`, 'prepare', '1.2.3'])
     expect(prepare?.env).toEqual({ PATH: LOGIN_PATH })
 
-    const launches = calls.filter((call) => call.options.stdio === 'ignore')
+    const launches = calls.filter((call) => call.launching)
     expect(launches.map((call) => call.argv.slice(3))).toEqual([
       ['sh', 'daemon', NODE, `/home/me/.antumi/backend/${folder}/daemon.mjs`],
       ['sh', 'core', NODE, `/home/me/.antumi/backend/${folder}/core.mjs`]
     ])
-    expect(launches.every((call) => call.options.detached === true && call.options.windowsHide === true)).toBe(true)
+    expect(launches.every((call) => call.options.detached !== true && call.options.windowsHide === true)).toBe(true)
     expect(launches[0]?.env).toEqual({ PATH: LOGIN_PATH, ANTUMI_MCP_JS: `/home/me/.antumi/backend/${folder}/mcp.mjs` })
 
     // Other builds' folders are cleared once core answers, this one's named to be kept.
@@ -179,7 +181,7 @@ describe('ensureWslBackend', () => {
     })
     expect((await ensureWslBackend({ distro: 'Ubuntu', version: '1.2.3', archive: archive(), host })).ok).toBe(true)
     expect(calls.some((call) => call.argv[2]?.includes('sha256sum -c'))).toBe(false)
-    expect(calls.some((call) => call.options.stdio === 'ignore')).toBe(false)
+    expect(calls.some((call) => call.launching)).toBe(false)
   })
 
   it('stops at what went wrong', async () => {
@@ -190,6 +192,7 @@ describe('ensureWslBackend', () => {
     expect(await problem((call) => (call.argv[2]?.includes('sha256sum -c') ? { code: 1, stderr: 'sha256sum: WARNING: 1 computed checksum did NOT match\n' } : undefined))).toEqual({ kind: 'install', detail: 'sha256sum: WARNING: 1 computed checksum did NOT match' })
     expect(await problem((call) => (call.argv[2] === 'check' ? { stdout: '{"node":"v24.21.0","arch":"x64","pty":"GLIBC_2.38 not found"}\n' } : undefined))).toEqual({ kind: 'pty', detail: 'GLIBC_2.38 not found' })
     expect(await problem((call) => (call.argv[2] === 'prepare' ? { code: 1, stderr: 'boom' } : undefined))).toEqual({ kind: 'start', detail: 'boom' })
+    expect(await problem((call) => (call.launching ? { code: 1, stderr: 'Access is denied' } : undefined))).toEqual({ kind: 'start', detail: 'Error: wsl-launch: Access is denied' })
     expect(await problem((call) => (call.argv[2] === 'endpoint' ? { stdout: '{"endpoint":null}\n' } : undefined))).toMatchObject({ kind: 'start', detail: expect.stringContaining('/home/me/.antumi/logs/core.log') })
   })
 
@@ -222,9 +225,9 @@ describe('replaceOldWslDaemon', () => {
     const place = { distro: 'Ubuntu', node: NODE, dir: '/home/me/.antumi/backend/x', home: '/home/me', path: LOGIN_PATH }
     const left = distro((call) => (call.argv[2] === 'replace-daemon' ? { stdout: '{"start":["daemon"]}\n' } : undefined))
     await replaceOldWslDaemon(place, '1.2.3', left.host)
-    expect(left.calls.filter((call) => call.options.stdio === 'ignore').map((call) => call.argv[4])).toEqual(['daemon'])
+    expect(left.calls.filter((call) => call.launching).map((call) => call.argv[4])).toEqual(['daemon'])
     const stayed = distro((call) => (call.argv[2] === 'replace-daemon' ? { stdout: '{"start":[]}\n' } : undefined))
     await replaceOldWslDaemon(place, '1.2.3', stayed.host)
-    expect(stayed.calls.some((call) => call.options.stdio === 'ignore')).toBe(false)
+    expect(stayed.calls.some((call) => call.launching)).toBe(false)
   })
 })

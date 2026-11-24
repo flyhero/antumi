@@ -15,7 +15,7 @@ try {
       continue
     }
     $escaped = [regex]::Replace($argument, '(\\*)"', '$1$1\"')
-    $escaped = [regex]::Replace($escaped, '(\\+)$', '$1$1')
+    $escaped = [regex]::Replace($escaped, '(\\+)\z', '$1$1')
     '"' + $escaped + '"'
   }
   $info = [System.Diagnostics.ProcessStartInfo]::new()

@@ -91,7 +91,7 @@ async function main(): Promise<void> {
   if (!folder.startsWith('/tmp/antumi-wsl-launch-')) throw new Error('could not create launch test folder')
   try {
     const file = `${folder}/arguments`
-    const argv = [...tricky, 'line one\nline two', 'slash before quote\\"', 'space and slash \\']
+    const argv = [...tricky, 'line one\nline two', 'slash before quote\\"', 'space and slash \\', 'slash before newline\\\n']
     const value = '中文 "\' $HOME %PATH% ; | &'
     await launchInDistro(distro, ['/bin/sh', '-c', 'file=$1; shift; printf \'%s\\n\' "$@" > "$file"; printf \'%s\\n\' "$PATH" "$ANTUMI_SMOKE" >> "$file"', 'sh', file, ...argv], { env: { PATH: windowsLikePath, ANTUMI_SMOKE: value } })
     let received = ''

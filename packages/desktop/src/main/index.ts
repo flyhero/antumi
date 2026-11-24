@@ -807,7 +807,11 @@ void app.whenReady().then(async () => {
     },
     (error: unknown) => console.error('[antumi] the browser host did not start', error)
   ))
-  setInterval(() => void backend.replaceOldDaemon(), OLD_DAEMON_CHECK_MS).unref()
+  // A failed check is only logged: the next tick tries again.
+  setInterval(
+    () => void backend.replaceOldDaemon().catch((error: unknown) => console.error('[antumi] the old daemon was not replaced', error)),
+    OLD_DAEMON_CHECK_MS
+  ).unref()
   app.on('activate', () => {
     if (!mainWindow) {
       createWindow()

@@ -128,7 +128,7 @@ export class ChannelService {
   private readonly home: string
   private readonly states = new Map<string, { state: ChannelState; error: string | null }>()
   // Pictures still coming for a question: it does not run until they are in, or given up on.
-  private readonly fetching = new Map<string, { waiting: Set<string>; parts: Map<string, Buffer[]>; lost: number; timer: NodeJS.Timeout }>()
+  private readonly fetching = new Map<string, { waiting: Set<string>; parts: Map<string, Buffer[]>; lost: number; saving: number; timer: NodeJS.Timeout }>()
   private readonly timeouts = new Map<string, NodeJS.Timeout>()
   // Starting, between leaving the queue and its message being sent.
   private readonly starting = new Set<string>()
@@ -160,6 +160,7 @@ export class ChannelService {
     for (const timer of [this.restartTimer, this.outboxTimer, this.purgeTimer]) if (timer) clearTimeout(timer)
     for (const timer of this.timeouts.values()) clearTimeout(timer)
     for (const { timer } of this.fetching.values()) clearTimeout(timer)
+    this.fetching.clear()
     this.link?.stop()
     this.link = null
   }
@@ -455,7 +456,7 @@ export class ChannelService {
     if (images.length) {
       const timer = setTimeout(() => this.imagesDone(request.id), IMAGE_WAIT_MS)
       timer.unref()
-      this.fetching.set(request.id, { waiting: new Set(images.map((image) => image.ref)), parts: new Map(), lost: 0, timer })
+      this.fetching.set(request.id, { waiting: new Set(images.map((image) => image.ref)), parts: new Map(), lost: 0, saving: 0, timer })
       this.link?.send({ type: 'fetch', requestId: request.id, channelId, images: images.map((image) => image.ref) })
     }
     this.tick()
@@ -471,12 +472,17 @@ export class ChannelService {
     if (!done && !error && size <= MAX_ATTACHMENT_BYTES + ATTACHMENT_CHUNK_BYTES) return
     fetch.waiting.delete(ref)
     fetch.parts.delete(ref)
+    // Still counted while it is saved: the question must not go on without it.
+    fetch.saving += 1
     const kept = done && !error && size <= MAX_ATTACHMENT_BYTES ? await this.options.keepImage(Buffer.concat(parts)).then((info) => info.id, () => null) : null
+    fetch.saving -= 1
+    // The wait ran out or the service stopped meanwhile.
+    if (this.fetching.get(requestId) !== fetch) return
     // Read now: another picture of the same question may have been kept meanwhile.
     const request = this.store.request(requestId)
     if (kept && request) this.store.updateRequest(requestId, { images: [...request.images, kept] })
     else fetch.lost += 1
-    if (fetch.waiting.size === 0) this.imagesDone(requestId)
+    if (fetch.waiting.size === 0 && fetch.saving === 0) this.imagesDone(requestId)
   }
 
   // Every picture is in, or it has waited long enough: the question goes on with what came.
@@ -486,7 +492,7 @@ export class ChannelService {
     clearTimeout(fetch.timer)
     this.fetching.delete(requestId)
     const request = this.store.request(requestId)
-    const lost = fetch.lost + fetch.waiting.size
+    const lost = fetch.lost + fetch.waiting.size + fetch.saving
     if (request && lost > 0) this.store.updateRequest(requestId, { notes: [...request.notes, `有 ${lost} 张图片没读到。`] })
     this.tick()
   }

@@ -203,15 +203,18 @@ export class SquadCallService {
   }
   private async start(call: SquadCall): Promise<void> {
     let permissionMode = call.permissionMode
+    let allowBypass = call.allowBypass
     const parent = this.chats.listAll().find((entry) => entry.id === call.parentId)
     if (parent && parent.archivedAt == null) {
       if (callerReadOnly(parent)) throw new Rejection('squad-call-forbidden', '主会话现在只允许读取，不能启动开发团队')
-      const order = ['bypass', 'auto', 'acceptEdits', 'ask']
-      const modes = squadModes(call.squad, call.allowBypass).filter((mode) => order.indexOf(mode) >= order.indexOf(call.permissionMode))
-      permissionMode = ChatPermissionMode.parse(delegatedMode(parent.chatOptions?.permissionMode, this.chats.allowsBypass(parent.id), modes))
+      allowBypass = this.chats.allowsBypass(parent.id)
+      const modes = squadModes(call.squad, allowBypass)
+      permissionMode = ChatPermissionMode.parse(delegatedMode(parent.chatOptions?.permissionMode, allowBypass, modes))
       if (!modes.includes(permissionMode)) throw new Rejection('chat-option-invalid')
     }
-    await this.squads.start(call.taskId, call.allowBypass, { permissionMode }, call.squad.id)
+    allowBypass = permissionMode === 'bypass' && allowBypass
+    this.patch(call.id, { permissionMode, allowBypass })
+    await this.squads.start(call.taskId, allowBypass, { permissionMode }, call.squad.id)
   }
   private patch(id: string, fields: Partial<SquadCall>): SquadCall {
     const call = this.store.patch(id, fields); this.options.changed(call); return call

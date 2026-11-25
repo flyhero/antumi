@@ -41,6 +41,7 @@ describe('ChannelService', () => {
   let announced: Channel[][]
   let channel: Channel
   let seq: number
+  let keepImage: ChannelServiceOptions['keepImage']
 
   const profile = AgentProfile.parse({ id: '11111111-1111-4111-8111-111111111111', name: '答疑', instructions: '简短回答。', agent: 'claude', audience: 'channels', archivedAt: null, createdAt: 1, updatedAt: 1 })
   const settle = async () => { for (let i = 0; i < 20; i++) await new Promise((resolve) => setTimeout(resolve, 0)) }
@@ -108,13 +109,14 @@ describe('ChannelService', () => {
     seq = 0
     profiles = [profile]
     announced = []
+    keepImage = (bytes) => attachments.put(bytes)
     channels = new ChannelService(store, {
       conversations, credentials,
       tasks: new TaskService(tasks, projects, path.join(root, 'worktrees'), () => {}, attachments, conversations),
       profile: (id) => profiles.find((each) => each.id === id) ?? null,
       recentProjects: () => projects.recent(),
       isRepo: async (dir) => dir === repo,
-      keepImage: (bytes) => attachments.put(bytes),
+      keepImage: (bytes) => keepImage(bytes),
       changed: (list) => announced.push(list),
       identity: async () => 'owner@example.com',
       now: () => now,
@@ -382,6 +384,42 @@ describe('ChannelService', () => {
     const frames = JSON.stringify(daemon.written(conversations.get(running.conversationId!).sessionId!))
     expect(frames).toContain('"type":"image"')
     expect(frames).toContain(asked.text)
+  })
+
+  it('waits for a picture being saved when the next one fails, and sends it', async () => {
+    const png = Buffer.from(pngBytes(8, 8))
+    const put = keepImage
+    let release: () => void = () => {}
+    const gate = new Promise<void>((resolve) => { release = resolve })
+    keepImage = (bytes) => gate.then(() => put(bytes))
+    daemon.reply = () => {}
+    await ask({ images: [{ ref: 'F1', name: 'a.png', mime: 'image/png', bytes: 100 }, { ref: 'F2', name: 'b.png', mime: 'image/png', bytes: 100 }] })
+    const [request] = channels.requests(channel.id, null, 1).items
+    fromGateway({ type: 'image', requestId: request!.id, ref: 'F1', data: png.toString('base64'), done: true, error: null })
+    fromGateway({ type: 'image', requestId: request!.id, ref: 'F2', data: '', done: true, error: 'http 403' })
+    await settle()
+    expect(channels.requests(channel.id, null, 1).items[0]).toMatchObject({ state: 'queued', images: 0 })
+    expect(daemon.spawns).toHaveLength(0)
+    release()
+    await settle()
+    const running = channels.requests(channel.id, null, 1).items[0]!
+    expect(running).toMatchObject({ state: 'running', images: 1 })
+    expect(JSON.stringify(daemon.written(conversations.get(running.conversationId!).sessionId!))).toContain('"type":"image"')
+  })
+
+  it('leaves the store alone for a picture saved after the service stopped', async () => {
+    const png = Buffer.from(pngBytes(8, 8))
+    let release: () => void = () => {}
+    keepImage = () => new Promise((resolve) => { release = () => resolve({ id: 'late' }) })
+    await ask({ images: [{ ref: 'F1', name: 'a.png', mime: 'image/png', bytes: 100 }] })
+    const [request] = channels.requests(channel.id, null, 1).items
+    fromGateway({ type: 'image', requestId: request!.id, ref: 'F1', data: png.toString('base64'), done: true, error: null })
+    await settle()
+    channels.stop()
+    const update = vi.spyOn(store, 'updateRequest')
+    release()
+    await settle()
+    expect(update).not.toHaveBeenCalled()
   })
 
   it('goes on without a picture that could not be had, and says so', async () => {

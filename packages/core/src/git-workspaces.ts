@@ -1,13 +1,25 @@
 import { access } from 'node:fs/promises'
+import { gte } from 'semver'
 import type { GitWorkspace } from '@antumi/protocol'
 import { git } from './git-changes'
 
-// NUL records preserve spaces and non-ASCII paths without Git's display quoting.
+const WORKTREE_NUL_VERSION = '2.36.0'
+
+// Git before 2.36 only has line records; keep NUL records where paths can contain newlines.
+export async function gitWorktreeFields(directory: string): Promise<string[]> {
+  const output = await git(directory, ['--version'])
+  const version = /^git version (\d+\.\d+\.\d+)/.exec(output)?.[1]
+  if (!version) throw new Error(`Unrecognized Git version: ${output.trim()}`)
+  const nul = gte(version, WORKTREE_NUL_VERSION)
+  const listing = await git(directory, ['worktree', 'list', '--porcelain', ...(nul ? ['-z'] : [])])
+  return listing.split(nul ? '\0' : '\n')
+}
+
 export async function gitWorkspaces(directory: string): Promise<GitWorkspace[]> {
-  const output = await git(directory, ['worktree', 'list', '--porcelain', '-z'])
+  const fields = await gitWorktreeFields(directory)
   const entries: GitWorkspace[] = []
   let current: GitWorkspace | undefined
-  for (const field of output.split('\0')) {
+  for (const field of fields) {
     if (field.startsWith('worktree ')) {
       current = { path: field.slice(9), branch: null, detached: false, locked: false, missing: false, conversationIds: [], planning: field.slice(9).split(/[\\/]/).includes('.planning') }
       entries.push(current)

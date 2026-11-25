@@ -845,7 +845,7 @@ export const MESSAGES = {
   "InstalledAgentsSettings.verifyNativeModels": {"zh": "验证本机模型", "en": "Check local models"},
   "InstalledAgentsSettings.verifyNativeModelsAgain": {"zh": "重新验证", "en": "Check again"},
   "InstalledAgentsSettings.nativeModelsHint": {"zh": "只读取模型列表，不发送消息。首次验证可能需要准备运行时。", "en": "Only lists models, without sending a message. The first check may prepare the runtime."},
-  "InstalledAgentsSettings.nativeModelsHelp": {"zh": "可在新建会话中选择「沿用本机配置」查看模型，或检查 DSH 的模型设置。也可以使用 Antumi 的服务商。", "en": "Choose Use local settings in a new chat, check the DSH model configuration, or use an Antumi provider instead."},
+  "InstalledAgentsSettings.nativeModelsHelp": {"zh": "可在新建会话中选择「沿用本机配置」查看模型，或检查 {agent} 的模型设置。也可以使用 Antumi 的服务商。", "en": "Choose Use local settings in a new chat, check the {agent} model configuration, or use an Antumi provider instead."},
   "Readiness.accountReady": {"zh": "环境已就绪", "en": "Environment ready"},
   "Readiness.providerReady": {"zh": "服务商已配置", "en": "Provider configured"},
   "ModelsUnavailable.text": {"zh": "选不了模型：{reason}", "en": "No models to pick: {reason}"},

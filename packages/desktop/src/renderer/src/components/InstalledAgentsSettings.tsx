@@ -156,6 +156,7 @@ function AgentRow({ kind, check, enabled, last }: { kind: AgentKind; check: Envi
   const canVerifyNative = rpc?.features.includes('chat-catalog-refresh') ?? false
   const nativeBadge = checkNative && readiness.state === 'unknown-auth'
   const nativeStatus = nativeModelsBadge(nativeModels)
+  const nativeHelp = t('InstalledAgentsSettings.nativeModelsHelp', { agent: agentLabel(kind) })
   const badge = nativeBadge ? nativeStatus : {
     text: agentReadinessText(readiness, kind), level: readiness.state === 'ready' ? 'ok' : 'warning'
   }
@@ -200,13 +201,13 @@ function AgentRow({ kind, check, enabled, last }: { kind: AgentKind; check: Envi
         {checkNative ? (
           <div className="agent-install-actions">
             {canVerifyNative && (
-              <button type="button" className="button ghost" onClick={() => void verifyNative()} disabled={nativeModels.state === 'checking'}>
+              <button type="button" className="button" onClick={() => void verifyNative()} disabled={nativeModels.state === 'checking'}>
                 {t(nativeModels.state === 'idle' || nativeModels.state === 'checking' ? 'InstalledAgentsSettings.verifyNativeModels' : 'InstalledAgentsSettings.verifyNativeModelsAgain')}
               </button>
             )}
             {!nativeBadge && nativeModels.state !== 'idle' && <span className="environment-pill" data-level={nativeStatus.level} aria-live="polite">{nativeStatus.text}</span>}
             <span className="settings-row-description" aria-live="polite">
-              {nativeModels.state === 'unavailable' ? nativeModels.detail ?? t('InstalledAgentsSettings.nativeModelsHelp') : t(canVerifyNative ? 'InstalledAgentsSettings.nativeModelsHint' : 'InstalledAgentsSettings.nativeModelsHelp')}
+              {nativeModels.state === 'unavailable' ? nativeModels.detail ?? nativeHelp : canVerifyNative ? t('InstalledAgentsSettings.nativeModelsHint') : nativeHelp}
             </span>
           </div>
         ) : (readiness.state === 'needs-account' || readiness.state === 'needs-provider' || readiness.state === 'unknown-auth' || readiness.state === 'authorize-on-use') && <Fix label={t('InstalledAgentsSettings.signIn')} command={agentDescriptor(kind, getLocale()).environment.signIn} />}

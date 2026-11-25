@@ -56,6 +56,7 @@ describe('InstalledAgentsSettings', () => {
     const html = render()
     expect(html).toContain('已安装 · 本机模型未验证')
     expect(html).toContain('沿用本机配置')
+    expect(html).toContain('检查 DeepSeek Harness 的模型设置')
     expect(html).not.toContain('验证本机模型')
   })
 

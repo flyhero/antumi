@@ -1,12 +1,10 @@
-import { t } from '../i18n'
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { useCore } from '../core-store'
 import { createTerminalSurface } from './terminal-surface'
+import { attachTerminalSession } from './terminal-session'
+import { terminalSelectionPlace, trackTerminalSelection, type TerminalSelectionPoint } from './terminal-selection'
 
 const ignore = () => {}
-
-// Where a mouse selection ended, in the frame's box: what is done with it shows there.
-type Picked = { x: number; y: number }
 
 // selectionAction: shown by a passage just selected with the mouse, until it is cleared, the view
 // scrolls or the user types; dismiss puts it away.
@@ -14,12 +12,13 @@ export function SessionTerminal({ sessionId, selectionAction }: { sessionId: str
   const container = useRef<HTMLDivElement>(null)
   const frame = useRef<HTMLDivElement>(null)
   const rpc = useCore((s) => s.rpc)
-  const [picked, setPicked] = useState<Picked | null>(null)
+  const [picked, setPicked] = useState<TerminalSelectionPoint | null>(null)
   const dismiss = useCallback(() => setPicked(null), [])
 
   useEffect(() => {
     const element = container.current
-    if (!element || !rpc) {
+    const bounds = frame.current
+    if (!element || !bounds || !rpc) {
       return
     }
     const surface = createTerminalSurface(element, rpc, sessionId)
@@ -27,72 +26,21 @@ export function SessionTerminal({ sessionId, selectionAction }: { sessionId: str
     // Opened by the user, so keystrokes should reach the shell at once.
     term.focus()
 
-    let disposed = false
-    let attached = false
-    let cursor = 0
-    const queued: Array<{ offset: number; data: string }> = []
-    const writeAt = (offset: number, data: string) => {
-      const skip = Math.max(0, cursor - offset)
-      if (skip < data.length) {
-        term.write(data.slice(skip))
-        cursor = offset + data.length
-      }
-    }
-    const stopData = rpc.on('sessions.data', (event) => {
-      if (event.sessionId !== sessionId || disposed) return
-      if (!attached) queued.push(event)
-      else writeAt(event.offset, event.data)
-    })
-    const stopExit = rpc.on('sessions.exit', (event) => {
-      if (event.sessionId === sessionId && !disposed) term.write(t('SessionTerminal.2mProcessExitedCode0m', { value1: event.exitCode }))
-    })
-
-    rpc
-      .call('sessions.attach', { sessionId })
-      .then(({ buffer, bufferStart, exited }) => {
-        if (disposed) {
-          return
-        }
-        writeAt(bufferStart, buffer)
-        queued.sort((a, b) => a.offset - b.offset).forEach((event) => writeAt(event.offset, event.data))
-        queued.length = 0
-        attached = true
-        if (exited) {
-          term.write(t('SessionTerminal.2mSessionEnded0m'))
-          return
-        }
-        sendSize()
-      })
-      .catch((error: unknown) => {
-        term.write(t('SessionTerminal.cannotConnectToSession', { value1: error instanceof Error ? error.message : String(error) }))
-      })
-
+    const stopSession = attachTerminalSession({ rpc, term, sessionId, sendSize })
     const input = term.onData((data) => {
       setPicked(null)
       void rpc.call('sessions.write', { sessionId, data }).catch(ignore)
     })
-    // Read once the mouse is up, when xterm has settled the selection; a click that cleared it shows nothing.
-    const released = (event: MouseEvent) => {
-      if (event.button !== 0) return
-      setTimeout(() => {
-        const box = frame.current?.getBoundingClientRect()
-        if (disposed || !box || !term.hasSelection() || !term.getSelection().trim()) return
-        setPicked({ x: event.clientX - box.left, y: event.clientY - box.top })
-      }, 0)
-    }
-    element.addEventListener('mouseup', released)
+    const stopPicking = trackTerminalSelection({ element, frame: bounds, getSelection: () => term.getSelection(), onPicked: setPicked })
     const selection = term.onSelectionChange(() => { if (!term.hasSelection()) setPicked(null) })
     const scroll = term.onScroll(() => setPicked(null))
     return () => {
-      disposed = true
-      stopData()
-      stopExit()
+      stopSession()
       input.dispose()
-      element.removeEventListener('mouseup', released)
+      stopPicking()
       selection.dispose()
       scroll.dispose()
       surface.dispose()
-      void rpc.call('sessions.detach', { sessionId }).catch(ignore)
     }
   }, [rpc, sessionId])
 
@@ -106,12 +54,22 @@ export function SessionTerminal({ sessionId, selectionAction }: { sessionId: str
   )
 }
 
-// Just under where the mouse let go, kept inside the frame: above the point near its bottom, and
-// short of its right edge.
-function SelectionAction({ at, frame, children }: { at: Picked; frame: HTMLDivElement | null; children: ReactNode }) {
-  const width = frame?.clientWidth ?? Infinity
-  const height = frame?.clientHeight ?? Infinity
-  const left = Math.max(4, Math.min(at.x - 12, width - 140))
-  const top = at.y + 40 > height ? Math.max(4, at.y - 36) : at.y + 10
-  return <div className="terminal-selection-action" style={{ left, top }}>{children}</div>
+function SelectionAction({ at, frame, children }: { at: TerminalSelectionPoint; frame: HTMLDivElement | null; children: ReactNode }) {
+  const action = useRef<HTMLDivElement>(null)
+  const [place, setPlace] = useState(at)
+  useLayoutEffect(() => {
+    const element = action.current
+    if (!element || !frame) return
+    const position = () => setPlace(terminalSelectionPlace({
+      at,
+      frame: { width: frame.clientWidth, height: frame.clientHeight },
+      action: { width: element.offsetWidth, height: element.offsetHeight }
+    }))
+    position()
+    const observer = new ResizeObserver(position)
+    observer.observe(element)
+    observer.observe(frame)
+    return () => observer.disconnect()
+  }, [at, frame])
+  return <div ref={action} className="terminal-selection-action" style={{ left: place.x, top: place.y }}>{children}</div>
 }

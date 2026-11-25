@@ -34,7 +34,10 @@ export const cliTargetHost: CliTargetHost = {
   read: (file) => readFile(file, 'utf8'),
   async run(command) {
     const launch = planLaunch(command.command, command.args, os.homedir(), { ...process.env, OPENCODE_DISABLE_AUTOUPDATE: '1', PI_OFFLINE: '1' })
-    const result = await execute(launch.file, launch.args, { env: launch.env, timeout: 5000, maxBuffer: 256 * 1024, windowsHide: true })
+    const pending = execute(launch.file, launch.args, { env: launch.env, timeout: 5000, maxBuffer: 256 * 1024, windowsHide: true })
+    // Read-only probes have no input. Some Windows launchers wait for EOF before exiting.
+    pending.child.stdin?.end()
+    const result = await pending
     return stripAnsi(`${result.stdout}\n${result.stderr}`).trim()
   }
 }
@@ -71,14 +74,15 @@ export function desktopCli(file: string, platform: NodeJS.Platform): boolean {
 }
 
 export async function resolveCliTarget(agent: AgentKind, environment: Environment, host: CliTargetHost = cliTargetHost): Promise<CliTarget | null> {
-  const selected = environment.checks.find((check) => check.tool === agent)?.path
+  const check = environment.checks.find((entry) => entry.tool === agent)
+  const selected = check?.path
   if (!selected) return null
   const paths = host.platform === 'win32' ? path.win32 : path.posix
   const canonical = await host.canonical(selected).catch(() => selected)
   const version = cliVersion(await host.run({ command: selected, args: ['--version'] }).catch(() => ''))
   const base = { path: selected, version }
   const target = (channel: CliTarget['channel'], command: CliCommand | null, latestUrl: string | null, tagPrefix?: string): CliTarget => ({ ...base, channel, command, latestUrl, tagPrefix, identity: JSON.stringify({ selected, canonical, channel, command }) })
-  if (desktopCli(selected, host.platform) || desktopCli(canonical, host.platform)) return target('desktop', null, null)
+  if (check.requiresStandaloneCli || desktopCli(selected, host.platform) || desktopCli(canonical, host.platform)) return target('desktop', null, null)
   const maintenance = adapterOf(agent).maintenance
   const packageName = maintenance?.packageName
   if (packageName) {

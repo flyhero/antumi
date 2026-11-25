@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Environment } from '@antumi/protocol'
-import { cliCommandText, cliVersion, compareCliVersions, desktopCli, inside, latestCliVersion, resolveCliTarget, type CliTargetHost } from './agent-cli-target'
+import { cliCommandText, cliTargetHost, cliVersion, compareCliVersions, desktopCli, inside, latestCliVersion, resolveCliTarget, type CliTargetHost } from './agent-cli-target'
 
 const environment: Environment = { checks: [{ tool: 'codex', status: 'ok', version: '1.0.0', path: '/bin/codex', signedIn: true }], searchPath: [], checkedAt: 0 }
 function host(overrides: Partial<CliTargetHost> = {}): CliTargetHost {
@@ -11,6 +11,11 @@ function host(overrides: Partial<CliTargetHost> = {}): CliTargetHost {
 }
 
 describe('CLI install identity and release versions', () => {
+  it('closes stdin on CLI probes that wait for the end of redirected input', async () => {
+    await expect(cliTargetHost.run({ command: process.execPath, args: ['-e', 'process.stdin.on(\'end\', () => console.log(\'done\')); process.stdin.resume()'] }))
+      .resolves.toBe('done')
+  }, 10_000)
+
   it('keeps prerelease and Cursor build identities, without inventing an order for hashes', () => {
     expect(cliVersion('codex-cli 1.2.3-beta.4')).toBe('1.2.3-beta.4')
     expect(cliVersion('2026.10.19-6bbf2c4')).toBe('2026.10.19-6bbf2c4')
@@ -61,6 +66,37 @@ describe('CLI install identity and release versions', () => {
   it('rejects a different package bin even when the package and manager exist', async () => {
     const target = await resolveCliTarget('codex', environment, host({ read: async () => JSON.stringify({ name: '@openai/codex', bin: 'other.js' }), run: async ({ args }) => args[0] === '--version' ? '1.0.0' : '/global/node_modules' }))
     expect(target?.command).toBeNull()
+  })
+
+  it('uses npm release metadata only for the proven DSH CLI installation', async () => {
+    const selected = '/bin/dsh'
+    const root = '/global/node_modules'
+    const packageRoot = `${root}/@deepseek-ai/dsh`
+    const installed: Environment = { ...environment, checks: [{ tool: 'dsh', status: 'ok', version: '0.2.2-rc.5', path: selected, signedIn: null }] }
+    const npm = host({
+      platform: 'linux',
+      canonical: async (file) => file === selected ? `${packageRoot}/lib/bin.js` : file,
+      read: async (file) => {
+        if (file !== `${packageRoot}/package.json`) throw new Error('wrong root')
+        return JSON.stringify({ name: '@deepseek-ai/dsh', bin: { dsh: 'lib/bin.js' } })
+      },
+      run: async ({ command, args }) => {
+        if (args[0] === '--version') return '0.2.2-rc.5'
+        if (command === 'npm') return root
+        throw new Error('not installed')
+      }
+    })
+    expect(await resolveCliTarget('dsh', installed, npm)).toMatchObject({ channel: 'npm', version: '0.2.2-rc.5',
+      command: { command: 'npm', args: ['install', '-g', '@deepseek-ai/dsh@latest'] }, latestUrl: 'https://registry.npmjs.org/@deepseek-ai/dsh/latest' })
+    expect(await resolveCliTarget('dsh', installed, { ...npm, canonical: async (file) => file }))
+      .toMatchObject({ channel: 'unknown', command: null, latestUrl: null })
+  })
+
+  it('treats the Windows DSH desktop launcher as app-managed rather than an unknown installation', async () => {
+    const selected = 'D:\\deepseek-harness\\resources\\runtime\\cli\\bin\\dsh.cmd'
+    const bundled: Environment = { ...environment, checks: [{ tool: 'dsh', status: 'unknown', version: null, path: selected, signedIn: null, requiresStandaloneCli: true }] }
+    expect(await resolveCliTarget('dsh', bundled, host({ platform: 'win32', run: async () => '0.2.2-rc.5' })))
+      .toMatchObject({ channel: 'desktop', command: null, latestUrl: null })
   })
 
   it('uses the owner of a package beneath a Homebrew node prefix, rather than upgrading the wrong cask', async () => {

@@ -12,7 +12,7 @@ import { checkoutKey, checkoutKeys, commitRef, committedDiff, conflictFiles, fil
 import { abortOperation, clearDirectRebase, continueOperation, parseTrack, pickCommit, rebaseBranch, rebasing, updateBranch } from './git-update'
 import { outgoingCommits, pushBranch, trackBranch } from './git-push'
 import type { GitFavoriteStore } from './git-favorite-store'
-import { gitWorkspaces } from './git-workspaces'
+import { gitWorkspaces, gitWorktreeFields } from './git-workspaces'
 
 // A remote the repository has, never one that reads as an option.
 const remoteIn = (status: GitStatus) => (remote: string) => {
@@ -179,13 +179,13 @@ export class GitService {
     const [head, sha, listing, worktrees, remotes, protectedRefs, busy, operation, conflicts, tags, reflog, binding] = await Promise.all([
       projectHead(dir), gitOrNull(dir, ['rev-parse', 'HEAD']),
       git(dir, ['for-each-ref', '--sort=-committerdate', '--format=%(refname)%00%(objectname)%00%(upstream)%00%(upstream:track,nobracket)', 'refs/heads', 'refs/remotes']),
-      git(dir, ['worktree', 'list', '--porcelain', '-z']), git(dir, ['remote']), this.protectedRefs(key), this.busy(dir), gitOperation(dir), conflictFiles(dir),
+      gitWorktreeFields(dir), git(dir, ['remote']), this.protectedRefs(key), this.busy(dir), gitOperation(dir), conflictFiles(dir),
       git(dir, ['for-each-ref', '--format=%(refname)%00%(objectname)%00%(*objectname)%00%(objecttype)%00%(*objecttype)', 'refs/tags']),
       gitOrNull(dir, ['reflog', 'show', '--format=%gs', '--max-count=500', 'HEAD']), this.taskAt(dir)
     ])
     const holders = new Map<string, string>()
     let folder = ''
-    for (const field of worktrees.split('\0')) {
+    for (const field of worktrees) {
       if (field.startsWith('worktree ')) folder = field.slice(9)
       if (field.startsWith('branch ')) holders.set(field.slice(7), folder)
     }

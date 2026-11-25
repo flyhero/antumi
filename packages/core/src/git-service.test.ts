@@ -46,9 +46,9 @@ describe('Git management', () => {
   afterEach(() => { favorites.close(); store.close(); rmSync(root, { recursive: true, force: true }) })
 
   it('opens a project and associates all linked worktrees with tasks and conversations', async () => {
-    const worktree = path.join(root, 'task worktree')
+    const worktree = path.join(root, 'task 工作区')
     git(repo, 'worktree', 'add', '-q', '-b', 'task/topic', worktree)
-    git(repo, 'worktree', 'lock', worktree)
+    git(repo, 'worktree', 'lock', '--reason', 'first\nsecond', worktree)
     tasks.push(Task.parse({ id: 'task', title: 'topic', details: '', status: 'running', repos: [{ path: repo, worktreePath: worktree, branch: 'task/topic' }], dependsOn: [], agent: 'claude', createdAt: 0, updatedAt: 0 }))
     const project = await service.openProject(worktree)
     expect(project.project).toBe(repo)
@@ -58,7 +58,9 @@ describe('Git management', () => {
       expect.objectContaining({ path: worktree, branch: 'task/topic', taskId: 'task', locked: true })
     ]))
     const direct: GitTarget = { kind: 'project', project: worktree }
-    expect((await service.status(direct)).taskId).toBe('task')
+    const status = await service.status(direct)
+    expect(status.taskId).toBe('task')
+    expect(status.branches.find((branch) => branch.ref === 'refs/heads/task/topic')?.worktree).toBe(worktree)
     for (const action of [
       { kind: 'switch', ref: 'refs/heads/main' }, { kind: 'detach', ref: 'HEAD' },
       { kind: 'create', ref: 'HEAD', name: 'other', checkout: true }

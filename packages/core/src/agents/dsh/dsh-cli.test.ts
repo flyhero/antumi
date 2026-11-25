@@ -3,7 +3,7 @@ import { mkdtemp, writeFile, mkdir, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import type { Launch, LaunchHost } from '@antumi/protocol/node'
-import { detectDsh, prepareDshProfile } from './dsh-cli'
+import { detectDsh, dshOverlay, prepareDshProfile } from './dsh-cli'
 
 const desktopBin = 'D:\\DeepSeek Harness\\resources\\runtime\\cli\\bin'
 const npmBin = 'C:\\Users\\user\\AppData\\Roaming\\npm'
@@ -137,5 +137,14 @@ describe.skipIf(process.platform === 'win32')('DSH managed profile', () => {
     await expect(prepareDshProfile(f.command, f.bundle, f.home)).rejects.toMatchObject({ reason: 'dsh-runtime-install-failed' })
     await prepareDshProfile(f.command, f.bundle, f.home)
     expect(await readFile(existing, 'utf8')).toBe('user-config')
+  })
+})
+
+describe('DSH stage overlay', () => {
+  it('patches the provider plugin only for a session on an Antumi provider', () => {
+    expect(dshOverlay(false)).toContain('- id: skill-filesystem')
+    expect(dshOverlay(false)).not.toContain('llm-pi-ai')
+    expect(dshOverlay(true)).toContain('- id: skill-filesystem')
+    expect(dshOverlay(true)).toContain('- id: llm-pi-ai')
   })
 })

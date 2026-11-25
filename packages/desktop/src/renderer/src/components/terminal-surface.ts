@@ -5,6 +5,9 @@ import { onThemeChange } from '../appearance'
 import { codeFontStack } from '../code-font'
 import { usePreferences } from '../preferences'
 import { pastedCommand } from '../terminal-commands'
+import { showError } from '../core-store'
+import { t } from '../i18n'
+import { terminalCopyHandler } from './terminal-copy'
 import { terminalTheme } from './terminal-theme'
 
 // Each session's terminal on screen, so a control outside it can type into it or read what is selected.
@@ -50,13 +53,30 @@ export function createTerminalSurface(element: HTMLElement, rpc: RpcConnection, 
   term.loadAddon(fit)
   term.open(element)
   fit.fit()
+  term.attachCustomKeyEventHandler(terminalCopyHandler({
+    getSelection: () => term.getSelection(),
+    writeText: (text) => { void navigator.clipboard.writeText(text).catch(() => showError(t('fileActions.copyFailedTryAgain'))) }
+  }))
   if (sessionId) shown.set(sessionId, term)
   const sendSize = () => {
     if (sessionId) void rpc.call('sessions.resize', { sessionId, cols: term.cols, rows: term.rows }).catch(() => {})
   }
-  const stopTheming = onThemeChange(() => { term.options.theme = terminalTheme() })
+  const stopAppearance = followTerminalAppearance({ term, fit, sendSize })
   const observer = new ResizeObserver(() => { fit.fit(); sendSize() })
   observer.observe(element)
+  return {
+    term, sendSize,
+    dispose: () => {
+      stopAppearance()
+      observer.disconnect()
+      if (sessionId && shown.get(sessionId) === term) shown.delete(sessionId)
+      term.dispose()
+    }
+  }
+}
+
+function followTerminalAppearance({ term, fit, sendSize }: { term: Terminal; fit: FitAddon; sendSize: () => void }) {
+  const stopTheming = onThemeChange(() => { term.options.theme = terminalTheme() })
   let disposed = false
   const refit = () => {
     if (disposed) return
@@ -85,15 +105,9 @@ export function createTerminalSurface(element: HTMLElement, rpc: RpcConnection, 
     }
     if (next.terminalFontSize !== previous.terminalFontSize || next.terminalLineHeight !== previous.terminalLineHeight || fontChanged) refit()
   })
-  return {
-    term, sendSize,
-    dispose: () => {
-      disposed = true
-      stopTheming()
-      stopFontSizing()
-      observer.disconnect()
-      if (sessionId && shown.get(sessionId) === term) shown.delete(sessionId)
-      term.dispose()
-    }
+  return () => {
+    disposed = true
+    stopTheming()
+    stopFontSizing()
   }
 }

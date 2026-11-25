@@ -574,7 +574,7 @@ export function createRpcHandlers(
         model: model ?? profile?.model ?? undefined, effort: effort ?? profile?.effort ?? undefined, worktree, branch, deferStart, helperOf,
         modelProvider: profile?.modelProvider ?? modelProvider, profile, ...(account ? { account } : {}) })
     },
-    'conversations.chatCatalog': ({ agent, modelProvider }) => conversations.chatCatalog(agent, modelProvider),
+    'conversations.chatCatalog': ({ agent, modelProvider, refresh }, connection) => conversations.chatCatalog(agent, modelProvider, !connection.mobile && refresh),
     'conversations.chatCatalogProblem': ({ agent }) => conversations.chatCatalogProblem(agent),
     'conversations.translate': ({ id, text, to, model }) => translations.translate(conversations.get(id).agent, text, to, model, { kind: 'translation', conversationId: id, baseline: () => conversations.costBaseline(id) }, conversations.quickProvider(id)),
     'conversations.setAdditionalProjects': ({ id, projectPaths }) => conversations.setAdditionalProjects(id, projectPaths),

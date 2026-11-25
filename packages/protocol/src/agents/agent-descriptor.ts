@@ -74,6 +74,8 @@ export type AgentDescriptor = {
     role: string
     install: string
     signIn: string
+    // Can check the installed agent's native model catalog on demand instead of assuming a login.
+    verifyNativeModels?: boolean
     // A CLI found, but too old to speak the protocol Antumi runs it with.
     outdated?: { status: string; hint: string }
     // Missing, for one whose runtime Antumi downloads itself: without it the row reads as a CLI to install.

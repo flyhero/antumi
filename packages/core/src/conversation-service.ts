@@ -1614,29 +1614,33 @@ export class ConversationService {
   // kept as each chat stage reports them, read back from the newest stage after a restart, and
   // asked of the CLI only when it never ran a chat. On a provider, the provider's models; null
   // where it does not serve the agent.
-  chatCatalog(agent: AgentKind, providerId?: string): Promise<ChatCatalog | null> {
+  chatCatalog(agent: AgentKind, providerId?: string, refresh = false): Promise<ChatCatalog | null> {
     if (providerId !== undefined) {
       const provider = this.providers?.get(providerId)
       const offered = provider && providerEndpoint(provider, agent) ? adapterOf(agent).providerModels?.({ ...provider, providerId }) : undefined
       return Promise.resolve(offered ? { models: offered } : null)
     }
+    if (refresh) this.invalidateCli(agent)
     const known = this.catalogs.get(agent)
     if (known) return known
     const found = this.freshCatalogs.has(agent) ? null : this.catalogFromStages(agent)
     const adapter = adapterOf(agent)
     const catalog = found ? Promise.resolve(found) : agentCliAccess.use(agent, () => adapter.catalog ? adapter.catalog(this.sessionsRoot) : this.probeCatalog(agent)).then((result) => {
-      this.catalogProblems.delete(agent)
+      if (this.catalogs.get(agent) === catalog) this.catalogProblems.delete(agent)
       return result
     }, (error: unknown) => {
-      if (error instanceof Rejection) this.catalogProblems.set(agent, { reason: error.reason, message: error.message })
-      else this.catalogProblems.delete(agent)
+      if (this.catalogs.get(agent) === catalog) {
+        if (error instanceof Rejection) this.catalogProblems.set(agent, { reason: error.reason, message: error.message })
+        else this.catalogProblems.delete(agent)
+      }
       return null
     })
     this.catalogs.set(agent, catalog)
     // A probe that failed is tried again next time rather than remembered.
     void catalog.then((result) => {
+      if (this.catalogs.get(agent) !== catalog) return
       if (result) this.freshCatalogs.delete(agent)
-      if (!result && this.catalogs.get(agent) === catalog) this.catalogs.delete(agent)
+      else this.catalogs.delete(agent)
     })
     return catalog
   }

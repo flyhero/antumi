@@ -1212,6 +1212,38 @@ describe('ConversationService', () => {
     } finally { catalog.mockRestore() }
   })
 
+  it('checks the current native model catalog on request instead of reusing a known list', async () => {
+    const model = (id: string) => ({ id, label: id, description: null, efforts: [], isDefault: true })
+    const catalog = vi.spyOn(dsh, 'catalog')
+      .mockResolvedValueOnce({ models: [model('old')] })
+      .mockResolvedValueOnce({ models: [model('current')] })
+      .mockRejectedValueOnce(new Rejection('dsh-runtime-install-failed', 'no pnpm'))
+    try {
+      expect(await service.chatCatalog('dsh')).toEqual({ models: [model('old')] })
+      expect(await service.chatCatalog('dsh')).toEqual({ models: [model('old')] })
+      expect(await service.chatCatalog('dsh', undefined, true)).toEqual({ models: [model('current')] })
+      expect(await service.chatCatalog('dsh')).toEqual({ models: [model('current')] })
+      expect(await service.chatCatalog('dsh', undefined, true)).toBeNull()
+      expect(service.chatCatalogProblem('dsh')).toEqual({ reason: 'dsh-runtime-install-failed', message: 'no pnpm' })
+      expect(catalog).toHaveBeenCalledTimes(3)
+    } finally { catalog.mockRestore() }
+  })
+
+  it('does not let an older catalog probe replace the refreshed status', async () => {
+    let rejectOld = (_error: Error): void => {}
+    const old = new Promise<null>((_resolve, reject) => { rejectOld = reject })
+    const fresh = { models: [{ id: 'current', label: 'Current', description: null, efforts: [], isDefault: true }] }
+    const catalog = vi.spyOn(dsh, 'catalog').mockReturnValueOnce(old).mockResolvedValueOnce(fresh)
+    try {
+      const pending = service.chatCatalog('dsh')
+      expect(await service.chatCatalog('dsh', undefined, true)).toEqual(fresh)
+      rejectOld(new Rejection('dsh-runtime-install-failed', 'old failure'))
+      expect(await pending).toBeNull()
+      expect(service.chatCatalogProblem('dsh')).toBeNull()
+      expect(await service.chatCatalog('dsh')).toEqual(fresh)
+    } finally { catalog.mockRestore() }
+  })
+
   it('hands off to the model and effort picked, refusing one the agent does not list before stopping anything', async () => {
     const created = await service.create('claude', [])
     const codex = await codexOpens(service.handoff(created.id, 'codex', '', false))

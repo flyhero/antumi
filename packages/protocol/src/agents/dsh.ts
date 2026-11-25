@@ -21,6 +21,7 @@ export const dsh: AgentDescriptor = {
   environment: {
     role: '通过 Antumi 专用 profile 运行；首次使用时准备随应用提供的运行时插件。',
     install,
+    verifyNativeModels: true,
     signIn: '在 DSH 中配置模型服务商，或在 Antumi 的服务商设置中添加 API Key'
   },
   usageWhere: '在所用模型服务商处查看',
@@ -35,6 +36,7 @@ export const dsh: AgentDescriptor = {
     environment: {
       role: 'Runs in an Antumi profile; prepares the bundled runtime plugin on first use.',
       install,
+      verifyNativeModels: true,
       signIn: 'Configure a model provider in DSH, or add an API key in Antumi provider settings'
     },
     usageWhere: 'Check with your model provider'

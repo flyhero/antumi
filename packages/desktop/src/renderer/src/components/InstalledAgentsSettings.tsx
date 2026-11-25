@@ -4,7 +4,7 @@ import { AGENT_KINDS, agentDescriptor, agentReadiness, type AgentCliInstallation
 import { refreshAgentCli, upgradeAgentCli, cancelAgentCliUpgrade, selectConversation, installAgentCli, refreshEnvironment, showTerminal, useCore } from '../core-store'
 import { cliStatusText, cliErrorText, cliBackendOutdated, cliChannelText } from '../agent-cli-text'
 import { checkStatusText } from '../environment-text'
-import { agentLabel } from '../labels'
+import { agentLabel, reasonText } from '../labels'
 import { setPreference, usePreferences } from '../preferences'
 import { CopyButton } from './CopyButton'
 import { AgentIcon, RefreshIcon } from './icons'
@@ -90,7 +90,7 @@ function CliMaintenance({ kind, check }: { kind: AgentKind; check: EnvironmentCh
       )}
       <details className="agent-cli-details">
         <summary>{t('InstalledAgentsSettings.details')}</summary>
-        {check.signedIn === null && <p className="settings-row-description">{t('InstalledAgentsSettings.signInUnknown')}</p>}
+        {check.signedIn === null && !agentDescriptor(kind).environment.verifyNativeModels && <p className="settings-row-description">{t('InstalledAgentsSettings.signInUnknown')}</p>}
         {(channelText || path) && (
           <p className="settings-row-description mono agent-row-where" title={path ?? undefined}>
             {channelText ? (path ? `${channelText} · ${path}` : channelText) : path}
@@ -135,13 +135,45 @@ function CliMaintenance({ kind, check }: { kind: AgentKind; check: EnvironmentCh
   )
 }
 
+type NativeModelsCheck = { state: 'idle' } | { state: 'checking' } | { state: 'listed'; count: number } | { state: 'unavailable'; detail?: string }
+
+function nativeModelsBadge(check: NativeModelsCheck): { text: string; level?: 'ok' | 'warning' } {
+  if (check.state === 'listed') return { text: t('InstalledAgentsSettings.nativeModelsListed', { count: check.count }), level: 'ok' }
+  if (check.state === 'unavailable') return { text: t('InstalledAgentsSettings.nativeModelsUnavailable'), level: 'warning' }
+  return { text: t(check.state === 'checking' ? 'InstalledAgentsSettings.nativeModelsChecking' : 'InstalledAgentsSettings.nativeModelsUnchecked') }
+}
+
 function AgentRow({ kind, check, enabled, last }: { kind: AgentKind; check: EnvironmentCheck; enabled: boolean; last: boolean }) {
   const labelId = useId()
   const environment = useCore((s) => s.environment)
+  const rpc = useCore((s) => s.rpc)
   const providers = useCore((s) => s.modelProviders)
   const disabled = usePreferences((s) => s.disabledAgents)
   const probes = useProviderProbes((s) => s.probes)
   const readiness = agentReadiness(kind, environment, disabled, providers, probes)
+  const [nativeModels, setNativeModels] = useState<NativeModelsCheck>({ state: 'idle' })
+  const checkNative = enabled && check.status === 'ok' && !check.problem && agentDescriptor(kind).environment.verifyNativeModels
+  const canVerifyNative = rpc?.features.includes('chat-catalog-refresh') ?? false
+  const nativeBadge = checkNative && readiness.state === 'unknown-auth'
+  const nativeStatus = nativeModelsBadge(nativeModels)
+  const badge = nativeBadge ? nativeStatus : {
+    text: agentReadinessText(readiness, kind), level: readiness.state === 'ready' ? 'ok' : 'warning'
+  }
+  const verifyNative = async () => {
+    if (!rpc || !canVerifyNative || nativeModels.state === 'checking') return
+    setNativeModels({ state: 'checking' })
+    try {
+      const catalog = await rpc.call('conversations.chatCatalog', { agent: kind, refresh: true })
+      if (catalog?.models.length) {
+        setNativeModels({ state: 'listed', count: catalog.models.length })
+        return
+      }
+      const problem = await rpc.call('conversations.chatCatalogProblem', { agent: kind })
+      setNativeModels({ state: 'unavailable', detail: problem ? reasonText(problem.reason, problem.message) : undefined })
+    } catch {
+      setNativeModels({ state: 'unavailable' })
+    }
+  }
   const currentVersion = useCore((s) => {
     const cli = s.agentCli[kind]
     return cli?.path === check.path ? cli.currentVersion : null
@@ -156,8 +188,8 @@ function AgentRow({ kind, check, enabled, last }: { kind: AgentKind; check: Envi
           {version && <span className="agent-row-version mono" title={check.path ?? undefined}>{version}</span>}
           {!enabled && <span className="agent-row-pill">{t('InstalledAgentsSettings.disabled')}</span>}
           {enabled && (
-            <span className="environment-pill" data-level={readiness.state === 'ready' ? 'ok' : 'warning'}>
-              {agentReadinessText(readiness, kind)}
+            <span className="environment-pill" data-level={badge.level} aria-live={nativeBadge ? 'polite' : undefined}>
+              {badge.text}
             </span>
           )}
         </div>
@@ -165,7 +197,19 @@ function AgentRow({ kind, check, enabled, last }: { kind: AgentKind; check: Envi
         {check.requiresStandaloneCli ? (
           <Fix label={checkStatusText(check)} command={agentDescriptor(kind, getLocale()).environment.install} />
         ) : check.status === 'unknown' && <p className="settings-row-description">{tr('InstalledAgentsSettings.checkWhetherTheCliCanStart', { value1: checkStatusText(check), value2: agentDescriptor(kind, getLocale()).environment.outdated?.hint ?? '' })}</p>}
-        {(readiness.state === 'needs-account' || readiness.state === 'needs-provider' || readiness.state === 'unknown-auth' || readiness.state === 'authorize-on-use') && <Fix label={t('InstalledAgentsSettings.signIn')} command={agentDescriptor(kind, getLocale()).environment.signIn} />}
+        {checkNative ? (
+          <div className="agent-install-actions">
+            {canVerifyNative && (
+              <button type="button" className="button ghost" onClick={() => void verifyNative()} disabled={nativeModels.state === 'checking'}>
+                {t(nativeModels.state === 'idle' || nativeModels.state === 'checking' ? 'InstalledAgentsSettings.verifyNativeModels' : 'InstalledAgentsSettings.verifyNativeModelsAgain')}
+              </button>
+            )}
+            {!nativeBadge && nativeModels.state !== 'idle' && <span className="environment-pill" data-level={nativeStatus.level} aria-live="polite">{nativeStatus.text}</span>}
+            <span className="settings-row-description" aria-live="polite">
+              {nativeModels.state === 'unavailable' ? nativeModels.detail ?? t('InstalledAgentsSettings.nativeModelsHelp') : t(canVerifyNative ? 'InstalledAgentsSettings.nativeModelsHint' : 'InstalledAgentsSettings.nativeModelsHelp')}
+            </span>
+          </div>
+        ) : (readiness.state === 'needs-account' || readiness.state === 'needs-provider' || readiness.state === 'unknown-auth' || readiness.state === 'authorize-on-use') && <Fix label={t('InstalledAgentsSettings.signIn')} command={agentDescriptor(kind, getLocale()).environment.signIn} />}
         <CliMaintenance kind={kind} check={check} />
       </div>
       <div className="settings-row-control">
@@ -325,7 +369,7 @@ export function InstalledAgentsSettings() {
       )}
       <Group title={t('InstalledAgentsSettings.installed')} count={found.length}>
         {found.map(({ kind, check }) => (
-          <AgentRow key={kind} kind={kind} check={check} enabled={!disabled.includes(kind)} last={enabledCount <= 1} />
+          <AgentRow key={JSON.stringify([kind, check.path, check.version])} kind={kind} check={check} enabled={!disabled.includes(kind)} last={enabledCount <= 1} />
         ))}
       </Group>
       <Group title={t('InstalledAgentsSettings.availableToInstall')} count={missing.length} collapsible={found.length > 0}>

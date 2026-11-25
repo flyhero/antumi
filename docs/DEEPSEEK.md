@@ -61,9 +61,10 @@ core 使用通用 ACP driver，按握手能力调用 `session/resume`。计划�
 
 ```sh
 node scripts/build-plugins.mjs
+node --import tsx scripts/smoke-dsh-catalog.mjs /absolute/path/to/@deepseek-ai/dsh/lib/bin.js
 pnpm test:dsh-runtime --dsh /absolute/path/to/@deepseek-ai/dsh/lib/bin.js
 ```
 
-运行时插件的内部依赖仍固定在 rc.3，保证同一份插件可以复现构建。已通过集成检查的 CLI 包括 `0.2.2-rc.3`、`0.2.2-rc.4` 和 `0.2.2-rc.5`。
+运行时插件用 rc.3 的依赖做开发和类型检查，安装后由实际启动的 DSH CLI 提供这些模块，避免覆盖 CLI 自带版本。模型目录检查已在 `0.2.2-rc.3`、`0.2.2-rc.4` 和 `0.2.2-rc.5` 上通过，走真实的 profile 安装流程验证原生模型与 Antumi 服务商路由，不调用模型接口。
 
 检查覆盖三种服务商协议、MCP 共存和凭据隔离、多项目写入与命令、越界拒绝、提问、计划审批、取消及只读恢复。测试目录位于系统临时目录和仓库忽略的 `work/`，结束后清理；命令沙箱检查需要主机能启动 DSH 的原生沙箱。

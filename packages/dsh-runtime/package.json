@@ -15,6 +15,10 @@
   "scripts": { "typecheck": "tsc -p ." },
   "dependencies": {
     "@agentclientprotocol/sdk": "1.4.0",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@antumi/protocol": "workspace:*",
     "@deepseek-ai/cordis": "~4.1.0",
     "@deepseek-ai/dsh-acp": "0.2.2-rc.3",
     "@deepseek-ai/dsh-acp-app": "0.2.2-rc.3",
@@ -34,10 +38,6 @@
     "@deepseek-ai/dsh-tools": "0.2.2-rc.3",
     "@deepseek-ai/dsh-tool-ask-user": "0.2.2-rc.3",
     "@deepseek-ai/dsh-user-questions": "0.2.2-rc.3",
-    "zod": "catalog:"
-  },
-  "devDependencies": {
-    "@antumi/protocol": "workspace:*",
     "@types/node": "catalog:",
     "typescript": "catalog:"
   }

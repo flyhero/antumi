@@ -10,7 +10,7 @@ import path from 'node:path'
 import { createInterface } from 'node:readline'
 import { fileURLToPath } from 'node:url'
 import { dshCommand } from '../packages/core/src/agents/dsh/dsh-command.ts'
-import { DSH_OVERLAY } from '../packages/core/src/agents/dsh/dsh-cli.ts'
+import { dshOverlay } from '../packages/core/src/agents/dsh/dsh-cli.ts'
 
 const cli = process.argv[process.argv.indexOf('--dsh') + 1]
 if (!process.argv.includes('--dsh') || !cli) throw new Error('Pass --dsh /absolute/path/to/@deepseek-ai/dsh/lib/bin.js')
@@ -33,7 +33,7 @@ const requireCli = createRequire(await realpath(cli))
 await link(path.dirname(requireCli.resolve('@deepseek-ai/dsh-base/package.json')), path.join(profile, 'node_modules', '@deepseek-ai', 'dsh-base'))
 await writeFile(path.join(profile, 'package.json'), JSON.stringify({ name: 'dsh-profile-antumi', private: true, dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', '@antumi/dsh-runtime'] } } }))
 const overlay = path.join(scratch, 'overlay.yml')
-await writeFile(overlay, DSH_OVERLAY)
+await writeFile(overlay, dshOverlay(true))
 const mcp = path.join(scratch, 'mcp.mjs')
 await writeFile(mcp, `import { createInterface } from 'node:readline'
 createInterface({input:process.stdin}).on('line', line => {

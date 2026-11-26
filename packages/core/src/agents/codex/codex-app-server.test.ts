@@ -359,6 +359,20 @@ describe('CodexAppServer options', () => {
 
 describe('CodexAppServer commands', () => {
   const at = 1
+  it.each([
+    ['no rollout found for thread id unsaved', true],
+    ['authentication required', false]
+  ])('classifies resume failure %s as a lost session: %s', (message, lost) => {
+    const driver = new CodexAppServer('stage-1', { ...OPTIONS, resume: 'unsaved' })
+    driver.due().forEach((frame) => driver.apply({ dir: 'out', at, frame }))
+    driver.apply({ dir: 'in', at, frame: { id: 'antumi-init', result: {} } })
+    driver.due().forEach((frame) => driver.apply({ dir: 'out', at, frame }))
+    driver.apply({ dir: 'in', at, frame: { id: 'antumi-thread', error: { code: -32600, message } } })
+    expect(driver.ready()).toBe(false)
+    expect(driver.failure()).toBe(message)
+    expect(driver.sessionLost()).toBe(lost)
+  })
+
   const handshake = (driver: CodexAppServer, threadId = 'thread-1', thread: Record<string, unknown> = {}) => {
     driver.due().forEach((frame) => driver.apply({ dir: 'out', at, frame }))
     driver.apply({ dir: 'in', at, frame: { id: 'antumi-init', result: {} } })
@@ -658,7 +672,7 @@ describe('CodexAppServer commands', () => {
     const driver = new CodexAppServer('stage-1', OPTIONS)
     handshake(driver)
     driver.apply({ dir: 'out', at, frame: driver.send('go').wire, ref: 'ref-1' })
-    expect(() => driver.interrupt()).toThrow(expect.objectContaining({ reason: 'chat-busy' }))
+    expect(() => driver.interrupt()).toThrow(expect.objectContaining({ reason: 'chat-turn-not-started' }))
     driver.apply({ dir: 'in', at, frame: { id: 'antumi-turn-1', result: { turn: { id: 'turn-9' } } } })
     driver.apply({ dir: 'in', at, frame: { id: 4, method: 'item/tool/requestUserInput', params: { questions: [{ id: 'q1', header: 'Pick', question: 'Which?', options: [{ label: 'A' }] }] } } })
     expect(driver.interrupt()).toEqual([

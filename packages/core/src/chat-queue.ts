@@ -12,13 +12,20 @@ export class ChatQueue {
   // A queue record from the log: a message to wait, one released from being held, one dropped,
   // or, with no ref, every one dropped.
   apply(record: Extract<ChatRecord, { dir: 'queue' }>): void {
-    if (record.text !== null && record.ref) this.add(record.text, record.ref, record.images, record.held, record.references)
+    if (record.text !== null && record.ref) this.add(record.text, record.ref, record.images, record.held, record.references, record.before)
     else if (record.release && record.ref) this.release(record.ref)
     else this.drop(record.ref)
   }
 
-  add(text: string, ref: string, images: readonly ChatImage[] = [], held = false, references?: ChatReference[]): void {
-    this.entries = [...this.entries.filter((entry) => entry.ref !== ref), { text, images: [...images], ref, held, ...(references?.length ? { references } : {}) }]
+  add(text: string, ref: string, images: readonly ChatImage[] = [], held = false, references?: ChatReference[], before?: string): void {
+    const entry = { text, images: [...images], ref, held, ...(references?.length ? { references } : {}) }
+    const existing = this.entries.findIndex((each) => each.ref === ref)
+    if (existing >= 0) {
+      this.entries[existing] = entry
+      return
+    }
+    const next = before ? this.entries.findIndex((each) => each.ref === before) : -1
+    this.entries.splice(next < 0 ? this.entries.length : next, 0, entry)
   }
 
   drop(ref: string | undefined): void {

@@ -15,6 +15,7 @@ import { WHOLE_SESSION_FORK, type ChatAnswer, type StageMessage } from './chat-d
 import { catalogOf, probeChatCatalog } from './chat-catalog'
 import { ChatHost, type ChatStage } from './chat-host'
 import { ChatLog, type LoggedRecord } from './chat-log'
+import { chatDeliveryStatus } from './chat-delivery-status'
 import type { Transcript } from './agent-transcripts'
 import type { SessionHost } from './daemon-client'
 import { ConversationStore } from './conversation-store'
@@ -280,6 +281,10 @@ export class ConversationService {
         // ChatHost dispatches the cancel immediately after this callback; begin its grace
         // period in the following microtask so the cancellation is always first.
         queueMicrotask(() => { void this.stopAfterCancel(sessionId, grace) })
+      },
+      sessionLost: (stage, sessionId) => {
+        this.store.endStage(stage.stageId, null)
+        this.handleExit(sessionId, null)
       }
     }, Date.now, wire)
   }
@@ -1446,6 +1451,9 @@ export class ConversationService {
       this.changed(this.store.update(id, { sessionId: null }))
       throw error
     }
+    // Only move queued messages after startup can no longer delete the new stage on rollback.
+    const previous = this.store.stages(id).filter((candidate) => candidate.id !== stage.id).at(-1)
+    if (previous) this.chats.restoreQueue(id, this.chatStage(current, previous))
     // Announced again now that the agent can take a message: clients learn it is idle.
     return this.changed(this.store.touch(id))
   }
@@ -1756,7 +1764,7 @@ export class ConversationService {
     this.gitSending.set(id, (this.gitSending.get(id) ?? 0) + 1)
     try {
       await this.gitGuard?.(this.get(id).projectPaths)
-      if (ref && this.sentRef(id, ref, 0)) return
+      if (ref && this.checkSentRef(id, ref, 0, true)) return
       const note = this.switchNote(id)
       const message = note ? branchSwitchMessage(note, text) : text
       await this.chats.send(id, message, await this.chatImages(imageIds), queue, steer, ref, chatReferencesFor(text, message, references))
@@ -1831,10 +1839,19 @@ export class ConversationService {
   }
 
   sentRef(id: string, ref: string, since: number): boolean {
+    return this.checkSentRef(id, ref, since, false)
+  }
+
+  private checkSentRef(id: string, ref: string, since: number, checkUncertain: boolean): boolean {
     const conversation = this.get(id)
-    return this.store.stages(id)
-      .filter((stage) => stage.endedAt === null || stage.endedAt >= since)
-      .some((stage) => this.chats.items(this.chatStage(conversation, stage)).some((item) => item.id === `u:${ref}`))
+    for (const stage of this.store.stages(id)) {
+      if (stage.endedAt !== null && stage.endedAt < since) continue
+      const chat = this.chatStage(conversation, stage)
+      if (checkUncertain) this.chats.assertDelivery(chat, ref)
+      if (this.chats.submitted(chat, ref)) return true
+      if (this.chats.items(chat).some((item) => item.id === `u:${ref}`) && !this.chats.undelivered(chat, ref)) return true
+    }
+    return false
   }
 
   sourceDeliveryReceipt(id: string, ref: string, known: import('@antumi/protocol').SourceDelivery['state']): import('./source-updates').SourceDeliveryReceipt | null {
@@ -1843,7 +1860,9 @@ export class ConversationService {
     let result: import('./source-updates').SourceDeliveryReceipt | null = null
     for (const stage of this.store.stages(id)) {
       const records = ChatLog.of(this.sessionsRoot, id, stage.id).read().records
-      if (records.some((record) => record.dir === 'out' && record.ref === ref)) result = { state: known === 'submitted' || records.some((record) => record.dir === 'receipt' && record.ref === ref) ? 'submitted' : 'uncertain' }
+      const delivery = chatDeliveryStatus(records, ref)
+      if (delivery === 'undelivered') result = { state: 'failed' }
+      else if (delivery !== null) result = { state: known === 'submitted' || delivery === 'submitted' ? 'submitted' : 'uncertain' }
       else if (records.some((record) => record.dir === 'queue' && record.ref === ref && record.text !== null)) {
         const state = this.stageChatItems(id, stage.id).findLast((item) => item.kind === 'state')
         const entry = state?.kind === 'state' ? state.queue.find((entry) => entry.ref === ref) : undefined
@@ -2094,7 +2113,11 @@ export class ConversationService {
     this.chats.cancelAsks(id)
     const grace = adapterOf(current.agent).turns?.stopAfterCancel
     if (!grace || !current.sessionId) {
-      await this.chats.interrupt(id)
+      try { await this.chats.interrupt(id) }
+      catch {
+        if (!current.sessionId || this.get(id).sessionId !== current.sessionId) return
+        await this.stop(id, true)
+      }
       return
     }
     // Mark it intentional before writing cancel: the agent may obey and exit before the daemon's
@@ -2118,7 +2141,6 @@ export class ConversationService {
     await this.serially(id, async () => {
       const conversation = this.get(id)
       const { agent } = conversation
-      if (!adapterOf(agent).turns?.retryByRestart) throw new Rejection('chat-option-invalid', `${agent} turns cannot reconnect this way`)
       const stage = this.store.stages(id).find((candidate) => candidate.id === stageId)
       if (!stage) throw new Rejection('stage-not-found', `no chat stage ${stageId}`)
       const notice = this.chats.items(this.chatStage(conversation, stage)).find((item) => item.id === itemId)
@@ -2127,6 +2149,13 @@ export class ConversationService {
       }
       const user = this.chats.items(this.chatStage(conversation, stage)).find((item) => item.id === notice.action?.userItemId)
       if (user?.kind !== 'user') throw new Rejection('chat-item-not-found', 'the message to retry is no longer available')
+      const ref = user.id.slice(2)
+      const undelivered = this.chats.undelivered(this.chatStage(conversation, stage), ref)
+      if (!adapterOf(agent).turns?.retryByRestart && !undelivered) throw new Rejection('chat-option-invalid', `${agent} turns cannot reconnect this way`)
+      if (undelivered && this.sentRef(id, ref, 0)) {
+        this.chats.updateNotice(this.chatStage(conversation, stage), { dir: 'note', at: Date.now(), id: notice.id, level: 'info', text: '这条消息已在重新连接后送达。', action: null })
+        return
+      }
 
       // Offered while the turn was still silent: stopped first, if it still is.
       const silent = this.chats.silentTurn(id)
@@ -2137,7 +2166,7 @@ export class ConversationService {
       if (ready.sessionId && !this.chats.idle(id)) throw new Rejection('chat-busy', `${agent} is already working on another turn`)
       if (ready.sessionId) await this.stop(id)
       await this.start(id, agent, '', false)
-      await this.sendNow(id, user.text, user.images.map((image) => image.id), false, false, randomUUID())
+      await this.sendNow(id, user.text, user.images.map((image) => image.id), false, false, undelivered ? ref : randomUUID(), user.references)
       this.chats.updateNotice(this.chatStage(conversation, stage), {
         dir: 'note',
         at: Date.now(),
@@ -2172,7 +2201,7 @@ export class ConversationService {
     return { items: cut.items, before: cut.first > 0 ? stages[cut.first]!.id : null, ...(cut.truncated ? { truncated: true } : {}) }
   }
 
-  async stop(id: string): Promise<Conversation> {
+  async stop(id: string, requireExit = false): Promise<Conversation> {
     const pending = this.launching.get(id)
     if (pending) {
       const { opening } = pending
@@ -2187,7 +2216,7 @@ export class ConversationService {
     }
     const current = this.get(id)
     if (!current.sessionId) return current
-    await this.stopAgent(current.sessionId)
+    await this.stopAgent(current.sessionId, requireExit)
     await this.importHooks?.after(id)
     if (this.store.get(id)?.sessionId === null) return this.get(id)
     const stage = this.store.activeStage(id)
@@ -2340,7 +2369,7 @@ export class ConversationService {
     this.chats.handleStderr(sessionId, data)
   }
 
-  handleExit(sessionId: string, exitCode: number): void {
+  handleExit(sessionId: string, exitCode: number | null): void {
     this.chats.handleExit(sessionId, exitCode)
     this.releaseLaunch(sessionId)
     const stopped = this.stopping.has(sessionId)
@@ -2390,6 +2419,7 @@ export class ConversationService {
         // Started, or spawned, since the list was taken.
         if (!info && stage && (stage.startedAt >= listedAt || (this.launches.get(conversation.sessionId)?.at ?? -Infinity) >= listedAt)) continue
         if (!info || !stage) {
+          this.chats.handleExit(conversation.sessionId, null)
           if (stage) this.store.endStage(stage.id, null)
           this.changed(this.store.update(conversation.id, { sessionId: null }))
           this.capacityReleased?.()

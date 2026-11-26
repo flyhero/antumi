@@ -11,6 +11,7 @@ import { ChatLog } from './chat-log'
 import { fakeChatDaemon } from './fake-chat-agent'
 import { pngBytes } from './image-fixtures'
 import { WireLog } from './wire-log'
+import { Rejection } from './rejection'
 
 const STAGE: ChatStage = {
   conversationId: 'conversation-1',
@@ -241,9 +242,177 @@ describe('ChatHost', () => {
       await request(method, params)
       throw new Error('reply lost')
     })
-    await expect(host.send(STAGE.conversationId, 'once', [], false, false, 'retry')).rejects.toThrow('reply lost')
+    await expect(host.send(STAGE.conversationId, 'once', [], false, false, 'retry')).resolves.toBeUndefined()
     await host.send(STAGE.conversationId, 'once', [], false, false, 'retry')
     expect(userFrames(sessionId)).toHaveLength(1)
+  })
+
+  it('rejects a second live process for a conversation instead of routing messages to the first', async () => {
+    const { host, sessionId } = await started()
+    const second = await daemon.request('spawnPipe', { command: 'claude', args: [], cwd: '/work/repo', env: {} })
+    await expect(host.open({ ...STAGE, stageId: 'second' }, second.sessionId, 0, true)).rejects.toMatchObject({ reason: 'chat-process-running' })
+    await host.send(STAGE.conversationId, 'original')
+    expect(userFrames(sessionId)).toHaveLength(1)
+    expect(userFrames(second.sessionId)).toHaveLength(0)
+  })
+
+  it('retires a confirmed missing live when opening a replacement', async () => {
+    const { host, sessionId } = await started()
+    daemon.reply = () => {}
+    await host.send(STAGE.conversationId, 'first')
+    const request = daemon.request
+    vi.spyOn(daemon, 'request').mockImplementation(async (method, params) => {
+      if (method === 'attach' && 'sessionId' in params && params.sessionId === sessionId) throw new Rejection('session-not-found')
+      return request(method, params)
+    })
+    const second = await daemon.request('spawnPipe', { command: 'claude', args: [], cwd: '/work/repo', env: {} })
+    await host.open({ ...STAGE, stageId: 'replacement' }, second.sessionId, 0, true)
+    expect(host.owns(sessionId)).toBe(false)
+    expect(host.items(STAGE).find((item) => item.kind === 'turn')).toMatchObject({ state: 'interrupted' })
+    await host.send(STAGE.conversationId, 'new')
+    expect(userFrames(second.sessionId)).toHaveLength(1)
+  })
+
+  it('holds uncertain queued sends and never replays them when the queue is released', async () => {
+    const { host, sessionId } = await started()
+    daemon.reply = () => {}
+    await host.send(STAGE.conversationId, 'first')
+    await host.send(STAGE.conversationId, 'second', [], true, false, 'second')
+    await host.send(STAGE.conversationId, 'third', [], true, false, 'third')
+    const request = daemon.request
+    vi.spyOn(daemon, 'request').mockImplementationOnce(async (method, params) => {
+      await request(method, params)
+      throw new Rejection('daemon-unavailable')
+    })
+    finish(sessionId, 'completed')
+    await flushMicrotasks()
+    expect(stateOf(host)).toMatchObject({ queue: [{ ref: 'second', held: true }, { ref: 'third', held: true }] })
+    await expect(host.sendQueued(STAGE.conversationId, 'second')).rejects.toMatchObject({ reason: 'delivery-uncertain' })
+    await expect(host.sendQueued(STAGE.conversationId, 'second', true)).rejects.toMatchObject({ reason: 'delivery-uncertain' })
+    expect(stateOf(host)).toMatchObject({ queue: expect.arrayContaining([expect.objectContaining({ ref: 'second' })]) })
+    // An actual cancellation response proves the agent received it; an exit alone would not.
+    finish(sessionId, 'aborted_streaming')
+    await host.sendQueued(STAGE.conversationId, 'second')
+    expect(userFrames(sessionId)).toHaveLength(2)
+    expect(stateOf(host)).toMatchObject({ queue: [{ ref: 'third', held: true }] })
+    host.forget(sessionId, STAGE.stageId)
+  })
+
+  it('keeps a queued message and its references when the daemon disconnects before dispatch', async () => {
+    const { host, sessionId } = await started()
+    daemon.reply = () => {}
+    await host.send(STAGE.conversationId, 'first')
+    const references: ChatReference[] = [{ start: 0, end: 4, target: { kind: 'file', path: '/file', relative: null } }]
+    await host.send(STAGE.conversationId, 'file', [], true, false, 'queued', references)
+    await host.send(STAGE.conversationId, 'later', [], true, false, 'later')
+    vi.spyOn(daemon, 'assertConnected').mockImplementation(() => { throw new Rejection('daemon-unavailable') })
+    finish(sessionId, 'completed')
+    expect(stateOf(host)).toMatchObject({ queue: [{ ref: 'queued', text: 'file', held: true, references }, { ref: 'later', held: true }] })
+    expect(host.items(STAGE).filter((item) => item.kind === 'notice')).toMatchObject([{ level: 'error', text: expect.stringContaining('排队的消息没能发出') }])
+  })
+
+  it.each([false, true])('keeps the order when a middle queued message fails (send now: %s)', async (now) => {
+    const { host, sessionId } = await started()
+    daemon.reply = () => {}
+    await host.send(STAGE.conversationId, 'first')
+    for (const ref of ['second', 'third', 'fourth']) await host.send(STAGE.conversationId, ref, [], true, false, ref)
+    if (!now) finish(sessionId, 'aborted_streaming')
+    vi.spyOn(daemon, 'request').mockRejectedValueOnce(new Rejection('daemon-unavailable'))
+    const send = host.sendQueued(STAGE.conversationId, 'third', now)
+    if (now) await expect(send).rejects.toMatchObject({ reason: 'delivery-uncertain' })
+    else await send
+    await flushMicrotasks()
+    expect(stateOf(host)).toMatchObject({ queue: [
+      { ref: 'second', held: true }, { ref: 'third', held: true }, { ref: 'fourth', held: true }
+    ] })
+    const log = ChatLog.of(root, STAGE.conversationId, STAGE.stageId)
+    expect(log.read().records.filter((record) => record.dir === 'queue').at(-1)).toMatchObject({ ref: 'fourth', held: true })
+    host.forget(sessionId, STAGE.stageId)
+    expect(stateOf(host)).toMatchObject({ queue: [
+      { ref: 'second', held: true }, { ref: 'third', held: true }, { ref: 'fourth', held: true }
+    ] })
+  })
+
+  it.each(['daemon-unavailable', 'session-not-found'])('keeps a real agent confirmation when the write later fails with %s', async (reason) => {
+    const { host, sessionId } = await started()
+    daemon.reply = () => {}
+    const request = daemon.request
+    vi.spyOn(daemon, 'request').mockImplementationOnce(async (method, params) => {
+      await request(method, params)
+      finish(sessionId, 'completed')
+      throw new Rejection(reason)
+    })
+    await expect(host.send(STAGE.conversationId, 'confirmed', [], false, false, 'confirmed')).resolves.toBeUndefined()
+    expect(host.items(STAGE).find((item) => item.id === 'u:confirmed')).toMatchObject({ delivery: 'submitted' })
+    expect(host.items(STAGE).find((item) => item.id === 'send-failed:confirmed')).toBeUndefined()
+    expect(host.undelivered(STAGE, 'confirmed')).toBe(false)
+    expect(host.owns(sessionId)).toBe(reason !== 'session-not-found')
+    host.forget(sessionId, STAGE.stageId)
+  })
+
+  it('publishes a rejected send even if the process exit arrived first', async () => {
+    const recorded = recordingSink()
+    const { host, sessionId } = await started(recorded.sink)
+    vi.spyOn(daemon, 'request').mockImplementationOnce(async () => {
+      host.handleExit(sessionId, 143)
+      throw new Rejection('session-not-found')
+    })
+    await expect(host.send(STAGE.conversationId, 'not delivered', [], false, false, 'rejected')).rejects.toMatchObject({ reason: 'session-not-found' })
+    expect(recorded.items.find((item) => item.id === 'send-failed:rejected')).toMatchObject({ kind: 'notice', level: 'error', action: { kind: 'retryTurn' } })
+    expect(recorded.items.findLast((item) => item.id === 'u:rejected')).toMatchObject({ delivery: 'undelivered' })
+    expect(host.owns(sessionId)).toBe(false)
+  })
+
+  it('restores a failed queued message ahead of messages added while its write was pending', async () => {
+    const { host, sessionId } = await started()
+    daemon.reply = () => {}
+    await host.send(STAGE.conversationId, 'first')
+    await host.send(STAGE.conversationId, 'second', [], true, false, 'second')
+    let rejectWrite: (error: Error) => void = () => {}
+    const pending = new Promise<never>((_resolve, reject) => { rejectWrite = reject })
+    vi.spyOn(daemon, 'request').mockImplementationOnce(() => pending)
+    const send = host.sendQueued(STAGE.conversationId, 'second', true)
+    const rejected = expect(send).rejects.toMatchObject({ reason: 'delivery-uncertain' })
+    await host.send(STAGE.conversationId, 'third', [], true, false, 'third')
+    rejectWrite(new Rejection('daemon-unavailable'))
+    await rejected
+    expect(stateOf(host)).toMatchObject({ queue: [{ ref: 'second', held: true }, { ref: 'third', held: true }] })
+    host.forget(sessionId, STAGE.stageId)
+  })
+
+  it('warns about silence without stopping or resending, and clears the warning after output', async () => {
+    vi.useFakeTimers()
+    try {
+      const { host, sessionId } = await started()
+      daemon.reply = () => {}
+      await host.send(STAGE.conversationId, 'think', [], false, false, 'silent')
+      await vi.advanceTimersByTimeAsync(5 * 60_000)
+      expect(host.items(STAGE).find((item) => item.id === 'silent:silent')).toMatchObject({ level: 'warning', text: expect.stringContaining('5 分钟') })
+      expect(host.activity(STAGE.conversationId)).toBe('running')
+      expect(daemon.killed).toHaveLength(0)
+      expect(userFrames(sessionId)).toHaveLength(1)
+      daemon.emit(sessionId, { type: 'assistant', message: { id: 'response', content: [{ type: 'text', text: 'progress' }] } })
+      expect(host.items(STAGE).find((item) => item.id === 'silent:silent')).toMatchObject({ level: 'info', text: 'Agent 已有新的进展。' })
+      await vi.advanceTimersByTimeAsync(5 * 60_000)
+      finish(sessionId, 'completed')
+      expect(host.items(STAGE).find((item) => item.id === 'silent:silent')).toMatchObject({ level: 'info', text: '这一轮已结束。' })
+      host.forget(sessionId, STAGE.stageId)
+    } finally { vi.useRealTimers() }
+  })
+
+  it.each(['tool', 'approval'] as const)('does not warn while waiting on a %s', async (kind) => {
+    vi.useFakeTimers()
+    try {
+      const { host, sessionId } = await started()
+      daemon.reply = () => {}
+      await host.send(STAGE.conversationId, 'run', [], false, false, 'busy')
+      if (kind === 'approval') daemon.emit(sessionId, canUseTool('approval'))
+      else daemon.emit(sessionId, { type: 'assistant', message: { id: 'tool', content: [{ type: 'tool_use', id: 'long', name: 'Bash', input: { command: 'sleep 600' } }] } })
+      await vi.advanceTimersByTimeAsync(10 * 60_000)
+      expect(host.items(STAGE).some((item) => item.id === 'silent:busy')).toBe(false)
+      expect(daemon.killed).toHaveLength(0)
+      host.forget(sessionId, STAGE.stageId)
+    } finally { vi.useRealTimers() }
   })
 
   it('passes on the limits the agent reports while it runs', async () => {

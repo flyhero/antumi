@@ -221,7 +221,7 @@ const Base = z.object({ id: z.string(), stageId: z.string(), revision: z.number(
 
 export const ChatItem = z.discriminatedUnion('kind', [
   // steer: sent into a running turn rather than starting one; the agent took it mid-way.
-  Base.extend({ kind: z.literal('user'), text: z.string(), images: z.array(ChatImage).default([]), steer: z.boolean().optional(), references: z.array(ChatReference).optional() }),
+  Base.extend({ kind: z.literal('user'), text: z.string(), images: z.array(ChatImage).default([]), steer: z.boolean().optional(), references: z.array(ChatReference).optional(), delivery: z.enum(['submitted', 'undelivered']).optional() }),
   Base.extend({ kind: z.literal('assistant'), text: z.string(), streaming: z.boolean() }),
   Base.extend({ kind: z.literal('reasoning'), text: z.string(), streaming: z.boolean() }),
   Base.extend({

@@ -187,6 +187,8 @@ export class PiRpc implements ChatDriver {
   }
 
   apply(record: ChatRecord): void {
+    if (record.dir === 'out' && record.ref) this.items.beginDelivery(record.ref)
+    if (record.dir === 'receipt' || record.dir === 'undelivered') this.items.rememberDelivery(record.ref, record.dir === 'receipt' ? 'submitted' : 'undelivered', record.at)
     if (record.dir === 'out' && record.ref && record.references) this.items.rememberReferences(record.ref, record.references)
     if (record.dir === 'in') this.receive(record.frame, record.at)
     else if (record.dir === 'out') this.sent(record.frame, record.at, record.ref, record.images ?? [])

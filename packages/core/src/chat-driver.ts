@@ -8,6 +8,7 @@ import type { AgentMcpServer, McpServer } from './agent-command'
 // the process ending. A stage's log holds these, and replaying them rebuilds the stage.
 export type ChatRecord =
   | { dir: 'receipt'; at: number; ref: string }
+  | { dir: 'undelivered'; at: number; ref: string }
   | { dir: 'in'; at: number; frame: unknown }
   // ref names the item an outgoing user message becomes, images what it showed the agent.
   | { dir: 'out'; at: number; frame: unknown; ref?: string; images?: ChatImage[]; references?: ChatReference[] }
@@ -23,7 +24,8 @@ export type ChatRecord =
   | { dir: 'option'; at: number; option: ChatOption; value: string }
   // A message to wait for the turn to end (ref names its user item); text null with a ref drops
   // that one, or with release lets a held one go; text null alone drops them all.
-  | { dir: 'queue'; at: number; text: string | null; ref?: string; images?: ChatImage[]; references?: ChatReference[]; release?: boolean; held?: boolean }
+  // before restores a failed send to its original position without clearing the queue.
+  | { dir: 'queue'; at: number; text: string | null; ref?: string; images?: ChatImage[]; references?: ChatReference[]; release?: boolean; held?: boolean; before?: string }
   | { dir: 'exit'; at: number; code: number | null; stderr: string }
   // An item as another record showed it: a session run outside Antumi, imported.
   | { dir: 'item'; at: number; item: ChatItem }

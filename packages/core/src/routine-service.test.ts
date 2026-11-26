@@ -345,7 +345,8 @@ describe('RoutineService', () => {
     await conversations.reconcile([])
     expect(conversations.get(run!.id).chat).toBeNull()
     await tick()
-    expect(runs(routine.id)[0]).toMatchObject({ outcome: 'interrupted', error: 'agent-lost' })
+    // Reconciliation now persists the interrupted turn instead of leaving an orphaned live.
+    expect(runs(routine.id)[0]).toMatchObject({ outcome: 'interrupted', error: 'Agent 已退出' })
     expect(routines.get(routine.id)?.unread).toBe(1)
   })
 

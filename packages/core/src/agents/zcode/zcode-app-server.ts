@@ -129,6 +129,9 @@ export class ZCodeAppServer implements ChatDriver {
   }
 
   apply(entry: ChatRecord): void {
+    if (entry.dir === 'out' && entry.ref) this.items.beginDelivery(entry.ref)
+    if (entry.dir === 'receipt' || entry.dir === 'undelivered') this.items.rememberDelivery(entry.ref, entry.dir === 'receipt' ? 'submitted' : 'undelivered', entry.at)
+    if (entry.dir === 'out' && entry.ref && entry.references) this.items.rememberReferences(entry.ref, entry.references)
     switch (entry.dir) {
       case 'in': this.receive(entry.frame, entry.at); break
       case 'out': this.sentFrame(entry.frame, entry.at, entry.ref, entry.images ?? []); break

@@ -477,6 +477,7 @@ export class CodexAppServer implements ChatDriver {
   private exited = false
   // steerable: started by a message; a review or a compaction takes none into it.
   private turn: { ref: string; turnId: string | null; assistant: string | null; steerable?: boolean } | null = null
+  private readonly endedTurns = new Set<string>()
   // Messages sent into the running turn, by request, until Codex takes or refuses them: one taken
   // shows as sent then; one refused waits in the queue for the turn to end instead.
   private readonly steering = new Map<string, { text: string; images: ChatImage[]; ref: string }>()
@@ -547,6 +548,8 @@ export class CodexAppServer implements ChatDriver {
   }
 
   apply(record: ChatRecord): void {
+    if (record.dir === 'out' && record.ref) this.items.beginDelivery(record.ref)
+    if (record.dir === 'receipt' || record.dir === 'undelivered') this.items.rememberDelivery(record.ref, record.dir === 'receipt' ? 'submitted' : 'undelivered', record.at)
     if (record.dir === 'out' && record.ref && record.references) this.items.rememberReferences(record.ref, record.references)
     switch (record.dir) {
       case 'in': {
@@ -635,6 +638,10 @@ export class CodexAppServer implements ChatDriver {
   failure(): string | null {
     if (this.startError) return this.startError
     return this.exited && this.threadId === null ? 'exited' : null
+  }
+
+  sessionLost(): boolean {
+    return this.options.resume !== null && /\bno rollout found for thread id\b/i.test(this.startError ?? '')
   }
 
   activeTurnRef(): string | null { return this.turn?.ref ?? null }
@@ -787,7 +794,7 @@ export class CodexAppServer implements ChatDriver {
 
   interrupt(): unknown[] {
     if (!this.turn || !this.threadId) throw new Rejection('chat-idle', 'no turn is running')
-    if (!this.turn.turnId) throw new Rejection('chat-busy', 'the turn has not started yet')
+    if (!this.turn.turnId) throw new Rejection('chat-turn-not-started', 'the turn has not started yet')
     const cancels = [...this.pending.values()].filter((pending) => pending.kind !== 'plan').map((pending) => ({
       id: pending.rawId,
       result: pending.kind === 'question' ? { answers: {} } : { decision: 'cancel' }
@@ -1077,7 +1084,7 @@ export class CodexAppServer implements ChatDriver {
       if (!error) this.skills = this.skillEntries(frame.result)
     } else if (method && TURN_METHODS.has(method)) {
       const turn = TurnEvent.safeParse(frame.result)
-      if (turn.success && this.turn && !this.turn.turnId) this.turn.turnId = turn.data.turn.id
+      if (turn.success && this.turn && !this.turn.turnId && !this.endedTurns.has(turn.data.turn.id)) this.turn.turnId = turn.data.turn.id
       if (error) this.endTurn('failed', error, null, at)
     }
   }
@@ -1126,12 +1133,15 @@ export class CodexAppServer implements ChatDriver {
       }
       case 'turn/started': {
         const turn = TurnEvent.safeParse(params)
-        if (turn.success && this.turn && !this.turn.turnId) this.turn.turnId = turn.data.turn.id
+        if (turn.success && this.turn && !this.turn.turnId && !this.endedTurns.has(turn.data.turn.id)) this.turn.turnId = turn.data.turn.id
         return
       }
       case 'turn/completed': {
         const turn = TurnEvent.safeParse(params)
-        if (!turn.success) return
+        if (!turn.success || this.endedTurns.has(turn.data.turn.id)) return
+        if (this.turn?.turnId && this.turn.turnId !== turn.data.turn.id) return
+        // A late completion must not settle the next locally recorded prompt, even before its id arrives.
+        this.endedTurns.add(turn.data.turn.id)
         const { status, error, durationMs } = turn.data.turn
         const state: ChatTurnState = status === 'interrupted' ? 'interrupted' : status === 'failed' ? 'failed' : 'completed'
         const message = state === 'failed' ? (error?.message ?? null) : null
@@ -1672,6 +1682,7 @@ export class CodexAppServer implements ChatDriver {
       if (pending.kind !== 'plan') this.resolve(requestId, 'cancelled', null, at)
     }
     const turn = this.turn
+    if (turn?.turnId) this.endedTurns.add(turn.turnId)
     const id = turn ? `turn:${turn.ref}` : `turn:result-${++this.results}`
     this.items.put({ id, kind: 'turn', state, error, durationMs, usage: this.turnUsage, ...(this.meteredRequests.length ? { metering: { models: this.meteredRequests, calls: this.meteredRequests.length, callsEstimated: true, reportedCostUsd: null } } : {}), providerRef: turn?.turnId ?? null }, at)
     if (limit) this.items.usageLimit(id, limit, at)

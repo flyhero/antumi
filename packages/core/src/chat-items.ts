@@ -28,6 +28,23 @@ export class ChatItems {
   private deltas = new Map<string, string>()
   private notices = 0
   private readonly references = new Map<string, ChatReference[]>()
+  private readonly deliveries = new Map<string, 'submitted' | 'undelivered'>()
+
+  beginDelivery(ref: string): void {
+    this.deliveries.delete(`u:${ref}`)
+  }
+
+  rememberDelivery(ref: string, delivery: 'submitted' | 'undelivered', at: number): void {
+    const id = `u:${ref}`
+    if (this.deliveries.get(id) === 'submitted') return
+    this.deliveries.set(id, delivery)
+    const item = this.items.get(id)
+    if (item?.kind === 'user') this.put({ ...item, delivery }, at)
+  }
+
+  delivery(ref: string): 'submitted' | 'undelivered' | undefined {
+    return this.deliveries.get(`u:${ref}`)
+  }
 
   rememberReferences(ref: string, references: ChatReference[]): void {
     this.references.set(`u:${ref}`, references)
@@ -41,6 +58,8 @@ export class ChatItems {
 
   put(body: ChatItemBody, at: number): ChatItem {
     if (body.kind === 'user') {
+      const delivery = this.deliveries.get(body.id)
+      if (delivery) body = { ...body, delivery }
       const references = body.references ?? this.references.get(body.id)
       if (references) body = { ...body, references: validChatReferences(body.text, references) }
     }

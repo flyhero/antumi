@@ -426,6 +426,139 @@ describe('ConversationService', () => {
     expect(daemon.spawns).toHaveLength(0)
   })
 
+  it('retires a missing daemon session before resuming the same conversation', async () => {
+    const first = await service.create('claude', [])
+    daemon.reply = () => {}
+    await service.send(first.id, 'first')
+    await service.send(first.id, 'queued before daemon restart', [], true, false, 'surviving-queue')
+    daemon.sessions.delete(first.sessionId!)
+    await service.reconcile([], Date.now() + 1)
+    expect(service.get(first.id).sessionId).toBeNull()
+    expect(service.stageChatItems(first.id, service.stages(first.id)[0]!.id).filter((item) => item.kind === 'turn')).toMatchObject([{ state: 'interrupted' }])
+    const next = await service.continue(first.id)
+    await service.send(first.id, 'next', [], false, false, 'next-ref')
+    expect(daemon.written(next.sessionId!).at(-1)).toMatchObject({ type: 'user', message: { content: 'next' } })
+    expect(service.chatPage(first.id).items.filter((item) => item.id === 'u:next-ref')).toHaveLength(1)
+    expect(service.chatPage(first.id).items.findLast((item) => item.kind === 'state')).toMatchObject({ queue: [{ ref: 'surviving-queue', held: true }] })
+  })
+
+  it('persists a rejected send as undelivered and lets the same ref be sent after reconnecting', async () => {
+    const first = await service.create('claude', [])
+    const image = await attachmentsAt(root).put(pngBytes(2, 2))
+    vi.spyOn(daemon, 'request').mockRejectedValueOnce(new Rejection('session-not-found'))
+    await expect(service.send(first.id, 'retry', [image.id], false, false, 'retry')).rejects.toMatchObject({ reason: 'session-not-found' })
+    expect(service.get(first.id).sessionId).toBeNull()
+    expect(service.sentRef(first.id, 'retry', 0)).toBe(false)
+    expect(service.sourceDeliveryReceipt(first.id, 'retry', 'uncertain')).toEqual({ state: 'failed' })
+    service = serve()
+    expect(service.sentRef(first.id, 'retry', 0)).toBe(false)
+    const next = await service.continue(first.id)
+    await service.send(first.id, 'retry', [image.id], false, false, 'retry')
+    expect(daemon.written(next.sessionId!).at(-1)).toMatchObject({ type: 'user', message: { content: [{ type: 'image' }, { type: 'text', text: 'retry' }] } })
+    expect(service.sentRef(first.id, 'retry', 0)).toBe(true)
+    expect(service.sourceDeliveryReceipt(first.id, 'retry', 'uncertain')).toEqual({ state: 'submitted' })
+  })
+
+  it('keeps later queued messages held when a queued send is rejected and retried', async () => {
+    const first = await service.create('claude', [])
+    daemon.reply = () => {}
+    await service.send(first.id, 'first')
+    await service.send(first.id, 'second', [], true, false, 'second')
+    await service.send(first.id, 'third', [], true, false, 'third')
+    vi.spyOn(daemon, 'request').mockRejectedValueOnce(new Rejection('session-not-found'))
+    daemon.emit(first.sessionId!, { type: 'result', subtype: 'success', terminal_reason: 'completed' })
+    await settle()
+    expect(service.get(first.id).sessionId).toBeNull()
+    const stage = service.stages(first.id).at(-1)!
+    expect(service.stageChatItems(first.id, stage.id).find((item) => item.id === 'send-failed:second')).toMatchObject({ kind: 'notice', action: { kind: 'retryTurn', userItemId: 'u:second' } })
+    await service.retryTurn(first.id, stage.id, 'send-failed:second')
+    const next = service.get(first.id).sessionId!
+    expect(daemon.written(next).filter((frame) => JSON.stringify(frame).includes('"type":"user"'))).toMatchObject([{ message: { content: 'second' } }])
+    expect(service.chatPage(first.id).items.findLast((item) => item.kind === 'state')).toMatchObject({ queue: [{ ref: 'third', text: 'third', held: true }] })
+  })
+
+  it('stops only the unacknowledged Codex process when no turn id is available', async () => {
+    const other = await service.create('claude', [])
+    const created = await codexOpens(service.create('codex', []))
+    await service.send(created.id, 'no response')
+    await service.interrupt(created.id)
+    expect(service.get(created.id).sessionId).toBeNull()
+    expect(daemon.killed).toEqual([{ sessionId: created.sessionId, force: false }])
+    expect(service.get(other.id).sessionId).toBe(other.sessionId)
+    expect(service.stages(created.id).at(-1)?.endedAt).not.toBeNull()
+  })
+
+  it('starts a fresh Codex thread when a rejected first prompt left no saved rollout', async () => {
+    const first = await codexOpens(service.create('codex', []), 'unsaved')
+    vi.spyOn(daemon, 'request').mockRejectedValueOnce(new Rejection('session-not-found'))
+    await expect(service.send(first.id, 'retry', [], false, false, 'retry')).rejects.toMatchObject({ reason: 'session-not-found' })
+    const starting = service.continue(first.id)
+    const resuming = `pipe-${daemon.spawns.length + 1}`
+    const asked = (method: string) => daemon.written(resuming).some((frame) => JSON.stringify(frame).includes(`"method":"${method}"`))
+    while (!asked('initialize')) await settle()
+    daemon.emit(resuming, { id: 'antumi-init', result: {} })
+    while (!asked('thread/resume')) await settle()
+    daemon.emit(resuming, { id: 'antumi-thread', error: { code: -32600, message: 'no rollout found for thread id unsaved' } })
+    const next = await codexOpens(starting, 'saved')
+    expect(daemon.written(next.sessionId!).some((frame) => JSON.stringify(frame).includes('"method":"thread/start"'))).toBe(true)
+    await service.send(first.id, 'retry', [], false, false, 'retry')
+    expect(daemon.written(next.sessionId!).filter((frame) => JSON.stringify(frame).includes('"method":"turn/start"'))).toHaveLength(1)
+  })
+
+  it('keeps the old queue when a handoff fails before the new stage commits', async () => {
+    const first = await service.create('claude', [])
+    const request = daemon.request
+    daemon.reply = () => {}
+    await service.send(first.id, 'first')
+    await service.send(first.id, 'second', [], true, false, 'second')
+    await service.send(first.id, 'third', [], true, false, 'third')
+    vi.spyOn(daemon, 'request').mockRejectedValueOnce(new Rejection('session-not-found'))
+    daemon.emit(first.sessionId!, { type: 'result', subtype: 'success', terminal_reason: 'completed' })
+    await settle()
+    const previous = service.stages(first.id).at(-1)!
+    vi.spyOn(daemon, 'request').mockImplementation(async (method, params) => {
+      if (method === 'write' && 'data' in params && params.data.includes('移交')) throw new Rejection('daemon-unavailable')
+      return request(method, params)
+    })
+    const handoff = codexOpens(service.handoff(first.id, 'codex', 'continue', false))
+    await expect(handoff).rejects.toMatchObject({ reason: 'delivery-uncertain' })
+    expect(service.stages(first.id)).toHaveLength(1)
+    expect(service.stageChatItems(first.id, previous.id).find((item) => item.kind === 'state')).toMatchObject({ queue: [{ ref: 'second' }, { ref: 'third' }] })
+  })
+
+  it('deduplicates a submitted steer whose agent acknowledgement is still pending', async () => {
+    const first = await codexOpens(service.create('codex', []))
+    await service.send(first.id, 'first')
+    daemon.emit(first.sessionId!, { id: 'antumi-turn-1', result: { turn: { id: 'turn-1' } } })
+    await service.send(first.id, 'steer', [], false, true, 'steer')
+    expect(service.chatPage(first.id).items.find((item) => item.id === 'u:steer')).toBeUndefined()
+    expect(service.sentRef(first.id, 'steer', 0)).toBe(true)
+    const writes = daemon.written(first.sessionId!).length
+    await service.send(first.id, 'steer', [], false, true, 'steer')
+    expect(daemon.written(first.sessionId!)).toHaveLength(writes)
+    service = serve()
+    expect(service.sentRef(first.id, 'steer', 0)).toBe(true)
+  })
+
+  it('does not stop a replacement session when an earlier cancel fails late', async () => {
+    const first = await codexOpens(service.create('codex', []))
+    await service.send(first.id, 'first')
+    daemon.emit(first.sessionId!, { id: 'antumi-turn-1', result: { turn: { id: 'turn-1' } } })
+    const request = daemon.request
+    vi.spyOn(daemon, 'request').mockImplementation(async (method, params) => {
+      if (method === 'write' && 'data' in params && params.data.includes('turn/interrupt')) {
+        daemon.exit(first.sessionId!, 143)
+        await codexOpens(service.continue(first.id), 'replacement')
+        throw new Rejection('daemon-unavailable')
+      }
+      return request(method, params)
+    })
+    await service.interrupt(first.id)
+    expect(service.get(first.id).sessionId).not.toBe(first.sessionId)
+    expect(service.get(first.id).sessionId).not.toBeNull()
+    expect(daemon.killed).toHaveLength(0)
+  })
+
   it('commits and pushes only a conversation project, while its agent is idle', async () => {
     const repo = path.join(root, 'app')
     const remote = path.join(root, 'origin.git')

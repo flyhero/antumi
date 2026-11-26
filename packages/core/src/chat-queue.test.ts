@@ -39,6 +39,19 @@ describe('ChatQueue', () => {
     expect(queue.view).toEqual([])
   })
 
+  it('restores a failed middle message before its successor without clearing later messages', () => {
+    const queue = new ChatQueue()
+    for (const ref of ['first', 'second', 'third']) queue.apply({ dir: 'queue', at, text: ref, ref })
+    queue.sent('second')
+    queue.apply({ dir: 'queue', at, text: 'second', ref: 'second', held: true, before: 'third' })
+    expect(queue.view.map((entry) => entry.ref)).toEqual(['first', 'second', 'third'])
+    for (const ref of ['first', 'third']) {
+      queue.apply({ dir: 'queue', at, text: ref, ref, held: true })
+      expect(queue.view.map((entry) => entry.ref)).toEqual(['first', 'second', 'third'])
+    }
+    expect(queue.view.every((entry) => entry.held)).toBe(true)
+  })
+
   it('keeps the images a message waits with', () => {
     const queue = new ChatQueue()
     const image = { id: `${'a'.repeat(64)}.png`, width: 4, height: 3 }

@@ -4,6 +4,7 @@ import { agentDescriptor, ANTUMI_REQUEST_PREFIX, isAntumiRequest, type AgentKind
 import type { AttachmentStore } from './attachment-store'
 import type { ChatAnswer, ChatDriver, ChatImageFile, ChatOutgoing, ChatRecord, ChatStageOptions, StageMessage } from './chat-driver'
 import { ChatLog, type LoggedRecord } from './chat-log'
+import { chatDeliveryStatus } from './chat-delivery-status'
 import { clip } from './chat-items'
 import type { AntumiAsk, AntumiResolution } from './antumi-requests'
 import { adapterOf } from './agents'
@@ -17,6 +18,7 @@ const START_TIMEOUT_MS = 30_000
 const STDERR_TAIL_CHARS = 8 * 1024
 // Ended stages kept rebuilt in memory, most recently read last.
 const HISTORY_CACHE = 20
+const SILENCE_NOTICE_MS = 5 * 60_000
 
 // ended: the stage is over in the store (its agent is gone), not merely not taken over yet.
 export type ChatStage = { conversationId: string; stageId: string; agent: AgentKind; options: ChatStageOptions; ended?: boolean }
@@ -38,6 +40,7 @@ export type ChatSink = {
   // A watched prompt with no event for a while asks the owner to tear the process down in stages.
   turnStalled?(conversationId: string, sessionId: string): void
   prompt?(stage: ChatStage, ref: string): void
+  sessionLost?(stage: ChatStage, sessionId: string): void
 }
 
 // A turn of an agent whose turns stall (AgentAdapter.turns.firstFrameTimeoutMs), traced to the
@@ -78,6 +81,8 @@ type Live = ChatStage & {
   // A process this stage just started: the stderr it wrote before core attached goes to the wire log too.
   freshStderr: boolean
   watch: TurnWatch | null
+  silence: { ref: string; timer: ReturnType<typeof setTimeout>; noticed: boolean } | null
+  pendingReceipts: Set<string>
 }
 
 // Where the raw traffic goes, for the user to debug with; it records nothing while switched off.
@@ -145,10 +150,26 @@ export class ChatHost {
   async open(stage: ChatStage, sessionId: string, consumed: number, waitForStart: boolean): Promise<void> {
     const open = this.lives.get(sessionId)
     if (open) return this.catchUp(open)
+    for (const previous of this.lives.values()) {
+      if (previous.conversationId !== stage.conversationId) continue
+      try {
+        const snapshot = await this.daemon.request('attach', { sessionId: previous.sessionId })
+        if (!snapshot.exited) throw new Rejection('chat-process-running', '这个会话仍有 Agent 在运行')
+        await this.catchUp(previous)
+      } catch (error) {
+        if (!(error instanceof Rejection && error.reason === 'session-not-found')) throw error
+        this.loseSession(previous)
+      }
+    }
     const log = ChatLog.of(this.sessionsRoot, stage.conversationId, stage.stageId)
     const driver = createDriver(stage)
     const { records, end } = log.read()
     records.forEach((record) => driver.apply(record))
+    const pendingReceipts = new Set<string>()
+    for (const record of records) {
+      if (record.dir === 'out' && record.ref) pendingReceipts.add(record.ref)
+      else if (record.dir === 'receipt' || record.dir === 'undelivered') pendingReceipts.delete(record.ref)
+    }
     const live: Live = {
       ...stage,
       sessionId,
@@ -168,7 +189,9 @@ export class ChatHost {
       started: null,
       lastActive: records.at(-1)?.at ?? this.now(),
       freshStderr: records.length === 0,
-      watch: null
+      watch: null,
+      silence: null,
+      pendingReceipts
     }
     this.lives.set(sessionId, live)
     this.history.delete(stage.stageId)
@@ -190,6 +213,8 @@ export class ChatHost {
 
   // Drops a stage that never got going without logging its end.
   forget(sessionId: string, stageId: string): void {
+    const live = this.lives.get(sessionId)
+    if (live) { this.clearSilence(live); this.clearWatchTimer(live) }
     this.lives.delete(sessionId)
     this.history.delete(stageId)
   }
@@ -208,7 +233,7 @@ export class ChatHost {
     live.queued.sort((a, b) => a.offset - b.offset).forEach((event) => this.feed(live, event.offset, event.data))
     live.queued = []
     live.attached = true
-    this.pump(live)
+    if (!snapshot.exited && !live.exitedEarly) this.pump(live)
     this.flush(live)
     const exitCode = snapshot.exited ? snapshot.exitCode : live.exitedEarly?.code
     if (exitCode !== undefined) this.end(live, exitCode)
@@ -322,8 +347,17 @@ export class ChatHost {
 
   // A running stage's items, or an ended one's rebuilt from its log.
   items(stage: ChatStage): ChatItem[] {
+    const driver = this.driverOf(stage)
+    return stage.ended ? settledRequests(driver.items.list()) : driver.items.list()
+  }
+
+  submitted(stage: ChatStage, ref: string): boolean {
+    return this.driverOf(stage).items.delivery(ref) === 'submitted'
+  }
+
+  private driverOf(stage: ChatStage): ChatDriver {
     const live = [...this.lives.values()].find((each) => each.stageId === stage.stageId)
-    if (live) return live.driver.items.list()
+    if (live) return live.driver
     let driver = this.history.get(stage.stageId)
     if (driver) {
       this.history.delete(stage.stageId)
@@ -333,7 +367,34 @@ export class ChatHost {
       ChatLog.of(this.sessionsRoot, stage.conversationId, stage.stageId).read().records.forEach((record) => replayed.apply(record))
     }
     this.remember(stage.stageId, driver)
-    return stage.ended ? settledRequests(driver.items.list()) : driver.items.list()
+    return driver
+  }
+
+  undelivered(stage: ChatStage, ref: string): boolean {
+    return chatDeliveryStatus(ChatLog.of(this.sessionsRoot, stage.conversationId, stage.stageId).read().records, ref) === 'undelivered'
+  }
+
+  assertDelivery(stage: ChatStage, ref: string): void {
+    if (!this.items(stage).some((item) => item.id === `send-failed:${ref}`)) return
+    const records = ChatLog.of(this.sessionsRoot, stage.conversationId, stage.stageId).read().records
+    if (chatDeliveryStatus(records, ref) === 'uncertain') {
+      throw new Rejection('delivery-uncertain', '消息的提交结果尚未确认。请先检查本轮输出；确认需要再次执行时，请重新发送。')
+    }
+  }
+
+  restoreQueue(conversationId: string, previous: ChatStage): void {
+    const source = ChatLog.of(this.sessionsRoot, previous.conversationId, previous.stageId)
+    const records = source.read().records
+    if (!records.some((record) => record.dir === 'note' && record.id?.startsWith('send-failed:') || record.dir === 'exit' && record.code === null)) return
+    const live = this.running(conversationId)
+    const state = this.items(previous).find((item) => item.kind === 'state')
+    for (const entry of state?.queue ?? []) {
+      if (chatDeliveryStatus(records, entry.ref) !== null) continue
+      this.record(live, { dir: 'queue', at: this.now(), ...entry, held: true })
+      source.append([{ dir: 'queue', at: this.now(), ref: entry.ref, text: null }])
+    }
+    this.history.delete(previous.stageId)
+    this.flush(live)
   }
 
   // While a turn runs: with steer, the message goes into it (an agent that takes none rejects);
@@ -341,7 +402,10 @@ export class ChatHost {
   // A caller that names the message's ref sends it at most once per stage: again, it is a no-op.
   async send(conversationId: string, text: string, images: readonly ChatImage[] = [], queue = false, steer = false, ref: string = randomUUID(), references?: ChatReference[]): Promise<void> {
     const live = this.running(conversationId)
-    if (live.driver.items.get(`u:${ref}`) || this.queued(live).some((entry) => entry.ref === ref)) return
+    this.assertDelivery(live, ref)
+    if (live.driver.items.delivery(ref) === 'submitted') return
+    if (live.driver.items.get(`u:${ref}`)) return
+    if (this.queued(live).some((entry) => entry.ref === ref)) return
     const busy = inTurn(live.driver)
     if (busy && queue && !steer) {
       this.enqueue(live, text, images, ref, references)
@@ -364,12 +428,29 @@ export class ChatHost {
   // first. With now, it leaves the queue and goes at once, into the running turn if there is one.
   async sendQueued(conversationId: string, ref?: string, now = false): Promise<void> {
     const live = this.running(conversationId)
-    const entry = this.queued(live).find((each) => ref === undefined || each.ref === ref)
+    const queue = this.queued(live)
+    const entry = queue.find((each) => ref === undefined || each.ref === ref)
     if (!entry) throw new Rejection('chat-nothing-queued', 'no message is waiting')
+    this.assertDelivery(live, entry.ref)
     if (now) {
+      if (live.driver.items.get(`u:${entry.ref}`)) {
+        this.record(live, { dir: 'queue', at: this.now(), text: null, ref: entry.ref })
+        this.flush(live)
+        return
+      }
       if (live.driver.activity() !== 'idle' && !live.driver.canSteer()) throw new Rejection('chat-no-steer', 'the agent takes no message into a running turn')
       this.record(live, { dir: 'queue', at: this.now(), text: null, ref: entry.ref })
-      await this.send(conversationId, entry.text, entry.images, false, true, entry.ref, entry.references)
+      try {
+        const message = inTurn(live.driver) ? live.driver.steer(entry.text, this.files(entry.images)) : live.driver.send(entry.text, this.files(entry.images))
+        const sent = this.dispatch(live, message, entry.ref, entry.images, entry.references)
+        this.flush(live)
+        await sent
+      }
+      catch (error) {
+        this.holdQueued(live, entry, queue)
+        this.flush(live)
+        throw error
+      }
       return
     }
     this.record(live, { dir: 'queue', at: this.now(), text: null, ref: entry.ref, release: true })
@@ -413,6 +494,8 @@ export class ChatHost {
 
   private record(live: Live, record: LoggedRecord): void {
     live.log.append([record])
+    if (record.dir === 'out' && record.ref) live.pendingReceipts.add(record.ref)
+    else if (record.dir === 'receipt' || record.dir === 'undelivered') live.pendingReceipts.delete(record.ref)
     live.driver.apply(record)
     live.lastActive = record.at
   }
@@ -558,6 +641,7 @@ export class ChatHost {
       const at = this.now()
       const before = live.driver.activity()
       const previousRef = live.driver.activeTurnRef?.()
+      const awaitingUser = [...live.pendingReceipts].filter((ref) => !live.driver.items.get(`u:${ref}`))
       live.driver.apply({ dir: 'in', at, frame })
       const nextRef = live.driver.activeTurnRef?.()
       if (live.attached && nextRef && nextRef !== previousRef) this.sink.prompt?.(live, nextRef)
@@ -565,6 +649,15 @@ export class ChatHost {
       if (before !== 'idle' && live.driver.activity() === 'idle') this.watchEnded(live, at)
       const kept = live.driver.logged(frame)
       if (kept !== null) records.push({ dir: 'in', at, frame: kept, end: line.end })
+      // Only agent output can confirm a turn or a steer. A local exit must remain uncertain.
+      const confirmed = awaitingUser.filter((ref) => live.driver.items.get(`u:${ref}`))
+      if (previousRef && previousRef !== nextRef && live.pendingReceipts.has(previousRef)) confirmed.push(previousRef)
+      for (const ref of confirmed) {
+        const receipt: LoggedRecord = { dir: 'receipt', at, ref }
+        records.push(receipt)
+        live.pendingReceipts.delete(ref)
+        live.driver.apply(receipt)
+      }
     }
     live.log.append(records)
     if (lines.length) live.lastActive = this.now()
@@ -574,16 +667,24 @@ export class ChatHost {
   // Sends what the driver says is owed (the handshake, say), and a queued message the agent can
   // now take. Each goes into the log before it goes out, so none is sent twice.
   private pump(live: Live): void {
+    if (this.lives.get(live.sessionId) !== live) return
     for (const frame of live.driver.due()) {
       void this.write(live, frame).catch(ignore)
     }
     const queued = live.driver.queuedToSend()
     if (!queued) return
+    const queue = this.queued(live)
     try {
+      this.assertDelivery(live, queued.ref)
+      if (live.driver.items.get(`u:${queued.ref}`)) {
+        this.record(live, { dir: 'queue', at: this.now(), ref: queued.ref, text: null })
+        this.pump(live)
+        return
+      }
       void this.dispatch(live, live.driver.send(queued.text, this.files(queued.images)), queued.ref, queued.images, queued.references).catch(ignore)
     } catch (error) {
-      // An image gone from the store since it was queued: that message is dropped with a word.
-      this.record(live, { dir: 'queue', at: this.now(), text: null, ref: queued.ref })
+      // Keep the message and its attachments for an explicit retry, including offline sends.
+      this.holdQueued(live, queued, queue)
       this.record(live, { dir: 'note', at: this.now(), level: 'error', text: `排队的消息没能发出：${error instanceof Error ? error.message : String(error)}` })
     }
   }
@@ -592,10 +693,21 @@ export class ChatHost {
     return this.dispatch(live, { wire: frame, logged: frame }, ref)
   }
 
+  private holdQueued(live: Live, entry: Omit<ChatQueued, 'held'>, original: readonly ChatQueued[]): void {
+    const queue = this.queued(live).filter((each) => each.ref !== entry.ref)
+    const preceding = new Set(original.slice(0, original.findIndex((each) => each.ref === entry.ref)).map((each) => each.ref))
+    const next = queue.find((each) => !preceding.has(each.ref))
+    // Restore its position without clearing messages that a crash could otherwise lose.
+    this.record(live, { dir: 'queue', at: this.now(), ...entry, held: true, ...(next ? { before: next.ref } : {}) })
+    for (const each of queue) this.record(live, { dir: 'queue', at: this.now(), ...each, held: true })
+  }
+
   // Logged and applied before it is written, so a crash in between cannot send it twice.
   private dispatch(live: Live, message: ChatOutgoing, ref?: string, images: readonly ChatImage[] = [], references?: ChatReference[]): Promise<unknown> {
     // A disconnected daemon must not leave a logged message that deduplication treats as sent.
     this.daemon.assertConnected?.()
+    const queue = this.queued(live)
+    const queued = ref ? queue.find((entry) => entry.ref === ref) : undefined
     if (ref && !inTurn(live.driver)) this.sink.prompt?.(live, ref)
     this.record(live, { dir: 'out', at: this.now(), frame: message.logged, ...(ref ? { ref } : {}), ...(images.length ? { images: [...images] } : {}), ...(references?.length ? { references } : {}) })
     const turns = adapterOf(live.agent).turns
@@ -610,12 +722,37 @@ export class ChatHost {
     const line = JSON.stringify(message.wire)
     this.tap(live, [{ dir: 'stdin', text: line }])
     return this.daemon.request('write', { sessionId: live.sessionId, data: `${line}\n` }).then((result) => {
-      if (ref?.startsWith('source-comments:')) {
-        live.log.append([{ dir: 'receipt', at: this.now(), ref }])
-        this.sink.activity(live.conversationId)
+      if (ref) {
+        this.record(live, { dir: 'receipt', at: this.now(), ref })
+        this.flush(live)
       }
       return result
+    }).catch((error: unknown) => {
+      // Only this rejection proves the handler never reached the process. A lost reply does not.
+      const missing = error instanceof Rejection && error.reason === 'session-not-found'
+      if (ref && chatDeliveryStatus(live.log.read().records, ref) === 'submitted') {
+        if (missing) this.loseSession(live)
+        return
+      }
+      if (missing && ref) this.record(live, { dir: 'undelivered', at: this.now(), ref })
+      if (queued) this.holdQueued(live, queued, queue)
+      this.record(live, {
+        dir: 'note', at: this.now(), id: `send-failed:${ref ?? this.rpcId(message.logged) ?? 'control'}`, level: 'error',
+        text: missing ? 'Agent 会话已失效，这条消息没有送达。请重新连接后重试。' : '提交结果未能确认，消息可能已经送达。请先停止或检查当前回合，避免重复执行。',
+        ...(missing && ref && live.driver.items.get(`u:${ref}`) ? { action: { kind: 'retryTurn', userItemId: `u:${ref}` } } : {})
+      })
+      // The process may have exited before its write rejection arrived; still publish the failure.
+      this.flush(live)
+      if (missing) this.loseSession(live)
+      if (missing) throw error
+      throw new Rejection('delivery-uncertain', error instanceof Error ? error.message : String(error))
     })
+  }
+
+  private loseSession(live: Live): void {
+    if (this.lives.get(live.sessionId) !== live) return
+    this.end(live, null)
+    this.sink.sessionLost?.(live, live.sessionId)
   }
 
   private tap(live: Live, entries: Parameters<WireTap['record']>[2]): void {
@@ -623,7 +760,12 @@ export class ChatHost {
   }
 
   private flush(live: Live): void {
-    const { items, deltas } = live.driver.items.drain()
+    const changed = live.driver.items.drain()
+    const progress = changed.deltas.length > 0 || changed.items.some((item) => item.kind === 'assistant' || item.kind === 'reasoning' || item.kind === 'tool' || item.kind === 'approval' || item.kind === 'question' || (item.kind === 'notice' && item.id !== `silent:${live.driver.activeTurnRef?.()}`))
+    this.watchSilence(live, progress)
+    const diagnostic = live.driver.items.drain()
+    const items = [...changed.items, ...diagnostic.items]
+    const deltas = changed.deltas
     if (items.length) this.sink.items(live.conversationId, items)
     deltas.forEach((delta) => this.sink.delta(live.conversationId, live.stageId, delta.itemId, delta.append))
     const provider = live.driver.providerSessionId()
@@ -661,6 +803,7 @@ export class ChatHost {
   }
 
   private end(live: Live, code: number | null): void {
+    if (live.silence) clearTimeout(live.silence.timer)
     this.clearWatchTimer(live)
     const last = live.framer.flush()
     if (last) this.read(live, [last], false)
@@ -673,6 +816,7 @@ export class ChatHost {
     live.started?.reject(this.startFailure(live, live.driver.failure() ?? 'exited'))
     live.started = null
     this.lives.delete(live.sessionId)
+    this.clearSilence(live)
     this.remember(live.stageId, live.driver)
     this.sink.activity(live.conversationId)
     // Everything is in the log now; the daemon can let go of the output it kept.
@@ -713,6 +857,41 @@ export class ChatHost {
     if (typeof frame !== 'object' || frame === null) return null
     const id = Reflect.get(frame, 'id')
     return typeof id === 'string' || typeof id === 'number' ? String(id) : null
+  }
+
+  private clearSilence(live: Live): void {
+    if (live.silence) clearTimeout(live.silence.timer)
+    live.silence = null
+  }
+
+  private watchSilence(live: Live, progress: boolean): void {
+    const ref = live.driver.activeTurnRef?.()
+    if (!ref || this.lives.get(live.sessionId) !== live) {
+      if (live.silence?.noticed) this.record(live, { dir: 'note', at: this.now(), id: `silent:${live.silence.ref}`, level: 'info', text: '这一轮已结束。' })
+      this.clearSilence(live)
+      return
+    }
+    if (live.silence?.ref === ref && !progress) return
+    const previous = live.silence
+    this.clearSilence(live)
+    if (previous?.noticed) {
+      this.record(live, { dir: 'note', at: this.now(), id: `silent:${previous.ref}`, level: 'info', text: 'Agent 已有新的进展。' })
+    }
+    const at = this.now()
+    const timer = setTimeout(() => {
+      if (this.lives.get(live.sessionId) !== live || live.driver.activeTurnRef?.() !== ref) return
+      const waiting = live.driver.activity() === 'awaiting'
+      const tool = live.driver.items.list().some((item) => item.kind === 'tool' && item.status === 'running' && !item.background)
+      if (waiting || tool) return
+      if (live.silence) live.silence.noticed = true
+      this.record(live, {
+        dir: 'note', at: this.now(), id: `silent:${ref}`, level: 'warning',
+        text: `${agentDescriptor(live.agent).label} 已有 5 分钟没有新的可见进展（上次进展：${new Date(at).toISOString()}）。它可能仍在思考或等待服务响应；可以继续等待，也可以停止本轮。Antumi 不会自动重发。`
+      })
+      this.flush(live)
+    }, SILENCE_NOTICE_MS)
+    timer.unref()
+    live.silence = { ref, timer, noticed: false }
   }
 
   private watchPrompt(live: Live, ref: string, timeout: number, noticeAfter?: number): void {

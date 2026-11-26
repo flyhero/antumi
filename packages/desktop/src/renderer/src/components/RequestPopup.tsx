@@ -1,4 +1,3 @@
-import { SupportActions } from './ContactAuthor'
 import { getLocale, useLocale, t } from '../i18n'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type JSX } from 'react'
 import { create } from 'zustand'
@@ -264,7 +263,7 @@ export function RequestPopup() {
               <button type="button" className="request-popup-open" aria-label={t('RequestPopup.openInAntumi')} title={t('RequestPopup.openInAntumi')} onClick={() => open(entry.target)}><PopInIcon /></button>
               <button type="button" className="request-popup-close" aria-label={t('RequestPopup.collapseShowAgainForNewRequests')} title={t('RequestPopup.collapseShowAgainForNewRequests')} onClick={close}><CloseIcon /></button>
             </header>
-            {error && <p className="request-popup-error" role="alert">{error}<SupportActions error={error} /></p>}
+            {error && <p className="request-popup-error" role="alert">{error}</p>}
             <ChatSurfaceContext.Provider value={surface}>
               <ChatPaths.Provider value={shorten}>
                 <ChatRoots.Provider value={roots}>

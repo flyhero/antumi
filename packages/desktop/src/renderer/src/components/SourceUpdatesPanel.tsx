@@ -1,4 +1,3 @@
-import { SupportActions } from './ContactAuthor'
 import { useEffect, useRef, useState } from 'react'
 import type { SourceUpdateTarget, SourceUpdates } from '@antumi/protocol'
 import { perform, showSourceUpdates, useCore } from '../core-store'
@@ -130,7 +129,7 @@ export function SourceUpdatesPanel({ target, inspector = false }: { target: Sour
       </article>)}
       {page?.deliveries.map((delivery) => <div className="source-update-delivery" key={delivery.id} role="status">
         <span>{t('SourceUpdates.batch', { count: delivery.commentIds.length })} · {t(`SourceUpdates.${delivery.state}`)}</span>
-        {delivery.error && <span className="muted">{delivery.error}<SupportActions error={delivery.error} /></span>}
+        {delivery.error && <span className="muted">{delivery.error}</span>}
         {(delivery.state === 'failed' || delivery.state === 'prepared') && <button type="button" className="button ghost" disabled={busy} onClick={() => void send(delivery.requestId)}>{t('SourceUpdates.retry')}</button>}
       </div>)}
       <p className="muted">{t('SourceUpdates.textOnly')}</p>

@@ -1,11 +1,10 @@
 import { TeamCallCard } from './TeamCalls'
-import { SupportActions } from './ContactAuthor'
 import { useTeamCalls } from '../team-calls'
 import { getLocale, t, tr } from '../i18n'
 import { HelperTurnCost } from './HelperTurnCost'
 import { addQuote } from '../chat-quotes'
 import { focusChatInput } from '../helper-conversations'
-import { Fragment, createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, createContext, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { agentDescriptor, CODEX_IMAGE_GENERATION, cursorProviderError, isBrowserTool, isPlanApproval, isPreviewTool, chatReferencesIn, parseHandoffMessage, toolImagePath, type AgentKind, type ChatItem, type Conversation, type ConversationStage } from '@antumi/protocol'
 import { ChatBrowserTabs, firstBrowserCall, shouldOpenBrowser, useWatchBrowserTabs } from '../browser-state'
 import { ChatBrowserCard, ChatBrowserRun, ChatShotCard } from './ChatBrowserCard'
@@ -50,8 +49,9 @@ import { ChatMessageRelay, useMessageRelay } from './chat-message-relay'
 import { useChatTypeface } from '../chat-typeface'
 import { freshKeys, useJustFinished } from '../chat-motion'
 import { acknowledgeInitialMessage, sendInitialMessage, useInitialMessages, type InitialMessage } from '../initial-messages'
-import { acknowledgeChatDeliveries, NO_DELIVERIES, useChatDeliveries, withChatDeliveries, type ChatDelivery } from '../chat-deliveries'
+import { acknowledgeChatDeliveries, discardChatDelivery, NO_DELIVERIES, useChatDeliveries, withChatDeliveries, type ChatDelivery } from '../chat-deliveries'
 import { sendChatDelivery } from '../chat-delivery-send'
+import { insertIntoComposer } from '../composer-insertions'
 import { Spinner } from './Spinner'
 import { InvestigationPreparing } from './InvestigationPreparing'
 import { InvestigationReference } from './InvestigationReference'
@@ -231,11 +231,22 @@ function ChatDeliveryStatus({ conversationId, message }: { conversationId: strin
   const conversation = useCore((state) => state.conversations[conversationId])
   const delivering = useChatDeliveries((messages) => messages[conversationId]?.some((entry) => entry.phase === 'sending') ?? false)
   const failed = message.phase === 'failed'
+  const [detailsOpen, setDetailsOpen] = useState(false)
+  const detailsId = useId()
   return (
-    <div className="chat-user-delivery" data-failed={failed || undefined} role={failed ? 'alert' : 'status'}>
-      <span>{failed ? t('ChatDelivery.failed', { reason: message.error ?? t('ChatDelivery.notSent') }) : t('ChatDelivery.sending')}</span>
-      {failed && <SupportActions error={message.error ?? t('ChatDelivery.notSent')} />}
-      {failed && <button type="button" className="link-button" disabled={!rpc || delivering || Boolean(surface.sendBlocker) || Boolean(conversation?.starting) || Boolean(conversation?.preparing)} onClick={() => void sendChatDelivery(conversationId, message.ref, surface.prepareSend)}>{t('ChatContextMenu.retry')}</button>}
+    <div className="chat-user-delivery" data-failed={failed || undefined} data-uncertain={failed && message.uncertain || undefined} role={failed ? 'alert' : 'status'}>
+      <div className="chat-user-delivery-row">
+        <span className="chat-user-delivery-label">{failed ? t(message.uncertain ? 'ChatDelivery.unconfirmed' : 'ChatDelivery.failedSummary') : t('ChatDelivery.sending')}</span>
+        {failed && (message.uncertain
+          ? <button type="button" className="link-button" onClick={() => { insertIntoComposer(conversationId, { text: message.text, images: message.images, references: message.references }); focusChatInput(conversationId) }}>{t('ChatDelivery.restoreInput')}</button>
+          : <button type="button" className="link-button" disabled={!rpc || delivering || Boolean(surface.sendBlocker) || Boolean(conversation?.starting) || Boolean(conversation?.preparing)} onClick={() => void sendChatDelivery(conversationId, message.ref, surface.prepareSend)}>{t('ChatContextMenu.retry')}</button>)}
+        {failed && <button type="button" className="link-button chat-user-delivery-secondary" aria-expanded={detailsOpen} aria-controls={detailsId} onClick={() => setDetailsOpen((open) => !open)}>{t(detailsOpen ? 'ChatDelivery.hideDetails' : 'ChatDelivery.details')}</button>}
+        {failed && message.uncertain && <button type="button" className="link-button chat-user-delivery-secondary" title={t('ChatDelivery.removeLocalHint')} onClick={() => discardChatDelivery(conversationId, message.ref)}>{t('ChatDelivery.removeLocal')}</button>}
+      </div>
+      {failed && detailsOpen && <div className="chat-user-delivery-details" id={detailsId}>
+        {message.uncertain && <p>{t('ChatDelivery.uncertain')}</p>}
+        <p>{message.error ?? t('ChatDelivery.notSent')}</p>
+      </div>}
     </div>
   )
 }
@@ -291,7 +302,6 @@ function InitialMessageEntry({ id, agent, message }: { id: string; agent: AgentK
       {message.phase === 'failed' ? (
         <div className="chat-initial-error chat-notice" data-level="error" role="alert">
           <span>{tr('ConversationChat.firstMessageNotSent', { value1: message.error })}</span>
-          <SupportActions error={message.error ?? undefined} />
           <button type="button" className="button ghost" disabled={!rpc} onClick={() => { if (rpc) void sendInitialMessage(id, rpc) }}>{t('ChatContextMenu.retry')}</button>
         </div>
       ) : (
@@ -330,8 +340,7 @@ function ChatNotice({ conversationId, item }: { conversationId: string; item: No
       {item.action?.stop ? (retrying ? t('ConversationChat.stopping') : t('ConversationChat.stopAndRetry')) : retrying ? t('ConversationChat.reconnecting') : t('ConversationChat.reconnectAndRetry')}
     </button>
   )
-  const support = item.level === 'error' ? <SupportActions error={text} /> : null
-  if (!more) return <div className="chat-notice chat-notice-actionable" data-level={item.level}><span>{text}</span>{action}{support}</div>
+  if (!more) return <div className="chat-notice chat-notice-actionable" data-level={item.level}><span>{text}</span>{action}</div>
   // The words stay out of the button, so an error's output can be selected and copied.
   return (
     <div className="chat-notice chat-notice-long chat-notice-actionable" data-level={item.level}>
@@ -340,7 +349,6 @@ function ChatNotice({ conversationId, item }: { conversationId: string; item: No
       </button>
       <div className="chat-notice-text" data-open={open || undefined} onClick={open ? undefined : () => setOpen(true)}>{open ? text : first}</div>
       {action}
-      {support}
     </div>
   )
 }
@@ -376,7 +384,7 @@ function AssistantReply({ conversationId, item, completedAt, ending, blockKey }:
   return (
     <div ref={box} className="chat-assistant" data-streaming={item.streaming || undefined} data-translated={shown !== text || undefined}>
       {shown && <ChatMarkdown text={shown} highlight={!item.streaming} runnable={!item.streaming} visualization={visualization} />}
-      {failure && <div className="chat-notice" data-level="warning">{failure.detail}<SupportActions error={failure.detail} /></div>}
+      {failure && <div className="chat-notice" data-level="warning">{failure.detail}</div>}
       {(completedAt !== undefined || (parentId && !item.streaming)) && text && (
         <div className="chat-message-actions">
           <CopyButton text={shown} label={shown !== text ? t('ChatContextMenu.copyTranslation') : t('ConversationChat.copyReply')} />
@@ -412,7 +420,7 @@ function Item({ conversationId, item, completedAt, blockKey }: { conversationId:
     case 'question':
       return <ChatRequestLine item={item} />
     case 'turn':
-      return <div className="chat-turn" data-state={item.state}>{compact && item.state === 'completed' ? helperDuration(item) : turnText(item)}{item.state === 'failed' && <SupportActions error={turnText(item)} />}{compact && <HelperTurnCost turn={item} />}</div>
+      return <div className="chat-turn" data-state={item.state}>{compact && item.state === 'completed' ? helperDuration(item) : turnText(item)}{compact && <HelperTurnCost turn={item} />}</div>
     case 'notice':
       return <ChatNotice conversationId={conversationId} item={item} />
     case 'todos':

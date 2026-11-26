@@ -1,4 +1,3 @@
-import { SupportActions } from './ContactAuthor'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { VisualizationReference } from '@antumi/protocol'
 import { useCore } from '../core-store'
@@ -100,7 +99,7 @@ export function ChatVisualization({ scope, reference }: { scope: VisualizationSc
       </span>
     </div>
     {!supported ? <p className="chat-preview-note muted">{t('ChatVisualization.upgrade')}</p> : <>
-      {error && <div className="chat-preview-note muted" role="status">{error}<SupportActions error={error} /></div>}
+      {error && <div className="chat-preview-note muted" role="status">{error}</div>}
       {!src && !error && <p className="chat-preview-note muted">{t('ChatPreviewCard.preparingPreview')}</p>}
       {src && <iframe ref={frame} key={generation} title={title} className="chat-visualization-frame" src={src} sandbox="allow-scripts" referrerPolicy="no-referrer" style={{ height: Math.min(expanded ? 10_000 : 800, height) }} inert={!awake} />}
       {controls && panels.length > 0 && <div className="chat-visualization-controls">

@@ -1,4 +1,3 @@
-import { SupportActions } from './ContactAuthor'
 import { TeamCalls } from './TeamCalls'
 import { useEffect, useRef, useState } from 'react'
 import { agentCallOpen, type AgentCall, type Conversation } from '@antumi/protocol'
@@ -35,7 +34,7 @@ export function AgentCalls({ conversation }: { conversation: Conversation }) {
   const ordered = [...(calls ?? [])].sort((a, b) => b.createdAt - a.createdAt || a.id.localeCompare(b.id))
   return <><TeamCalls conversationId={conversation.id} /><section className="delegation-panel" aria-label={t('AgentProfiles.calls')}>
     <header className="delegation-panel-header"><strong>{t('AgentProfiles.history')}</strong><span className="muted">{calls?.length ?? 0}{working > 0 && ` · ${t('AgentProfiles.running')} ${working}`}</span></header>
-    {error && <p className="inspector-empty" role="alert">{error}<SupportActions error={error} /></p>}
+    {error && <p className="inspector-empty" role="alert">{error}</p>}
     {!error && calls === null && <p className="inspector-empty muted">{t('AgentProfiles.loadingCalls')}</p>}
     {calls?.length === 0 && <p className="inspector-empty muted">{t('AgentProfiles.noCalls')}</p>}
     {ordered.length > 0 && <ol ref={list} className="delegation-list" aria-label={t('AgentProfiles.history')}>
@@ -46,7 +45,7 @@ export function AgentCalls({ conversation }: { conversation: Conversation }) {
       <details className="delegation-instruction"><summary title={call.instruction}>{call.instruction.split('\n').filter((line) => line.trim()).slice(0, 2).join(' · ')}</summary><p>{call.instruction}</p></details>
       {(() => { const worktree = worktreeStatusText(call); return worktree && <p className="delegation-worktree" data-warn={worktree.warn || undefined}><span className="delegation-badge">{t('AgentProfiles.worktreeBadge')}</span>{call.worktree && <span className="mono" title={call.worktree.dir}>{call.worktree.branch}</span>}{worktree.text && <span>{worktree.text}</span>}</p> })()}
       {call.result && <details key={`result:${call.id === focus}`} className="delegation-result" open={call.id === focus || undefined}><summary>{t('AgentProfiles.result')}</summary><p>{call.result}</p></details>}
-      {call.error && <p className="modal-error" role="status">{call.error}<SupportActions error={call.error} /></p>}
+      {call.error && <p className="modal-error" role="status">{call.error}</p>}
       <footer className="delegation-record-actions">
         {call.state !== 'queued' && call.state !== 'starting' && <button type="button" className="link-button" onClick={() => void openAgentCall(call)}>{t('AgentProfiles.openConversation')}</button>}
         {call.worktree && <button type="button" className="link-button" onClick={() => void copyBranch(call)}>{copied === call.id ? t('AgentProfiles.branchCopied') : t('AgentProfiles.copyBranch')}</button>}

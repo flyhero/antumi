@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import { dismissError } from '../core-store'
 import { t } from '../i18n'
 import { CloseIcon, WarningIcon } from './icons'
-import { SupportActions } from './ContactAuthor'
 
 export const ERROR_TOAST_DURATION_MS = 3_000
 
@@ -45,7 +44,6 @@ export function ErrorToast({ message }: { message: string }) {
       onFocusCapture={() => setFocused(true)} onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false) }}>
       <span className="toast-icon" aria-hidden="true"><WarningIcon /></span>
       <span className="toast-message">{message}</span>
-      <SupportActions error={message} />
       <button type="button" className="icon-button" aria-label={t('BackdropPicker.close')} onClick={dismissError}><CloseIcon /></button>
     </div>
   )

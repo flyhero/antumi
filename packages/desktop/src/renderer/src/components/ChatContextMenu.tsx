@@ -1,4 +1,3 @@
-import { SupportActions } from './ContactAuthor'
 import { t, tr } from '../i18n'
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent, type RefObject } from 'react'
 import { canHaveHelper, LANGUAGE_NAMES, type Conversation, type ResolvedFile } from '@antumi/protocol'
@@ -83,7 +82,7 @@ export function useChatContextMenu(list: RefObject<HTMLDivElement | null>, scope
     {menu.file && <FileMenuItems scope={scope} file={menu.file} line={menu.reference?.line} onClose={close} />}
     {menu.reference && !filePreviewSupported() && canRevealFile() && <MenuItem label={t('ChatContextMenu.showInFileManager')} icon={<FolderIcon />} onSelect={() => { close(); if (menu.reference) void showChatFile(scope, menu.reference) }} />}
     {menu.resolving && <div className="menu-label" role="status">{t('ChatContextMenu.findingFile')}</div>}
-    {menu.error && <div className="menu-label" role="status">{menu.error}<SupportActions error={menu.error} /></div>}
+    {menu.error && <div className="menu-label" role="status">{menu.error}</div>}
     {!menu.selection && !menu.text && menu.code === null && !menu.reference && !menu.href && <MenuItem label={t('ChatContextMenu.nothingToCopy')} disabled onSelect={close} />}
   </ContextMenu>)
   return { onContextMenu, onKeyDown, onPointerDown, menu: content, open: menu !== null }

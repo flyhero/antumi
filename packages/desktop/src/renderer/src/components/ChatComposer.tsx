@@ -1,4 +1,4 @@
-import { useComposerInsertions } from '../composer-insertions'
+import { appendComposerInsertion, useComposerInsertions } from '../composer-insertions'
 import { useComposerCommandRuns } from '../composer-command-runs'
 import { mergeComposerImages } from '../browser-context'
 import { getLocale, t, tr } from '../i18n'
@@ -291,7 +291,7 @@ export function ChatComposer({ conversation, state, compact = false }: { convers
   const pastedTextSupported = usePastedTextSupported()
   const attached = useComposerImages(draft.images)
   useComposerInsertions(id, (insertion) => {
-    setText((current) => [current, insertion.text].filter(Boolean).join('\n\n'))
+    setValue((current) => appendComposerInsertion(current, insertion))
     attached.setImages((current) => mergeComposerImages(current, insertion.images))
   })
   useEffect(() => saveComposerDraft(id, { ...value, images: attached.images }), [id, value, attached.images])

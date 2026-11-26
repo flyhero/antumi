@@ -7110,10 +7110,15 @@ div.inspector-empty > p { margin: 0 0 8px; }
 .chat-user-footer { display: flex; align-items: center; justify-content: flex-end; gap: 4px; height: 22px; margin-top: 4px; opacity: 0; transition: opacity 0.12s; }
 .chat-entry:hover > .chat-user-footer,
 .chat-user-footer:focus-within { opacity: 1; }
-.chat-user-delivery { display: flex; align-items: center; justify-content: flex-end; gap: 8px; min-height: 22px; margin-top: 4px; font-size: 12px; color: var(--text-3); }
-.chat-user-delivery[data-failed] { color: var(--danger); }
-.chat-user-delivery > span { min-width: 0; overflow-wrap: anywhere; }
-.chat-user-delivery .link-button { flex-shrink: 0; }
+.chat-user-delivery { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; min-width: 0; margin-top: 4px; font-size: var(--chat-font-small); color: var(--text-3); }
+.chat-user-delivery-row { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 4px 12px; min-height: 22px; max-width: 100%; }
+.chat-user-delivery[data-failed] .chat-user-delivery-label { color: var(--danger); }
+.chat-user-delivery[data-uncertain] .chat-user-delivery-label { color: var(--warning); }
+.chat-user-delivery .link-button { flex-shrink: 0; margin: 0; font: inherit; white-space: nowrap; text-decoration: none; }
+.chat-user-delivery .link-button:hover { text-decoration: underline; }
+.chat-user-delivery .chat-user-delivery-secondary { color: var(--text-muted); }
+.chat-user-delivery-details { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; width: fit-content; max-width: min(100%, 560px); padding: 8px 12px; border-radius: var(--radius-sm); background: var(--fill); color: var(--text-muted); text-align: left; }
+.chat-user-delivery-details p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .chat-message-time { align-self: center; margin-left: 2px; color: var(--text-3); font-size: 12px; font-variant-numeric: tabular-nums; }
 /* A block so a wide table scrolls by itself; as wide as its columns, so the frame hugs them. */
 .chat-markdown table { display: block; width: max-content; max-width: 100%; margin: 0.6em 0; overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); border-collapse: separate; border-spacing: 0; }
@@ -11768,7 +11773,6 @@ button.squad-member-main { cursor: pointer; }
 .contact-author-actions > span { flex: 1 1 160px; font-size: 12px; }
 .error-toast { pointer-events: auto; flex-wrap: wrap; }
 .error-toast .toast-message { flex: 1 1 160px; }
-.error-toast .support-actions { margin-inline-start: auto; }
 
 /* One wallpaper stage per window; region shells never repaint the wallpaper. */
 :root[data-backdrop]:not([data-window='request-popup']) .app {

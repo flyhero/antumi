@@ -56,9 +56,41 @@ describe('outgoing messages', () => {
     useChat.setState({ [conversation.id]: { items: [first, message(`u:${ref}`, outgoing.text)], before: null } }, true)
     const html = render()
     expect(html.match(/立即发送的内容/g)).toHaveLength(1)
-    expect(html).toContain('发送失败：网络断开')
+    expect(html).toContain('发送失败')
+    expect(html).toContain('查看详情')
+    expect(html).toContain('aria-expanded="false"')
+    expect(html).not.toContain('网络断开')
     expect(html).toContain('重试')
-    expect(html.indexOf('立即发送的内容')).toBeLessThan(html.indexOf('发送失败：网络断开'))
+    expect(html).not.toContain('support-actions')
+    expect(html.indexOf('立即发送的内容')).toBeLessThan(html.indexOf('发送失败'))
+  })
+})
+
+describe('private chat errors', () => {
+  const privateError = '内部项目 /repo/private：连接失败'
+  const failures: ChatItem[] = [
+    { kind: 'notice', id: 'notice', stageId: 'first', revision: 0, at: 2, level: 'error', text: privateError, action: { kind: 'retryTurn', userItemId: first.id } },
+    { kind: 'notice', id: 'long-notice', stageId: 'first', revision: 0, at: 2, level: 'error', text: `${privateError}\n${'详细错误\n'.repeat(20)}` },
+    { kind: 'turn', id: 'failed-turn', stageId: 'first', revision: 0, at: 2, state: 'failed', error: privateError, durationMs: null, usage: null }
+  ]
+
+  it.each(failures)('keeps $kind errors in the chat without author or issue actions', (item) => {
+    useChat.setState({ [conversation.id]: { items: [first, item], before: null } }, true)
+    const html = render()
+    expect(html).toContain(privateError)
+    expect(html).not.toContain('support-actions')
+    expect(html).not.toContain('找作者')
+    expect(html).not.toContain('GitHub Issue')
+  })
+
+  it('keeps retry available for a failed first message without a feedback link', () => {
+    useChat.setState({}, true)
+    useInitialMessages.setState({ [conversation.id]: { ref: 'pending', text: '私人消息', at: 1, images: [], phase: 'failed', error: privateError } }, true)
+    const html = render()
+    expect(html).toContain(privateError)
+    expect(html).toContain('重试')
+    expect(html).not.toContain('support-actions')
+    expect(html).not.toContain('GitHub Issue')
   })
 })
 

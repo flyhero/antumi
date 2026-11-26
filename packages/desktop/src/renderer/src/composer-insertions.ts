@@ -1,8 +1,14 @@
 import { useEffect } from 'react'
 import { create } from 'zustand'
-import type { ChatImage } from '@antumi/protocol'
+import type { ChatImage, ChatReference } from '@antumi/protocol'
+import type { MentionedText } from './chat-mentions'
 
-export type ComposerInsertion = { text: string; images: readonly ChatImage[] }
+export type ComposerInsertion = { text: string; images: readonly ChatImage[]; references?: ChatReference[] }
+
+export function appendComposerInsertion(current: MentionedText, insertion: ComposerInsertion): MentionedText {
+  const prefix = current.text ? `${current.text}\n\n` : ''
+  return { text: prefix + insertion.text, mentions: [...current.mentions, ...(insertion.references ?? []).map((reference) => ({ ...reference, start: reference.start + prefix.length, end: reference.end + prefix.length }))] }
+}
 const EMPTY: readonly ComposerInsertion[] = []
 const useInsertions = create<Record<string, readonly ComposerInsertion[]>>(() => ({}))
 const keyOf = (id: string | null) => id === null ? 'new-conversation' : `conversation:${id}`

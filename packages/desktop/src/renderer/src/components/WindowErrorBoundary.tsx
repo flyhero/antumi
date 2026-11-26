@@ -1,6 +1,5 @@
 import { Component, type ReactNode } from 'react'
 import { t } from '../i18n'
-import { SupportActions } from './ContactAuthor'
 
 export class WindowErrorBoundary extends Component<{ children: ReactNode }, { error: string | null }> {
   override state: { error: string | null } = { error: null }
@@ -15,7 +14,6 @@ export class WindowErrorBoundary extends Component<{ children: ReactNode }, { er
       <h2>Antumi</h2>
       <p>{t('ContactAuthor.crashed')}</p>
       <button type="button" className="button" onClick={() => location.reload()}>{t('ContactAuthor.reload')}</button>
-      <SupportActions error={this.state.error} />
     </div></section></div>
   }
 }

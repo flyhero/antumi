@@ -1,8 +1,19 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { ERROR_TOAST_DURATION_MS, scheduleErrorToastDismiss } from './components/ErrorToast'
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { ErrorToast, ERROR_TOAST_DURATION_MS, scheduleErrorToastDismiss } from './components/ErrorToast'
 
 afterEach(() => {
   vi.useRealTimers()
+})
+
+it('shows private error details without an author contact or prefilled issue link', () => {
+  const message = '私人项目 /repo/private 发送失败'
+  const html = renderToStaticMarkup(createElement(ErrorToast, { message }))
+  expect(html).toContain(message)
+  expect(html).not.toContain('support-actions')
+  expect(html).not.toContain('找作者')
+  expect(html).not.toContain('GitHub Issue')
 })
 
 it('dismisses an error toast without user interaction', () => {

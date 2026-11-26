@@ -1,4 +1,3 @@
-import { SupportActions } from './ContactAuthor'
 import { localized, t, tr } from '../i18n'
 import { useState } from 'react'
 import type { SquadRun, SquadWork } from '@antumi/protocol'
@@ -91,7 +90,7 @@ function WorkRow({ run, work, live, now, onConversation }: { run: SquadRun; work
         <div className="squad-work-detail">
           <h4>{t('ChatSubagents.instructions')}</h4>
           <p className="squad-work-instruction">{work.instruction}</p>
-          {work.error && <p className="modal-error">{work.error}<SupportActions error={work.error} /></p>}
+          {work.error && <p className="modal-error">{work.error}</p>}
           {work.result && <><h4>{t('ChatSubagents.result')}</h4><div className="squad-work-result"><ChatMarkdown text={work.result} /></div></>}
           {(conversationId || retry) && <div className="squad-work-detail-actions">{actions}</div>}
         </div>

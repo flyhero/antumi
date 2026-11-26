@@ -1,4 +1,3 @@
-import { SupportActions } from './ContactAuthor'
 import { useTeamCalls } from '../team-calls'
 import { Fragment, useEffect, useId, useRef, useState } from 'react'
 import type { ChatItem, Conversation, DelegationTarget } from '@antumi/protocol'
@@ -98,7 +97,7 @@ export function DelegationDialog({ conversation, onClose, onHistory, initial }: 
       {worktreeOffered && <div className="delegation-check-group"><label className="delegation-check"><input type="checkbox" checked={inWorktree} disabled={busy} onChange={(event) => { setInWorktree(event.target.checked); requestRef.current = crypto.randomUUID() }} />{t('AgentProfiles.inWorktree')}</label><p className="delegation-check-hint muted">{t('AgentProfiles.inWorktreeHint')}</p></div>}
       <label className="delegation-field">{t('AgentProfiles.goal')}<textarea className="input" autoFocus required rows={3} maxLength={10000} placeholder={t('AgentProfiles.goalPlaceholder')} value={goal} disabled={busy} onChange={(event) => { setGoal(event.target.value); requestRef.current = crypto.randomUUID() }} /></label>
       <label className="delegation-field">{t('AgentProfiles.context')}<textarea className="input" rows={2} maxLength={9998} placeholder={t('AgentProfiles.contextPlaceholder')} value={context} disabled={busy} onChange={(event) => { setContext(event.target.value); requestRef.current = crypto.randomUUID() }} /></label>
-      {error && <p className="modal-error" role="alert">{error}<SupportActions error={error} /></p>}
+      {error && <p className="modal-error" role="alert">{error}</p>}
       <footer className="modal-footer"><button type="button" className="link-button delegation-history" disabled={busy} onClick={() => { onHistory(); onClose() }}>{t('AgentProfiles.history')}</button><button type="button" className="button ghost" disabled={busy} onClick={onClose}>{t('ChatCommandSettings.cancel')}</button><button type="submit" className="button primary" disabled={busy || !selected || !goal.trim() || conversation.archivedAt != null}>{busy ? t('AgentProfiles.starting') : t('AgentProfiles.dispatch')}</button></footer>
     </form>
   </dialog>

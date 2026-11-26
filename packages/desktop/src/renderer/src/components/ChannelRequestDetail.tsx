@@ -1,4 +1,3 @@
-import { SupportActions } from './ContactAuthor'
 import { useEffect, useState } from 'react'
 import type { ChannelRequest, ChannelToolCall } from '@antumi/protocol'
 import { perform, useCore } from '../core-store'
@@ -38,8 +37,8 @@ export function ChannelRequestDetailContent({ request, detail, error }: { reques
   return <div className="agent-channel-detail">
     <h5>{t('AgentChannels.question')}</h5>
     <pre>{request.text || t('AgentChannels.imagesOnly')}</pre>
-    {request.error && <><h5>{t('AgentChannels.failure')}</h5>{explained ? <p className="agent-channel-failure">{explained}</p> : <pre>{request.error}</pre>}<SupportActions error={request.error} /></>}
-    {error ? <p className="modal-error" role="alert">{error}<SupportActions error={error} /></p> : <>
+    {request.error && <><h5>{t('AgentChannels.failure')}</h5>{explained ? <p className="agent-channel-failure">{explained}</p> : <pre>{request.error}</pre>}</>}
+    {error ? <p className="modal-error" role="alert">{error}</p> : <>
       <h5>{t('AgentChannels.answer')}</h5>
       {detail?.answer ? <pre>{detail.answer}</pre> : <p className="squad-block-hint muted">{detail ? emptyAnswer : '…'}</p>}
       <h5>{t('AgentChannels.reads')}</h5>

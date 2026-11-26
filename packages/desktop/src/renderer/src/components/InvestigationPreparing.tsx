@@ -4,7 +4,6 @@ import { perform, useCore } from '../core-store'
 import { preparingError } from '../conversation-state'
 import { t } from '../i18n'
 import { Spinner } from './Spinner'
-import { SupportActions } from './ContactAuthor'
 
 // Where an issue's conversation stands before its agent can start: core fetching the issue, then
 // its images; or why that stopped, with a retry.
@@ -25,7 +24,6 @@ export function InvestigationPreparing({ conversation }: { conversation: Convers
       <div className="chat-initial-error chat-notice" data-level="error" role="alert">
         <span title={preparing.error}>{t('InvestigationPreparing.failed', { key, error: preparingError(preparing) })}</span>
         <button type="button" className="button ghost" disabled={!rpc || retrying} onClick={() => void retry()}>{t('ChatContextMenu.retry')}</button>
-        <SupportActions error={preparing.error} />
       </div>
     )
   }

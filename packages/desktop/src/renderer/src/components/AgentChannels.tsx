@@ -6,6 +6,8 @@ import {
 } from '@antumi/protocol'
 import { setChannels, useChannelFollowUpsSupported, useChannelPlatformToolsSupported, useChannelReadiness, useChannels, useChannelsSupported, useChannelTaskCardsSupported, useChannelTaskReportsSupported, useChannelTasksSupported } from '../channels'
 import { askConfirm } from '../confirm-dialog'
+import { defaultAgent } from '../default-agent'
+import { useInstalledAgents } from '../installed-agents'
 import { timeAgo } from '../conversation-state'
 import { perform, useCore } from '../core-store'
 import { t, useLocale } from '../i18n'
@@ -112,10 +114,28 @@ function ChannelRow({ channel, requestsOpen, onToggle, onRequests, onEdit, onRem
   </div>
 }
 
+// A tip's widest, and roughly how tall its text runs: about 22 characters a line of 17px.
+const TIP_WIDTH = 288
+const tipHeight = (text: string) => Math.ceil(text.length / 22) * 17 + 16
+
 // The longer why of a setting, on hover or focus, so the form reads as a list of choices. It opens
-// to the right: the settings sit at the dialog's left, where opening left would cut it off.
+// towards whichever side of the dialog's scrolling area has room for it, as it stands when pointed
+// at: an icon in the right column would have its tip cut off opening right, one near the bottom
+// opening down.
 function Info({ text }: { text: string }) {
-  return <span className="agent-profile-info" tabIndex={0} aria-label={text} data-tooltip={text} data-tooltip-align="start"><InfoIcon /></span>
+  const [place, setPlace] = useState<{ right: boolean; up: boolean }>({ right: true, up: false })
+  const fit = (icon: HTMLElement) => {
+    const box = icon.getBoundingClientRect()
+    const area = (icon.closest('.agent-channel-steps') ?? document.documentElement).getBoundingClientRect()
+    const toRight = area.right - box.left
+    const below = area.bottom - box.bottom
+    setPlace({ right: toRight >= TIP_WIDTH || toRight >= box.right - area.left, up: below < tipHeight(text) && box.top - area.top > below })
+  }
+  // data-tooltip's four corners: right and down is align start, left and down the default, right
+  // and up side top, left and up side top-end.
+  const corner = place.up ? { 'data-tooltip-side': place.right ? 'top' : 'top-end' } : place.right ? { 'data-tooltip-align': 'start' } : {}
+  return <span className="agent-profile-info" tabIndex={0} aria-label={text} data-tooltip={text} {...corner}
+    onPointerEnter={(event) => fit(event.currentTarget)} onFocus={(event) => fit(event.currentTarget)}><InfoIcon /></span>
 }
 
 // A switch with its why beside it, outside the label so pointing at the why does not flip the switch.
@@ -154,6 +174,7 @@ function ChannelDialog({ profileId, platform, channel, agent, hasProvider, onClo
   const taskCreationSupported = useChannelTasksSupported()
   const reportsSupported = useChannelTaskReportsSupported()
   const cardsSupported = useChannelTaskCardsSupported() && descriptor.features.cards
+  const installed = useInstalledAgents()
   const toolCatalog = useChannelPlatformToolsSupported() ? descriptor.tools : undefined
   const followUpsSupported = useChannelFollowUpsSupported() && descriptor.features.followUps
   const locale = useLocale((state) => state.locale)
@@ -164,7 +185,8 @@ function ChannelDialog({ profileId, platform, channel, agent, hasProvider, onClo
     projectPaths: channel?.projectPaths ?? [], users: (channel?.allowedUsers ?? []).join('\n'), places: (channel?.allowedPlaces ?? []).join('\n'), allowDirect: channel?.allowDirect ?? false, allowTaskCreation: channel?.allowTaskCreation ?? false,
     reportTasks: channel?.reportTasks,
     cards: !!channel?.taskCards, owners: (channel?.ownerUsers ?? []).join('\n'),
-    cardStart: channel?.taskCards ? channel.taskCards.start !== null : true, cardAgent: channel?.taskCards?.start?.agent ?? agent,
+    // The agent the owner last set to work, as a new task takes, not the one answering in the chat.
+    cardStart: channel?.taskCards ? channel.taskCards.start !== null : true, cardAgent: channel?.taskCards?.start?.agent ?? defaultAgent(useCore.getState().tasks, useCore.getState().conversations) ?? agent,
     cardReview: channel?.taskCards ? channel.taskCards.review ?? 'none' : 'ownerOrAsker',
     followUps: channel?.followUps ?? false,
     tools: channel?.platformTools ?? [], docKind: channel?.docLocation?.kind ?? 'wikiNode', docValue: channel?.docLocation?.value ?? '', docAccess: channel?.docAccess ?? 'edit',
@@ -285,9 +307,12 @@ function ChannelDialog({ profileId, platform, channel, agent, hasProvider, onClo
         </div>
         <div className="squad-field">
           <Option checked={draft.cardStart} onChange={(cardStart) => setDraft({ ...draft, cardStart })} label={t('AgentChannels.cardStart')} info={t('AgentChannels.cardStartHint')} />
-          {draft.cardStart && <ChatPicker label={t('AgentChannels.cardAgent')} value={draft.cardAgent} placeholder="" size="field" placement="below"
-            options={AGENT_KINDS.map((each) => ({ value: each, label: agentLabel(each), icon: <AgentIcon agent={each} /> }))}
-            onChange={(value) => setDraft({ ...draft, cardAgent: AGENT_KINDS.find((each) => each === value) ?? draft.cardAgent })} />}
+          {draft.cardStart && <>
+            <span className="agent-channel-option"><span>{t('AgentChannels.cardAgent')}</span><Info text={t('AgentChannels.cardAgentHint')} /></span>
+            <ChatPicker label={t('AgentChannels.cardAgent')} value={draft.cardAgent} placeholder="" size="field" placement="below"
+              options={AGENT_KINDS.filter((each) => installed.includes(each) || each === draft.cardAgent).map((each) => ({ value: each, label: agentLabel(each), icon: <AgentIcon agent={each} /> }))}
+              onChange={(value) => setDraft({ ...draft, cardAgent: AGENT_KINDS.find((each) => each === value) ?? draft.cardAgent })} />
+          </>}
           <span>{t('AgentChannels.cardReview')}</span>
           <ChatPicker label={t('AgentChannels.cardReview')} value={draft.cardReview} placeholder="" size="field" placement="below"
             options={[

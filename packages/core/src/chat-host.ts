@@ -385,7 +385,8 @@ export class ChatHost {
   restoreQueue(conversationId: string, previous: ChatStage): void {
     const source = ChatLog.of(this.sessionsRoot, previous.conversationId, previous.stageId)
     const records = source.read().records
-    if (!records.some((record) => record.dir === 'note' && record.id?.startsWith('send-failed:') || record.dir === 'exit' && record.code === null)) return
+    // A stage that lost its session, or whose agent crashed, leaves its queue unsent; held, it waits for the user.
+    if (!records.some((record) => record.dir === 'note' && record.id?.startsWith('send-failed:') || record.dir === 'exit' && record.code !== 0)) return
     const live = this.running(conversationId)
     const state = this.items(previous).find((item) => item.kind === 'state')
     for (const entry of state?.queue ?? []) {

@@ -442,6 +442,26 @@ describe('ConversationService', () => {
     expect(service.chatPage(first.id).items.findLast((item) => item.kind === 'state')).toMatchObject({ queue: [{ ref: 'surviving-queue', held: true }] })
   })
 
+  it('keeps the queue of an agent that crashed mid-turn, held, for the next stage', async () => {
+    const first = await service.create('claude', [])
+    daemon.reply = () => {}
+    await service.send(first.id, 'first')
+    await service.send(first.id, 'queued before the crash', [], true, false, 'crash-queue')
+    daemon.exit(first.sessionId!, 137)
+    await settle()
+    expect(service.get(first.id).sessionId).toBeNull()
+    await service.continue(first.id)
+    expect(service.chatPage(first.id).items.findLast((item) => item.kind === 'state')).toMatchObject({ queue: [{ ref: 'crash-queue', held: true }] })
+  })
+
+  it('leaves nothing to restore after a clean exit', async () => {
+    const first = await service.create('claude', [])
+    daemon.exit(first.sessionId!, 0)
+    await settle()
+    await service.continue(first.id)
+    expect(service.chatPage(first.id).items.findLast((item) => item.kind === 'state')).toMatchObject({ queue: [] })
+  })
+
   it('persists a rejected send as undelivered and lets the same ref be sent after reconnecting', async () => {
     const first = await service.create('claude', [])
     const image = await attachmentsAt(root).put(pngBytes(2, 2))

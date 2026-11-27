@@ -2,7 +2,7 @@ import { RESERVED_MCP_SERVER_NAME } from '@antumi/protocol'
 import { antumiReadTools, type AgentCommand } from '../../agent-command'
 import { startNote } from '../../agent-prompt'
 import type { AgentLaunch } from '../agent-adapter'
-import { claudeModelId, claudeProviderEnv } from './claude-provider'
+import { claudeLaunchModelId, claudeModelId, claudeProviderEnv } from './claude-provider'
 import { CLAUDE_MODE_NAMES } from './claude-stream'
 
 // Claude splits these lists on commas, so a path with one in it is left out rather than garbled.
@@ -43,7 +43,9 @@ export const READ_ANYWHERE_TOOLS = ['Read', 'Glob', 'Grep']
 function lockedCommand(launch: AgentLaunch, lockdown: NonNullable<AgentLaunch['lockdown']>): AgentCommand {
   const { providerSessionId, resume, preferred = {}, mcp, provider } = launch
   const providerDefault = provider?.models.find((model) => model.id === provider.defaultModel)
-  const model = preferred.model ?? (providerDefault ? claudeModelId(providerDefault) : undefined)
+  const model = provider && preferred.model
+    ? claudeLaunchModelId(preferred.model)
+    : preferred.model ?? (providerDefault ? claudeModelId(providerDefault) : undefined)
   const env = provider ? claudeProviderEnv(provider) : launch.account?.env
   const servers = mcp ? { [RESERVED_MCP_SERVER_NAME]: { type: 'stdio', command: mcp.command, args: mcp.args, ...(mcp.env ? { env: mcp.env } : {}) } } : {}
   return { command: 'claude', ...(env ? { env } : {}), args: [
@@ -97,7 +99,9 @@ export function claudeCommand(launch: AgentLaunch): AgentCommand {
   }
   // On a provider its default is named outright: Claude Code's own would be one of Anthropic's.
   const providerDefault = provider?.models.find((model) => model.id === provider.defaultModel)
-  const model = preferred.model ?? (providerDefault ? claudeModelId(providerDefault) : undefined)
+  const model = provider && preferred.model
+    ? claudeLaunchModelId(preferred.model)
+    : preferred.model ?? (providerDefault ? claudeModelId(providerDefault) : undefined)
   // A provider is reached with a key, not an account: it takes the place of one.
   const env = provider ? claudeProviderEnv(provider) : launch.account?.env
   return { command: 'claude', ...(env ? { env } : {}), args: [

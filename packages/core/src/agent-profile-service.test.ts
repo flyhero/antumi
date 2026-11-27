@@ -85,6 +85,35 @@ describe('reusable agent roles and delegated work', () => {
     expect(() => profiles.save({ name: 'Cursor helper', agent: 'cursor', audience: 'channels' })).toThrow(expect.objectContaining({ reason: 'agent-no-lockdown' }))
   })
 
+  it.each(['gemini', 'kimi'] as const)('rejects unsupported read-only role saves for %s', (agent) => {
+    const error = expect.objectContaining({ reason: 'agent-read-only-unsupported' })
+    expect(() => profiles.save({ name: 'Reader', agent })).toThrow(error)
+    expect(() => profiles.save({ ...reviewer, agent }, reviewer.id)).toThrow(error)
+    expect(profiles.list()).toEqual([reviewer])
+  })
+
+  it('allows saving and dispatching a read-only Antigravity role in ask mode', async () => {
+    chats.setCapacity({ maxConcurrentAgents: 20, agentConcurrency: { claude: 6, antigravity: 0 } }, () => { profiles.tick(); delivery?.tick() })
+    const antiReader = profiles.save({ name: 'Antigravity reader', agent: 'antigravity', capability: 'readOnly' })
+    expect(antiReader).toMatchObject({ agent: 'antigravity', capability: 'readOnly' })
+    const call = await profiles.dispatch(parentId, antiReader.id, 'Inspect the repository')
+    expect(call).toMatchObject({ state: 'queued', readOnly: true, permissionMode: 'ask', profile: { agent: 'antigravity', capability: 'readOnly' } })
+    await profiles.cancelForParent(parentId)
+  })
+
+  it('rejects read-only delegation to an unsupported developer or legacy read-only role before queuing', async () => {
+    const developer = profiles.save({ name: 'Developer', agent: 'gemini', capability: 'develop' })
+    const legacy = store.save({ name: 'Legacy', agent: 'gemini', capability: 'readOnly' })
+    await expect(profiles.dispatch(parentId, legacy.id, 'Inspect')).rejects.toMatchObject({
+      reason: 'agent-read-only-unsupported', message: expect.stringContaining('请修改「Legacy」的外部智能体或将其切换为开发测试')
+    })
+    conversations.setWorkspaceReadOnly(parentId, true)
+    await expect(profiles.dispatch(parentId, developer.id, 'Inspect')).rejects.toMatchObject({
+      reason: 'agent-read-only-unsupported', message: expect.stringContaining('当前会话只能委派支持只读的智能体')
+    })
+    expect(profiles.calls(parentId)).toEqual([])
+  })
+
   it('saves and dispatches an Antigravity developer with a non-default model and its effort', async () => {
     const probe = vi.spyOn(antigravity, 'catalog').mockResolvedValue({ models: [
       { id: 'flash', label: 'Flash', description: null, efforts: ['low', 'medium', 'high'], isDefault: true },

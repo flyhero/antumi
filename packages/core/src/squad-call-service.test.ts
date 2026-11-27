@@ -85,6 +85,19 @@ describe('a chat invoking a team', () => {
     projects.close(); conversationStore.close(); tasks.close(); rmSync(root, { recursive: true, force: true })
   })
   const dispatch = () => calls.dispatch(parentId, squad.id, 'Implement feature and verify', 'feature-1')
+  it('lists a legacy team with an unsupported read-only lead as unavailable and refuses to dispatch it', async () => {
+    const legacyStore = new SquadStore(db)
+    try {
+      legacyStore.update(squad.id, { ...squad, members: squad.members.map((member) =>
+        member.id === squad.leaderId ? { ...member, agent: 'gemini' } : member) })
+    } finally { legacyStore.close() }
+    const reason = expect.stringContaining('队长「Leader」使用的 Gemini CLI 不支持只读模式')
+    expect(calls.targets(parentId)).toEqual([expect.objectContaining({ reason, permissionMode: null })])
+    await expect(dispatch()).rejects.toMatchObject({ reason: 'squad-call-forbidden', message: reason })
+    expect(store.list()).toEqual([])
+    expect(tasks.list()).toEqual([])
+  })
+
   it('creates one linked task, freezes the roster and starts from the actual caller commit', async () => {
     const call = await dispatch()
     squads.update(squad.id, { ...squad, name: 'Edited' })

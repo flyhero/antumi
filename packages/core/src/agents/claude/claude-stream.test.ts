@@ -379,11 +379,41 @@ describe('ClaudeStream state', () => {
     expect(stateOf(replay(before, { ...OPTIONS, preferred: { model: 'sonnet' } }))?.model).toBe('sonnet')
   })
 
-  it('names a listed model run with a 1M context by the alias that keeps it, offered beside the model', () => {
+  it.each(['claude-test[1M]', 'claude-test[1m]'])('resolves an uppercase 1M report to the provider row %s', (id) => {
+    const driver = replay([
+      { dir: 'in', at: 1, frame: { type: 'system', subtype: 'init', model: 'claude-test[1M]' } },
+      { dir: 'in', at: 2, frame: { type: 'assistant', message: { id: 'reply', model: 'claude-test', content: [], usage: { input_tokens: 42 } } } }
+    ], { ...OPTIONS, providerModels: [{ id, label: 'Claude Test', description: null, efforts: [], isDefault: true }] })
+    expect(stateOf(driver)).toMatchObject({
+      model: id,
+      billingModel: 'claude-test',
+      context: { used: 42, window: 1_000_000 },
+      models: [{ id, label: 'Claude Test', isDefault: true }]
+    })
+  })
+
+  it('keeps the provider 1M default distinct from the bare model', () => {
+    const providerModels = [
+      { id: 'm', label: 'Model', description: null, efforts: [], isDefault: false },
+      { id: 'm[1m]', label: 'Model (1M)', description: null, efforts: [], isDefault: true }
+    ]
+    const driver = replay([
+      { dir: 'out', at: 1, frame: { type: 'control_request', request_id: 'antumi-init', request: { subtype: 'initialize' } } }
+    ], { ...OPTIONS, providerModels })
+    expect(stateOf(driver)).toMatchObject({ model: 'm[1m]', models: providerModels })
+    driver.apply({ dir: 'in', at: 2, frame: { type: 'system', subtype: 'init', model: 'm' } })
+    expect(stateOf(driver)).toMatchObject({ model: 'm[1m]', billingModel: 'm', models: providerModels })
+    driver.apply({ dir: 'out', at: 3, frame: { type: 'control_request', request_id: 'antumi-option-1', request: { subtype: 'set_model', model: 'm' } } })
+    driver.apply({ dir: 'in', at: 4, frame: { type: 'control_response', response: { subtype: 'success', request_id: 'antumi-option-1' } } })
+    driver.apply({ dir: 'in', at: 5, frame: { type: 'system', subtype: 'init', model: 'm' } })
+    expect(stateOf(driver)).toMatchObject({ model: 'm', billingModel: 'm', models: providerModels })
+  })
+
+  it.each(['[1m]', '[1M]'])('names a listed model run with %s by the alias that keeps its 1M context', (suffix) => {
     const init = records.findIndex((record) => record.dir === 'in' && JSON.stringify(record.frame).includes('"subtype":"init"'))
     const listed = stateOf(replay(records.slice(0, init)))?.models.find((model) => model.id === 'opus')
     const reported = replay(records.slice(0, init + 1).map((record, index): ChatRecord => index === init && record.dir === 'in' && typeof record.frame === 'object' && record.frame
-      ? { ...record, frame: { ...record.frame, model: 'claude-opus-5-5[1m]' } } : record))
+      ? { ...record, frame: { ...record.frame, model: `claude-opus-5-5${suffix}` } } : record))
     const state = stateOf(reported)
     expect(state).toMatchObject({ model: 'opus[1m]', billingModel: 'claude-opus-5-5' })
     const ids = state?.models.map((model) => model.id) ?? []

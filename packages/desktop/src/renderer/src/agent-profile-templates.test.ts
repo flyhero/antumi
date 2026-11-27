@@ -32,8 +32,9 @@ describe('agent role templates', () => {
   it('prefers an installed tool that can run a read-only role', () => {
     const explorer = AGENT_PROFILE_TEMPLATES[0]!
     const tester = AGENT_PROFILE_TEMPLATES.find((item) => item.id === 'tester')!
-    expect(agentProfileTemplateSeed(explorer, ['antigravity', 'codex']).agent).toBe('codex')
-    expect(agentProfileTemplateSeed(tester, ['antigravity', 'codex']).agent).toBe('antigravity')
+    expect(agentProfileTemplateSeed(explorer, ['gemini', 'codex']).agent).toBe('codex')
+    expect(agentProfileTemplateSeed(explorer, ['antigravity', 'codex']).agent).toBe('antigravity')
+    expect(agentProfileTemplateSeed(tester, ['gemini', 'codex']).agent).toBe('gemini')
   })
 
   it('selects a real lightweight model independently of effort, respecting a valid preference', () => {
@@ -49,6 +50,15 @@ describe('agent role templates', () => {
     expect(agentProfileTemplateModel(explorer, 'claude', catalog, 'unavailable', true).model).toBe('default')
     const providerCatalog: ChatCatalog = { models: [{ ...catalog.models[0]!, id: 'small[1m]' }] }
     expect(agentProfileTemplateModel(explorer, 'claude', providerCatalog, 'small', true).model).toBe('small[1m]')
+  })
+
+  it('matches a legacy 1M provider small model to the catalog spelling', () => {
+    const explorer = AGENT_PROFILE_TEMPLATES[0]!
+    const model = { id: 'claude-haiku-5-5[1m]', label: 'Haiku (1M)', description: null, isDefault: false, efforts: ['low'] }
+    const providerCatalog = { models: [...catalog.models, model] }
+    expect(agentProfileTemplateModel(explorer, 'claude', providerCatalog, 'claude-haiku-5-5[1M]', true)).toEqual({ model: model.id, effort: 'low' })
+    const bare = { ...model, id: 'claude-haiku-5-5' }
+    expect(agentProfileTemplateModel(explorer, 'claude', { models: [...providerCatalog.models, bare] }, bare.id, true).model).toBe(bare.id)
   })
 
   it('keeps unsupported effort and missing catalogs unset instead of inventing model options', () => {

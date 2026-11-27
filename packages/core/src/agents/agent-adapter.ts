@@ -143,6 +143,8 @@ export interface AgentAdapter {
   // A model provider's models under the ids it takes them by, for an agent that can run on one
   // (its descriptor's capabilities.modelProviders); its command then takes AgentLaunch.provider.
   providerModels?(provider: Pick<ProviderLaunch, 'providerId' | 'models' | 'defaultModel'>): ChatModel[]
+  // Resolves an equivalent model id (such as an earlier [1M] spelling) to one of providerModels'.
+  matchProviderModel?(model: string, offered: readonly ChatModel[]): ChatModel | undefined
   // The sessions it kept of its runs outside Antumi, which an imported conversation resumes.
   readonly transcripts?: TranscriptSource
   readonly usageTranscripts?: { format: 'claude' | 'codex'; home(home?: string): string }

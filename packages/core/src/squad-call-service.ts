@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { canDelegate, callerReadOnly, ChatPermissionMode, squadCallOpen, squadModes, type AgentKind, type Conversation, type DelegationQuota, type Squad, type SquadCall, type SquadCallTarget, type SquadRun } from '@antumi/protocol'
+import { canDelegate, callerReadOnly, ChatPermissionMode, squadCallOpen, squadModes, squadReadOnlyIssues, type AgentKind, type Conversation, type DelegationQuota, type Squad, type SquadCall, type SquadCallTarget, type SquadRun } from '@antumi/protocol'
 import type { AgentProfileService } from './agent-profile-service'
 import { delegatedMode } from './agent-profile-service'
 import type { ConversationService } from './conversation-service'
@@ -7,7 +7,7 @@ import type { DelegationResultSource } from './delegation-delivery-service'
 import { committedHead, describeWorktreeOutcome, readWorktreeOutcome } from './delegation-worktree'
 import { Rejection } from './rejection'
 import type { SquadCallStore } from './squad-call-store'
-import type { SquadService } from './squad-service'
+import { squadReadOnlyReason, type SquadService } from './squad-service'
 import type { TaskService } from './task-service'
 import { gitTopLevel } from './workspace'
 
@@ -64,6 +64,8 @@ export class SquadCallService {
       if (!modes.includes(mode)) reason = '团队成员不支持当前授权范围内的权限模式'
       const quotas = squad.members.map((member) => ({ memberId: member.id, quota: this.options.quota(member) }))
       if (quotas.find((entry) => entry.memberId === squad.leaderId)?.quota.state === 'exhausted') reason = '队长的额度已用完'
+      const readOnlyIssue = !reason ? squadReadOnlyIssues(squad)[0] : undefined
+      if (readOnlyIssue) reason = squadReadOnlyReason(readOnlyIssue)
       return { squad, reason, permissionMode: reason ? null : mode, quotas }
     })
   }

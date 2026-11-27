@@ -1145,6 +1145,7 @@ export const MESSAGES = {
   "sidebar.toggleSection": { "zh": "{action}{label}", "en": "{action} {label}" },
   "sidebar.tasks": { "zh": "任务", "en": "Tasks" },
   "sidebar.conversations": { "zh": "会话", "en": "Chats" },
+  "squad.readOnlyUnsupported": { "zh": "团队中的队长或只读成员需要使用支持只读模式的外部智能体。请在团队设置中修改。", "en": "The team lead and read-only members need agents that support read-only mode. Update the team settings." },
   "squad.leaderReadOnly": { "zh": "队长必须是只读成员", "en": "The team lead must be a read-only member" },
   "squad.developerRequired": { "zh": "至少需要一名开发成员", "en": "At least one developer is required" },
   "squad.memberDuplicate": { "zh": "成员标识和名称不能重复", "en": "Member IDs and names must be unique" },
@@ -9121,6 +9122,19 @@ export const MESSAGES = {
     "zh": "队长读代码，和你商量出计划和分工；你批准后，它接着带成员开发。",
     "en": "The team lead reads code and discusses the plan and assignments with you, then leads development after approval."
   },
+  "SquadLaunchDialog.leaderPlanUnsupported": {
+    "zh": "当前后端不支持规划模式，请直接开始或在「设置 → 外部智能体」中切换支持规划的后端。",
+    "en": "The active backend does not support plan mode. Start directly or switch to a backend with plan mode in Settings → Local agents."
+  },
+  "SquadLaunchDialog.leaderReadOnlyUnsupported": {
+    "zh": "队长「{name}」使用的 {agent} 不支持只读模式，请在团队设置中更换为支持只读的外部智能体。",
+    "en": "{name}, the team lead, uses {agent}, which does not support read-only mode. Choose an agent that supports it in team settings."
+  },
+  "SquadLaunchDialog.memberReadOnlyUnsupported": {
+    "zh": "只读成员「{name}」使用的 {agent} 不支持只读模式，请在团队设置中更换外部智能体或将该成员切换为开发测试。",
+    "en": "Read-only member {name} uses {agent}, which does not support read-only mode. Change the agent or switch the member to development and testing in team settings."
+  },
+  "SquadLaunchDialog.editSquad": { "zh": "去修改团队", "en": "Edit team" },
   "SquadLaunchDialog.startDirectly": {
     "zh": "直接开始",
     "en": "Start directly"
@@ -9261,6 +9275,14 @@ export const MESSAGES = {
     "zh": "队长只读：拆分工作、分派给成员、汇总验证结果，自己不改代码。",
     "en": "Read-only team lead: breaks down work, assigns members, and summarizes verification; does not edit code."
   },
+  "Squads.readOnlyUnsupportedTag": { "zh": "不支持只读", "en": "No read-only support" },
+  "Squads.leaderReadOnlyUnsupportedOption": { "zh": "不支持只读模式，不能担任队长", "en": "Team leads require read-only support" },
+  "Squads.leaderReadOnlyUnsupportedHint": {
+    "zh": "{agent} 不支持只读模式，请更换为支持只读的外部智能体担任队长。",
+    "en": "{agent} does not support read-only mode. Choose an agent that supports it for the team lead."
+  },
+  "Squads.capabilityReadOnlyUnsupported": { "zh": "{agent} 不支持只读模式，仅可用于开发测试", "en": "{agent} supports development and testing only" },
+  "Squads.cannotLeadReadOnlyUnsupported": { "zh": "{agent} 不支持只读模式，不能设为队长", "en": "{agent} cannot lead because it lacks read-only support" },
   "Squads.leaderReadOnly": {
     "zh": "队长 · 只读",
     "en": "Team lead · Read only"
@@ -13791,6 +13813,7 @@ export const MESSAGES = {
   "AgentChannels.onPlatform": {"zh": "已接入 {platform}：{state}", "en": "On {platform}: {state}"},
   "labels.channelManaged": {"zh": "这个会话在回答聊天平台上的提问，只能查看、停止或删除。", "en": "This conversation answers a chat platform. It can only be read, stopped or deleted."},
   "labels.profileHasChannels": {"zh": "先移除这个智能体的聊天平台接入。", "en": "Remove this agent's chat platforms first."},
+  "labels.agentReadOnlyUnsupported": { "zh": "此外部智能体不支持只读模式，请选择支持只读的外部智能体。", "en": "This agent does not support read-only mode. Choose an agent that supports it." },
   "labels.agentNoLockdown": {"zh": "这个外部智能体还不能接入聊天平台。", "en": "This external agent cannot be put on a chat platform yet."},
   "labels.channelsUnavailable": {"zh": "这个 core 不支持聊天平台。", "en": "This core has no chat platforms."},
   "labels.channelProjectNotRecent": {"zh": "只能选最近用过的项目", "en": "Only recent projects can be picked"},

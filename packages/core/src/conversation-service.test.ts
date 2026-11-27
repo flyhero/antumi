@@ -2368,6 +2368,21 @@ describe('ConversationService', () => {
       expect(notices).toContain('服务商不再提供上次用的模型 gw-small，这次改用它的默认模型 GW Big')
     })
 
+    it('validates and resumes a legacy 1M provider selection with its effort', async () => {
+      const model = 'claude-opus-5-5[1M]'
+      const saved = await providers.save(gateway({ models: [
+        { id: 'gw-big', label: 'GW Big', contextWindow: null, maxOutput: null, efforts: [] },
+        { id: 'claude-opus-5-5', label: null, contextWindow: 1_000_000, maxOutput: null, efforts: ['high'] }
+      ], smallModel: 'gw-big' }))
+      await expect(service.validateStartOptions('claude', { model, effort: 'high' }, saved.id)).resolves.toBeUndefined()
+      const created = await service.create('claude', [root], undefined, { modelProvider: saved.id })
+      await service.stop(created.id)
+      store.setChatOptions(created.id, { claude: { model, effort: 'high' } })
+      await service.continue(created.id)
+      expect(lastSpawn().args).toEqual(expect.arrayContaining(['--model', 'claude-opus-5-5[1m]', '--effort', 'high']))
+      expect(service.chatPage(created.id).items.some((item) => item.kind === 'notice' && item.text.includes('服务商不再提供上次用的模型'))).toBe(false)
+    })
+
     it('refuses a provider that does not serve the agent, and offers each agent the provider\'s models', async () => {
       const { id: providerId } = await providers.save(gateway())
       await expect(service.create('codex', [root], undefined, { modelProvider: providerId })).rejects.toMatchObject({ reason: 'model-provider-agent-unsupported' })
@@ -2468,6 +2483,14 @@ describe('ConversationService', () => {
       const task = store.create('claude', root, [root], randomUUID(), {}, { id: 'task-1', title: 'Dark mode' })
       await expect(service.fork(task.id, stage.id, slow.id)).rejects.toMatchObject({ reason: 'task-conversation' })
     })
+  })
+
+  it('rejects read-only conversations on agents without read-only support before persisting or spawning', async () => {
+    const legacy = AgentProfile.parse({ id: randomUUID(), name: 'Legacy reader', agent: 'gemini', capability: 'readOnly', archivedAt: null, createdAt: 0, updatedAt: 0 })
+    await expect(service.create('gemini', [], false, { profile: legacy })).rejects.toMatchObject({ reason: 'agent-read-only-unsupported' })
+    await expect(service.create('kimi', [], false, { readOnly: true })).rejects.toMatchObject({ reason: 'agent-read-only-unsupported' })
+    expect(service.list()).toEqual([])
+    expect(daemon.spawns).toEqual([])
   })
 
 })

@@ -41,6 +41,30 @@ export const Squad = SquadFields.safeExtend({
 })
 export type Squad = z.infer<typeof Squad>
 
+export function agentSupportsReadOnly(agent: AgentKind): boolean {
+  return agentDescriptor(agent).capabilities.readOnly !== false
+}
+
+export function agentSupportsPlan(agent: AgentKind, backend?: string | null): boolean {
+  const descriptor = agentDescriptor(agent)
+  const modes = backend && descriptor.backendModes?.[backend] ? descriptor.backendModes[backend] : Object.keys(descriptor.modes)
+  return modes.includes('plan')
+}
+
+export type SquadReadOnlyIssue = { memberId: string; memberName: string; agent: AgentKind; leader: boolean }
+
+export function squadReadOnlyIssues(squad: Pick<Squad, 'members' | 'leaderId'>): SquadReadOnlyIssue[] {
+  const issues: SquadReadOnlyIssue[] = []
+  for (const member of squad.members) {
+    const leader = member.id === squad.leaderId
+    if ((!leader && member.capability !== 'readOnly') || agentSupportsReadOnly(member.agent)) continue
+    const issue = { memberId: member.id, memberName: member.name, agent: member.agent, leader }
+    if (leader) issues.unshift(issue)
+    else issues.push(issue)
+  }
+  return issues
+}
+
 export const SquadWork = z.object({
   id: z.string().uuid(),
   memberId: z.string().uuid(),

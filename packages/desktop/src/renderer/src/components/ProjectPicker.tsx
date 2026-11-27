@@ -148,7 +148,7 @@ export function ProjectPicker({
   const recent = choices.filter((choice) => !forgotten.includes(choice.path) && (!choice.source || !forgotten.includes(choice.source)))
   const close = useCallback(() => setOpen(false), [])
   // An additional project's right-click menu, which makes it the primary one.
-  const [projectMenu, setProjectMenu] = useState<{ path: string; at: MenuPoint } | null>(null)
+  const [projectMenu, setProjectMenu] = useState<{ path: string; at: MenuPoint; anchor: HTMLElement } | null>(null)
   const closeProjectMenu = useCallback(() => setProjectMenu(null), [])
   const paths = projects.map((project) => project.path)
   const descriptions = useProjectDescriptions(paths)
@@ -196,7 +196,7 @@ export function ProjectPicker({
           ].filter(Boolean).join('\n')}
           onContextMenu={promotable && index > 0 ? (event) => {
             event.preventDefault()
-            setProjectMenu({ path: project.path, at: menuPoint(event) })
+            setProjectMenu({ path: project.path, at: menuPoint(event), anchor: event.currentTarget })
           } : undefined}
         >
           <span className="chip-main chip-static">
@@ -219,7 +219,7 @@ export function ProjectPicker({
         </span>
       ))}
       {projectMenu && (
-        <ContextMenu at={projectMenu.at} label={t('GitInspector.actionsFor', { value1: projectName(projectMenu.path) })} onClose={closeProjectMenu}>
+        <ContextMenu at={projectMenu.at} anchor={projectMenu.anchor} label={t('GitInspector.actionsFor', { value1: projectName(projectMenu.path) })} onClose={closeProjectMenu}>
           <MenuItem label={t('ProjectPicker.makePrimaryProject')} onSelect={() => promote(projectMenu.path)} />
         </ContextMenu>
       )}

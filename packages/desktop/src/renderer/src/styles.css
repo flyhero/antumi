@@ -2455,13 +2455,15 @@ button.task-tag:hover {
   background: transparent;
 }
 
-/* Placed by ContextMenu and MenuSubmenu, so they opt out of .menu's anchoring.
-   Above the plan comment box (z-index 50): a right-click on a selection opens both. */
+/* Top-layer menus use viewport coordinates. Clear the browser's popover centering and colour. */
 .context-menu,
 .submenu {
   position: fixed;
+  inset: auto;
+  margin: 0;
   z-index: 60;
   min-width: 180px;
+  color: var(--text);
 }
 
 .submenu {
@@ -11111,6 +11113,7 @@ button.squad-member-main { cursor: pointer; }
 .squad-tag { flex-shrink: 0; padding: 1px 6px; border-radius: var(--radius-xs); background: var(--fill); color: var(--text-muted); font-size: 11px; line-height: 16px; white-space: nowrap; }
 .squad-tag[data-kind='leader'] { background: color-mix(in srgb, var(--warning) 16%, transparent); color: var(--text); }
 .squad-tag[data-kind='develop'] { background: var(--accent-bg); color: var(--accent); }
+.squad-tag[data-kind='error'] { background: color-mix(in srgb, var(--danger) 14%, transparent); color: var(--danger); }
 .squad-member-toggle { display: grid; place-items: center; width: 18px; height: 18px; margin-right: -4px; padding: 0; border: 0; border-radius: var(--radius-xs); background: transparent; color: var(--text-3); cursor: pointer; flex-shrink: 0; }
 .squad-member-toggle svg { width: 12px; height: 12px; transition: transform 0.12s ease; }
 .squad-member-edit[data-open] .squad-member-toggle svg { transform: rotate(90deg); }
@@ -11124,8 +11127,10 @@ button.squad-member-main { cursor: pointer; }
 .squad-field b { color: var(--text); font-weight: 600; font-size: 13px; }
 .squad-add { align-self: flex-start; margin-top: 2px; font-size: 12px; }
 .squad-editor-footer { display: flex; justify-content: flex-end; gap: 8px; }
+.task-launch-dialog .modal-error > .link-button { margin-inline-start: 6px; }
 .squad-launch-ways { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; border: 0; }
 .squad-launch-ways label { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; cursor: pointer; }
+.squad-launch-ways label:has(input:disabled) { opacity: 0.55; cursor: not-allowed; }
 .squad-launch-ways input { margin-top: 3px; }
 .squad-launch-ways .muted { display: block; font-size: 12px; }
 .squad-work-panel { display: flex; flex-direction: column; gap: 24px; padding: 16px; overflow: auto; }

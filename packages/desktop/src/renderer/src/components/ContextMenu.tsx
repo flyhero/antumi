@@ -17,6 +17,57 @@ export function menuPoint(event: MouseEvent<HTMLElement>, anchor = event.current
 const EDGE = 8
 const ITEMS = ':scope > [role^="menuitem"]:not(:disabled)'
 
+export function menuPortalHost(
+  origin: { closest(selector: string): Element | null } | null | undefined,
+  fallback: Element
+): Element {
+  return origin?.closest('dialog, [popover]') ?? fallback
+}
+
+export function placeContextMenu(
+  at: MenuPoint,
+  align: 'start' | 'end',
+  above: boolean,
+  { width, height }: { width: number; height: number },
+  viewport: { width: number; height: number }
+): MenuPoint {
+  const x = align === 'end'
+    ? Math.min(Math.max(EDGE, at.x - width), viewport.width - width - EDGE)
+    : at.x + width > viewport.width - EDGE ? Math.max(EDGE, at.x - width) : at.x
+  const y = above || at.y + height > viewport.height - EDGE ? Math.max(EDGE, at.y - height - (above ? 4 : 0)) : at.y
+  return { x, y }
+}
+
+export function placeSubmenu(
+  row: { left: number; right: number; top: number },
+  { width, height }: { width: number; height: number },
+  viewport: { width: number; height: number }
+): MenuPoint {
+  const right = row.right + 4
+  return {
+    x: right + width > viewport.width - EDGE ? Math.max(EDGE, row.left - width - 4) : right,
+    y: Math.max(EDGE, Math.min(row.top - 5, viewport.height - height - EDGE))
+  }
+}
+
+export function liftMenuPopover(element: {
+  popover: string | null
+  isConnected: boolean
+  matches(selector: string): boolean
+  showPopover?(): void
+  hidePopover?(): void
+}): () => void {
+  if (typeof element.showPopover !== 'function') return () => {}
+  element.popover = 'manual'
+  if (element.isConnected && !element.matches(':popover-open')) element.showPopover()
+  return () => {
+    if (typeof element.hidePopover === 'function' && element.isConnected && element.matches(':popover-open')) {
+      element.hidePopover()
+    }
+    element.popover = null
+  }
+}
+
 // The items of whichever menu (or open submenu) holds the focus.
 function focusedMenuItems(root: HTMLElement): HTMLElement[] {
   const menu = document.activeElement?.closest<HTMLElement>('[role="menu"]')
@@ -25,12 +76,14 @@ function focusedMenuItems(root: HTMLElement): HTMLElement[] {
 
 // A menu at a point: the pointer for a right-click, or under a button with `align: 'end'`; with
 // `above`, over the point, as for a control at the bottom whose menu should not cover what is below.
-// Portaled outside clipped, scrolling boxes. A native modal dialog is itself in the browser's top
-// layer, so its menus must stay inside that dialog; anything portaled to <body> would sit behind it.
-export function ContextMenu({ at, align = 'start', above = false, trigger, scrollBoundary, width, label, onClose, children }: {
+// Keeps the host's DOM ancestry so the menu can be used inside a modal dialog. Lifting it to the
+// top layer keeps its viewport coordinates valid even when the host has backdrop-filter.
+export function ContextMenu({ at, align = 'start', above = false, anchor, trigger, scrollBoundary, width, label, onClose, children }: {
   at: MenuPoint
   align?: 'start' | 'end'
   above?: boolean
+  // A right-click origin inside a dialog or popover. Clicking it still dismisses the menu.
+  anchor?: HTMLElement | null
   // The button that toggles the menu; pressing it isn't an outside click.
   trigger?: HTMLElement | null
   scrollBoundary?: HTMLElement | null
@@ -44,6 +97,12 @@ export function ContextMenu({ at, align = 'start', above = false, trigger, scrol
   const panel = useRef<HTMLDivElement>(null)
   const [place, setPlace] = useState(at)
   const [opener] = useState(() => document.activeElement)
+  const host = menuPortalHost(anchor ?? trigger, document.body)
+
+  useLayoutEffect(() => {
+    const element = panel.current
+    if (element) return liftMenuPopover(element)
+  }, [host])
 
   // Flips up or left like a native menu when it would run off the window. Placed again whenever
   // the panel changes size: a menu that fills in after it opens (the project picker fetches its
@@ -51,22 +110,18 @@ export function ContextMenu({ at, align = 'start', above = false, trigger, scrol
   useLayoutEffect(() => {
     const element = panel.current
     if (!element) return
-    const place = () => {
-      const { width, height } = element.getBoundingClientRect()
+    const position = () => {
+      const size = element.getBoundingClientRect()
       const { clientWidth, clientHeight } = document.documentElement
-      const x = align === 'end'
-        ? Math.min(Math.max(EDGE, at.x - width), clientWidth - width - EDGE)
-        : at.x + width > clientWidth - EDGE ? Math.max(EDGE, at.x - width) : at.x
-      const y = above || at.y + height > clientHeight - EDGE ? Math.max(EDGE, at.y - height - (above ? 4 : 0)) : at.y
-      setPlace({ x, y })
+      setPlace(placeContextMenu(at, align, above, size, { width: clientWidth, height: clientHeight }))
     }
-    place()
+    position()
     const first = element.querySelector<HTMLElement>('[data-menu-search]') ?? element.querySelector<HTMLElement>(ITEMS)
     first?.focus()
-    const observer = new ResizeObserver(place)
+    const observer = new ResizeObserver(position)
     observer.observe(element)
     return () => observer.disconnect()
-  }, [at, align, above])
+  }, [at, align, above, host])
 
   useEffect(() => {
     const outside = (event: Event) =>
@@ -116,8 +171,7 @@ export function ContextMenu({ at, align = 'start', above = false, trigger, scrol
     >
       {children}
     </div>,
-    // Inside the top-layer host it opens from (a dialog, a lifted Popover): from the body it would sit beneath it.
-    trigger?.closest('dialog, [popover]') ?? document.body
+    host
   )
 }
 
@@ -147,6 +201,7 @@ export function MenuItem({ label, icon, hint, danger, disabled, onSelect }: {
 
 // A row that opens a menu of its own beside it: on hover, or on click, Enter or → (which also
 // move the focus in). ← inside it goes back. The parent decides which one is open.
+// Its panel stays inside the parent menu for events, and lifts above it to escape blur and clipping.
 export function MenuSubmenu({ label, icon, value, disabled, open, onOpen, onClose, children }: {
   label: string
   icon?: ReactNode
@@ -166,19 +221,26 @@ export function MenuSubmenu({ label, icon, value, disabled, open, onOpen, onClos
     (panel.current?.querySelector<HTMLElement>('[aria-checked="true"]') ?? panel.current?.querySelector<HTMLElement>(ITEMS))?.focus()
 
   useLayoutEffect(() => {
-    const box = row.current?.getBoundingClientRect()
     const element = panel.current
-    if (!open || !box || !element) {
+    if (!open || !element) {
       setPlace(null)
       return
     }
-    const { width, height } = element.getBoundingClientRect()
-    const { clientWidth, clientHeight } = document.documentElement
-    const right = box.right + 4
-    setPlace({
-      x: right + width > clientWidth - EDGE ? Math.max(EDGE, box.left - width - 4) : right,
-      y: Math.max(EDGE, Math.min(box.top - 5, clientHeight - height - EDGE))
-    })
+    const lower = liftMenuPopover(element)
+    const position = () => {
+      const box = row.current?.getBoundingClientRect()
+      if (!box) return
+      const size = element.getBoundingClientRect()
+      const { clientWidth, clientHeight } = document.documentElement
+      setPlace(placeSubmenu(box, size, { width: clientWidth, height: clientHeight }))
+    }
+    position()
+    const observer = new ResizeObserver(position)
+    observer.observe(element)
+    return () => {
+      observer.disconnect()
+      lower()
+    }
   }, [open])
 
   // The pointer moving on to another item of the menu it opened from closes it, as native menus do;

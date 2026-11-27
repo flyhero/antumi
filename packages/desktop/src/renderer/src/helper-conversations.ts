@@ -3,6 +3,7 @@ import { agentDescriptor, canHaveHelper, quickModel, type ChatCatalog, type Chat
 import { perform, useCore } from './core-store'
 import { addQuote } from './chat-quotes'
 import { usePreferences } from './preferences'
+import { providerSmallModel } from './model-provider-choice'
 
 // The model provider a helper runs on: its parent's, where the parent's agent runs on one.
 export function helperProvider(parent: Pick<Conversation, 'modelProvider' | 'route'>): string | undefined {
@@ -13,10 +14,7 @@ export function helperProvider(parent: Pick<Conversation, 'modelProvider' | 'rou
 export function helperModel(parent: Conversation, catalog: ChatCatalog | null): string | null {
   const providerId = helperProvider(parent)
   const provider = providerId ? useCore.getState().modelProviders.find((each) => each.id === providerId) : undefined
-  if (provider) {
-    const small = provider.smallModel
-    return catalog?.models.find((each) => each.id === small || each.id === `${small}[1m]` || each.id.endsWith(`/${small}`))?.id ?? null
-  }
+  if (provider) return providerSmallModel(catalog, provider.smallModel)
   return usePreferences.getState().quickModels[parent.agent] || quickModel(agentDescriptor(parent.agent).quickModels, catalog)
 }
 

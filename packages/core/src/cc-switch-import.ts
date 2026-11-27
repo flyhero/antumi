@@ -7,6 +7,7 @@ import { parse as parseToml } from 'smol-toml'
 import { z } from 'zod'
 import { ModelProviderInput, PROVIDER_CLAUDE_ENV, ProviderHeaders, ProviderModel, type ModelProvider, type ProviderImportCandidate, type ProviderImportPreview, type ProviderImportResult } from '@antumi/protocol'
 import type { ModelProviderStore } from './model-providers'
+import { CLAUDE_1M_CONTEXT, parseClaudeModelId } from './provider-request'
 import { Rejection } from './rejection'
 import { parseJson } from './usage-source'
 
@@ -59,16 +60,35 @@ function models(ids: unknown[], context: number | null = null, effort = '') {
   return [...new Set(ids.map(text).filter(Boolean))].map((id) => ProviderModel.parse({ id, label: null, contextWindow: context, maxOutput: null, efforts: effort ? [effort] : [] }))
 }
 
+function claudeModels(ids: unknown[], context: number | null): ProviderModel[] {
+  const found = new Map<string, ProviderModel>()
+  for (const entry of ids) {
+    const raw = text(entry)
+    if (!raw) continue
+    const { id, oneMillion } = parseClaudeModelId(raw)
+    const existing = found.get(id)
+    if (existing) {
+      if (oneMillion) existing.contextWindow = Math.max(existing.contextWindow ?? 0, CLAUDE_1M_CONTEXT)
+      continue
+    }
+    const contextWindow = oneMillion ? Math.max(context ?? 0, CLAUDE_1M_CONTEXT) : context
+    found.set(id, ProviderModel.parse({ id, label: null, contextWindow, maxOutput: null, efforts: [] }))
+  }
+  return [...found.values()]
+}
+
 function containsKey(value: unknown, key: string): boolean {
   if (typeof value === 'string') return value.includes(key)
   if (Array.isArray(value)) return value.some((entry) => containsKey(entry, key))
-  return Object.values(record(value)).some((entry) => containsKey(entry, key))
+  return Object.entries(record(value)).some(([name, entry]) => name.includes(key) || containsKey(entry, key))
 }
 
 function normalize(row: Row): Planned {
   const shown: ProviderImportCandidate = { id: randomBytes(12).toString('hex'), app: row.app, name: row.name.trim().slice(0, 60).trim(), endpoint: null, models: [], issue: null }
   let secret = ''
-  const skip = (issue: NonNullable<ProviderImportCandidate['issue']>): Planned => ({ shown: { ...shown, name: secret ? shown.name.replaceAll(secret, '…') : shown.name, issue }, input: null })
+  const skip = (issue: NonNullable<ProviderImportCandidate['issue']>): Planned => ({
+    shown: { ...shown, name: (secret ? row.name.replaceAll(secret, '…') : row.name).trim().slice(0, 60).trim(), issue }, input: null
+  })
   if (!['claude', 'codex'].includes(row.app)) return skip('unsupported')
   const meta = objectJson(row.meta)
   if (row.category === 'official' || ['codex_oauth', 'xai_oauth', 'github_copilot'].includes(text(meta.providerType))) return skip('managed-account')
@@ -86,13 +106,16 @@ function normalize(row: Row): Planned {
       secret = key
       const ids = [env.ANTHROPIC_MODEL, env.ANTHROPIC_DEFAULT_SONNET_MODEL, env.ANTHROPIC_DEFAULT_OPUS_MODEL, env.ANTHROPIC_DEFAULT_HAIKU_MODEL, env.ANTHROPIC_SMALL_FAST_MODEL]
       if (Array.isArray(meta.stackModels)) ids.push(...meta.stackModels.map((entry) => record(entry).model))
-      const found = models(ids, positive(env.CLAUDE_CODE_MAX_CONTEXT_TOKENS))
+      if (containsKey(ids, key)) return skip('invalid-config')
+      const found = claudeModels(ids, positive(env.CLAUDE_CODE_MAX_CONTEXT_TOKENS))
+      const smallModel = parseClaudeModelId(text(env.ANTHROPIC_DEFAULT_HAIKU_MODEL)).id ||
+        parseClaudeModelId(text(env.ANTHROPIC_SMALL_FAST_MODEL)).id || found[0]?.id || ''
       const headers = Object.fromEntries(text(env.ANTHROPIC_CUSTOM_HEADERS).split('\n').filter(Boolean).map((line) => {
         const split = line.indexOf(':')
         if (split < 1) throw new Error('invalid header')
         return [line.slice(0, split).trim(), line.slice(split + 1).trim()]
       }))
-      input = { id: null, name: shown.name, preset: 'custom', apiKey: key, agents: ['claude'], anthropic: { baseUrl, auth: token ? 'auth_token' : 'api_key', env: Object.fromEntries(PROVIDER_CLAUDE_ENV.filter((key) => typeof env[key] === 'string').map((key) => [key, text(env[key])])) }, openai: null, models: found, defaultModel: found[0]?.id ?? '', smallModel: text(env.ANTHROPIC_DEFAULT_HAIKU_MODEL) || found[0]?.id || '', headers: ProviderHeaders.parse(headers), smallJobs: 'off' }
+      input = { id: null, name: shown.name, preset: 'custom', apiKey: key, agents: ['claude'], anthropic: { baseUrl, auth: token ? 'auth_token' : 'api_key', env: Object.fromEntries(PROVIDER_CLAUDE_ENV.filter((key) => typeof env[key] === 'string').map((key) => [key, text(env[key])])) }, openai: null, models: found, defaultModel: found[0]?.id ?? '', smallModel, headers: ProviderHeaders.parse(headers), smallJobs: 'off' }
     } else {
       const toml = parseToml(text(config.config))
       const profile = record(record(toml.profiles)[text(toml.profile)])
@@ -110,7 +133,7 @@ function normalize(row: Row): Planned {
     }
     // Missing models can be listed at import time; all connection fields must already be valid.
     const { apiKey, ...publicConfig } = input
-    if (apiKey && containsKey(publicConfig, apiKey)) return skip('invalid-config')
+    if (apiKey && containsKey([row.name, publicConfig], apiKey)) return skip('invalid-config')
     ModelProviderInput.omit({ models: true, defaultModel: true, smallModel: true }).parse(input)
     z.array(ProviderModel).max(100).parse(input.models)
     shown.endpoint = input.anthropic?.baseUrl ?? input.openai?.responsesUrl ?? null

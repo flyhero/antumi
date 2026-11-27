@@ -5,7 +5,7 @@ import { app } from 'electron'
 import {
   antumiPaths,
   backendToStart,
-  retireOldDaemon,
+  daemonToStart,
   runningCore,
   stopBackendForInstall as stopBackendForInstallAt,
   type BackendStop,
@@ -80,11 +80,12 @@ export function ensureBackend(): Promise<void> {
 
 // A daemon an update left running still runs from the old bundle, which a macOS update renamed
 // and then trashed: it asks for folder access again under that name, and the old code keeps serving. Busy
-// at launch, it is asked again while the app runs, and replaced once it runs nothing. Core
-// reconnects to the new one by itself.
+// at launch, it is asked again while the app runs, and replaced once it runs nothing. A daemon that
+// is gone altogether (it crashed, or was killed) is started again too. Core reconnects to the new
+// one by itself.
 export function replaceOldDaemon(): Promise<void> {
   if (!app.isPackaged) return Promise.resolve()
   return serialized(async () => {
-    if (await retireOldDaemon(app.getVersion())) await launch(['daemon'])
+    if (await daemonToStart(app.getVersion())) await launch(['daemon'])
   })
 }

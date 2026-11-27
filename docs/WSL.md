@@ -50,7 +50,7 @@ Windows                                   WSL 发行版
 5. **启动**：每个由一个无窗口的 `wsl.exe -d <发行版> --exec env PATH=… /bin/sh -c … node <入口>` 带起来，和本机 `launch()` 一样不随应用退出。桌面端先隐藏启动系统自带的 Windows PowerShell；它用 `ProcessStartInfo` 的 `CreateNoWindow=true`、`UseShellExecute=false` 启动 `wsl.exe`，成功后立即退出，桌面端等到这个结果才继续。Linux 进程留在 `wsl.exe` 的前台，不在发行版里再做一次后台化：有 `wsl.exe` 连着，发行版才不会被回收。输出由那段 `sh` 接到发行版自己的 `~/.antumi/logs/` 里。
 6. **等 core 应答**：`backend-control.mjs endpoint` 答回 core 的端口和令牌。core 要把账号、插件、技能等都加载完才监听、写 `core.json`，冷启动的发行版第一次曾超过 30 秒，所以还没答回时 `endpoint` 顺带说这个目录的 `core.mjs` 还在不在跑（查 `/proc/*/cmdline`）：在就最多等三分钟，这次拉起的 core 不在了（拉起后 5 秒宽限）就马上报错，不白等。core.log 里 `listening` 那行带着启动用了几秒。
 
-应用开着的时候，core 没了（比如 `wsl --shutdown` 之后）会在界面再来问它在哪时重新走一遍，最多二十秒一次；旧 daemon 的替换沿用本机那个定时检查，改问 `backend-control.mjs replace-daemon`。
+应用开着的时候，core 没了（比如 `wsl --shutdown` 之后）会在界面再来问它在哪时重新走一遍，最多二十秒一次；旧 daemon 的替换沿用本机那个定时检查，改问 `backend-control.mjs replace-daemon`；同一个检查发现 daemon 已经没了（崩溃、被杀）也会重新拉起它，core 等到它后自己重连。
 
 core 应答后顺手清掉别的版本的目录，仍有进程从里面运行的留着（为手上的会话留下的旧 daemon，Agent 从里面启动的 MCP 服务）。
 

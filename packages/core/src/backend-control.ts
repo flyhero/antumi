@@ -4,7 +4,7 @@ import { createRequire } from 'node:module'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { CoreEndpoint } from '@antumi/protocol'
-import { backendToStart, retireOldDaemon, runningCore } from '@antumi/protocol/node'
+import { backendToStart, daemonToStart, runningCore } from '@antumi/protocol/node'
 
 // The daemon depends on node-pty, core does not: a specifier held in a variable is one TypeScript
 // does not resolve and esbuild leaves alone, so at run time it is found in the node_modules beside
@@ -36,8 +36,8 @@ export async function backendControl(args: string[], options: BackendControlOpti
   const rest = keepNewer ? given.slice(0, -1) : given
   const rule = { keepNewer }
   if (command === 'prepare' && rest.length === 1 && rest[0]) return { answer: { start: await backendToStart(rest[0], options.home, rule) } }
-  // As replaceOldDaemon in the desktop app: a daemon to start only once an older one left.
-  if (command === 'replace-daemon' && rest.length === 1 && rest[0]) return { answer: { start: (await retireOldDaemon(rest[0], options.home, rule)) ? ['daemon'] : [] } }
+  // As replaceOldDaemon in the desktop app: a daemon to start once an older one left, or none runs.
+  if (command === 'replace-daemon' && rest.length === 1 && rest[0]) return { answer: { start: (await daemonToStart(rest[0], options.home, rule)) ? ['daemon'] : [] } }
   if (command === 'endpoint' && rest.length === 0) {
     const endpoint = await runningCore(options.home)
     return { answer: endpoint ? { endpoint } : { endpoint: null, coreRunning: await (options.coreRunning ?? coreBesideRuns)() } }

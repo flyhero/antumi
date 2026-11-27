@@ -1,5 +1,6 @@
-import { AGENT_KINDS, agentDescriptor, quickModel, type AgentKind, type AgentProfileFields, type ChatCatalog } from '@antumi/protocol'
+import { AGENT_KINDS, agentDescriptor, agentSupportsReadOnly, quickModel, type AgentKind, type AgentProfileFields, type ChatCatalog } from '@antumi/protocol'
 import { localized, t } from './i18n'
+import { providerSmallModel } from './model-provider-choice'
 
 export type AgentProfileTemplate = {
   id: 'explorer' | 'reviewer' | 'debugger' | 'tester' | 'planner'
@@ -21,7 +22,7 @@ export const AGENT_PROFILE_TEMPLATES: readonly AgentProfileTemplate[] = localize
 
 // Templates stay presentation data until the user saves an independent copy.
 export function agentProfileTemplateSeed(template: AgentProfileTemplate, installed: readonly AgentKind[]): AgentProfileFields {
-  const agent = installed.find((kind) => template.capability !== 'readOnly' || agentDescriptor(kind).capabilities.readOnly !== false) ?? installed[0] ?? AGENT_KINDS[0]
+  const agent = installed.find((kind) => template.capability !== 'readOnly' || agentSupportsReadOnly(kind)) ?? installed[0] ?? AGENT_KINDS[0]
   return {
     name: template.name,
     description: template.description,
@@ -33,8 +34,7 @@ export function agentProfileTemplateSeed(template: AgentProfileTemplate, install
 
 // Only choose real catalog entries. Effort is independent of the model's size or price.
 export function agentProfileTemplateModel(template: AgentProfileTemplate, agent: AgentKind, catalog: ChatCatalog | null, smallModel?: string | null, onProvider = false): { model: string | null; effort: string | null } {
-  const small = smallModel ? catalog?.models.find((item) => item.id === smallModel || item.id === `${smallModel}[1m]` || item.id.endsWith(`/${smallModel}`)) : undefined
-  const quick = small?.id ?? (onProvider ? null : quickModel(agentDescriptor(agent).quickModels, catalog))
+  const quick = providerSmallModel(catalog, smallModel) ?? (onProvider ? null : quickModel(agentDescriptor(agent).quickModels, catalog))
   const chosen = catalog?.models.find((item) => item.id === (template.model === 'quick' ? quick : null)) ?? catalog?.models.find((item) => item.isDefault) ?? catalog?.models[0]
   const effort = template.model === 'quick' ? 'low' : template.model === 'strong' ? 'high' : 'medium'
   return { model: chosen?.id ?? null, effort: chosen?.efforts.includes(effort) ? effort : null }

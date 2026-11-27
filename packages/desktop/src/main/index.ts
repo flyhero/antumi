@@ -793,7 +793,8 @@ ipcMain.handle('antumi:update-automatic', (event, automatic: unknown) => {
 })
 ipcMain.handle('antumi:update-prerelease', (_event, prerelease: unknown) => updater?.setPrerelease(prerelease === true))
 
-// How often a daemon an update left running, busy at launch, is asked again whether it can go.
+// How often a daemon an update left running, busy at launch, is asked again whether it can go,
+// and a daemon that is gone is started again.
 const OLD_DAEMON_CHECK_MS = 5 * 60_000
 
 // Packaged, a second launch would race the first for daemon and core; hand it to the open window.

@@ -1,6 +1,6 @@
 import { createServer, type IncomingHttpHeaders, type Server } from 'node:http'
 import { afterEach, describe, expect, it } from 'vitest'
-import { anthropicMessagesUrl, askProvider, failureText } from './provider-request'
+import { anthropicMessagesUrl, askProvider, failureText, parseClaudeModelId } from './provider-request'
 import { probeModelProvider } from './model-provider-probe'
 
 type Seen = { method: string | undefined; url: string | undefined; headers: IncomingHttpHeaders; body: Record<string, unknown> }
@@ -30,6 +30,22 @@ async function serve(answer: (seen: Seen) => { status: number; body: unknown; lo
   return { base: `http://127.0.0.1:${portOf(server)}`, seen }
 }
 
+describe('parseClaudeModelId', () => {
+  it.each([
+    ['claude-test[1M]', 'claude-test', true],
+    ['claude-test[1m]', 'claude-test', true],
+    [' claude-test[1M][1m] ', 'claude-test', true],
+    ['claude-test[1M] [1m]', 'claude-test', true],
+    ['[1M]', '[1M]', false],
+    ['[1M][1m]', '[1M][1m]', false],
+    ['[1M] [1m]', '[1M] [1m]', false],
+    ['claude-test', 'claude-test', false],
+    ['claude[1M]-test', 'claude[1M]-test', false]
+  ])('parses %j', (raw, id, oneMillion) => {
+    expect(parseClaudeModelId(raw)).toEqual({ id, oneMillion })
+  })
+})
+
 describe('askProvider', () => {
   it('sends each wire its own path, auth header and body, and reads the reply', async () => {
     const { base, seen } = await serve(({ url }) => ({
@@ -50,6 +66,20 @@ describe('askProvider', () => {
     expect(seen[1]?.headers['x-api-key']).toBe('k2')
     expect(seen[1]?.headers.authorization).toBeUndefined()
     expect(seen[2]?.body).toMatchObject({ model: 'm', store: false })
+  })
+
+  it('strips the Claude context suffix only on Anthropic requests', async () => {
+    const { base, seen } = await serve(() => ({ status: 200, body: {} }))
+    for (const [wire, model] of [
+      ['anthropic', 'claude-test[1M]'],
+      ['anthropic', 'claude-test[1m]'],
+      ['anthropic', '[1M]'],
+      ['openai-responses', 'relay-test[1M]'],
+      ['openai-chat', 'relay-test[1m]']
+    ] as const) {
+      expect(await askProvider({ endpoint: { wire, baseUrl: base, anthropic: null }, apiKey: 'k', model }, 'q')).toMatchObject({ ok: true })
+    }
+    expect(seen.map((entry) => entry.body.model)).toEqual(['claude-test', 'claude-test', '[1M]', 'relay-test[1M]', 'relay-test[1m]'])
   })
 
   it('reports what a refusal said without the key, and never follows a redirect', async () => {
@@ -82,6 +112,22 @@ describe('anthropicMessagesUrl and failureText', () => {
 })
 
 describe('probeModelProvider', () => {
+  it('uses bare IDs on Anthropic while probing saved model IDs verbatim on OpenAI wires', async () => {
+    const { base, seen } = await serve(() => ({ status: 200, body: {} }))
+    const probe = await probeModelProvider({
+      anthropic: { baseUrl: base, auth: 'api_key', env: {} },
+      openai: { chatUrl: base, responsesUrl: base },
+      defaultModel: 'big[1M]',
+      smallModel: 'small[1m]'
+    }, 'k')
+    expect(probe.ok).toBe(true)
+    expect(seen.map((entry) => [entry.url, entry.body.model])).toEqual([
+      ['/v1/messages', 'big'], ['/v1/messages', 'small'],
+      ['/responses', 'big[1M]'], ['/responses', 'small[1m]'],
+      ['/chat/completions', 'big[1M]'], ['/chat/completions', 'small[1m]']
+    ])
+  })
+
   it('asks every endpoint with the default and small model', async () => {
     const { base, seen } = await serve(({ body }) => (body.model === 'small' ? { status: 404, body: { error: { message: 'model not found' } } } : { status: 200, body: { choices: [{ message: { content: 'ok' } }] } }))
     const probe = await probeModelProvider({ anthropic: null, openai: { chatUrl: base, responsesUrl: null }, defaultModel: 'big', smallModel: 'small' }, 'k')

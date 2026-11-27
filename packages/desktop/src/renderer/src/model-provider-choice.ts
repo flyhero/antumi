@@ -1,4 +1,4 @@
-import { providerEndpoint, type AgentKind, type ModelProvider } from '@antumi/protocol'
+import { providerEndpoint, type AgentKind, type ChatCatalog, type ModelProvider } from '@antumi/protocol'
 
 // The providers an agent can start on: ones with a key that serve it.
 export function servingProviders(providers: readonly ModelProvider[], agent: AgentKind): ModelProvider[] {
@@ -14,4 +14,14 @@ export function providerFor(providers: readonly ModelProvider[], id: string | nu
 // What an agent's models are kept under: a provider offers its own, which an edit may change.
 export function catalogKey(agent: AgentKind, provider: ModelProvider | null): string {
   return provider ? `${agent}|${provider.id}|${provider.revision}` : agent
+}
+
+// The small model under the id used in the catalog, including Claude's context suffix or a provider prefix.
+export function providerSmallModel(catalog: ChatCatalog | null, smallModel: string | null | undefined): string | null {
+  if (!catalog || !smallModel) return null
+  const { models } = catalog
+  const exact = models.find((model) => model.id === smallModel)
+  if (exact) return exact.id
+  const base = smallModel.replace(/(?:\s*\[1m\])+$/i, '').trim() || smallModel
+  return models.find((model) => model.id === base + '[1m]' || model.id.endsWith('/' + smallModel))?.id ?? null
 }

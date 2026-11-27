@@ -13,6 +13,7 @@ import { addedPatch, editPatch } from '../../chat-diff'
 import { ChatQueue } from '../../chat-queue'
 import { StageState } from '../../chat-stage-state'
 import { CLAUDE_TASK_TOOLS, ClaudeTasks } from './claude-tasks'
+import { CLAUDE_1M_CONTEXT, parseClaudeModelId } from '../../provider-request'
 import { Rejection } from '../../rejection'
 import { loggedRefusal, rateLimitReport, refusalResetsAt, usageLimitText } from './claude-usage'
 import { mergeUsageReports, type UsageReport } from '../../usage-source'
@@ -58,7 +59,6 @@ export const CLAUDE_MODE_NAMES: Record<string, string> = {
   auto: 'auto',
   bypass: 'bypassPermissions'
 }
-const ONE_MILLION = 1_000_000
 const CHOSEN: Record<string, string> = { allowed: 'allow', allowedForSession: 'allowForSession', denied: 'deny' }
 
 const Head = z.looseObject({ type: z.string() })
@@ -115,6 +115,7 @@ const TIME_LIMIT = /reaching its background time limit/
 const ModelRow = z.looseObject({
   value: z.string(),
   resolvedModel: z.string().nullish(),
+  defaultValue: z.string().nullish(),
   displayName: z.string().nullish(),
   description: z.string().nullish(),
   supportedEffortLevels: z.array(z.string()).catch([]).optional(),
@@ -255,9 +256,9 @@ function modelRows(value: unknown): ModelRow[] {
 // A provider's models as catalog rows. The API names a model without the [1m] the CLI is told it
 // by, so that is what a turn reports; the provider's default stands for the CLI's own.
 function providerRows(models: readonly ChatModel[]): ModelRow[] {
-  const rows = models.map((model) => ({ value: model.id, resolvedModel: model.id.replace(/\[1m\]$/, ''), displayName: model.label, description: model.description, supportedEffortLevels: [...model.efforts], supportsAutoMode: false }))
+  const rows = models.map((model) => ({ value: model.id, resolvedModel: parseClaudeModelId(model.id).id, displayName: model.label, description: model.description, supportedEffortLevels: [...model.efforts], supportsAutoMode: false }))
   const fallback = models.find((model) => model.isDefault) ?? models[0]
-  return fallback ? [...rows, { value: 'default', resolvedModel: fallback.id.replace(/\[1m\]$/, '') }] : rows
+  return fallback ? [...rows, { value: 'default', resolvedModel: parseClaudeModelId(fallback.id).id, defaultValue: fallback.id }] : rows
 }
 
 // Names with a leading __ are the CLI's own plumbing, not for a person to type.
@@ -748,12 +749,15 @@ export class ClaudeStream implements ChatDriver {
 
   // The options the stage offers follow from the catalog, the model and the mode reported.
   private refreshOptions(): void {
+    const defaultRow = this.catalog.find((each) => each.value === 'default')
     const models: ChatModel[] = this.catalog.filter((row) => row.value !== 'default').map((row) => ({
       id: row.value,
       label: row.displayName ?? row.value,
       description: row.description ?? null,
       efforts: row.supportedEffortLevels ?? [],
-      isDefault: row.resolvedModel != null && row.resolvedModel === this.catalog.find((each) => each.value === 'default')?.resolvedModel,
+      isDefault: defaultRow?.defaultValue != null
+        ? row.value === defaultRow.defaultValue
+        : row.resolvedModel != null && row.resolvedModel === defaultRow?.resolvedModel,
       ...(row.supportsAutoMode ? { autoMode: true } : {})
     }))
     const current = this.currentModel()
@@ -791,13 +795,24 @@ export class ClaudeStream implements ChatDriver {
   // A listed model with a 1M context (`opus[1m]`, which the CLI reports as `<its id>[1m]`) is that
   // row under the alias that keeps the window, so a restart on it keeps the window too.
   private currentModel(): ModelRow | undefined {
-    const reported = this.reportedModel ?? this.options.preferred?.model ?? this.catalog.find((row) => row.value === 'default')?.resolvedModel
+    const defaultRow = this.catalog.find((row) => row.value === 'default')
+    const reported = this.reportedModel ?? this.options.preferred?.model ?? defaultRow?.defaultValue ?? defaultRow?.resolvedModel
     if (!reported) return undefined
     const rows = this.catalog.filter((row) => row.value !== 'default')
     const listed = (name: string) => rows.find((row) => row.value === name) ?? rows.find((row) => row.resolvedModel === name)
     const found = listed(reported)
-    const base = !found && reported.endsWith('[1m]') ? listed(reported.slice(0, -'[1m]'.length)) : undefined
-    return found ?? (base && { ...base, value: `${base.value}[1m]`, displayName: `${base.displayName ?? base.value} (1M)` })
+    if (found) return found
+    const parsed = parseClaudeModelId(reported)
+    if (parsed.oneMillion) {
+      const sameOneMillion = rows.find((row) => {
+        const model = parseClaudeModelId(row.value)
+        return model.oneMillion && (model.id === parsed.id || row.resolvedModel === parsed.id)
+      })
+      if (sameOneMillion) return sameOneMillion
+    }
+    const base = parsed.oneMillion ? listed(parsed.id) : undefined
+    if (!base || parseClaudeModelId(base.value).oneMillion) return base
+    return { ...base, value: `${base.value}[1m]`, displayName: `${base.displayName ?? base.value} (1M)` }
   }
 
   private reply(requestId: string, response: unknown): unknown {
@@ -883,7 +898,12 @@ export class ClaudeStream implements ChatDriver {
     const { subtype, session_id, model, permissionMode, detail, compact_metadata, mcp_servers } = system.data
     if (subtype === 'init' && session_id) this.sessionId = session_id
     if (subtype === 'init') unreachableMcp(mcp_servers).forEach((server) => this.items.mcpUnreachable(server.name, at))
-    if (subtype === 'init' && model) this.reportedModel = model
+    if (subtype === 'init' && model) {
+      // A provider can report the same API id for both context windows.
+      const selected = this.reportedModel ?? this.options.preferred?.model ?? this.catalog.find((row) => row.value === 'default')?.defaultValue
+      const selectedId = selected && this.options.providerModels ? parseClaudeModelId(selected) : null
+      this.reportedModel = selectedId?.oneMillion && selectedId.id === model ? model + '[1m]' : model
+    }
     // After the first turn, an init with no message before it is the CLI starting a turn of its
     // own: a subagent left working in the background has reported back.
     if (subtype === 'init' && !this.turn && this.turnsSeen > 0) {
@@ -1186,7 +1206,7 @@ export class ClaudeStream implements ChatDriver {
   // Before the first turn reports it: a 1M model says so in its name.
   private guessedWindow(): number | null {
     const names = [this.reportedModel, this.currentModel()?.value].filter((name): name is string => Boolean(name))
-    return names.some((name) => name.includes('[1m]')) ? ONE_MILLION : null
+    return names.some((name) => parseClaudeModelId(name).oneMillion) ? CLAUDE_1M_CONTEXT : null
   }
 
   // Background subagents the CLI counts as finished beyond those already settled by their own

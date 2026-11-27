@@ -5,7 +5,7 @@ import net from 'node:net'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { backendToStart, daemonPresence, retireOldDaemon, runningCore, stopBackendForInstall } from './backend-lifecycle'
+import { backendToStart, daemonPresence, daemonToStart, retireOldDaemon, runningCore, stopBackendForInstall } from './backend-lifecycle'
 import { writeCoreEndpoint } from './core-endpoint'
 import { antumiPaths } from './paths'
 
@@ -194,6 +194,29 @@ describe.skipIf(process.platform === 'win32')('backend lifecycle', () => {
     })
   })
 
+  describe('daemonToStart', () => {
+    it('is true once an older daemon left', async () => {
+      await fakeDaemon({ version: OLD, pid: 401 })
+      expect(await daemonToStart(APP, home)).toBe(true)
+    })
+
+    it('is true when no daemon serves the socket any more, as after a crash', async () => {
+      await staleSocket()
+      expect(await daemonToStart(APP, home)).toBe(true)
+    })
+
+    it('is false while a daemon of this version runs, or an older one still runs something', async () => {
+      await fakeDaemon({ version: OLD, pid: 402, live: 1 })
+      expect(await daemonToStart(APP, home)).toBe(false)
+    })
+
+    it.skipIf(asRoot)('is false when the socket cannot be shown to be gone', async () => {
+      await fakeDaemon({ version: APP })
+      await chmod(antumiPaths(home).daemonSocket, 0o000)
+      expect(await daemonToStart(APP, home)).toBe(false)
+    })
+  })
+
   describe('backendToStart', () => {
     it('starts both when nothing runs', async () => {
       expect(await backendToStart(APP, home)).toEqual(['daemon', 'core'])
@@ -203,6 +226,13 @@ describe.skipIf(process.platform === 'win32')('backend lifecycle', () => {
       await fakeDaemon({ version: APP, pid: 201 })
       await fakeCore(APP, process.pid)
       expect(await backendToStart(APP, home)).toEqual([])
+    })
+
+    it('starts only the daemon when the core is current and no daemon runs', async () => {
+      const core = await child()
+      await fakeCore(APP, core.pid)
+      expect(await backendToStart(APP, home)).toEqual(['daemon'])
+      expect(await gone(core.proc)).toBe(false)
     })
 
     it('starts nothing when the core is current and an older daemon is busy', async () => {

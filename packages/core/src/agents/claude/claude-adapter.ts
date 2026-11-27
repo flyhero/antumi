@@ -3,7 +3,7 @@ import { parseClaudeQuick } from '../../model-metering'
 import type { AgentAdapter } from '../agent-adapter'
 import { claudeAccounts, claudeDefaultHome } from './claude-account'
 import { claudeCommand } from './claude-command'
-import { claudeProviderModels } from './claude-provider'
+import { claudeProviderModels, matchClaudeProviderModel } from './claude-provider'
 import { CLAUDE_MODE_NAMES, ClaudeStream } from './claude-stream'
 import { claudeTranscripts } from './claude-transcripts'
 import { claudeAuthentication, claudeSignedIn, readClaudeUsage } from './claude-usage'
@@ -15,6 +15,7 @@ export const claude: AgentAdapter = {
   createDriver: (stageId, options) => new ClaudeStream(stageId, options),
   command: claudeCommand,
   providerModels: claudeProviderModels,
+  matchProviderModel: matchClaudeProviderModel,
   permissionModes: Object.keys(CLAUDE_MODE_NAMES),
   session: { preassignedId: true, folderBound: true, nativeFork: 'any' },
   // Claude Code asks for MCP tools itself, under whatever mode the user set.

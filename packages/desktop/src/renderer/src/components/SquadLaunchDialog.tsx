@@ -1,10 +1,12 @@
 import { SupportActions } from './ContactAuthor'
 import { t, tr } from '../i18n'
 import { useEffect, useRef, useState } from 'react'
-import { ChatPermissionMode, checkSquadStart, squadModes, type Task } from '@antumi/protocol'
+import { agentSupportsPlan, ChatPermissionMode, checkSquadStart, squadModes, squadReadOnlyIssues, type Task } from '@antumi/protocol'
 import { dismissError, openChatWhileStarting, perform, selectSquad, useCore } from '../core-store'
 import { useOccludesBrowser } from '../browser-occlusion'
 import { reasonText } from '../labels'
+import { resolveSquadRoster, squadReadOnlyIssueText } from '../squads'
+import { useAgentBackend } from './ChatOptionsBar'
 import { useEditsInPlace } from './TaskLaunch'
 import { ChatPicker } from './ChatPicker'
 import { CloseIcon, SquadIcon } from './icons'
@@ -13,6 +15,7 @@ export function SquadLaunchDialog({ task, onSingle }: { task: Task; onSingle(): 
   useOccludesBrowser()
   const dialog = useRef<HTMLDialogElement>(null)
   const squads = useCore((state) => state.squads)
+  const profiles = useCore((state) => state.agentProfiles)
   const tasks = useCore((state) => state.tasks)
   const plan = useCore((state) => state.squadPlan)
   const inPlace = useEditsInPlace(task)
@@ -25,9 +28,14 @@ export function SquadLaunchDialog({ task, onSingle }: { task: Task; onSingle(): 
   // as it goes.
   const leaderPlans = useCore((state) => state.rpc?.features.includes('squad-leader-planning') ?? false) && !plan && !task.plan
   const [planFirst, setPlanFirst] = useState(true)
-  const planning = leaderPlans && planFirst
   const squad = squads[squadId]
-  const modes = squad ? squadModes(squad, true) : []
+  const resolvedSquad = squad ? { ...squad, members: resolveSquadRoster(squad, profiles) } : null
+  const leader = resolvedSquad?.members.find((member) => member.id === resolvedSquad.leaderId) ?? null
+  const leaderBackend = useAgentBackend(leader?.agent ?? null)
+  const leaderCanPlan = leader ? agentSupportsPlan(leader.agent, leaderBackend) : true
+  const planning = leaderPlans && leaderCanPlan && planFirst
+  const modes = resolvedSquad ? squadModes(resolvedSquad, true) : []
+  const readOnlyIssue = resolvedSquad ? squadReadOnlyIssues(resolvedSquad)[0] ?? null : null
   const mode = modes.includes(requested) ? requested : modes[0] ?? 'ask'
   const dependencies = task.dependsOn.flatMap((id) => tasks[id] ? [tasks[id]] : [])
   // Planning reads only, so it may begin before the dependencies are done.
@@ -35,7 +43,7 @@ export function SquadLaunchDialog({ task, onSingle }: { task: Task; onSingle(): 
   const close = () => { dismissError(); useCore.setState({ taskLaunchId: null, squadPlan: null, squadLaunch: false }) }
   useEffect(() => { dialog.current?.showModal(); return () => dialog.current?.close() }, [])
   const start = async () => {
-    if (busy || blocker || !squad || !modes.length) return
+    if (busy || blocker || readOnlyIssue || !squad || squad.archivedAt !== null || !modes.length) return
     setBusy(true); dismissError()
     const result = await openChatWhileStarting(task.id, () => perform((rpc) => rpc.call('squads.start', { id: task.id, squadId, permissionMode: mode, allowBypass: true, ...(plan ? { plan } : {}), ...(planning ? { planFirst: true } : {}) })))
     if (result) { close(); if (!planning) useCore.setState({ inspectorOpen: true, taskInspectorTab: 'squad' }) }
@@ -60,16 +68,18 @@ export function SquadLaunchDialog({ task, onSingle }: { task: Task; onSingle(): 
       </fieldset>
       {leaderPlans && (
         <fieldset className="squad-launch-ways" disabled={busy}>
-          <label><input type="radio" name="squad-launch-way" checked={planFirst} onChange={() => setPlanFirst(true)} /><span>{tr('SquadLaunchDialog.recommended', { value1: <b>{t('SquadLaunchDialog.planWithTheLeaderFirst')}</b>, value2: <span className="muted">{t('SquadLaunchDialog.theLeaderReadsCodeAndDiscussesThePlan')}</span> })}</span></label>
-          <label><input type="radio" name="squad-launch-way" checked={!planFirst} onChange={() => setPlanFirst(false)} /><span><b>{t('SquadLaunchDialog.startDirectly')}</b><span className="muted">{t('SquadLaunchDialog.theLeaderBreaksDownTaskDetailsAndAssigns')}</span></span></label>
+          <label><input type="radio" name="squad-launch-way" disabled={!leaderCanPlan} checked={leaderCanPlan && planFirst} onChange={() => setPlanFirst(true)} /><span>{tr('SquadLaunchDialog.recommended', { value1: <b>{t('SquadLaunchDialog.planWithTheLeaderFirst')}</b>, value2: <span className="muted">{t(leaderCanPlan ? 'SquadLaunchDialog.theLeaderReadsCodeAndDiscussesThePlan' : 'SquadLaunchDialog.leaderPlanUnsupported')}</span> })}</span></label>
+          <label><input type="radio" name="squad-launch-way" checked={!leaderCanPlan || !planFirst} onChange={() => setPlanFirst(false)} /><span><b>{t('SquadLaunchDialog.startDirectly')}</b><span className="muted">{t('SquadLaunchDialog.theLeaderBreaksDownTaskDetailsAndAssigns')}</span></span></label>
         </fieldset>
       )}
-      {squad && <p className="muted">{tr('SquadLaunchDialog.coordinatesMembersUsingTheSquadSModelsAnd', { value1: squad.members.find((member) => member.id === squad.leaderId)?.name, value2: squad.members.length - 1, value3: planning ? t('SquadLaunchDialog.developmentPermissionsApplyAfterPlanApproval') : '' })}</p>}
+      {resolvedSquad && <p className="muted">{tr('SquadLaunchDialog.coordinatesMembersUsingTheSquadSModelsAnd', { value1: resolvedSquad.members.find((member) => member.id === resolvedSquad.leaderId)?.name, value2: resolvedSquad.members.length - 1, value3: planning ? t('SquadLaunchDialog.developmentPermissionsApplyAfterPlanApproval') : '' })}</p>}
       {inPlace && <p className="muted">{t('SquadLaunchDialog.thisProjectIsNotAGitRepositoryChanges')}</p>}
       {!available.length && <button type="button" className="button" onClick={() => { close(); selectSquad(null, true) }}>{t('SquadLaunchDialog.createADevelopmentSquadFirst')}</button>}
-      {blocker && <p className="modal-error">{reasonText(blocker, blocker)}</p>}
-      {error && <p className="modal-error" role="alert">{error}<SupportActions error={error} /></p>}
-      <footer className="modal-footer"><button type="button" className="button ghost" disabled={busy} onClick={close}>{t('ChatCommandSettings.cancel')}</button><button type="submit" className="button primary" disabled={busy || Boolean(blocker) || !squad || squad.archivedAt !== null || !modes.length}>{busy ? t('DiscussionDraft.starting') : planning ? t('SquadLaunchDialog.startPlanning') : t('ChatPlan.startSquadDevelopment')}</button></footer>
+      {readOnlyIssue && squad ? (
+        <p className="modal-error" role="alert">{squadReadOnlyIssueText(readOnlyIssue)}<button type="button" className="link-button" onClick={() => { close(); selectSquad(squad.id) }}>{t('SquadLaunchDialog.editSquad')}</button></p>
+      ) : blocker ? <p className="modal-error" role="alert">{reasonText(blocker, blocker)}</p>
+        : error && <p className="modal-error" role="alert">{error}<SupportActions error={error} /></p>}
+      <footer className="modal-footer"><button type="button" className="button ghost" disabled={busy} onClick={close}>{t('ChatCommandSettings.cancel')}</button><button type="submit" className="button primary" disabled={busy || Boolean(blocker || readOnlyIssue) || !squad || squad.archivedAt !== null || !modes.length}>{busy ? t('DiscussionDraft.starting') : planning ? t('SquadLaunchDialog.startPlanning') : t('ChatPlan.startSquadDevelopment')}</button></footer>
     </form>
   </dialog>
 }

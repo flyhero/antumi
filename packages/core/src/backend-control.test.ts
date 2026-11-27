@@ -56,8 +56,8 @@ describe('backendControl', () => {
     expect(await backendControl(['prepare', '2.0.0'], { home })).toEqual({ answer: { start: ['daemon', 'core'] } })
   })
 
-  it('names a daemon to start only once an older one left', async () => {
-    expect(await backendControl(['replace-daemon', '2.0.0'], { home })).toEqual({ answer: { start: [] } })
+  it('names a daemon to start once an older one left, or when none runs', async () => {
+    expect(await backendControl(['replace-daemon', '2.0.0'], { home })).toEqual({ answer: { start: ['daemon'] } })
     await fakeDaemon('2.0.0')
     expect(await backendControl(['replace-daemon', '2.0.0'], { home })).toEqual({ answer: { start: [] } })
     expect(await backendControl(['replace-daemon', '3.0.0'], { home })).toEqual({ answer: { start: ['daemon'] } })
@@ -143,7 +143,8 @@ describe('backend-control process', () => {
     expect(stderr).toContain('[antumi] core 1.0.0 is older than this app (2.0.0); replacing it')
   }, 30_000)
 
-  it('prints no daemon to start when none was replaced', async () => {
+  it('prints no daemon to start while one of this version runs', async () => {
+    await fakeDaemon('2.0.0')
     const { code, stdout } = await run(['replace-daemon', '2.0.0'])
     expect(code).toBe(0)
     expect(stdout).toBe('{"start":[]}\n')

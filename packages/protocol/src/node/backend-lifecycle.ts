@@ -136,16 +136,21 @@ async function exited(pid: number, ms = 10_000): Promise<boolean> {
   return !alive(pid)
 }
 
+// Whether an app of this version starts a daemon: an older one left, or none runs at all (it
+// crashed, or was killed). Core waits for one and reconnects by itself, but only an app starts it.
+export async function daemonToStart(version: string, home?: string, rule: ReplaceRule = {}): Promise<boolean> {
+  return (await retireOldDaemon(version, home, rule)) || (await daemonPresence(home)) === 'gone'
+}
+
 // Which of daemon and core to start for an app of this version, after asking any older one to leave.
 export async function backendToStart(version: string, home?: string, rule: ReplaceRule = {}): Promise<('daemon' | 'core')[]> {
-  const daemonReplaced = await retireOldDaemon(version, home, rule)
+  const daemon = await daemonToStart(version, home, rule)
   const running = await runningCore(home)
   // A core of this build stays, and a newer one where the rule keeps it: it reconnects to a new
   // daemon by itself.
-  const coreKept = running !== null && !replaces(running.version, version, rule)
-  if (coreKept && !daemonReplaced) return []
-  if (running && !coreKept) await retireCore(running, version)
-  return coreKept ? ['daemon'] : ['daemon', 'core']
+  if (running !== null && !replaces(running.version, version, rule)) return daemon ? ['daemon'] : []
+  if (running) await retireCore(running, version)
+  return ['daemon', 'core']
 }
 
 // Whether a daemon serves the socket. Only a refused connection or no socket at all proves none

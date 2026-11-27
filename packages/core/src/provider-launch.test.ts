@@ -57,6 +57,59 @@ describe('starting an agent on a model provider', () => {
     ])
   })
 
+  it.each([null, 1_000_000])('launches Claude with a single lowercase 1M suffix for context %s', (contextWindow) => {
+    const id = 'claude-sonnet-5-5[1M]'
+    const provider = {
+      ...launchOn('claude'),
+      models: [{ id, label: null, contextWindow, maxOutput: null, efforts: [] }],
+      defaultModel: id,
+      smallModel: 'claude-haiku-5-5[1M][1m]'
+    }
+    const command = start('claude', provider)
+    expect(command.args.slice(command.args.indexOf('--model'), command.args.indexOf('--model') + 2)).toEqual(['--model', 'claude-sonnet-5-5[1m]'])
+    expect(command.env).toMatchObject({
+      ANTHROPIC_DEFAULT_SONNET_MODEL: 'claude-sonnet-5-5[1m]',
+      ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-sonnet-5-5[1m]',
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: 'claude-haiku-5-5[1m]',
+      ANTHROPIC_SMALL_FAST_MODEL: 'claude-haiku-5-5[1m]'
+    })
+  })
+
+  it('merges duplicate 1M catalog rows in their original order', () => {
+    const model = { id: 'm', label: null, contextWindow: 1_000_000, maxOutput: null, efforts: ['high'] }
+    const provider = {
+      ...launchOn('claude'),
+      models: [model, { ...model, id: 'small', contextWindow: 400_000 }, { ...model, id: 'm[1M]', label: 'Model M', contextWindow: null, efforts: [] }],
+      defaultModel: 'm[1M]',
+      smallModel: 'small'
+    }
+    expect(adapterOf('claude').providerModels?.(provider)).toMatchObject([
+      { id: 'm[1m]', label: 'Model M', isDefault: true, efforts: ['high'] },
+      { id: 'small', isDefault: false }
+    ])
+  })
+
+  it('sets the shared context limit using only the non-1M models', () => {
+    const model = { label: null, maxOutput: null, efforts: [] }
+    const provider = {
+      ...launchOn('claude'),
+      models: [{ ...model, id: 'claude-opus-5-5[1M]', contextWindow: 200_000 }, { ...model, id: 'regular', contextWindow: 400_000 }],
+      defaultModel: 'regular',
+      smallModel: 'regular'
+    }
+    expect(start('claude', provider).env?.CLAUDE_CODE_MAX_CONTEXT_TOKENS).toBe('400000')
+  })
+
+  it.each([false, true])('normalizes a preferred provider model at launch (locked down: %s)', (locked) => {
+    const provider = launchOn('claude')
+    const command = adapterOf('claude').command({
+      providerSessionId: null, resume: false, handoffPath: null, extraProjects: [], provider,
+      preferred: { model: locked ? 'claude-opus-5-5[1M][1m]' : 'claude-opus-5-5[1M]' },
+      ...(locked ? { lockdown: { tools: [] } } : {})
+    })
+    expect(command.args.slice(command.args.indexOf('--model'), command.args.indexOf('--model') + 2)).toEqual(['--model', 'claude-opus-5-5[1m]'])
+  })
+
   it('sends Claude\'s key as x-api-key where the provider takes that', () => {
     expect(start('claude', launchOn('claude', 'kimi-code')).env).toMatchObject({ ANTHROPIC_BASE_URL: 'https://api.kimi.com/coding', ANTHROPIC_API_KEY: KEY, ANTHROPIC_AUTH_TOKEN: '', ENABLE_TOOL_SEARCH: 'false' })
   })

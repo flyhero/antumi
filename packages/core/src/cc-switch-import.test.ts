@@ -89,6 +89,69 @@ describe('CC Switch provider import', () => {
     expect((await importer.preview(dir)).candidates[0]?.issue).toBe('duplicate')
   })
 
+  it.each([null, 200_000, 2_000_000])('normalizes Claude 1M models and preserves the configured context of %s', async (context) => {
+    await database([{
+      id: 'Claude 1M',
+      app: 'claude',
+      config: claude({
+        ANTHROPIC_MODEL: 'claude-sonnet-5-5',
+        ANTHROPIC_DEFAULT_SONNET_MODEL: 'claude-sonnet-5-5[1M]',
+        ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-opus-5-5[1M][1m]',
+        ANTHROPIC_DEFAULT_HAIKU_MODEL: 'claude-haiku-5-5[1m]',
+        ANTHROPIC_SMALL_FAST_MODEL: 'claude-fast',
+        CLAUDE_CODE_MAX_CONTEXT_TOKENS: context === null ? undefined : String(context)
+      }),
+      meta: { stackModels: [{ model: 'claude-opus-5-5' }, { model: 'claude-stack[1M]' }] }
+    }])
+    const preview = await importer.preview(dir)
+    expect(preview.candidates[0]).toMatchObject({
+      issue: null,
+      models: ['claude-sonnet-5-5', 'claude-opus-5-5', 'claude-haiku-5-5', 'claude-fast', 'claude-stack']
+    })
+    const result = await importer.import(preview.token, preview.candidates.map((entry) => entry.id))
+    expect(result.items[0]?.status).toBe('imported')
+    const oneMillion = Math.max(context ?? 0, 1_000_000)
+    expect(store.list()[0]).toMatchObject({
+      defaultModel: 'claude-sonnet-5-5',
+      smallModel: 'claude-haiku-5-5',
+      models: [
+        { id: 'claude-sonnet-5-5', contextWindow: oneMillion },
+        { id: 'claude-opus-5-5', contextWindow: oneMillion },
+        { id: 'claude-haiku-5-5', contextWindow: oneMillion },
+        { id: 'claude-fast', contextWindow: context },
+        { id: 'claude-stack', contextWindow: oneMillion }
+      ]
+    })
+  })
+
+  it('uses the bare primary and fast model IDs when Haiku is empty', async () => {
+    await database([{ id: 'Relay', app: 'claude', config: claude({
+      ANTHROPIC_MODEL: 'claude-test[1M]',
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: ' ',
+      ANTHROPIC_SMALL_FAST_MODEL: 'claude-fast[1M]'
+    }) }])
+    const preview = await importer.preview(dir)
+    await importer.import(preview.token, preview.candidates.map((entry) => entry.id))
+    expect(store.list()[0]).toMatchObject({
+      defaultModel: 'claude-test',
+      smallModel: 'claude-fast',
+      models: [{ id: 'claude-test', contextWindow: 1_000_000 }, { id: 'claude-fast', contextWindow: 1_000_000 }]
+    })
+  })
+
+  it('rejects a key in a raw Claude model ID before removing its suffix', async () => {
+    const key = `${KEY}[1M]`
+    await database([
+      { id: 'Env', app: 'claude', config: claude({ ANTHROPIC_AUTH_TOKEN: key, ANTHROPIC_MODEL: key }) },
+      { id: 'Stack', app: 'claude', config: claude({ ANTHROPIC_AUTH_TOKEN: key }), meta: { stackModels: [{ model: key }] } }
+    ])
+    const preview = await importer.preview(dir)
+    expect(preview.candidates.map((entry) => entry.issue)).toEqual(['invalid-config', 'invalid-config'])
+    expect(JSON.stringify(preview)).not.toContain(KEY)
+    await importer.import(preview.token, preview.candidates.map((entry) => entry.id))
+    expect(store.list()).toEqual([])
+  })
+
   it('supports legacy JSON without changing it and reads an active TOML profile or environment key', async () => {
     vi.stubEnv('ANTUMI_TEST_CC_KEY', KEY)
     const file = path.join(dir, 'config.json')
@@ -134,6 +197,21 @@ describe('CC Switch provider import', () => {
     const result = await importer.import(preview.token, preview.candidates.map((entry) => entry.id))
     expect(JSON.stringify(result)).not.toContain(KEY)
     expect(store.list()).toEqual([])
+  })
+
+  it('redacts a key that straddles the preview name limit', async () => {
+    const prefix = 'a'.repeat(54)
+    await database([{ id: 'name', name: prefix + KEY, app: 'claude', config: claude() }])
+    const preview = await importer.preview(dir)
+    expect(preview.candidates).toMatchObject([{ name: prefix + '…', issue: 'invalid-config' }])
+    expect(JSON.stringify(preview)).not.toContain(KEY.slice(0, 6))
+  })
+
+  it('rejects a key used as a custom header name', async () => {
+    await database([{ id: 'headers', app: 'claude', config: claude({ ANTHROPIC_CUSTOM_HEADERS: `X-${KEY}: public` }) }])
+    const preview = await importer.preview(dir)
+    expect(preview.candidates).toMatchObject([{ name: 'headers', issue: 'invalid-config' }])
+    expect(JSON.stringify(preview)).not.toContain(KEY)
   })
 
   it('lists unknown models only after selection and reports individual failures', async () => {

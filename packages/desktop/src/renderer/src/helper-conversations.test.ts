@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createRpcClient, RpcRequest, type ChatCatalog, type Conversation, type RpcConnection } from '@antumi/protocol'
-import { ensureHelper, handToHelper, helperFor, helperWaiting } from './helper-conversations'
+import { ensureHelper, handToHelper, helperFor, helperModel, helperWaiting } from './helper-conversations'
 import { useCore } from './core-store'
 import { usePreferences } from './preferences'
 import { createElement } from 'react'
@@ -43,6 +43,18 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('helper conversations', () => {
+  it('matches a legacy 1M provider small model to the catalog spelling', () => {
+    const providerId = 'relay'
+    useCore.setState({ modelProviders: [{
+      id: providerId, name: 'Relay', preset: 'custom', anthropic: null, openai: null, models: [],
+      defaultModel: 'sonnet', smallModel: 'claude-haiku-5-5[1M]', agents: ['claude'],
+      hasKey: true, revision: 1, createdAt: 0, updatedAt: 0
+    }] })
+    const onProvider: Conversation = { ...parent, modelProvider: providerId, route: { providerId, name: 'Relay', reason: 'served' } }
+    const model = { id: 'claude-haiku-5-5[1m]', label: 'Haiku (1M)', description: null, isDefault: false, efforts: [] }
+    expect(helperModel(onProvider, { models: [...catalog.models, model] })).toBe(model.id)
+  })
+
   it.each(['haiku', 'sonnet'])('creates a deferred ask conversation with the quick model %s and transfers the selection', async (model) => {
     usePreferences.setState({ quickModels: model === 'sonnet' ? { claude: 'sonnet' } : {} })
     const { sent, reply } = connection()

@@ -12,6 +12,16 @@ export type ProviderReply =
   | { ok: false; status: number | null; message: string; latencyMs: number }
 
 const MESSAGE_LIMIT = 300
+export const CLAUDE_1M_CONTEXT = 1_000_000
+const CLAUDE_1M_SUFFIX = /(?:\s*\[1m\])+$/i
+
+// Claude Code uses this suffix to select a context window and strips it before /v1/messages.
+export function parseClaudeModelId(model: string): { id: string; oneMillion: boolean } {
+  const value = model.trim()
+  if (!CLAUDE_1M_SUFFIX.test(value)) return { id: value, oneMillion: false }
+  const base = value.replace(CLAUDE_1M_SUFFIX, '').trim()
+  return base ? { id: base, oneMillion: true } : { id: value, oneMillion: false }
+}
 
 // Agents add the version segment themselves; one already on the address would go twice.
 export function trimmed(baseUrl: string): string {
@@ -43,7 +53,7 @@ function build({ endpoint, apiKey, model, headers: own = {} }: ProviderCall, pro
     return {
       url: anthropicMessagesUrl(endpoint.baseUrl),
       headers: withProviderHeaders(own, { ...json, ...auth, 'anthropic-version': '2023-06-01' }),
-      body: { model, max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] }
+      body: { model: parseClaudeModelId(model).id, max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] }
     }
   }
   const headers = withProviderHeaders(own, { ...json, authorization: `Bearer ${apiKey}` })

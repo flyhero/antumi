@@ -247,6 +247,8 @@ export class ChannelService {
       docLocation: fields.docLocation !== undefined ? fields.docLocation : existing?.docLocation,
       docAccess: fields.docAccess ?? existing?.docAccess,
       followUps: fields.followUps ?? existing?.followUps,
+      ownerUsers: fields.ownerUsers ? [...new Set(fields.ownerUsers)] : existing?.ownerUsers,
+      taskCards: fields.taskCards !== undefined ? fields.taskCards : existing?.taskCards,
       // A client from before it leaves it out: what was chosen stays.
       reportTasks: fields.reportTasks ?? existing?.reportTasks,
       dailyPerUser: fields.dailyPerUser ?? 20, dailyTotal: fields.dailyTotal ?? 200, maxConcurrent: fields.maxConcurrent ?? 2,

@@ -517,6 +517,22 @@ describe('ChannelService', () => {
     expect(channels.toolCalls(request!.id).at(-1)).toMatchObject({ tool: 'lark_fetch_doc', target: 'fetch-doc ✗' })
   })
 
+  it('keeps every switch it is saved with, and what a client from before leaves out', async () => {
+    const feishu = await channels.save({
+      profileId: profile.id, platform: 'feishu', projectPaths: [repo], allowedUsers: ['ou_1'], allowedPlaces: ['oc_1'], credentials: { appId: 'cli_1', appSecret: 's' },
+      allowTaskCreation: true, reportTasks: true, ownerUsers: ['ou_owner', 'ou_owner'], taskCards: { start: { agent: 'codex', model: null, effort: null, modelProvider: null }, review: 'owner' },
+      platformTools: ['fetch-doc'], docLocation: { kind: 'folder', value: 'fldcnA' }, docAccess: 'view', followUps: true
+    })
+    const saved = { allowTaskCreation: true, reportTasks: true, ownerUsers: ['ou_owner'], taskCards: { start: { agent: 'codex' }, review: 'owner' }, platformTools: ['fetch-doc'], docLocation: { kind: 'folder', value: 'fldcnA' }, docAccess: 'view', followUps: true }
+    expect(feishu).toMatchObject(saved)
+    expect(channels.list().find((each) => each.id === feishu.id)).toMatchObject(saved)
+    // A client from before these switches saves without them: they stay.
+    const { reportTasks: _r, ownerUsers: _o, taskCards: _t, platformTools: _p, docLocation: _d, docAccess: _a, followUps: _f, ...older } = feishu
+    expect(await channels.save({ ...older, enabled: false })).toMatchObject({ ...saved, enabled: false })
+    // Turned off on purpose, they go.
+    expect(await channels.save({ ...feishu, taskCards: null, docLocation: null })).toMatchObject({ taskCards: null, docLocation: null })
+  })
+
   it('goes on in a thread without a mention only for its one asker, until anyone else speaks there', async () => {
     const feishu = await channels.save({ profileId: profile.id, platform: 'feishu', projectPaths: [repo], allowedUsers: ['ou_1', 'ou_2'], allowedPlaces: ['oc_1'], credentials: { appId: 'cli_1', appSecret: 's' }, followUps: true })
     expect(sent('channels').at(-1)?.channels.find((each) => each.id === feishu.id)?.options).toEqual({ followUps: true })

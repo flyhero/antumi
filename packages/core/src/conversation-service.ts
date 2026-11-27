@@ -432,7 +432,20 @@ export class ConversationService {
   // are never listed: a client that does not know group chats would show them as its own. Nor is
   // one opened for a chat platform's asker, which is not the user's to speak in.
   list(includeTasks = false, includeSquads = false, includeDelegates = false): Conversation[] {
-    return this.store.list().filter((conversation) => (includeTasks || !conversation.taskId) && !isHelper(conversation) && !conversation.discussionId && !conversation.channel && (includeSquads || !conversation.squadRunId) && (includeDelegates || !conversation.parentConversationId)).map((conversation) => this.withChat(conversation))
+    return this.store.list().filter((conversation) => this.listed(conversation, includeTasks, includeSquads, includeDelegates)).map((conversation) => this.withChat(conversation))
+  }
+  private listed(conversation: Conversation, includeTasks = false, includeSquads = false, includeDelegates = false): boolean {
+    return (includeTasks || !conversation.taskId) && !isHelper(conversation) && !conversation.discussionId && !conversation.channel && (includeSquads || !conversation.squadRunId) && (includeDelegates || !conversation.parentConversationId)
+  }
+  // The listed conversations opened for an issue, with what watching its comments reads of each.
+  // That asks on every change, so it gets neither the others nor the chat state `list` reads.
+  issueConversations(): Array<Pick<Conversation, 'id' | 'archivedAt' | 'preparing'> & { source: TaskSource }> {
+    return this.store.ofIssues().flatMap((conversation) => {
+      // An issue the store could not read comes back as none.
+      if (!conversation.source || !this.listed(conversation)) return []
+      const preparing = this.preparingOf(conversation)
+      return [{ id: conversation.id, source: conversation.source, archivedAt: conversation.archivedAt, ...(preparing ? { preparing } : {}) }]
+    })
   }
   helper(parentId: string): Conversation | null {
     this.get(parentId)

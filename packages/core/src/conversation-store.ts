@@ -98,6 +98,11 @@ export class ConversationStore {
     return this.db.prepare(`${SELECT} ORDER BY updated_at DESC`).all().map(conversation)
   }
 
+  // Those opened for an issue themselves, not through a task.
+  ofIssues(): Conversation[] {
+    return this.db.prepare(`${SELECT} WHERE source IS NOT NULL AND task_id IS NULL ORDER BY updated_at DESC`).all().map(conversation)
+  }
+
   helper(parentId: string): Conversation | null {
     const row = this.db.prepare(`${SELECT} WHERE helper_of = ?`).get(parentId)
     return row ? conversation(row) : null

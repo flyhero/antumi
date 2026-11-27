@@ -1380,6 +1380,27 @@ describe('ConversationService', () => {
     expect(restarted.get(other.id).preparing).toBeUndefined()
   })
 
+  it('gives whoever watches issue comments the issue conversations alone, as the list has them', async () => {
+    const source = { provider: 'demo', instance: 'default', name: 'Demo', key: 'D-2', url: 'https://demo.test/issues/D-2' }
+    const preparing = await service.openInvestigation('claude', [], undefined, {}, { source, title: 'Crash' })
+    const other = await service.openInvestigation('claude', [], undefined, {}, { source: { ...source, key: 'D-3' }, title: 'Other' })
+    const started = await service.beginInvestigation(other.id, { title: 'Other', brief: 'brief', readable: [] }, 'note')
+    await service.stop(started.id)
+    await service.setArchived(started.id, true)
+    await service.create('claude', [])
+    // One whose issue no longer reads is no issue's conversation.
+    const unreadable = await service.create('claude', [])
+    const database = new DatabaseSync(path.join(root, 'antumi.db'))
+    database.prepare('UPDATE conversations SET source=? WHERE id=?').run('{"provider":1}', unreadable.id)
+    database.close()
+
+    const issues = service.issueConversations()
+    expect(issues).toEqual(service.list().filter((each) => each.source).map((each) => ({ id: each.id, source: each.source, archivedAt: each.archivedAt, ...(each.preparing ? { preparing: each.preparing } : {}) })))
+    expect(issues.find((each) => each.id === preparing.id)).toEqual({ id: preparing.id, source: { ...source, title: 'Crash' }, archivedAt: null, preparing: { step: 'issue', error: null } })
+    expect(issues.find((each) => each.id === other.id)).toMatchObject({ source: { key: 'D-3' }, archivedAt: expect.any(Number) })
+    expect(issues).toHaveLength(2)
+  })
+
   it('keeps nothing as said for a handoff without a note', async () => {
     const created = await codexOpens(service.create('codex', []))
     await service.stop(created.id)

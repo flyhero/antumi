@@ -141,6 +141,13 @@ let delegationDelivery: DelegationDeliveryService | undefined
 let sourceFixes: SourceFixService | undefined
 let sourceInvestigations: SourceInvestigationService | undefined
 let sourceUpdates: SourceUpdates | undefined
+// Changes that come together are answered once: each answer reads every watched issue.
+let sourceOwnersDue = false
+const sourceOwnersChanged = (): void => {
+  if (sourceOwnersDue) return
+  sourceOwnersDue = true
+  queueMicrotask(() => { sourceOwnersDue = false; sourceUpdates?.changed() })
+}
 let server: RpcServer | null = null
 const mobile = new MobileService(mobileStore, {
   dir: path.join(paths.home, 'mobile'),
@@ -174,7 +181,10 @@ const todos = new TodoStore(paths.database, (conversationId, groups) => server?.
 const conversations = new ConversationService(
   conversationsStore, daemon, paths.sessions,
   (event) => {
-    if (event.type === 'changed' || event.type === 'deleted' || (event.type === 'chatItems' && event.items.some((item) => ['state', 'user', 'turn'].includes(item.kind)))) queueMicrotask(() => sourceUpdates?.changed())
+    // Only a task's conversation or an issue's can change what is shown of an issue's comments.
+    const ownsIssue = (conversation: { source?: unknown; taskId?: string | null } | null) => Boolean(conversation?.source || conversation?.taskId)
+    if (event.type === 'deleted' || (event.type === 'changed' && ownsIssue(event.conversation)) ||
+      (event.type === 'chatItems' && event.items.some((item) => ['state', 'user', 'turn'].includes(item.kind)) && ownsIssue(conversationsStore.get(event.conversationId)))) sourceOwnersChanged()
     if (event.type === 'changed' || event.type === 'deleted' || event.type === 'chatItems') queueMicrotask(() => { sourceInvestigations?.changed(); void sourceFixes?.tick() })
     const watchers = (id: string) => [...(server?.connections ?? [])].filter((c) => c.watching.has(id))
     // One opened for a chat platform's asker is no client's to list: nobody is told of it but the
@@ -298,7 +308,7 @@ const service = new TaskService(
       server?.broadcast('tasks.changed', { task: event.task })
       squadCalls?.tick()
       pullRequests.current?.taskChanged(event.task)
-      queueMicrotask(() => sourceUpdates?.changed())
+      sourceOwnersChanged()
       if (!event.sourceOnly) schedules.taskChanged(event.task)
       queueMicrotask(() => void sourceFixes?.tick())
       refreshAwake()
@@ -347,8 +357,7 @@ sourceUpdates = new SourceUpdates(sourceUpdateStore, sources, {
         active, generation: String(task.attempts.length), conversationId: task.conversationId,
         sendBlocker: service.isLaunching(task.id) ? '任务仍在启动中' : !task.conversationId ? '任务还没有会话，下次启动时读取最新原文' : task.status === 'review' || !active ? '请先通过原有入口继续任务' : null })
     }
-    for (const conversation of conversations.list()) {
-      if (!conversation.source || conversation.taskId) continue
+    for (const conversation of conversations.issueConversations()) {
       owners.push({ target: { kind: 'conversation', id: conversation.id }, source: conversation.source, snapshot: null,
         active: conversation.archivedAt == null && !conversation.preparing, conversationId: conversation.id,
         sendBlocker: conversation.archivedAt != null ? '请先取消归档' : conversation.preparing ? '问题仍在准备中' : null })

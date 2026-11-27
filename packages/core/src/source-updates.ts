@@ -69,8 +69,10 @@ export class SourceUpdates {
       this.waiting.splice(index, 1)[0]?.start()
     }
   }
-  private owner(target: SourceUpdateTarget): SourceUpdateOwner {
-    const owner = this.hooks.owners().find((owner) => key(owner.target) === key(target))
+  // Reading the owners lists every task and issue conversation, so whoever needs several of them
+  // reads once and hands the list on.
+  private owner(target: SourceUpdateTarget, owners = this.hooks.owners()): SourceUpdateOwner {
+    const owner = owners.find((owner) => key(owner.target) === key(target))
     if (!owner) throw new Rejection('source-none')
     return owner
   }
@@ -130,13 +132,13 @@ export class SourceUpdates {
     const reserved = new Set(deliveries.filter((delivery) => !['cancelled', 'failed'].includes(delivery.state)).flatMap((delivery) => delivery.commentIds))
     return { target, item, comments, deliveries, reserved }
   }
-  summary(target: SourceUpdateTarget): SourceUpdateSummary {
-    const owner = this.owner(target)
+  summary(target: SourceUpdateTarget): SourceUpdateSummary { return this.summaryOf(this.owner(target)) }
+  private summaryOf(owner: SourceUpdateOwner): SourceUpdateSummary {
     const data = this.records(owner)
     const connection = this.sources.updateConnection(owner.source)
     const rebound = !!connection && !!data.item.binding && connection.binding !== data.item.binding
     const revision = createHash('sha256').update(JSON.stringify([data.item.refreshedAt, data.deliveries.map((batch) => [batch.id, batch.state, batch.error])])).digest('hex')
-    return { revision, target, watching: data.target.watching, active: owner.active && data.target.watching && !!connection && !rebound && !data.item.blocked,
+    return { revision, target: owner.target, watching: data.target.watching, active: owner.active && data.target.watching && !!connection && !rebound && !data.item.blocked,
       supported: connection?.supported ?? false,
       unread: data.comments.filter((comment) => comment.sequence > data.target.seen).length,
       pending: data.comments.filter((comment) => !data.reserved.has(comment.id)).length,
@@ -145,32 +147,38 @@ export class SourceUpdates {
       sendBlocker: owner.sendBlocker }
   }
   summaries(): SourceUpdateSummary[] {
-    this.reconcile()
-    return this.hooks.owners().map((owner) => this.summary(owner.target))
+    const owners = this.hooks.owners()
+    this.reconcile(owners)
+    return owners.map((owner) => this.summaryOf(owner))
   }
   page(target: SourceUpdateTarget, before?: number): UpdatePage {
-    this.reconcile()
-    const { comments, deliveries, reserved } = this.records(this.owner(target))
+    const owners = this.hooks.owners()
+    this.reconcile(owners)
+    const owner = this.owner(target, owners)
+    const { comments, deliveries, reserved } = this.records(owner)
     const selected = comments.filter((comment) => before === undefined || comment.sequence < before).slice(-50)
-    return { summary: this.summary(target), comments: selected.map((comment) => ({ ...comment, pending: !reserved.has(comment.id) })),
+    return { summary: this.summaryOf(owner), comments: selected.map((comment) => ({ ...comment, pending: !reserved.has(comment.id) })),
       next: comments.some((comment) => comment.sequence < (selected[0]?.sequence ?? 0)) ? selected[0]!.sequence : null,
       deliveries: deliveries.slice(-20).map((delivery) => SourceDeliveryInfo.parse(delivery)) }
   }
   watching(target: SourceUpdateTarget, watching: boolean): SourceUpdateSummary {
-    const record = this.ensure(this.owner(target))
-    this.store.saveTarget({ ...record, watching })
-    this.emit()
-    if (watching) void this.refresh(target).catch(() => {})
-    return this.summary(target)
+    const owners = this.hooks.owners()
+    const owner = this.owner(target, owners)
+    this.store.saveTarget({ ...this.ensure(owner), watching })
+    this.emit(owners)
+    if (watching) void this.refreshOwner(owner).catch(() => {})
+    return this.summaryOf(owner)
   }
   seen(target: SourceUpdateTarget, through: number): SourceUpdateSummary {
-    const record = this.ensure(this.owner(target))
-    this.store.saveTarget({ ...record, seen: Math.max(record.seen, Math.min(through, this.summary(target).through)) })
-    this.emit()
-    return this.summary(target)
+    const owners = this.hooks.owners()
+    const owner = this.owner(target, owners)
+    const record = this.ensure(owner)
+    this.store.saveTarget({ ...record, seen: Math.max(record.seen, Math.min(through, this.summaryOf(owner).through)) })
+    this.emit(owners)
+    return this.summaryOf(owner)
   }
-  private reconcile(): void {
-    for (const owner of this.hooks.owners()) this.ensure(owner)
+  private reconcile(owners = this.hooks.owners()): void {
+    for (const owner of owners) this.ensure(owner)
     for (const delivery of this.store.deliveries()) {
       if (['cancelled', 'failed', 'submitted'].includes(delivery.state)) continue
       const receipt = this.hooks.receipt(delivery)
@@ -186,32 +194,35 @@ export class SourceUpdates {
     void this.poll()
   }
   changed(): void {
-    this.reconcile()
-    const active = new Set(this.hooks.owners().filter((owner) => owner.active).map((owner) => key(owner.target)))
-    const resumed = this.hooks.owners().filter((owner) => active.has(key(owner.target)) && !this.activeTargets.has(key(owner.target)))
+    const owners = this.hooks.owners()
+    this.reconcile(owners)
+    const active = new Set(owners.filter((owner) => owner.active).map((owner) => key(owner.target)))
+    const resumed = owners.filter((owner) => active.has(key(owner.target)) && !this.activeTargets.has(key(owner.target)))
     this.activeTargets = active
-    this.emit()
-    for (const owner of resumed) if (this.ensure(owner).watching) void this.refresh(owner.target).catch(() => {})
+    this.emit(owners)
+    for (const owner of resumed) if (this.ensure(owner).watching) void this.refreshOwner(owner).catch(() => {})
   }
-  private emit(): void {
+  private emit(owners = this.hooks.owners()): void {
     if (this.stopped) return
-    const summaries = this.hooks.owners().map((owner) => this.summary(owner.target))
+    const summaries = owners.map((owner) => this.summaryOf(owner))
     const encoded = JSON.stringify(summaries)
     if (encoded === this.lastEmitted) return
     this.lastEmitted = encoded
     this.hooks.changed(summaries)
   }
 
-  async refresh(target: SourceUpdateTarget): Promise<SourceUpdateSummary> {
-    const owner = this.owner(target)
+  async refresh(target: SourceUpdateTarget): Promise<SourceUpdateSummary> { return this.refreshOwner(this.owner(target)) }
+  // For an owner just read; what it answers after a wait is read afresh.
+  private async refreshOwner(owner: SourceUpdateOwner): Promise<SourceUpdateSummary> {
+    const target = owner.target
     const { item } = this.records(owner)
     const connection = this.sources.updateConnection(owner.source)
-    if (!connection || !connection.supported) return this.summary(target)
-    if (!owner.active) return this.summary(target)
-    if (item.binding && item.binding !== connection.binding) return this.summary(target)
+    if (!connection || !connection.supported) return this.summaryOf(owner)
+    if (!owner.active) return this.summaryOf(owner)
+    if (item.binding && item.binding !== connection.binding) return this.summaryOf(owner)
     const running = this.inFlight.get(item.id)
     if (running) { await running; return this.summary(target) }
-    if (this.now() - item.attemptedAt < 10_000 && item.continuation === null) return this.summary(target)
+    if (this.now() - item.attemptedAt < 10_000 && item.continuation === null) return this.summaryOf(owner)
     const operation = this.limited(`${owner.source.provider}/${owner.source.instance}`, () => this.sync(this.store.item(item.id) ?? item, connection)).finally(() => { this.inFlight.delete(item.id); this.emit() })
     this.inFlight.set(item.id, operation)
     this.emit()
@@ -280,8 +291,9 @@ export class SourceUpdates {
   }
   async poll(): Promise<void> {
     if (this.stopped) return
-    this.reconcile()
-    const owners = this.hooks.owners().filter((owner) => {
+    const all = this.hooks.owners()
+    this.reconcile(all)
+    const owners = all.filter((owner) => {
       const { target, item } = this.records(owner)
       return owner.active && target.watching && !item.blocked && item.retryAt <= this.now()
     })

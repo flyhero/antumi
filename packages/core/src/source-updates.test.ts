@@ -24,6 +24,7 @@ describe('watched issue updates', () => {
   let binding: string
   let failPage: boolean
   let changes: number
+  let reads: number
   const send = vi.fn<(owner: SourceUpdateOwner, delivery: SourceDelivery) => Promise<SourceDeliveryReceipt>>()
   const receipts = new Map<string, SourceDeliveryReceipt>()
   let snapshot: SourceSnapshot
@@ -45,7 +46,7 @@ describe('watched issue updates', () => {
         return { comments: eligible.slice(offset, offset + 100), continuation: eligible.length > offset + 100 ? String(offset + 100) : null,
           checkpoint: { createdAt, ids: comments.filter((comment) => comment.createdAt === createdAt).map((comment) => comment.id) } }
       }
-    }) }, { owners: () => owners, snapshot: (_target, next) => { changedSnapshot = next }, send,
+    }) }, { owners: () => { reads++; return owners }, snapshot: (_target, next) => { changedSnapshot = next }, send,
       receipt: (delivery) => receipts.get(delivery.ref) ?? null, changed: () => {} }, () => now)
   }
   beforeEach(() => {
@@ -60,6 +61,7 @@ describe('watched issue updates', () => {
     now = 100_000
     binding = 'original-binding'
     changes = 0
+    reads = 0
     failPage = false
     receipts.clear()
     send.mockReset().mockResolvedValue({ state: 'queued' })
@@ -245,6 +247,27 @@ describe('watched issue updates', () => {
     owners[0]!.active = true
     await updates.poll()
     expect(updates.summary(target).pending).toBe(1)
+  })
+  it('reads who watches once for a change, however many do', () => {
+    owners[0]!.active = false
+    for (const id of ['two', 'three', 'four']) owners.push({ target: { kind: 'conversation', id }, source: { ...source, key: id }, snapshot: null, active: false, conversationId: id, sendBlocker: null })
+    reads = 0
+    updates.changed()
+    expect(reads).toBe(1)
+    expect(updates.summaries()).toHaveLength(4)
+    expect(reads).toBe(2)
+  })
+  it('catches up an owner that comes back, and answers with how it stands once caught up', async () => {
+    comments.push(comment('new', 2000))
+    updates.changed()
+    const refreshed = updates.refresh(target)
+    owners[0]!.sendBlocker = 'archived meanwhile'
+    expect(await refreshed).toMatchObject({ pending: 1, sendBlocker: 'archived meanwhile' })
+    expect(changes).toBe(1)
+  })
+  it('answers a refresh of what nothing owns with a refusal, not a throw', async () => {
+    const asked = updates.refresh({ kind: 'conversation', id: 'gone' })
+    await expect(asked).rejects.toMatchObject({ reason: 'source-none' })
   })
   it('does not let a new target skip an older target’s pending comments', async () => {
     comments.push(comment('new', 2000))

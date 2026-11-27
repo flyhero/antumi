@@ -1,7 +1,8 @@
 // Application-owned text. Values and external content are passed separately.
 export const MESSAGES = {
   "ProviderPicker.switch": { "zh": "更换服务商", "en": "Switch provider" },
-  "ProviderPicker.unavailable": { "zh": "服务商不可用，请重新选择或检查设置", "en": "Provider unavailable; choose another or check settings" },
+  "ProviderPicker.unavailable": { "zh": "服务商不可用", "en": "Provider unavailable" },
+  "ProviderPicker.unavailableHint": { "zh": "这个服务商已删除或不再服务该 Agent，请重新选择或检查设置", "en": "This provider was removed or no longer serves this agent. Choose another or check settings." },
   "ProviderPicker.switchConfirm": { "zh": "更换服务商将重新启动 Agent 并接续聊天记录，是否继续？", "en": "Switch providers and restart the agent with this conversation’s history?" },
   "ProviderPicker.inherited": { "zh": "沿用上级配置", "en": "Inherited configuration" },
 

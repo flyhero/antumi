@@ -26,12 +26,13 @@ export function ProviderPicker({ agent, value, onChange, disabled = false, place
       value={picked ?? ''}
       placeholder={t('ProviderPicker.ownAccount', { value1: agentLabel(agent) })}
       disabled={disabled}
-      title={disabled ? t('ProviderPicker.inherited') : undefined}
+      tone={missing ? 'warning' : undefined}
+      title={disabled ? t('ProviderPicker.inherited') : missing ? t('ProviderPicker.unavailableHint') : undefined}
       placement={placement}
       size={size}
       options={[
         { value: '', label: t('ProviderPicker.ownAccount', { value1: agentLabel(agent) }), description: t('ProviderPicker.ownAccountDescription', { value1: agentLabel(agent) }) },
-        ...(missing && value ? [{ value, label: t('ProviderPicker.unavailable'), disabled: true }] : []),
+        ...(missing && value ? [{ value, label: t('ProviderPicker.unavailable'), description: t('ProviderPicker.unavailableHint'), disabled: true }] : []),
         ...providers.map((provider) => ({
           value: provider.id,
           label: provider.name,

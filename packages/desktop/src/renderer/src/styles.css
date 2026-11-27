@@ -8793,6 +8793,7 @@ div.inspector-empty > p { margin: 0 0 8px; }
 .chat-picker svg { flex-shrink: 0; width: 14px; height: 14px; opacity: 0.7; }
 .chat-picker[data-tone='plan'] { color: var(--status-running); }
 .chat-picker[data-tone='bypass'] { color: var(--danger); }
+.chat-picker[data-tone='warning'] { color: var(--warning); }
 /* An agent picked to hand the chat to: the next send goes to it. */
 .chat-picker[data-tone='handoff'] { color: var(--accent); font-weight: 600; }
 /* Beside the task's buttons: a button's height, edge and type. */

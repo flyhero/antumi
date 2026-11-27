@@ -3,7 +3,7 @@ import { useComposerCommandRuns } from '../composer-command-runs'
 import { mergeComposerImages } from '../browser-context'
 import { getLocale, t, tr } from '../i18n'
 import { HelperStartOptions } from './HelperModelPicker'
-import { useCallback, useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { chatReferencesIn, chatReferencesFor, type ChatReference, agentDescriptor, canReuseConversation, type ChatImage, type ChatItem, type ChatQueued, type Conversation, type SavedChatCommand } from '@antumi/protocol'
 import { perform, useChatImagesSupported, useChatOptionsSupported, useCore, useFileMentionsSupported, usePastedTextSupported, useScheduleImagesSupported, useSchedulesSupported } from '../core-store'
 import { useComposerFiles } from '../composer-files'
@@ -28,7 +28,6 @@ import { HandoffAgentPicker, HandoffModePicker, HandoffModelPicker, HandoffProvi
 import { ArrowUpIcon, ArrowDownIcon, ChevronDownIcon, ClockIcon, CloseIcon, EnterIcon, PencilIcon, StopIcon } from './icons'
 import { SchedulePicker } from './SchedulePicker'
 import { createSchedule } from '../schedules'
-import { ChatMessageRelay } from './chat-message-relay'
 import { composerDraft, EMPTY_DRAFT, saveComposerDraft } from '../composer-drafts'
 import { useOccludesBrowser } from '../browser-occlusion'
 import { sendWayKeys, sendWays, type SendWay } from '../chat-send-ways'
@@ -271,7 +270,7 @@ function SendCardRows({ rows, note }: { rows: readonly SendRow[]; note: string |
 // running, it starts one on the same session first. The corner button sends, or stops the turn.
 // Images pasted, dropped or picked from the ＋ below sit above the text until it goes. `state` is
 // the running stage's, for the options row.
-export function ChatComposer({ conversation, state, compact = false }: { conversation: Conversation; state: StateItem | null; compact?: boolean }) {
+export function ChatComposer({ conversation, state, onSendNow, compact = false }: { conversation: Conversation; state: StateItem | null; onSendNow: () => void; compact?: boolean }) {
   const shortcuts = usePreferences((state) => state.panelShortcuts)
   const suggestionKey = useShortcutLabel('accept-suggestion')
   const steerKey = currentShortcutLabel('steer-message', shortcuts)
@@ -282,7 +281,6 @@ export function ChatComposer({ conversation, state, compact = false }: { convers
   const { id } = conversation
   const initialMessage = useInitialMessages((messages) => messages[id])
   const surface = useChatSurface()
-  const beginRelay = useContext(ChatMessageRelay)
   const [draft] = useState(() => composerDraft(id))
   const { value, setText, setValue } = useMentionedText({ text: draft.text, mentions: draft.mentions })
   const { text } = value
@@ -408,7 +406,7 @@ export function ChatComposer({ conversation, state, compact = false }: { convers
         if (sent) clear()
       } else {
         const ref = crypto.randomUUID()
-        beginRelay(ref, mentionMenu.inputProps.input.current?.contentDOM ?? null)
+        onSendNow()
         keepChatDelivery(id, {
           ref, text: composed, images, references: messageReferences(writtenMessage, composed),
           stageId: state?.stageId ?? 'pending', at: Date.now(), ...(steer ? { steer: true } : {})

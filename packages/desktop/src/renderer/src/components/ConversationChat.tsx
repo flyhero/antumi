@@ -45,7 +45,6 @@ import { ChatEditsCard, ChatPaths, ChatToolCard, ChatToolRun, editDisclosures } 
 import { ChatPreviewCard, ChatPreviewRun } from './ChatPreviewCard'
 import { SelectionComment } from './SelectionComment'
 import { effortLabel } from './ChatOptionsBar'
-import { ChatMessageRelay, useMessageRelay } from './chat-message-relay'
 import { useChatTypeface } from '../chat-typeface'
 import { freshKeys, useJustFinished } from '../chat-motion'
 import { acknowledgeInitialMessage, sendInitialMessage, useInitialMessages, type InitialMessage } from '../initial-messages'
@@ -274,7 +273,7 @@ function UserMessage({ conversationId, item, pending = false }: { conversationId
   return (
     <>
       {reference}
-      <div className="chat-user" data-message-id={item.id} data-clipped={(long && !open) || undefined} data-steer={item.steer || undefined}>
+      <div className="chat-user" data-clipped={(long && !open) || undefined} data-steer={item.steer || undefined}>
         {item.steer && <span className="chat-user-steer" title={t('ConversationChat.messageInsertedDuringTheTurn')}>{t('ConversationChat.additionalInstructions')}</span>}
         <ChatImageStrip images={item.images} />
         {quotes.length > 0 && <UserQuotes quotes={quotes} />}
@@ -441,12 +440,12 @@ const ChatAgent = createContext<ChatAgents>({ current: { agent: 'claude', model:
 // Opens the agent's turn under the user's message: its icon and name, the model it runs and how
 // hard it reasons, and when the message it answers came in. While that turn runs, a ring turns around the icon; one waiting
 // on the user holds it still, in the colour of the request.
-function TurnHead({ at, stageId, messageKey, live }: { at: number; stageId: string; messageKey: string; live: 'running' | 'awaiting' | null }) {
+function TurnHead({ at, stageId, live }: { at: number; stageId: string; live: 'running' | 'awaiting' | null }) {
   const { current, byStage, latest } = useContext(ChatAgent)
   const { agent, model, effort, provider, account } = (stageId !== latest && byStage.get(stageId)) || current
   const accountLabel = useCore((s) => shownAccountName(s.accounts, agent, account))
   return (
-    <div className="chat-turn-head" data-relay-for={messageKey}>
+    <div className="chat-turn-head">
       <span className="chat-turn-head-icon" data-live={live ?? undefined} aria-hidden="true"><AgentIcon agent={agent} /></span>
       <span className="chat-turn-head-name">{agentLabel(agent)}</span>
       {model && <span className="chat-turn-head-model" title={t('ConversationChat.model', { model: model })}>{model}</span>}
@@ -815,7 +814,7 @@ export function ConversationChat({ conversation, surface, onHandoff, variant = '
   }, [browserCall, conversation.id, showBrowser])
 
   // The working line comes and goes with the turn, below the entries: pinned to the end, the list
-  // follows it too, or the line (and the relay's dot that runs to it) sits just under the edge.
+  // follows it too.
   const turnState = conversation.chat?.turn
   useLayoutEffect(() => {
     const element = list.current
@@ -926,7 +925,7 @@ export function ConversationChat({ conversation, surface, onHandoff, variant = '
   }), [conversation.agent, conversation.route, modelId, state?.models, effort, stages, items, getLocale()])
   // A turn runs from the message that set it going.
   const since = useMemo(() => items.findLast((item) => item.kind === 'user')?.at ?? null, [items, getLocale()])
-  const beginRelay = useMessageRelay(view, list, items, id)
+  const followSentMessage = useCallback(() => { pinned.current = true }, [])
   const lastUserKey = blocks.findLast((block) => userItem(block) !== null)?.key
   const fileScope = useMemo(() => ({ conversationId: id, inspector: shown.inspector, roots }), [id, shown.inspector, roots, getLocale()])
   const contextMenu = useChatContextMenu(list, fileScope)
@@ -953,7 +952,6 @@ export function ConversationChat({ conversation, surface, onHandoff, variant = '
     <Folds.Provider value={folds}>
     <TodoHistory.Provider value={todoHistory}>
     <JumpToEntry.Provider value={jumpTo}>
-    <ChatMessageRelay.Provider value={beginRelay}>
     <div className="chat-view" data-variant={variant} data-conversation-id={id} ref={view} data-searching={find.searching || undefined} data-width={width} {...typeface}>
       {variant !== 'compact' && <ChatFind key={id} state={find} scope={view} container={list} onOpen={findOpened} hasOlder={Boolean(page?.before)} loadOlder={loadOlder} />}
       <div
@@ -984,7 +982,7 @@ export function ConversationChat({ conversation, surface, onHandoff, variant = '
           return (
             <Fragment key={message?.id.startsWith('u:') ? message.id : block.key}>
               <ActivityBlock conversationId={id} block={block} next={next} task={Boolean(conversation.taskId)} replies={replies} fresh={entering} />
-              {variant !== 'compact' && head && message && <div className="chat-entry" data-fresh={entering || undefined}><TurnHead at={message.at} stageId={message.stageId} messageKey={message.id} live={live} /></div>}
+              {variant !== 'compact' && head && message && <div className="chat-entry" data-fresh={entering || undefined}><TurnHead at={message.at} stageId={message.stageId} live={live} /></div>}
             </Fragment>
           )
         })}
@@ -1013,7 +1011,7 @@ export function ConversationChat({ conversation, surface, onHandoff, variant = '
         )}
       </div>
       <ProjectRunNotice conversationId={conversation.id} />
-      <ChatDock compact={variant === 'compact'} conversation={conversation} state={state} pending={pending} tools={tools} finishedCalls={finishedCalls} onPrevious={previous} sent={sent} onJump={jump} waiting={<DelegationRequests conversation={conversation} />} />
+      <ChatDock compact={variant === 'compact'} conversation={conversation} state={state} pending={pending} tools={tools} finishedCalls={finishedCalls} onPrevious={previous} sent={sent} onJump={jump} onSendNow={followSentMessage} waiting={<DelegationRequests conversation={conversation} />} />
       {variant !== 'compact' && <SelectionComment
         conversationId={id}
         container={list}
@@ -1026,7 +1024,6 @@ export function ConversationChat({ conversation, surface, onHandoff, variant = '
       />}
       {contextMenu.menu}
     </div>
-    </ChatMessageRelay.Provider>
     </JumpToEntry.Provider>
     </TodoHistory.Provider>
     </Folds.Provider>

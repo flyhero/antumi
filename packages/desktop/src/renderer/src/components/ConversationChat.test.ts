@@ -47,7 +47,6 @@ describe('outgoing messages', () => {
     const html = render()
     expect(html.match(/立即发送的内容/g)).toHaveLength(1)
     expect(html).toContain('发送中…')
-    expect(html).toContain(`data-message-id="u:${ref}"`)
   })
 
   it('shows failure and retry below one bubble even when core already recorded it', () => {

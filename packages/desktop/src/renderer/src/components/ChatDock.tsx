@@ -134,7 +134,7 @@ function PaneReply({ conversationId, pane }: { conversationId: string; pane: Con
 }
 
 // Everything that waits on the user sits here, above the composer, so it cannot scroll out of view.
-export function ChatDock({ conversation, state, pending, tools, finishedCalls, onPrevious, sent, onJump, compact = false, waiting: others = null }: {
+export function ChatDock({ conversation, state, pending, tools, finishedCalls, onPrevious, sent, onJump, onSendNow, compact = false, waiting: others = null }: {
   compact?: boolean
   // What agents working for this chat wait on, answered here (AgentRequests).
   waiting?: ReactNode
@@ -147,6 +147,7 @@ export function ChatDock({ conversation, state, pending, tools, finishedCalls, o
   onPrevious: () => void
   sent: readonly SentMessage[]
   onJump: (key: string) => void
+  onSendNow: () => void
 }) {
   const surface = useChatSurface()
   const inspectable = surface.changes !== null
@@ -179,7 +180,7 @@ export function ChatDock({ conversation, state, pending, tools, finishedCalls, o
       {archived && <ArchivedBar what={t('BrowserPanel.conversation')} onRestore={() => archiveConversation(conversation.id, false)} />}
       {/* The composer stays mounted while a request or the archive takes its place, so a draft is not lost. */}
       <div className="chat-dock-composer" hidden={waiting || archived || resting || Boolean(conversation.parentConversationId)}>
-        <ChatComposer compact={compact} conversation={conversation} state={state} />
+        <ChatComposer compact={compact} conversation={conversation} state={state} onSendNow={onSendNow} />
       </div>
       {conversation.parentConversationId && !waiting && <p className="muted"><button type="button" className="link-button" onClick={() => selectConversation(conversation.parentConversationId ?? null)}>{t('AgentProfiles.parent')}</button></p>}
       {resting && !waiting && !archived && <PaneReply conversationId={conversation.id} pane={pane} />}

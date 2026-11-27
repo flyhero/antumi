@@ -8276,31 +8276,28 @@ div.inspector-empty > p { margin: 0 0 8px; }
 .discussion-mention-mark { display: grid; place-items: center; flex-shrink: 0; width: 16px; height: 16px; font-size: 13px; font-weight: 600; color: var(--accent); }
 .discussion-mention-mark .agent-mark { width: 14px; height: 14px; }
 
-/* While the agent works a light runs round the border; a reduced-motion setting keeps it still
-   but tinted. */
-.chat-input-card[data-working] { border-color: color-mix(in srgb, var(--status-running) 30%, var(--border)); }
-.chat-input-card[data-working]::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  padding: 1px;
-  border-radius: inherit;
-  background: conic-gradient(from var(--chat-halo), transparent 0 60%, var(--status-running) 82%, transparent);
-  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  mask-composite: exclude;
-  pointer-events: none;
-  animation: chat-halo 2.4s linear infinite;
+/* Windows uses the static working border to avoid repainting a full-width mask each frame. */
+.chat-input-card[data-working] { border-color: color-mix(in srgb, var(--status-running) 45%, var(--border)); }
+@media (prefers-reduced-motion: no-preference) {
+  :where(:root:not([data-platform='win32'])) .chat-input-card[data-working] { border-color: color-mix(in srgb, var(--status-running) 30%, var(--border)); }
+  :where(:root:not([data-platform='win32'])) .chat-input-card[data-working]::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    padding: 1px;
+    border-radius: inherit;
+    background: conic-gradient(from var(--chat-halo), transparent 0 60%, var(--status-running) 82%, transparent);
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask-composite: exclude;
+    pointer-events: none;
+    animation: chat-halo 2.4s linear infinite;
+  }
 }
 .chat-input-card[data-awaiting] {
   border-color: var(--warning);
   background: color-mix(in srgb, var(--warning) 6%, var(--surface));
 }
 .chat-input-card[data-awaiting]::before { content: none; }
-
-@media (prefers-reduced-motion: reduce) {
-  .chat-input-card[data-working] { border-color: color-mix(in srgb, var(--status-running) 45%, var(--border)); }
-  .chat-input-card[data-working]::before { content: none; }
-}
 
 /* The plain-text composers (group chat, helper, routine) that don't run on CodeMirror: laid out as
    the main composer's editor. Grows with what is typed up to a limit, so no resize grip competes

@@ -35,6 +35,7 @@ const panelKind = thisPanelKind()
 const settingsPreview = import.meta.env.DEV && ['#pet-settings', '#settings'].includes(location.hash)
 const playground = location.hash === '#pet-playground' || settingsPreview
 if (settingsPreview) useCore.setState({ settingsOpen: true, settingsSection: location.hash === '#pet-settings' ? 'pet' : 'appearance' })
+if (window.antumi?.platform) document.documentElement.dataset.platform = window.antumi.platform
 
 startUiLanguage()
 followPreferences()

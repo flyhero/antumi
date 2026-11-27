@@ -24,9 +24,8 @@ export type ChannelPlatformDescriptor = {
   followUpScopes?: readonly string[]
   // The platform's hosted MCP its tools are reached through, those that may be given, and the scope
   // giving the asker access to a document the bot made needs. The catalog only names and groups
-  // them: what each takes is what the platform lists. untested: not yet tried with a real app of
-  // the platform, said by the setting.
-  tools?: { mcp: string; catalog: readonly PlatformTool[]; accessScopes: readonly string[]; untested?: boolean }
+  // them: what each takes is what the platform lists.
+  tools?: { mcp: string; catalog: readonly PlatformTool[]; accessScopes: readonly string[] }
 }
 
 const SLACK_MANIFEST = JSON.stringify({
@@ -109,8 +108,9 @@ export const CHANNEL_PLATFORM_DESCRIPTORS = {
     minGapMs: 250,
     features: { reactions: true, cards: true, followUps: true },
     followUpScopes: ['im:message.group_msg'],
-    // Lark's hosted MCP is not in its docs: it answers as Feishu's does, and takes the same headers.
-    tools: { mcp: 'https://mcp.larksuite.com/mcp', catalog: FEISHU_TOOLS, accessScopes: ['docs:permission.member:create'], untested: true }
+    // Lark's hosted MCP is not in its docs (they show only a user's own link), yet it answers as
+    // Feishu's does: it takes the same headers and a Lark app's tenant token.
+    tools: { mcp: 'https://mcp.larksuite.com/mcp', catalog: FEISHU_TOOLS, accessScopes: ['docs:permission.member:create'] }
   },
   dingtalk: {
     label: '钉钉',

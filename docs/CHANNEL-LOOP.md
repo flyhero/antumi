@@ -176,7 +176,7 @@ sequenceDiagram
 | 进展回到原话题（第一节） | `reportTasks` | 收需求 | 全部；钉钉没有话题，回成群里的一条新消息并 @ 提问人 | 进展只在 Antumi 里看 |
 | 卡片上开始执行（第二节） | `taskCards.start`、`ownerUsers` | 进展回报 | 飞书、Lark；Slack 以后 | 只在 Antumi 里开始 |
 | 卡片上验收和退回（第二节） | `taskCards.review`：只有主人，或主人和提问人 | 进展回报 | 同上 | 待验收是一条文字，验收在 Antumi 里 |
-| 飞书文档工具（第三节） | `platformTools` 逐个勾选；建文档时另有 `docLocation`、`docAccess` | —，答疑时也能用 | 飞书、Lark（Lark 未实测） | 只能读项目代码 |
+| 飞书文档工具（第三节） | `platformTools` 逐个勾选；建文档时另有 `docLocation`、`docAccess` | —，答疑时也能用 | 飞书、Lark | 只能读项目代码 |
 | 话题里免 @（第四节） | `followUps` | — | 飞书、Lark | 每次都要 @ |
 
 - 卡片依赖进展回报：任务卡和验收卡本身就是在聊天里报进展，关了回报却开着卡片说不通，界面上回报关着时卡片那块不能开。
@@ -402,7 +402,7 @@ core：ChannelService ─ 入站、提问、发件队列（已有）
 
 ## 三、飞书工具：以机器人身份读写文档
 
-> 状态：已实现（2026-11-27）。用真实的飞书测试应用以应用身份调过 `tools/list` 和几个只读调用；新建、修改文档和开权限还没有在真实飞书上调过（见「待验证」）。实现在 `core/src/channel-tools/platform.ts`、`ChannelService.callPlatform` / `toolSpecs`、`channel-feishu.ts` 的 `mcp` / `grant`。
+> 状态：已实现（2026-11-27）。用真实的飞书测试应用和一个 Lark 用户的应用以应用身份调过 `tools/list` 和只读调用；新建、修改文档和开权限还没有在真实平台上调过（见「待验证」）。实现在 `core/src/channel-tools/platform.ts`、`ChannelService.callPlatform` / `toolSpecs`、`channel-feishu.ts` 的 `mcp` / `grant`。
 
 ### 用哪个 MCP
 
@@ -412,7 +412,7 @@ core：ChannelService ─ 入站、提问、发件队列（已有）
 - `X-Lark-MCP-Allowed-Tools`：逗号分隔的工具名。不给就一个工具都不列；`tools/call` 只接受名单里的工具。
 - `Content-Type: application/json`。
 
-Lark 用 `mcp.larksuite.com/mcp`：开放平台文档里没有，探测到的行为和飞书的一样，请求头也相同。2026-11-27 应 Lark 用户的反馈先开放，同一份工具目录，接入设置里注明还没用真实的 Lark 应用试过（平台描述的 `tools.untested`）。不用 `lark-openapi-mcp`：它仍是 beta、一年多没更新、不能编辑文档、没有知识库预设（见第五节）。
+Lark 用 `mcp.larksuite.com/mcp`，同一份工具目录。Lark 开放平台只有一篇「远程调用 Lark MCP Server」，讲的是在配置平台生成、以登录用户身份调用的个人链接（内测、不推荐），没有飞书那篇开发者文档；但服务的行为和飞书的一样，请求头也相同。2026-11-27 用一个 Lark 用户的应用（日本区的租户）以应用身份调通了 `tools/list` 和 `fetch-doc`（知识库链接）。不用 `lark-openapi-mcp`：它仍是 beta、一年多没更新、不能编辑文档、没有知识库预设（见第五节）。
 
 | 工具 | 读 / 写 | 机器人能用 | 要开的权限 |
 |---|---|---|---|
@@ -636,7 +636,7 @@ CHANGELOG 草稿：
 用 2026-11-15 联调过的飞书应用，先只读：
 
 1. ~~托管 MCP 的 `tools/list` 和错误形式~~（2026-11-27 已实测，见第三节「实测」）。还要试：`create-doc` 建在知识库节点下和应用空间里各一篇，建在知识库里时 `doc_id` 拿去开权限用 `type=docx` 行不行。
-2. Lark 的 `mcp.larksuite.com/mcp` 是否认 `X-Lark-MCP-TAT`、工具是否相同。
+2. ~~Lark 的 `mcp.larksuite.com/mcp` 是否认 `X-Lark-MCP-TAT`、工具是否相同~~（2026-11-27 用 Lark 用户的应用实测：认，`tools/list` 和 `fetch-doc` 与飞书相同）。
 3. 卡片回调走长连接时：确认是 `type: event` 的数据帧、ACK 帧 `data` 里的提示能显示（已照 SDK 1.74 实现）；JSON 2.0 表单里带 `behaviors` 回调的提交按钮是否同时带回 `action.value` 和 `form_value`；卡片 Markdown 里的 `<at id=…></at>` 是否通知被 @ 的人；`PATCH` 改卡片要不要 `im:message:update`。
 4. 应用身份给同组织用户开 `edit` 权限；对方不在可用范围时的错误。
 5. 开了 `im:message.group_msg` 后，话题里的消息是否带 `thread_id` / `root_id`，机器人自己的回复是否也推来。

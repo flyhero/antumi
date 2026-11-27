@@ -44,7 +44,7 @@ Antumi 的技能库已经能装这两个仓库（`git clone` 后先扫 `skills/`
 - 接飞书托管的远程 MCP（`https://mcp.feishu.cn/mcp`），请求头 `X-Lark-MCP-TAT` 带应用 token、`X-Lark-MCP-Allowed-Tools` 带主人勾选的工具；token 只在网关里，智能体拿不到。
 - 机器人能用的工具：读 `fetch-doc`、`list-docs`、`get-comments`、`fetch-file`、`get-user`，写 `create-doc`、`update-doc`、`add-comments`；`search-doc`、`search-user` 只支持用户身份。
 - 文档建在主人指定的知识库节点下，建好后以应用身份给提问人开编辑权限。
-- Lark 用 `mcp.larksuite.com/mcp`，同一份工具，已开放但没有用真实的 Lark 应用试过。
+- Lark 用 `mcp.larksuite.com/mcp`，同一份工具。Lark 的文档只写了以用户身份调用的个人链接，但它也认应用身份：2026-11-27 用一个 Lark 用户的应用调通了 `tools/list` 和 `fetch-doc`。
 - 不接 `lark-openapi-mcp`：仍是 beta、2025-08 后没再更新、不能编辑文档。
 
 ## 以后：提问人身份

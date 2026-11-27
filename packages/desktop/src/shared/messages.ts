@@ -13719,7 +13719,6 @@ export const MESSAGES = {
   "AgentChannels.cardsSetupShort": {"zh": "要在开放平台订阅卡片回调 card.action.trigger。", "en": "Subscribe to the card.action.trigger callback in the developer console."},
   "AgentChannels.toolsScopesShort": {"zh": "要在开放平台开通 {count} 个权限，并把文档分享给机器人。", "en": "Enable {count} scopes in the developer console, and share the documents with the bot."},
   "AgentChannels.tools": {"zh": "文档工具", "en": "Docs tools"},
-  "AgentChannels.toolsUntested": {"zh": "还没有用真实的 {platform} 应用试过；调用出错时，智能体会把平台的报错告诉提问人。", "en": "Not yet tried with a real {platform} app; when a call fails, the agent tells the asker what the platform said."},
   "AgentChannels.toolsHint": {"zh": "勾上的工具，能 @ 机器人的人都可以让智能体以机器人的身份使用。默认一个都不开。", "en": "Anyone who can mention the bot can have the agent use the ticked tools as the bot. None is on by default."},
   "AgentChannels.toolsRead": {"zh": "读", "en": "Read"},
   "AgentChannels.toolsWrite": {"zh": "写", "en": "Write"},

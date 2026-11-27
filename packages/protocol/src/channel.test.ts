@@ -67,9 +67,8 @@ describe('chat platforms', () => {
     expect(tools.catalog.map((tool) => tool.name)).toEqual(['fetch-doc', 'list-docs', 'get-comments', 'fetch-file', 'create-doc', 'update-doc', 'add-comments'])
     expect(tools.catalog.filter((tool) => tool.write).map((tool) => tool.name)).toEqual(['create-doc', 'update-doc', 'add-comments'])
     for (const platform of ['slack', 'dingtalk'] as const) expect(channelPlatform(platform).tools, platform).toBeUndefined()
-    // Lark's own hosted MCP, the same tools, said to be untried until a real Lark app has run them.
-    expect(channelPlatform('lark').tools).toMatchObject({ mcp: 'https://mcp.larksuite.com/mcp', catalog: tools.catalog, untested: true })
-    expect(channelPlatform('feishu').tools?.untested).toBeUndefined()
+    // Lark's own hosted MCP, the same tools.
+    expect(channelPlatform('lark').tools).toMatchObject({ mcp: 'https://mcp.larksuite.com/mcp', catalog: tools.catalog })
     expect(ChannelFields.parse({ profileId: PROFILE, platform: 'feishu' }).platformTools).toBeUndefined()
   })
 

@@ -6283,20 +6283,21 @@ div.inspector-empty > p { margin: 0 0 8px; }
 
 .auto-investigation-settings { border-top: 1px solid var(--border); padding-top: 20px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .auto-investigation-summary { display: flex; flex-direction: column; gap: 4px; color: var(--text-muted); font-size: 12px; overflow-wrap: anywhere; }
+.settings-card:has(> .source-settings) { padding-top: 0; }
 .source-settings { display: flex; flex-direction: column; gap: 24px; min-width: 0; container-type: inline-size; }
 .source-settings .input { min-height: 36px; font-size: 14px; }
 .source-settings .chat-picker[data-size='field'] { height: 36px; padding-inline: 12px; font-size: 14px; }
 .source-settings :is(.input, .chat-picker):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .source-settings input[type='number'] { appearance: textfield; }
 .source-settings input[type='number']::-webkit-inner-spin-button, .source-settings input[type='number']::-webkit-outer-spin-button { appearance: none; margin: 0; }
-.source-connection-section { min-width: 0; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
-.source-connection-section > summary { display: flex; align-items: center; gap: 8px; min-height: 36px; list-style: none; cursor: pointer; }
+.source-connection-section { min-width: 0; border-bottom: 1px solid var(--border); }
+.source-connection-section > summary { display: flex; align-items: center; gap: 8px; min-height: 60px; list-style: none; cursor: pointer; }
 .source-connection-section > summary::-webkit-details-marker { display: none; }
 .source-connection-section > summary > svg { flex-shrink: 0; width: 16px; height: 16px; color: var(--text-muted); }
 .source-connection-section > summary > svg:last-child { margin-left: 8px; }
 .source-connection-section[open] > summary > svg:last-child { transform: rotate(90deg); }
 .source-connection-summary { margin-left: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-muted); font-size: 12px; }
-.source-connection-settings { padding: 20px 0 0; }
+.source-connection-settings { padding: 0 0 20px; }
 .source-settings-title { display: flex; align-items: center; flex-shrink: 0; gap: 8px; margin: 0; font-size: 14px; font-weight: 600; line-height: 1.5; }
 .source-settings-title > svg { width: 16px; height: 16px; flex-shrink: 0; color: var(--text-muted); }
 .source-automation-settings { gap: 0; padding-top: 0; border-top: 0; container-type: inline-size; }

@@ -366,7 +366,7 @@ export function ConversationDraft() {
               <div className="chat-options">
                 {(imagesSupported || files.picksFiles) && <ChatAddMenu disabled={busy} onAdd={attached.add} onFiles={files.picksFiles ? files.addPicked : undefined} />}
                 {agent && (
-                  <ProviderPicker agent={agent} value={providerId} disabled={busy || Boolean(profile)} onChange={(next) => {
+                  <ProviderPicker agent={agent} value={providerId} hideWhenLocalOnly disabled={busy || Boolean(profile)} onChange={(next) => {
                     // Models differ between accounts, so what was picked for the old one goes.
                     setProviderId(next)
                     setPicks({})

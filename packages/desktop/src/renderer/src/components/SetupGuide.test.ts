@@ -30,6 +30,7 @@ vi.mock('zustand', async (importOriginal) => {
 vi.mock('./PetSprite', () => ({ usePetSkin: () => ({ render: () => createElement('span', { 'data-test-pet': true }) }) }))
 
 const env = (signedIn: boolean | null, status: 'ok' | 'unknown' = 'ok'): Environment => ({ checks: [{ tool: 'codex', status, signedIn, version: '1.0.0', path: '/bin/codex' }], checkedAt: 0, searchPath: [] })
+const codexProvider = ModelProvider.parse({ id: 'example', name: 'Example', preset: 'custom', anthropic: null, openai: { responsesUrl: 'https://api.example.com/v1', chatUrl: null }, models: [{ id: 'model', label: null, contextWindow: null, maxOutput: null, efforts: [] }], defaultModel: 'model', smallModel: 'model', agents: ['codex'], hasKey: true, revision: 2, createdAt: 0, updatedAt: 0 })
 const render = () => renderToStaticMarkup(createElement(SetupGuide))
 
 beforeEach(() => {
@@ -40,16 +41,29 @@ beforeEach(() => {
   setLocale('zh-CN')
 })
 
-describe('SetupGuide', () => {
+describe('ProviderPicker', () => {
   it('offers local configuration before any Antumi provider has been added', () => {
     const html = renderToStaticMarkup(createElement(ProviderPicker, { agent: 'codex', value: null, onChange: () => {} }))
-    expect(html).toContain('沿用本机配置')
-  })
-  it('shows a missing selected provider rather than relabeling it as local configuration', () => {
-    const html = renderToStaticMarkup(createElement(ProviderPicker, { agent: 'codex', value: '00000000-0000-4000-8000-000000000123', onChange: () => {} }))
-    expect(html).toContain('服务商不可用')
+    expect(html).toContain('aria-label="服务商：本机配置"')
   })
 
+  it('can hide the picker until the current agent has a usable provider', () => {
+    const renderPicker = (agent: 'codex' | 'claude') => renderToStaticMarkup(createElement(ProviderPicker, { agent, value: null, hideWhenLocalOnly: true, onChange: () => {} }))
+    expect(renderPicker('codex')).toBe('')
+    useCore.setState({ modelProviders: [{ ...codexProvider, hasKey: false }] })
+    expect(renderPicker('codex')).toBe('')
+    useCore.setState({ modelProviders: [codexProvider] })
+    expect(renderPicker('claude')).toBe('')
+    expect(renderPicker('codex')).toContain('aria-label="服务商：本机配置"')
+  })
+
+  it('shows a missing selected provider rather than relabeling it as local configuration', () => {
+    const html = renderToStaticMarkup(createElement(ProviderPicker, { agent: 'codex', value: '00000000-0000-4000-8000-000000000123', hideWhenLocalOnly: true, onChange: () => {} }))
+    expect(html).toContain('服务商不可用')
+  })
+})
+
+describe('SetupGuide', () => {
   it('lets a native relay proceed without an official login or adding another provider', () => {
     const environment = env(true)
     environment.checks = environment.checks.map((check) => ({ ...check, authSource: 'native-provider' }))
@@ -177,8 +191,7 @@ describe('SetupGuide', () => {
   })
 
   it('distinguishes configured providers from tested ones and ignores results from earlier edits', () => {
-    const provider = ModelProvider.parse({ id: 'example', name: 'Example', preset: 'custom', anthropic: null, openai: { responsesUrl: 'https://api.example.com/v1', chatUrl: null }, models: [{ id: 'model', label: null, contextWindow: null, maxOutput: null, efforts: [] }], defaultModel: 'model', smallModel: 'model', agents: ['codex'], hasKey: true, revision: 2, createdAt: 0, updatedAt: 0 })
-    useCore.setState({ modelProviders: [provider] })
+    useCore.setState({ modelProviders: [codexProvider] })
     expect(render()).toContain('尚未执行连接测试')
     useProviderProbes.setState({ probes: { example: { revision: 2, result: { ok: false, checks: [], at: 0 } } } })
     expect(render()).toContain('连接测试未通过')

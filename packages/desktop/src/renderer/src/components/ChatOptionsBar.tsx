@@ -139,7 +139,7 @@ export function ChatOptionsBar({ conversation, state, compact = false }: { conve
       {switchingPermission && (
         <span className="chat-suggestion-hint" role="status">{t('ChatOptionsBar.switchingPermission')}</span>
       )}
-      {providerSwitchable && <ProviderPicker agent={agent} value={conversation.modelProvider ?? null} remember={false}
+      {providerSwitchable && <ProviderPicker agent={agent} value={conversation.modelProvider ?? null} hideWhenLocalOnly remember={false}
         disabled={switchingProvider || switchingPermission || !idle || Boolean(conversation.starting)}
         onChange={(modelProvider) => { void (async () => {
           if (!await askConfirm({ message: t('ProviderPicker.switchConfirm'), confirm: t('ProviderPicker.switch') })) return

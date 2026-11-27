@@ -51,6 +51,13 @@ describe('ChannelService', () => {
   const settle = async () => { for (let i = 0; i < 20; i++) await new Promise((resolve) => setTimeout(resolve, 0)) }
   const sent = <T extends CoreToChannelGateway['type']>(type: T) => toGateway.flatMap((message) => (message.type === type ? [message as Extract<CoreToChannelGateway, { type: T }>] : []))
   const posts = () => sent('deliver').filter((message) => message.op === 'post').map((message) => message.text)
+  const waitForPicture = () => vi.waitFor(() => {
+    const running = channels.requests(channel.id, null, 1).items[0]!
+    expect(running).toMatchObject({ state: 'running', images: 1 })
+    const frames = JSON.stringify(daemon.written(conversations.get(running.conversationId!).sessionId!))
+    expect(frames).toContain('"type":"image"')
+    return frames
+  })
   // Posts go one at a time to a place: each is confirmed for the next to leave.
   const deliverAll = async () => {
     const done = new Set<string>()
@@ -388,12 +395,7 @@ describe('ChannelService', () => {
     const png = Buffer.from(pngBytes(8, 8))
     fromGateway({ type: 'image', requestId: request!.id, ref: 'F1', data: png.subarray(0, 20).toString('base64'), done: false, error: null })
     fromGateway({ type: 'image', requestId: request!.id, ref: 'F1', data: png.subarray(20).toString('base64'), done: true, error: null })
-    await settle()
-    const running = channels.requests(channel.id, null, 1).items[0]!
-    expect(running).toMatchObject({ state: 'running', images: 1 })
-    const frames = JSON.stringify(daemon.written(conversations.get(running.conversationId!).sessionId!))
-    expect(frames).toContain('"type":"image"')
-    expect(frames).toContain(asked.text)
+    expect(await waitForPicture()).toContain(asked.text)
   })
 
   it('waits for a picture being saved when the next one fails, and sends it', async () => {
@@ -411,10 +413,7 @@ describe('ChannelService', () => {
     expect(channels.requests(channel.id, null, 1).items[0]).toMatchObject({ state: 'queued', images: 0 })
     expect(daemon.spawns).toHaveLength(0)
     release()
-    await settle()
-    const running = channels.requests(channel.id, null, 1).items[0]!
-    expect(running).toMatchObject({ state: 'running', images: 1 })
-    expect(JSON.stringify(daemon.written(conversations.get(running.conversationId!).sessionId!))).toContain('"type":"image"')
+    await waitForPicture()
   })
 
   it('leaves the store alone for a picture saved after the service stopped', async () => {

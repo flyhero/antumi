@@ -15,7 +15,7 @@ Antumi 是一个桌面工作台：任务和 Bug 进来它先接手，同事在�
 
 **[下载最新版](#下载) · [三分钟开始](#三分钟开始)**
 
-[它做什么](#它做什么) · [支持的 Agent](#支持的-agent) · [还能做什么](#还能做什么) · [常见问题](#常见问题) · [文档](#文档)
+[它做什么](#它做什么) · [支持的 Agent](#支持的-agent) · [还能做什么](#还能做什么) · [常见问题](#常见问题)
 
 **简体中文** · [English](README.en.md)
 
@@ -260,16 +260,9 @@ xattr -dr com.apple.quarantine /Applications/Antumi.app
 </details>
 
 <details>
-<summary><b>有 iOS 版吗？</b></summary>
+<summary><b>WSL、远程 Linux 能用吗？</b></summary>
 
-目前只有 Android 版，APK 在 GitHub Releases 下载，不上应用商店。
-
-</details>
-
-<details>
-<summary><b>怎么更新？</b></summary>
-
-macOS 和 Windows 在后台下载新版本，点「安装并重启」或等下次启动时换上。Linux 的 AppImage 也会在后台自动更新；deb 只提示新版本，需要重新下载安装。每个版本改了什么见[更新日志](CHANGELOG.md)。
+能。在设置 → 后端位置把后端挪到 WSL 的发行版或一台 Linux 服务器上，任务、会话和 Agent 都在那边运行，界面留在本机。远程服务器经 SSH 连接，缺 Node 时 Antumi 会自己装；选 WSL 只在 Windows 版里有。详见 [WSL](docs/GETTING-STARTED.md#项目和-agent-都在-wsl-里windows) 和[远程服务器](docs/REMOTE.md)。
 
 </details>
 
@@ -288,15 +281,6 @@ ANTUMI_HOME=~/.antumi-demo pnpm dev
 `ANTUMI_HOME` 指到一个测试目录，避免碰到自己的真实数据。打包步骤见[发版与打包](docs/RELEASING.md)。
 
 </details>
-
-## 文档
-
-| | |
-|---|---|
-| **使用** | [使用指南](docs/GETTING-STARTED.md) · [事项自动化](docs/SOURCE-AUTO-INVESTIGATION.md) · [来源回写](docs/SOURCE-WRITEBACK.md) · [用量账本](docs/USAGE-ANALYTICS.md) · [Markdown 主题](docs/MARKDOWN-THEMES.md) · [更新日志](CHANGELOG.md) |
-| **Agent** | [Antigravity](docs/ANTIGRAVITY.md) · [DeepSeek Harness](docs/DEEPSEEK.md) · [ZCode](docs/ZCODE.md) · [Kimi Code](docs/KIMI.md) · [Gemini CLI](docs/GEMINI.md) · [CodeBuddy](docs/CODEBUDDY.md) · [CodeArts](docs/CODEARTS.md) |
-| **扩展** | [任务来源插件](docs/PLUGINS.md)：用现成的，或自己写一个 · [接入新的 Agent](docs/ADDING-AN-AGENT.md) |
-| **开发** | [参与贡献](CONTRIBUTING.md) · [技术架构](docs/ARCHITECTURE.md) · [聊天平台接入](docs/CHANNELS.md) · [手机端](docs/MOBILE.md) · [WSL](docs/WSL.md) · [远程服务器](docs/REMOTE.md) · [发版与打包](docs/RELEASING.md) · [AGENTS.md](AGENTS.md) · [DESIGN.md](DESIGN.md) |
 
 ## 社区与支持
 

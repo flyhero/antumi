@@ -5,7 +5,7 @@ export function canDelegate(conversation: Conversation, squadTask = false): bool
     && !conversation.squadRunId && !conversation.routineId && !conversation.helperOf && !squadTask && conversation.archivedAt == null
 }
 
-export function callerReadOnly(conversation: Conversation): boolean {
+export function callerReadOnly(conversation: Pick<Conversation, 'workspaceReadOnly' | 'planOnly' | 'chatOptions'>): boolean {
   return Boolean(conversation.workspaceReadOnly || conversation.planOnly)
     || ['plan', 'readOnly'].includes(conversation.chatOptions?.permissionMode ?? '')
 }

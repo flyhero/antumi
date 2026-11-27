@@ -200,6 +200,30 @@ describe('reusable agent roles and delegated work', () => {
     expect(profiles.targets(parentId)).toEqual([])
     await expect(profiles.dispatch(parentId, reviewer.id, 'Review it')).rejects.toMatchObject({ reason: 'agent-call-forbidden' })
   })
+  it('offers the same targets before and after a conversation is created', () => {
+    ready = [{ agent: 'claude', modelProvider: null }, { agent: 'codex', modelProvider: 'test' }]
+    const archived = profiles.save({ name: 'Archived', agent: 'claude' })
+    profiles.archive(archived.id, true)
+    profiles.save({ name: 'Channel only', agent: 'claude', audience: 'channels' })
+    const before = conversations.list().length
+    expect(profiles.draftTargets()).toEqual(profiles.targets(parentId))
+    expect(profiles.draftTargets().map((target) => target.name)).toEqual(['Reviewer', 'Claude Code', 'Codex'])
+    disabled = ['claude']
+    ready = [{ agent: 'codex', modelProvider: 'test' }]
+    expect(profiles.draftTargets().map((target) => target.name)).toEqual(['Codex'])
+    expect(conversations.list()).toHaveLength(before)
+  })
+  it('applies a draft profile allow-list and hides direct agents and itself', () => {
+    ready = [{ agent: 'claude', modelProvider: null }]
+    const caller = profiles.save({ name: 'Coordinator', agent: 'claude', callableProfiles: [reviewer.id] })
+    conversations.setProfile(parentId, caller)
+    expect(profiles.draftTargets(caller.id)).toEqual(profiles.targets(parentId))
+    expect(profiles.draftTargets(caller.id).map((target) => target.profileId)).toEqual([reviewer.id])
+    profiles.save({ ...caller, callableProfiles: [] }, caller.id)
+    expect(profiles.draftTargets(caller.id)).toEqual([])
+    profiles.archive(caller.id, true)
+    expect(() => profiles.draftTargets(caller.id)).toThrow(expect.objectContaining({ reason: 'profile-archived' }))
+  })
   it('shows each target\'s quota and refuses one whose quota is used up', async () => {
     const resetsAt = Date.now() + 3_600_000
     const reading = (usedPercent: number, model: string | null = null): AgentUsage => ({ agent: 'claude', status: 'ok', plan: null, error: null, updatedAt: Date.now(), resetCredits: null,

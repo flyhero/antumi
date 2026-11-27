@@ -123,17 +123,6 @@ export function ConversationDraft() {
   // Only the user's own commands: the agent has not started to say what it takes.
   const chatCommands = useCore((s) => s.chatCommands)
   const commandEntries = useMemo(() => antumiEntries(chatCommands, projectPaths), [chatCommands, projectPaths, getLocale()])
-  // The agent will work in the first project picked.
-  const mentionMenu = useChatMentionMenu({ value, setText, setValue, roots: projectPaths, cwd: projectPaths[0] ?? null, agent })
-  const commandMenu = useChatCommandMenu({ text, entries: commandEntries, agentLabel: agent ? agentLabel(agent) : '', input: mentionMenu.inputProps.input, sendCommand: () => {} })
-  // An issue's note goes with the conversation's start, so a long paste in it stays text.
-  const files = useComposerFiles({
-    conversationId: null, cwd: projectPaths[0] ?? null, input: mentionMenu.inputProps.input, setValue, addImages: attached.add,
-    images: imagesSupported, mentions: mentionsSupported, pastes: pastedTextSupported && !issue, readOnly: busy
-  })
-  // Written out for the agent picked when it goes, which may not be the one picked before.
-  const writtenMessage = agent ? writeMentionedText(value, agent) : { text, references: [] }
-  const written = writtenMessage.text
 
   const provider = providerOf(agent)
   const key = agent ? catalogKey(agent, provider) : null
@@ -162,6 +151,18 @@ export function ConversationDraft() {
   const reading = agent && issue ? investigationMode(agent, offeredModes, investigationModes[agent]) : null
   const mode = profile?.capability === 'readOnly' && agent ? agentDescriptor(agent).readOnlyMode : agent ? (chosenMode && offeredModes.includes(chosenMode) ? chosenMode : reading ?? defaultStartMode(agent, offeredModes)) : null
   const effort = pick.effort && (!catalog || efforts.includes(pick.effort)) ? pick.effort : null
+  // The agent will work in the first project picked.
+  const mentionMenu = useChatMentionMenu({ value, setText, setValue, roots: projectPaths, cwd: projectPaths[0] ?? null, agent, draft: { profileId: profile?.id, permissionMode: mode ?? undefined, ...startOptions() } })
+  const commandMenu = useChatCommandMenu({ text, entries: commandEntries, agentLabel: agent ? agentLabel(agent) : '', input: mentionMenu.inputProps.input, sendCommand: () => {} })
+  // An issue's note goes with the conversation's start, so a long paste in it stays text.
+  const files = useComposerFiles({
+    conversationId: null, cwd: projectPaths[0] ?? null, input: mentionMenu.inputProps.input, setValue, addImages: attached.add,
+    images: imagesSupported, mentions: mentionsSupported, pastes: pastedTextSupported && !issue, readOnly: busy
+  })
+  // Written out for the agent picked when it goes, which may not be the one picked before.
+  const writtenMessage = agent ? writeMentionedText(value, agent) : { text, references: [] }
+  const written = writtenMessage.text
+
   const settingsLoading = Boolean(initial && agent && optionsSupported && catalog === undefined)
   const canSend = agent !== null && !busy && !settingsLoading && attached.uploading === 0 && (issue !== null || text.trim() !== '' || attached.images.length > 0)
   // The model a start would run, as quota windows name models; unknown until its catalog is in.

@@ -184,9 +184,12 @@ export class AgentProfileService {
     if (this.closed) return []
     const parent = this.chats.get(id)
     if (!this.canDelegate(parent)) return []
+    return this.availableTo(parent.profile)
+  }
+  private availableTo(caller: AgentProfile | null | undefined): AgentProfile[] {
     const disabled = this.sources.disabled()
-    return this.list().filter((profile) => profile.archivedAt === null && !forChannels(profile) && profile.id !== parent.profile?.id && !disabled.includes(profile.agent)
-      && (!parent.profile || parent.profile.callableProfiles.includes(profile.id)))
+    return this.list().filter((profile) => profile.archivedAt === null && !forChannels(profile) && profile.id !== caller?.id && !disabled.includes(profile.agent)
+      && (!caller || caller.callableProfiles.includes(profile.id)))
   }
   // A conversation running as a profile calls only the profiles it lists.
   private agents(id: string): ReadyAgent[] {
@@ -197,11 +200,19 @@ export class AgentProfileService {
   delegates(id: string): boolean { return this.available(id).length > 0 || this.agents(id).length > 0 }
   // Everyone it can delegate to, profiles first, each with what it has left.
   targets(id: string): DelegationTarget[] {
+    return this.describeTargets(this.available(id), this.agents(id))
+  }
+  draftTargets(profileId?: string): DelegationTarget[] {
+    if (this.closed) return []
+    const profile = profileId ? this.get(profileId) : null
+    return this.describeTargets(this.availableTo(profile), profile ? [] : this.sources.ready())
+  }
+  private describeTargets(profiles: readonly AgentProfile[], agents: readonly ReadyAgent[]): DelegationTarget[] {
     const readOnly = (agent: AgentKind) => agentDescriptor(agent).capabilities.readOnly !== false
     return [
-      ...this.available(id).map((profile) => ({ profileId: profile.id, name: profile.name, description: profile.description, agent: profile.agent,
+      ...profiles.map((profile) => ({ profileId: profile.id, name: profile.name, description: profile.description, agent: profile.agent,
         capability: profile.capability, readOnly: readOnly(profile.agent), quota: this.quota(profile.agent, profile.model, profile.modelProvider) })),
-      ...this.agents(id).map(({ agent, modelProvider }) => ({ profileId: null, name: agentDescriptor(agent).label, description: '', agent,
+      ...agents.map(({ agent, modelProvider }) => ({ profileId: null, name: agentDescriptor(agent).label, description: '', agent,
         capability: null, readOnly: readOnly(agent), quota: this.quota(agent, null, modelProvider), modelProvider }))
     ]
   }

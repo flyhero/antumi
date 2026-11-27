@@ -213,6 +213,23 @@ describe('a chat invoking a team', () => {
     const another = await chats.create('claude', [repo], false, { profile: allowed, permissionMode: 'ask' })
     expect(calls.targets(another.id).map((entry) => entry.squad.id)).toEqual([squad.id])
   })
+  it.each(['auto', 'plan', 'bypass'] as const)('previews the same teams and restrictions for a %s draft', async (permissionMode) => {
+    const parent = await chats.create('claude', [repo], true, { permissionMode })
+    const before = chats.listAll().length
+    expect(calls.draftTargets({ permissionMode, allowBypass: true })).toEqual(calls.targets(parent.id))
+    expect(chats.listAll()).toHaveLength(before)
+    expect(tasks.list()).toHaveLength(0)
+    exhausted = true
+    expect(calls.draftTargets({ permissionMode, allowBypass: true })[0]?.reason).toBe('队长的额度已用完')
+  })
+  it('applies a draft profile team allow-list and read-only restriction', async () => {
+    const profile = profiles.save({ name: 'Planner', agent: 'claude', capability: 'readOnly', callableSquads: [squad.id] })
+    const parent = await chats.create('claude', [repo], false, { profile, permissionMode: 'ask' })
+    expect(calls.draftTargets({ profileId: profile.id, permissionMode: 'ask' })).toEqual(calls.targets(parent.id))
+    expect(calls.draftTargets({ profileId: profile.id })[0]?.reason).toContain('规划')
+    profiles.save({ ...profile, callableSquads: [] }, profile.id)
+    expect(calls.draftTargets({ profileId: profile.id })).toEqual([])
+  })
   it('rejects exhausted leaders before creating a task', async () => {
     exhausted = true
     await expect(dispatch()).rejects.toMatchObject({ reason: 'squad-call-forbidden' })

@@ -2,7 +2,7 @@ import { getLocale, t, tr } from '../i18n'
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode, type RefObject, type HTMLAttributes } from 'react'
 import type { EditorView } from '@codemirror/view'
 import { forChannels, canDelegate } from '@antumi/protocol'
-import type { AgentKind, DelegationTarget, SquadCallTarget, ProjectFileMatch } from '@antumi/protocol'
+import type { AgentKind, DelegationTarget, SquadCallTarget, ProjectFileMatch, RpcParams } from '@antumi/protocol'
 import { useCore, useFileMentionsSupported } from '../core-store'
 import { fileTarget, insertMention, matchConversations, matchProjects, mentionQuery, placeMention, type MentionedText, type MentionTarget } from '../chat-mentions'
 import type { SetText } from './ChatMentionField'
@@ -30,6 +30,8 @@ type InputProps = Pick<HTMLAttributes<HTMLDivElement>, 'aria-autocomplete' | 'ar
 type MentionGroup = 'files' | 'projects' | 'profiles' | 'conversations' | 'squads'
 type MentionEntry = { key: string; group: MentionGroup; target: MentionTarget | null; name: string; detail: string; opens: string | null; icon: ReactNode; disabled?: boolean }
 const NO_FILES: readonly ProjectFileMatch[] = []
+const NO_TARGETS: readonly DelegationTarget[] = []
+const NO_TEAMS: readonly SquadCallTarget[] = []
 
 function fileEntry(match: ProjectFileMatch, cwd: string | null, manyRoots: boolean, dark: boolean): MentionEntry {
   const folder = match.relative.includes('/') ? match.relative.slice(0, match.relative.lastIndexOf('/')) : ''
@@ -79,8 +81,9 @@ function MentionOption({ entry, id, active, onHover, onPick }: {
 // one picked in as a mention, its icon and short name, written out for the agent as the message goes
 // (see writeMentions); Tab on a folder opens it to pick inside, and elsewhere picks too; Esc puts
 // the list away until the text changes.
-export function useChatMentionMenu({ value, setText, setValue, roots, cwd, agent, conversationId }: {
+export function useChatMentionMenu({ value, setText, setValue, roots, cwd, agent, conversationId, draft }: {
   conversationId?: string
+  draft?: RpcParams<'conversations.mentionTargets'>
   value: MentionedText
   setText: SetText
   setValue: (value: MentionedText) => void
@@ -107,19 +110,28 @@ export function useChatMentionMenu({ value, setText, setValue, roots, cwd, agent
   const conversations = useCore((s) => s.conversations)
   const readHistory = useCore((s) => s.chatSettings?.readHistory === true)
   const references = Boolean(rpc?.features.includes('conversation-references') && readHistory)
-  const supported = (fileMentions || references) && agent !== null
   const profiles = useCore((s) => s.agentProfiles)
   const conversation = useCore((s) => conversationId ? s.conversations[conversationId] : null)
   const tasks = useCore((state) => state.tasks)
-  const eligible = Boolean(conversation && canDelegate(conversation, Boolean(conversation.taskId && tasks[conversation.taskId]?.squadId)))
+  const draftSupported = Boolean(draft && rpc?.features.includes('draft-mention-targets'))
+  const eligible = conversation ? canDelegate(conversation, Boolean(conversation.taskId && tasks[conversation.taskId]?.squadId)) : draftSupported
   const delegates = Boolean(rpc?.features.includes('agent-profiles') && eligible)
   const teamsSupported = Boolean(rpc?.features.includes('squad-calls') && eligible)
-  const [teams, setTeams] = useState<readonly SquadCallTarget[]>([])
+  const directSupported = delegates && Boolean(rpc?.features.includes('direct-agent-calls'))
+  const supported = (fileMentions || references || delegates || teamsSupported) && agent !== null
+  const draftProfileId = draft?.profileId
+  const draftMode = draft?.permissionMode
+  const draftBypass = draft?.allowBypass
+  const targetKey = JSON.stringify([conversationId, draftProfileId, draftMode, draftBypass])
+  const [targetResult, setTargetResult] = useState<{ key: string; agents: readonly DelegationTarget[]; squads: readonly SquadCallTarget[] } | null>(null)
+  const targets = targetResult?.key === targetKey ? targetResult.agents : NO_TARGETS
+  const teams = targetResult?.key === targetKey ? targetResult.squads : NO_TEAMS
+  const callerProfile = conversation?.profile ?? (draftProfileId ? profiles[draftProfileId] : null)
   const disabledAgents = usePreferences((s) => s.disabledAgents)
-  const callable = Object.values(profiles).filter((profile) => delegates && profile.archivedAt === null && !forChannels(profile) && profile.id !== conversation?.profile?.id
-    && !disabledAgents.includes(profile.agent) && (!conversation?.profile || conversation.profile.callableProfiles.includes(profile.id)))
+  const callable = Object.values(profiles).filter((profile) => delegates && profile.archivedAt === null && !forChannels(profile) && profile.id !== callerProfile?.id
+    && !disabledAgents.includes(profile.agent) && (!callerProfile || callerProfile.callableProfiles.includes(profile.id))
+    && (!(directSupported || draftSupported) || targets.some((target) => target.profileId === profile.id)))
   // What core says of whom it can delegate to: their quota, and the agents called as they are.
-  const [targets, setTargets] = useState<readonly DelegationTarget[]>([])
   const display = usePreferences((s) => s.usageDisplay)
   const now = useNow(60_000)
   const quotaOf = (target: DelegationTarget | undefined) => target ? delegationQuotaText(target.quota, display, now) : null
@@ -166,20 +178,16 @@ export function useChatMentionMenu({ value, setText, setValue, roots, cwd, agent
     return () => { current = false }
   }, [asking, rpc, projects])
 
-  const directSupported = delegates && Boolean(rpc?.features.includes('direct-agent-calls'))
   useEffect(() => {
-    if (!asking || !rpc || !conversationId || !directSupported) return
+    if (!asking || !rpc || (!conversationId && !draftSupported)) return
     let current = true
-    rpc.call('agentCalls.targets', { id: conversationId }).then((found) => current && setTargets(found), () => current && setTargets([]))
+    const found = conversationId ? Promise.all([
+      directSupported ? rpc.call('agentCalls.targets', { id: conversationId }).catch(() => NO_TARGETS) : Promise.resolve(NO_TARGETS),
+      teamsSupported ? rpc.call('squadCalls.targets', { id: conversationId }).catch(() => NO_TEAMS) : Promise.resolve(NO_TEAMS)
+    ]).then(([agents, squads]) => ({ agents, squads })) : rpc.call('conversations.mentionTargets', { profileId: draftProfileId, permissionMode: draftMode, allowBypass: draftBypass })
+    found.then((result) => { if (current) setTargetResult({ key: targetKey, ...result }) }, () => { if (current) setTargetResult({ key: targetKey, agents: [], squads: [] }) })
     return () => { current = false }
-  }, [asking, rpc, conversationId, directSupported])
-
-  useEffect(() => {
-    if (!asking || !rpc || !conversationId || !teamsSupported) return
-    let current = true
-    rpc.call('squadCalls.targets', { id: conversationId }).then((found) => { if (current) setTeams(found) }, () => { if (current) setTeams([]) })
-    return () => { current = false }
-  }, [asking, rpc, conversationId, teamsSupported])
+  }, [asking, rpc, conversationId, directSupported, teamsSupported, draftSupported, draftProfileId, draftMode, draftBypass, targetKey])
 
   const entries = useMemo(() => {
     if (query === null) return { profiles: [], files: [], projects: [], conversations: [], squads: [] }
@@ -214,15 +222,16 @@ export function useChatMentionMenu({ value, setText, setValue, roots, cwd, agent
       name: entry.squad.name, disabled: entry.reason !== null, detail: entry.reason ?? [entry.squad.description, entry.squad.members.map((member) => [member.name, delegationQuotaText(entry.quotas.find((quota) => quota.memberId === member.id)?.quota ?? { state: 'unknown', window: null, stale: false }, display, now)].filter(Boolean).join(' ')).join(' · ')].filter(Boolean).join(' · '), opens: null, icon: <SquadIcon />
     })) : []
     return { profiles: [...profileRows, ...directRows], files: fileRows, projects: projectRows, conversations: conversationRows, squads: squadRows }
-  }, [teams, teamsSupported, query, files, projects, cwd, rootsKey, roots.length, profiles, conversation, delegates, targets, disabledAgents, display, now, conversations, conversationId, references, dark, getLocale()])
+  }, [teams, teamsSupported, query, files, projects, cwd, rootsKey, roots.length, profiles, conversation, delegates, directSupported, draftSupported, callerProfile, targets, disabledAgents, display, now, conversations, conversationId, references, dark, getLocale()])
+  const targetsLoading = asking && targetResult?.key !== targetKey
   const tabs: { id: MentionGroup; label: string; loading: boolean }[] = [
-    ...(delegates ? [{ id: 'profiles' as const, label: t('AgentProfiles.title'), loading: false }] : []),
-    ...(teamsSupported ? [{ id: 'squads' as const, label: t('TeamCalls.title'), loading: false }] : []),
+    ...(delegates ? [{ id: 'profiles' as const, label: t('AgentProfiles.title'), loading: targetsLoading && (directSupported || draftSupported) }] : []),
+    ...(teamsSupported ? [{ id: 'squads' as const, label: t('TeamCalls.title'), loading: targetsLoading }] : []),
     { id: 'files', label: t('ChatMentionMenu.files'), loading: filesLoading },
     { id: 'projects', label: t('ChatMentionMenu.projects'), loading: projects === null },
     ...(references ? [{ id: 'conversations' as const, label: t('ChatMentionMenu.conversations'), loading: false }] : [])
   ]
-  const preferred: MentionGroup = delegates && (callable.length || direct.length) ? 'profiles' : rootsKey ? 'files' : 'projects'
+  const preferred: MentionGroup = delegates && (callable.length || direct.length || targetsLoading) ? 'profiles' : rootsKey ? 'files' : 'projects'
   // Until the user picks a category, one with something for what they typed rather than an empty one.
   const fallback = !query || entries[preferred].length > 0 ? preferred : tabs.find((tab) => entries[tab.id].length > 0)?.id ?? preferred
   const selectedGroup = tabs.some((tab) => tab.id === group) && group !== null ? group : fallback

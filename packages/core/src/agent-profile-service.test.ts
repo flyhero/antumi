@@ -4,6 +4,8 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'nod
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { CredentialStore } from './credential-store'
+import { ModelProviderStore } from './model-providers'
 import { ModelProvider, type AgentKind, type AgentProfile, type AgentUsage } from '@antumi/protocol'
 import { AgentProfileService, delegatedMode, readyAgents, type ReadyAgent } from './agent-profile-service'
 import { AgentProfileStore } from './agent-profile-store'
@@ -224,6 +226,28 @@ describe('reusable agent roles and delegated work', () => {
     profiles.archive(caller.id, true)
     expect(() => profiles.draftTargets(caller.id)).toThrow(expect.objectContaining({ reason: 'profile-archived' }))
   })
+  it('honors a direct delegation provider instead of its default native quota', async () => {
+    const credentials = new CredentialStore(path.join(root, 'credentials.json'))
+    await credentials.load()
+    const providers = new ModelProviderStore(path.join(root, 'model-providers.json'), credentials)
+    await providers.load()
+    chats.setModelProviders(providers)
+    const provider = await providers.save({
+      id: null, name: 'Delegation gateway', preset: 'custom', agents: ['claude'], apiKey: 'delegation-key',
+      anthropic: { baseUrl: 'http://127.0.0.1:4000', auth: 'auth_token', env: {} }, openai: null,
+      models: [{ id: 'delegate-model', label: null, contextWindow: null, maxOutput: null, efforts: [] }],
+      defaultModel: 'delegate-model', smallModel: 'delegate-model'
+    })
+    ready = [{ agent: 'claude', modelProvider: null }]
+    usage = [{ agent: 'claude', status: 'ok', plan: null, error: null, updatedAt: Date.now(), resetCredits: null,
+      windows: [{ kind: 'session', model: null, usedPercent: 100, windowMinutes: 300, resetsAt: Date.now() + 3_600_000 }] }]
+    const call = await profiles.dispatch(parentId, { agent: 'claude', modelProvider: provider.id, model: 'delegate-model' }, 'Inspect the module')
+    expect(call.profile.modelProvider).toBe(provider.id)
+    await waitFor(() => store.call(call.id).state === 'running')
+    expect(chats.get(call.conversationId).modelProvider).toBe(provider.id)
+    expect(daemon.spawns.at(-1)?.env?.ANTHROPIC_AUTH_TOKEN).toBe('delegation-key')
+  })
+
   it('shows each target\'s quota and refuses one whose quota is used up', async () => {
     const resetsAt = Date.now() + 3_600_000
     const reading = (usedPercent: number, model: string | null = null): AgentUsage => ({ agent: 'claude', status: 'ok', plan: null, error: null, updatedAt: Date.now(), resetCredits: null,

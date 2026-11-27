@@ -31,7 +31,7 @@ export function HandoffScreen({ id }: { id: string }) {
   const now = useNow()
   if (!conversation) return <Screen title={t('handoff')} onBack={() => pop()}><Muted>{t('noConversations')}</Muted></Screen>
   // On a provider the agent's own account is not what it spends, so its limits say nothing.
-  const exhausted = agent && !conversation.modelProvider ? exhaustedText(usage?.find((each) => each.agent === agent), modelText(options?.model), now) : null
+  const exhausted = agent && !options?.modelProvider ? exhaustedText(usage?.find((each) => each.agent === agent), modelText(options?.model), now) : null
   const ready = agent !== null && options !== null && !options.loading && !busy
   const go = async (stopRunning: boolean) => {
     if (!agent || !options) return

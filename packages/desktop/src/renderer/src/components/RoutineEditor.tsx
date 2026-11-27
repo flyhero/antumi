@@ -1,7 +1,10 @@
+import { useProviderCatalog } from '../agent-models'
+import { ProviderPicker } from './ProviderPicker'
+import { usePreferences } from '../preferences'
 import { SupportActions } from './ContactAuthor'
 import { localized, t, tr } from '../i18n'
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
-import { agentDescriptor, HOURLY_EVERY, nextOccurrence, RoutineAgent, type AgentKind, type ChatCatalog, type Routine, type RoutineFields, type RoutineSchedule } from '@antumi/protocol'
+import { agentDescriptor, HOURLY_EVERY, nextOccurrence, RoutineAgent, type Routine, type RoutineFields, type RoutineSchedule } from '@antumi/protocol'
 import type { RoutineTemplate } from '../routine-templates'
 import { dismissError, useChatOptionsSupported, useCore } from '../core-store'
 import { useInstalledAgents } from '../installed-agents'
@@ -58,6 +61,7 @@ export function RoutineEditor({ routine, template = null, onClose }: { routine: 
   const mode = useCore((s) => s.chatSettings?.unattendedMode ?? 'acceptEdits')
   const rpc = useCore((s) => s.rpc)
   const optionsSupported = useChatOptionsSupported()
+  const providersSupported = rpc?.features.includes('provider-selection-v2') ?? false
   const installed = useInstalledAgents().filter((agent) => agentDescriptor(agent).capabilities.unattended)
   const [title, setTitle] = useState(routine?.title ?? template?.title ?? '')
   const [text, setText] = useState(routine?.target.text ?? template?.text ?? '')
@@ -65,7 +69,8 @@ export function RoutineEditor({ routine, template = null, onClose }: { routine: 
   const [projectPaths, setProjectPaths] = useState<string[]>(routine?.target.projectPaths ?? [])
   const [model, setModel] = useState<string | null>(routine?.target.model ?? null)
   const [effort, setEffort] = useState<string | null>(routine?.target.effort ?? null)
-  const [catalogs, setCatalogs] = useState<Partial<Record<AgentKind, ChatCatalog | null>>>({})
+  const [modelProvider, setModelProvider] = useState<string | null>(routine?.target.modelProvider ?? (agent !== 'auto' ? usePreferences.getState().defaultProviders[agent] : null) ?? null)
+  const catalog = useProviderCatalog(agent === 'auto' ? null : agent, modelProvider)
   const given = routine?.schedule ?? template?.schedule
   const [kind, setKind] = useState<Kind>(given?.kind ?? 'daily')
   const [time, setTime] = useState(given && 'time' in given ? given.time : '09:00')
@@ -87,17 +92,8 @@ export function RoutineEditor({ routine, template = null, onClose }: { routine: 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  useEffect(() => {
-    if (agent === 'auto' || !rpc || !optionsSupported || agent in catalogs) return
-    let current = true
-    const settle = (catalog: ChatCatalog | null) => current && setCatalogs((known) => ({ ...known, [agent]: catalog }))
-    rpc.call('conversations.chatCatalog', { agent }).then(settle, () => settle(null))
-    return () => { current = false }
-  }, [agent, rpc, optionsSupported, catalogs])
-
   const schedule = scheduleFrom(kind, time, days, every)
   const next = nextOccurrence(schedule, Date.now())
-  const catalog = agent === 'auto' ? null : catalogs[agent]
   const modelId = model ?? catalog?.models.find((each) => each.isDefault)?.id ?? null
   const efforts = catalog?.models.find((each) => each.id === modelId)?.efforts ?? []
   const chosenEffort = effort && efforts.includes(effort) ? effort : null
@@ -119,6 +115,7 @@ export function RoutineEditor({ routine, template = null, onClose }: { routine: 
         projectPaths,
         text: text.trim(),
         ...(attached.images.length ? { images: attached.images.map((image) => image.id) } : {}),
+        ...(providersSupported && agent !== 'auto' && modelProvider ? { modelProvider } : {}),
         ...(agent !== 'auto' && model ? { model } : {}),
         ...(agent !== 'auto' && chosenEffort ? { effort: chosenEffort } : {})
       }
@@ -189,9 +186,10 @@ export function RoutineEditor({ routine, template = null, onClose }: { routine: 
                 disabled={busy}
                 onChange={(value) => {
                   const picked = RoutineAgent.safeParse(value)
-                  if (picked.success) setAgent(picked.data)
+                  if (picked.success) { setAgent(picked.data); setModel(null); setEffort(null); setModelProvider(picked.data === 'auto' ? null : usePreferences.getState().defaultProviders[picked.data] ?? null) }
                 }}
               />
+              {providersSupported && agent !== 'auto' && <ProviderPicker agent={agent} value={modelProvider} disabled={busy} onChange={(value) => { setModelProvider(value); setModel(null); setEffort(null) }} />}
               {agent !== 'auto' && optionsSupported && catalog && (
                 <ChatModelPicker
                   models={catalog.models.map((each) => ({ value: each.id, label: each.label, description: each.description, efforts: each.efforts.map((one) => ({ value: one, label: effortLabel(one) })) }))}
@@ -206,7 +204,7 @@ export function RoutineEditor({ routine, template = null, onClose }: { routine: 
                   onEffort={setEffort}
                 />
               )}
-              {agent !== 'auto' && <AgentQuotaHint agent={agent} className="routine-editor-quota" />}
+              {agent !== 'auto' && !modelProvider && <AgentQuotaHint agent={agent} className="routine-editor-quota" />}
               <span className="chat-dock-spacer" />
               <ProjectPicker projects={projectPaths.map((path) => ({ path, worktreePath: null }))} onChange={setProjectPaths} locked={busy} />
             </div>

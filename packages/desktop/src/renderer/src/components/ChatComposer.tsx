@@ -581,7 +581,7 @@ export function ChatComposer({ conversation, state, compact = false }: { convers
       <div className="chat-options">
         {(imagesSupported || files.picksFiles) && <ChatAddMenu disabled={inputReadOnly} onAdd={attached.add} onFiles={files.picksFiles ? files.addPicked : undefined} />}
         {!compact && handoff.targets.length > 0 && <HandoffAgentPicker conversationId={id} handoff={handoff} disabled={busy || starting || switchingPermission} />}
-        {!compact && !handoff.target && <RouteBadge conversation={conversation} locked />}
+        {!compact && !handoff.target && <RouteBadge conversation={conversation} locked={Boolean(conversation.profile || conversation.helperOf || conversation.squadRunId || conversation.discussionId)} />}
         {handingOff ? (
           <>
             <HandoffModePicker conversationId={id} handoff={handoff} />

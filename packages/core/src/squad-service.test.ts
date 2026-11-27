@@ -4,6 +4,8 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { agentDescriptor, type Squad, type SquadRun, type SquadWork } from '@antumi/protocol'
+import { CredentialStore } from './credential-store'
+import { ModelProviderStore } from './model-providers'
 import { AttachmentStore } from './attachment-store'
 import { ConversationService } from './conversation-service'
 import { ConversationStore } from './conversation-store'
@@ -75,6 +77,29 @@ describe('squad execution', () => {
     return squads.dispatch(leaderId(), memberId, 'Do this part and report validation', capability)
   }
   async function releaseLeader() { complete(chats.get(leaderId()).sessionId!, 'delegated'); await waitFor(() => current().works.some((work) => work.state === 'running')) }
+
+  it('runs both a custom team leader and its member on their configured provider', async () => {
+    const credentials = new CredentialStore(path.join(root, 'credentials.json'))
+    await credentials.load()
+    const providers = new ModelProviderStore(path.join(root, 'model-providers.json'), credentials)
+    await providers.load()
+    chats.setModelProviders(providers)
+    const provider = await providers.save({
+      id: null, name: 'Team gateway', preset: 'custom', agents: ['claude'], apiKey: 'team-key',
+      anthropic: { baseUrl: 'http://127.0.0.1:4000', auth: 'auth_token', env: {} }, openai: null,
+      models: [{ id: 'team-model', label: null, contextWindow: null, maxOutput: null, efforts: [] }],
+      defaultModel: 'team-model', smallModel: 'team-model'
+    })
+    squad = squads.update(squad.id, { ...squad, members: squad.members.map((member) => ({ ...member, modelProvider: provider.id, model: 'team-model' })) })
+    await start()
+    expect(chats.get(leaderId()).modelProvider).toBe(provider.id)
+    await dispatch(id(2))
+    await releaseLeader()
+    const member = current().works[0]!
+    expect(chats.get(member.conversationId!).modelProvider).toBe(provider.id)
+    expect(daemon.spawns.every((spawn) => spawn.env?.ANTHROPIC_AUTH_TOKEN === 'team-key')).toBe(true)
+    expect(daemon.spawns.every((spawn) => spawn.args.includes('team-model'))).toBe(true)
+  })
 
   it('launches a read-only coordinator, binds MCP scope before first dispatch and freezes the roster', async () => {
     const run = await start()

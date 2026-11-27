@@ -44,7 +44,7 @@ function MemberRow({ member, index, agents, providersSupported, chair, author, b
 }) {
   const providers = useCore((state) => state.modelProviders)
   const provider = providersSupported ? providerFor(providers, member.modelProvider, member.agent) : null
-  const catalog = useAgentCatalog(member.agent, true, provider)
+  const catalog = useAgentCatalog(member.agent, true, provider, member.modelProvider)
   const { model, effort } = resolveModel(catalog, { model: member.model, effort: member.effort })
   const shownName = member.name ?? defaultMemberName(member.agent, member.model ?? null)
   return (

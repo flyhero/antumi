@@ -306,3 +306,8 @@ Noise 的一条传输消息最多 65535 字节，而一个附件块是 512 KiB�
 
 - **没在真机上跑过**：相机扫码（模拟器没有可用的相机画面）、指纹 / 面容、真实局域网和 Tailscale、App 退到后台再回来。
 - 各种 Agent 下多设备并发回答同一个请求的行为。
+
+
+### 服务商选择
+
+core 声明 `provider-selection-v2` 时，手机通过只读的 `modelProviders.list` 获取不含 API Key 的服务商列表，并订阅 `modelProviders.changed`。新建任务、会话和移交共用服务商、模型与推理强度选择，选择按电脑和 Agent 记住；服务商不可用时不改查本机模型。聊天选项可在空闲时调用 `conversations.setModelProvider` 更换非托管会话的服务商。手机不开放服务商配置写入，添加或修改仍在电脑端进行。

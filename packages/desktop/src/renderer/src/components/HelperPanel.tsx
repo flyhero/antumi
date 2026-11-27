@@ -12,6 +12,7 @@ import { useChatTypeface } from '../chat-typeface'
 import { confirmQuota } from './AgentQuota'
 import { ConversationChat } from './ConversationChat'
 import { conversationSurface } from './chat-surface'
+import { ProviderPicker } from './ProviderPicker'
 import { HelperModePicker, HelperModelPicker, helperMode, helperModes, useHelperCatalog } from './HelperModelPicker'
 import { sendsMessage } from './ChatComposer'
 import { EnterIcon } from './icons'
@@ -54,6 +55,7 @@ function HelperDraft({ parent }: { parent: Conversation }) {
       <div className="chat-options">
         {catalog !== undefined && <HelperModePicker agent={parent.agent} offered={offered} mode={permissionMode} disabled={busy} onMode={setPicked} />}
         <span className="chat-dock-spacer" />
+        <ProviderPicker agent={parent.agent} value={helperProvider(parent) ?? null} disabled onChange={() => {}} />
         <HelperModelPicker catalog={catalog} model={model} effort={effort} disabled={busy} onModel={(model) => setChoice({ model, effort: null })} onEffort={(effort) => setChoice({ model, effort })} />
         <button type="button" className="chat-input-button" data-tooltip-side="top-end" aria-label={sendLabel} data-tooltip={busy ? t('HelperPanel.startingHelper') : sendLabel} disabled={busy || !text.trim() || catalog === undefined} onClick={() => void send()}>
           <EnterIcon />

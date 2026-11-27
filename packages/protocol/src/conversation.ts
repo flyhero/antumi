@@ -40,6 +40,8 @@ export const Conversation = z.object({
   sessionId: z.string().nullable(),
   // Includes CLI checks and handshake, before the agent can take a message.
   starting: z.boolean().optional(),
+  // The saved provider differs from the last stage after an explicit route change.
+  providerChangePending: z.boolean().optional(),
   createdAt: z.number(),
   updatedAt: z.number(),
   // The newest stage's last reported context, kept after its process exits. Older cores omit it.
@@ -106,7 +108,7 @@ export const Conversation = z.object({
   // which the agent waits a moment for. error: why the fetch stopped, reason its code; it can be retried
   // (sources.retryInvestigation). Older cores leave it out, fetching before they answer.
   preparing: z.object({ step: z.enum(['issue', 'images']).catch('issue'), error: z.string().nullable(), reason: z.string().optional() }).nullable().optional(),
-  // The model provider it was started on, fixed for good; null on the agents' own accounts. route:
+  // The selected model provider; null on the agents' own accounts. route:
   // what its agent's next stage runs on. Older cores leave both out.
   modelProvider: ModelProviderId.nullable().optional(),
   route: ConversationRoute.nullable().optional(),

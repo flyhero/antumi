@@ -810,6 +810,29 @@ describe('ScheduleService', () => {
     }
     const rows = () => withTestDatabase(database, (raw) => raw.prepare('SELECT id, status, conversation_id AS conversationId, routine_id AS routineId, due_at AS dueAt, finished_at AS finishedAt, outcome, seen_at AS seenAt, error FROM scheduled_runs ORDER BY created_at').all())
 
+    it('runs a routine on its saved provider despite exhausted native quota', async () => {
+      const credentials = new CredentialStore(path.join(root, 'credentials.json'))
+      await credentials.load()
+      const providers = new ModelProviderStore(path.join(root, 'model-providers.json'), credentials)
+      await providers.load()
+      conversations.setModelProviders(providers)
+      const saved = await providers.save({
+        id: null, name: 'Routine gateway', preset: 'custom', agents: ['claude'], apiKey: 'routine-key',
+        anthropic: { baseUrl: 'http://127.0.0.1:4000', auth: 'auth_token', env: {} }, openai: null,
+        models: [{ id: 'routine-model', label: null, contextWindow: null, maxOutput: null, efforts: [] }],
+        defaultModel: 'routine-model', smallModel: 'routine-model'
+      })
+      usage = exhausted(clock + 2 * HOUR)
+      routine = daily({ modelProvider: saved.id, model: 'routine-model' })
+      const made = schedules.insertRoutineRun(routine, clock - 60_000, 'claude')!
+      await due()
+      expect(rows()[0]).toMatchObject({ id: made.id, status: 'started' })
+      expect(conversations.get(made.id).modelProvider).toBe(saved.id)
+      expect(daemon.spawns.at(-1)?.args).toContain('routine-model')
+      expect(daemon.spawns.at(-1)?.env?.ANTHROPIC_AUTH_TOKEN).toBe('routine-key')
+      await providers.remove(saved.id)
+    })
+
     it('opens a conversation under its own id, named for the routine, and sends the instruction unattended', async () => {
       routine = daily()
       const made = schedules.insertRoutineRun(routine, clock - 60_000, 'claude')!

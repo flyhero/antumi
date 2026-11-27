@@ -1,3 +1,4 @@
+import { usePreferences } from './preferences'
 import { useCallback, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { z } from 'zod'
 import { AgentProfileFields, type AgentKind, type AgentProfile } from '@antumi/protocol'
@@ -55,7 +56,7 @@ export function profileFieldsEqual(a: AgentProfileFields, b: AgentProfileFields)
 
 export function useAgentProfileDraft(profile: AgentProfile | null, seed: AgentProfileFields | null, template: string | undefined, agent: AgentKind) {
   const key = useRef(profile?.id ?? `new:${template ?? seed?.name ?? 'blank'}`)
-  const baseline = useRef<AgentProfileFields>(profile ?? seed ?? { name: '', agent, capability: 'readOnly' })
+  const baseline = useRef<AgentProfileFields>(profile ?? seed ?? { name: '', agent, capability: 'readOnly', modelProvider: usePreferences.getState().defaultProviders[agent] ?? null })
   const [fields, updateFields] = useState<AgentProfileFields>(() => readProfileDraft(key.current) ?? baseline.current)
   const current = useRef(fields)
   const [persisted, setPersisted] = useState(storageAvailable)

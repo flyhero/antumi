@@ -89,13 +89,13 @@ export function useComposerHandoff(conversation: Conversation, images: readonly 
     options: {
       ...(mode ? { permissionMode: mode } : {}),
       ...(modelsSupported ? { model: modelId ?? null, effort: effort ?? null } : {}),
-      ...(providerSupported && picked.modelProvider !== undefined ? { modelProvider: targetProvider?.id ?? null } : {})
+      ...(providerSupported ? { modelProvider: picked.modelProvider !== undefined ? picked.modelProvider : conversation.modelProvider ?? null } : {})
     }
   }
   const send = async (note: string, references?: ChatReference[]) => {
     if (!target || blocker) return false
     if (stopsRunning && !await askConfirm({ message: t('ChatHandoff.stopTheCurrentAndHandOffTo', { value1: agentLabel(from), value2: agentLabel(target.agent) }), confirm: t('ConfirmDialog.stopAndHandOff') })) return false
-    if (!targetProvider && !await confirmQuota(target.agent, modelText(target.model))) return false
+    if (!target.options.modelProvider && !targetProvider && !await confirmQuota(target.agent, modelText(target.model))) return false
     const attachments = images.length ? { images: images.map((image) => image.id) } : {}
     const result = task
       ? await perform((rpc) => rpc.call('tasks.handoff', { id: task.id, agent: target.agent, note, ...attachments, ...(rpc.features.includes('chat-references') ? { references } : {}), ...startOptions(), ...target.options }))
@@ -160,7 +160,7 @@ export function HandoffProviderPicker({ conversationId, agent }: { conversationI
   const chosen = useCore((s) => s.conversations[conversationId]?.modelProvider)
   const pending = useHandoffs((s) => s[conversationId])
   if (!supported) return null
-  return <ProviderPicker agent={agent} value={handoffProvider(providers, chosen, pending)?.id ?? null} onChange={(value) => chooseHandoffProvider(conversationId, value)} />
+  return <ProviderPicker agent={agent} value={pending?.modelProvider !== undefined ? pending.modelProvider : chosen ?? null} onChange={(value) => chooseHandoffProvider(conversationId, value)} />
 }
 
 // The model and effort the agent taking over starts in, where core takes them.
@@ -169,7 +169,7 @@ export function HandoffModelPicker({ conversationId, agent }: { conversationId: 
   const providers = useCore((s) => s.modelProviders)
   const chosen = useCore((s) => s.conversations[conversationId]?.modelProvider)
   const pending = useHandoffs((s) => s[conversationId])
-  const catalog = useAgentCatalog(agent, modelsSupported, handoffProvider(providers, chosen, pending))
+  const catalog = useAgentCatalog(agent, modelsSupported, handoffProvider(providers, chosen, pending), pending?.modelProvider !== undefined ? pending.modelProvider : chosen)
   const { modelId, defaultModel, effort } = resolveModel(catalog, pending ?? {})
   if (!catalog?.models.length) return null
   return (

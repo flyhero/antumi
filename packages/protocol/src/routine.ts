@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { ModelProviderId } from './model-provider-id'
 import { AttachmentId, MAX_CHAT_IMAGES } from './attachments'
 import { ScheduledRun } from './schedule'
 import { AGENT_KINDS, MAX_TASK_REPOS } from './task'
@@ -35,6 +36,7 @@ export const RoutineTarget = z.object({
   projectPaths: z.array(z.string().trim().min(1)).max(MAX_TASK_REPOS),
   text: z.string().trim().max(100000),
   images: z.array(AttachmentId).max(MAX_CHAT_IMAGES).optional(),
+  modelProvider: ModelProviderId.nullable().optional(),
   model: z.string().trim().min(1).max(200).optional(),
   effort: z.string().trim().min(1).max(200).optional()
 })

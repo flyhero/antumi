@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { checkStartMode, type ChatCatalog, type ChatPermissionMode, type Task, type TaskLaunchOptions } from '@antumi/protocol'
-import { resolveModel, useAgentCatalog, type ResolvedModel } from '../agent-models'
+import { resolveModel, useProviderCatalog, type ResolvedModel } from '../agent-models'
 import { updateTask, useCore, useTaskLaunchSupported } from '../core-store'
+import { ProviderPicker } from './ProviderPicker'
 import { ChatModelPicker } from './ChatPicker'
 import { effortLabel, startModes, useAgentBackend } from './ChatOptionsBar'
 
@@ -20,7 +21,8 @@ export type TaskLaunch = ResolvedModel & {
 export function useTaskLaunch(task: Task, dependencies: readonly Task[], enabled = true): TaskLaunch | null {
   const supported = useTaskLaunchSupported() && enabled
   const activeBackend = useAgentBackend(task.agent ?? null)
-  const catalog = useAgentCatalog(task.agent, supported && task.status === 'pending')
+  const provider = useCore((state) => task.conversationId && state.conversations[task.conversationId] ? state.conversations[task.conversationId]?.modelProvider ?? null : task.launch.modelProvider)
+  const catalog = useProviderCatalog(task.agent, provider, supported && task.status === 'pending')
   if (!supported || !task.agent) return null
   const resolved = resolveModel(catalog, { model: task.launch.model ?? undefined, effort: task.launch.effort ?? undefined })
   const offered = startModes(task.agent, resolved.model, activeBackend)
@@ -59,11 +61,14 @@ export function useEditsInPlace(task: Task, enabled = true): boolean {
 // shows by name, so the button always says what will run.
 export function TaskModelPicker({ task, launch }: { task: Task; launch: TaskLaunch }) {
   const { catalog } = launch
-  if (!catalog?.models.length) return null
+  const providerId = useCore((state) => task.conversationId && state.conversations[task.conversationId] ? state.conversations[task.conversationId]?.modelProvider ?? null : task.launch.modelProvider)
+  if (!task.agent) return null
   const shown = launch.modelId ?? launch.defaultModel?.id ?? null
   const save = (next: TaskLaunchOptions) => void updateTask(task.id, { launch: { ...task.launch, ...next } })
   return (
-    <ChatModelPicker
+    <>
+    <ProviderPicker agent={task.agent} value={providerId ?? null} disabled={Boolean(task.conversationId)} size="large" placement="below" onChange={(modelProvider) => save({ modelProvider, model: null, effort: null })} />
+    {catalog?.models.length ? <ChatModelPicker
       models={catalog.models.map((each) => ({ value: each.id, label: each.label, description: each.description, efforts: each.efforts.map((one) => ({ value: one, label: effortLabel(one) })) }))}
       model={shown}
       effort={launch.effort ?? null}
@@ -75,6 +80,7 @@ export function TaskModelPicker({ task, launch }: { task: Task; launch: TaskLaun
         save({ model, effort: launch.effort && efforts.includes(launch.effort) ? launch.effort : null })
       }}
       onEffort={(effort) => save({ model: shown, effort })}
-    />
+    /> : null}
+    </>
   )
 }

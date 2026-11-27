@@ -161,6 +161,13 @@ describe('TaskService', () => {
     return repo
   }
 
+  it('keeps the provider and model selected when a task is created', () => {
+    const modelProvider = '00000000-0000-4000-8000-000000000123'
+    const task = service.create({ title: 'Provider task', agent: 'claude', launch: { modelProvider, model: 'gateway-model', effort: 'high' } })
+    expect(task.launch).toMatchObject({ modelProvider, model: 'gateway-model', effort: 'high' })
+    expect(service.get(task.id).launch).toMatchObject({ modelProvider })
+  })
+
   function readyTask(title: string, repos: string[]) {
     const task = service.create({ title })
     return service.update({ id: task.id, details: 'x', repos, agent: 'claude' })

@@ -11,6 +11,7 @@ import { AgentModelPicker } from './AgentModelPicker'
 import { modeOptions, modeTone, startModes, useAgentBackend } from './ChatOptionsBar'
 import { ChatPicker } from './ChatPicker'
 import { ProjectPicker } from './ProjectPicker'
+import { usePreferences } from '../preferences'
 import { ProviderPicker } from './ProviderPicker'
 import { SettingsRow, Toggle } from './SettingsControls'
 import { SourceFixStatus } from './SourceFixStatus'
@@ -161,7 +162,7 @@ export function AutoInvestigationSettings({ provider, instance, info, connected 
       <div className="source-automation-controls">
         <SettingsRow label={t('SourceFix.coordinator')} description={t(autoFix.enabled ? 'SourceFix.coordinatorHint' : 'SourceAutomation.agentHint')} control={() => <ChatPicker size="field" placement="below" label={t('SourceFix.coordinator')} placeholder={t('AutoInvestigation.chooseAgent')} value={draft.agent ?? ''} options={[...new Set([...installed, ...(draft.agent ? [draft.agent] : [])])].map((agent) => ({ value: agent, label: agentLabel(agent), icon: <AgentIcon agent={agent} /> }))} disabled={busy} onChange={(value) => {
           const next = AgentKind.safeParse(value)
-          if (next.success) setDraft((known) => ({ ...known, agent: next.data, model: undefined, effort: undefined, modelProvider: undefined, permissionMode: undefined }))
+          if (next.success) setDraft((known) => ({ ...known, agent: next.data, model: undefined, effort: undefined, modelProvider: usePreferences.getState().defaultProviders[next.data] ?? undefined, permissionMode: undefined }))
         }} />} />
         {draft.agent && mode && <SettingsRow label={t('ChatHandoff.permissionMode')} description={t('AutoInvestigation.modeHint')} control={() => <ChatPicker size="field" placement="below" label={t('ChatHandoff.permissionMode')} placeholder={t('ChatHandoff.permissionMode')} value={mode} options={permissionOptions} tone={modeTone(mode)} disabled={busy} onChange={(value) => {
           const next = ChatPermissionMode.safeParse(value)

@@ -84,14 +84,14 @@ it('blocks image handoffs on older cores while still allowing a text-only handof
   expect(readHandoff(conversation, []).blocker).toBeNull()
 })
 
-it('sends the provider picked for the agent taking over, null for its own account, and nothing unpicked', () => {
+it('keeps the inherited provider explicit until the user chooses another route', () => {
   const gateway = ModelProvider.parse({ id: 'gateway', name: 'Gateway', preset: 'custom', anthropic: { baseUrl: 'https://gateway.example.com', auth: 'auth_token', env: {} }, openai: null, models: [{ id: 'gw', label: null, contextWindow: null, maxOutput: null, efforts: [] }], defaultModel: 'gw', smallModel: 'gw', agents: ['claude'], hasKey: true, revision: 1, createdAt: 0, updatedAt: 0 })
   const relay = ModelProvider.parse({ id: 'relay', name: 'Relay', preset: 'custom', anthropic: null, openai: { responsesUrl: 'https://relay.example.com/v1', chatUrl: null }, models: [{ id: 'model', label: null, contextWindow: null, maxOutput: null, efforts: [] }], defaultModel: 'model', smallModel: 'model', agents: ['codex'], hasKey: true, revision: 1, createdAt: 0, updatedAt: 0 })
   const conversation = Conversation.parse({ id: '22222222-2222-4222-8222-222222222222', title: 'Review', titleLocked: false, agent: 'codex', modelProvider: 'relay', workspacePath: '/project', projectPaths: ['/project'], managedWorkspace: false, sessionId: null, createdAt: 1, updatedAt: 1 })
   const rpc: RpcConnection = { ...createRpcClient(() => {}), features: ['handoff-provider'], close() {}, closed: new Promise(() => {}) }
   useCore.setState({ rpc, modelProviders: [gateway, relay] })
   proposeHandoff(conversation.id, 'claude')
-  expect(readHandoff(conversation, []).target?.options).not.toHaveProperty('modelProvider')
+  expect(readHandoff(conversation, []).target?.options).toMatchObject({ modelProvider: 'relay' })
   chooseHandoffProvider(conversation.id, 'gateway')
   expect(readHandoff(conversation, []).target?.options).toMatchObject({ modelProvider: 'gateway' })
   // A model picked afterwards keeps the provider.

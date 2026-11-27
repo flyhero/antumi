@@ -2,6 +2,8 @@ import { UsageSettings } from './UsageSettings'
 import { getLocale, localized, messageSearchText, t, tr, useLocale } from '../i18n'
 import type { BrowserSite, BrowserStatus, WireUsage } from '@antumi/protocol'
 import { useEffect, useId, useMemo, useRef, useState, type ReactElement } from 'react'
+import { ProviderPicker } from './ProviderPicker'
+import { useProviderCatalog } from '../agent-models'
 import { AGENT_KINDS, agentDescriptor, LANGUAGE_NAMES, PROTOCOL_VERSION, quickModel, TRANSLATE_LANGUAGES, UNATTENDED_MODES, type AgentKind, type SourceDescriptor, type UnattendedMode } from '@antumi/protocol'
 import packageJson from '../../../../package.json'
 import { perform, setAwakeMode, setChatSettings, setSettingsOpen, useAwakeSupported, useCore, useBrowserSupported, useChatCommandsSupported, useConversationArchiveSupported, useKnowledgeBaseSupported, useMcpServersSupported, useModelProvidersSupported, useSessionImportSupported, useAccountsSupported, useAgentProxySupported, useProjectConfigEditSupported, useSkillsSupported, useTranslateSupported, useWireLogSupported } from '../core-store'
@@ -14,7 +16,6 @@ import { UNATTENDED_LABEL } from '../schedules'
 import { askConfirm } from '../confirm-dialog'
 import { modeLabel } from './ChatOptionsBar'
 import { detectedAgents, useInstalledAgents } from '../installed-agents'
-import { useAgentCatalog } from '../agent-models'
 import { ChatPicker } from './ChatPicker'
 import { PluginSettings } from './PluginSettings'
 import { InstalledAgentsSettings } from './InstalledAgentsSettings'
@@ -112,8 +113,11 @@ function NotificationSettings() {
 // The model one agent does small jobs with: its cheapest by default, which the first option names, or
 // one the user picked from its catalog.
 function QuickModelPicker({ agent }: { agent: AgentKind }) {
-  const catalog = useAgentCatalog(agent, true)
-  const picked = usePreferences((s) => s.quickModels[agent]) ?? ''
+  const [providerId, setProviderId] = useState<string | null>(null)
+  const provider = useCore((state) => state.modelProviders.find((item) => item.id === providerId))
+  const catalog = useProviderCatalog(agent, providerId)
+  const ownModel = usePreferences((s) => s.quickModels[agent])
+  const picked = provider?.smallModel ?? ownModel ?? ''
   const cheapest = quickModel(agentDescriptor(agent).quickModels, catalog)
   const cheapestLabel = catalog?.models.find((model) => model.id === cheapest)?.label ?? (catalog === undefined ? '…' : t('ChatPicker.defaultModel'))
   const options = [
@@ -129,14 +133,20 @@ function QuickModelPicker({ agent }: { agent: AgentKind }) {
     <span className="quick-model">
       <AgentIcon agent={agent} />
       <span className="quick-model-agent">{agentLabel(agent)}</span>
+      <ProviderPicker agent={agent} value={providerId} remember={false} onChange={setProviderId} placement="below" />
       <ChatPicker
         label={t('SettingsPage.modelForQuickTasks', { value1: agentLabel(agent) })}
         value={picked}
         placeholder={t('SettingsPage.automatic_1569')}
         placement="below"
         align="end"
-        options={options}
+        options={provider ? options.filter((option) => option.value !== '') : options}
+        disabled={Boolean(providerId && !provider)}
         onChange={(value) => {
+          if (provider) {
+            void perform((rpc) => rpc.call('modelProviders.save', { ...provider, apiKey: null, smallModel: value }))
+            return
+          }
           const { [agent]: _gone, ...rest } = usePreferences.getState().quickModels
           setPreference('quickModels', value ? { ...rest, [agent]: value } : rest)
           if (useCore.getState().chatSettings?.titleModels !== undefined) {

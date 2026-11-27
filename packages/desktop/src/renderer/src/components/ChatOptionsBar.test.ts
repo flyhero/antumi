@@ -30,19 +30,37 @@ describe('models before an imported session resumes', () => {
   it.each([state, null])('offers the catalog when the transcript has no model list (%j)', (state) => {
     const html = renderToStaticMarkup(createElement(ChatOptionsBar, { conversation, state }))
     expect(html).toContain('GLM Flash')
-    expect(useAgentCatalog).toHaveBeenCalledWith('zcode', true, null)
+    expect(useAgentCatalog).toHaveBeenCalledWith('zcode', true, null, undefined)
+  })
+
+  it('keeps an unavailable selected provider in catalog requests instead of using native models', () => {
+    const providerId = '00000000-0000-4000-8000-000000000123'
+    renderToStaticMarkup(createElement(ChatOptionsBar, { conversation: { ...conversation, modelProvider: providerId }, state: null }))
+    expect(useAgentCatalog).toHaveBeenCalledWith('zcode', true, null, providerId)
+  })
+
+  it('discards stale stage models after a provider switch that still needs to restart', () => {
+    const render = (selected: string | null) => renderToStaticMarkup(createElement(ChatOptionsBar, {
+      conversation: { ...conversation, providerChangePending: true, chatOptions: { permissionMode: null, model: selected, effort: null, account: null } },
+      state: { ...state, model: 'stale-provider-model', models: [{ ...model, id: 'stale-provider-model', label: 'Old provider model' }] }
+    }))
+    const html = render(null)
+    expect(html).toContain('默认模型')
+    expect(html).not.toContain('Old provider model')
+    expect(render('zai/flash')).toContain('GLM Flash')
+    expect(useAgentCatalog).toHaveBeenCalledWith('zcode', true, null, undefined)
   })
 
   it('keeps a stopped stage’s model list when it already has one', () => {
     const html = renderToStaticMarkup(createElement(ChatOptionsBar, { conversation, state: { ...state, models: [{ ...model, label: 'Stage model' }] } }))
     expect(html).toContain('Stage model')
     expect(html).not.toContain('GLM Flash')
-    expect(useAgentCatalog).toHaveBeenCalledWith('zcode', false, null)
+    expect(useAgentCatalog).toHaveBeenCalledWith('zcode', false, null, undefined)
   })
 
   it('takes live model choices only from the running agent', () => {
     const html = renderToStaticMarkup(createElement(ChatOptionsBar, { conversation: { ...conversation, sessionId: 'running' }, state }))
     expect(html).not.toContain('GLM Flash')
-    expect(useAgentCatalog).toHaveBeenCalledWith('zcode', false, null)
+    expect(useAgentCatalog).toHaveBeenCalledWith('zcode', false, null, undefined)
   })
 })

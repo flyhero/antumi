@@ -362,8 +362,8 @@ export function createRpcHandlers(
     'agentCalls.list': ({ id, read }) => read ? profileService().read(id) : profileService().calls(id),
     'agentCalls.targets': ({ id }) => profileService().targets(id),
     'conversations.mentionTargets': (options) => ({ agents: profileService().draftTargets(options.profileId), squads: teamCalls().draftTargets(options) }),
-    'agentCalls.dispatch': ({ id, profileId, agent, model, effort, capability, instruction, ref, workspace }) => {
-      const target = profileId && !agent ? profileId : agent && !profileId ? { agent, model, effort, capability } : null
+    'agentCalls.dispatch': ({ id, profileId, agent, modelProvider, model, effort, capability, instruction, ref, workspace }) => {
+      const target = profileId && !agent ? profileId : agent && !profileId ? { agent, modelProvider, model, effort, capability } : null
       if (!target) throw new Rejection('invalid-params', '请指定 profileId 或 agent 之一')
       return profileService().dispatch(id, target, instruction, ref, workspace)
     },
@@ -615,6 +615,7 @@ export function createRpcHandlers(
     'conversations.handoff': ({ id, agent, note, stopRunning, allowBypass, permissionMode, model, effort, references, images, modelProvider }) => { sources.automatic?.takeover(id); return conversations.handoff(id, agent, note, stopRunning, allowBypass, { permissionMode, model, effort, references, images, modelProvider }) },
     'conversations.fork': ({ id, stageId, itemId }) => conversations.fork(id, stageId, itemId),
     // A mode the user picks is theirs to answer for: a run nobody watched stops answering for them.
+    'conversations.setModelProvider': ({ id, modelProvider }) => { notChannel(id); profiles?.guardUser(id, true); squads?.guardUser(id, true); return conversations.setModelProvider(id, modelProvider) },
     'conversations.setAccount': ({ id, account }) => { notChannel(id); profiles?.guardUser(id, true); squads?.guardUser(id, true); return conversations.setAccount(id, account) },
     'conversations.setOption': async ({ id, option, value }) => { notChannel(id); profiles?.guardUser(id, true); squads?.guardUser(id, true); if (option === 'permissionMode') conversations.attend(id); await conversations.setOption(id, option, value); return OK },
     'conversations.send': ({ id, text, images, queue, steer, ref, references }) => { notChannel(id); return userSent(id, async () => { profiles?.guardUser(id, true); squads?.guardUser(id, true); await conversations.send(id, text, images, queue, steer, ref, references); return OK }) },

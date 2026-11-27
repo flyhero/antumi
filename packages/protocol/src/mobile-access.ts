@@ -15,6 +15,7 @@ export const MOBILE_METHODS: Partial<Record<RpcMethod, MobileAccess>> = {
   'conversations.search': 'view',
   'conversations.chatCatalog': 'view',
   'conversations.configuration': 'view',
+  'modelProviders.list': 'view',
   'attachments.stat': 'view',
   'attachments.read': 'view',
   'tasks.list': 'view',
@@ -29,6 +30,7 @@ export const MOBILE_METHODS: Partial<Record<RpcMethod, MobileAccess>> = {
   'conversations.interrupt': 'operate',
   'conversations.continue': 'operate',
   'conversations.setOption': 'operate',
+  'conversations.setModelProvider': 'operate',
   // A free conversation only, as on the computer (core refuses a task's chat).
   'conversations.handoff': 'operate',
   // Only in projects already among the recent ones (core checks the paths), as is the next.
@@ -48,6 +50,7 @@ export const MOBILE_METHODS: Partial<Record<RpcMethod, MobileAccess>> = {
 }
 
 export const MOBILE_NOTIFICATIONS: ReadonlySet<RpcNotificationName> = new Set<RpcNotificationName>([
+  'modelProviders.changed',
   'conversations.changed',
   'conversations.deleted',
   'conversations.chatItems',

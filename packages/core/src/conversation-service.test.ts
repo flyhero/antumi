@@ -2274,6 +2274,75 @@ describe('ConversationService', () => {
     })
     const lastSpawn = () => daemon.spawns.at(-1)!
 
+    it('switches an idle native chat to a provider and back, handing history across routes', async () => {
+      const saved = await providers.save(gateway())
+      const created = await service.create('claude', [root])
+      store.setChatOptions(created.id, { claude: { model: 'old-native-model', effort: 'high' } })
+      await service.send(created.id, 'Remember the acceptance criteria')
+      await settle()
+      const switched = await service.setModelProvider(created.id, saved.id)
+      expect(switched.modelProvider).toBe(saved.id)
+      expect(lastSpawn().env).toMatchObject({ ANTHROPIC_AUTH_TOKEN: KEY })
+      expect(lastSpawn().args).toContain('gw-big')
+      expect(handoffFile(switched.sessionId!)).toContain('Remember the acceptance criteria')
+      expect(store.chatOptions(created.id).claude?.effort).toBeUndefined()
+      await settle()
+      const native = await service.setModelProvider(created.id, null)
+      expect(native.modelProvider).toBeNull()
+      expect(service.stages(created.id).at(-1)?.route).toBeNull()
+      expect(lastSpawn().env?.ANTHROPIC_AUTH_TOKEN).not.toBe(KEY)
+    })
+
+    it('refuses unavailable providers and busy chats without changing their current route', async () => {
+      const saved = await providers.save(gateway())
+      const created = await service.create('claude', [root])
+      await providers.remove(saved.id)
+      await expect(service.setModelProvider(created.id, saved.id)).rejects.toMatchObject({ reason: 'model-provider-unavailable' })
+      expect(service.get(created.id).modelProvider ?? null).toBeNull()
+      const ready = await providers.save(gateway())
+      daemon.reply = () => {}
+      await service.send(created.id, 'still working')
+      await expect(service.setModelProvider(created.id, ready.id)).rejects.toMatchObject({ reason: 'chat-busy' })
+      expect(service.get(created.id).modelProvider ?? null).toBeNull()
+      expect(daemon.spawns).toHaveLength(1)
+    })
+
+    it('serializes competing provider switches and preserves managed profiles', async () => {
+      const first = await providers.save(gateway())
+      const second = await providers.save(gateway({ name: 'Second gateway' }))
+      const created = await service.create('claude', [root])
+      const results = await Promise.allSettled([
+        service.setModelProvider(created.id, first.id),
+        service.setModelProvider(created.id, second.id)
+      ])
+      expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1)
+      expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1)
+      expect(daemon.spawns).toHaveLength(2)
+      const selected = service.get(created.id).modelProvider
+      store.setProfile(created.id, AgentProfile.parse({ id: randomUUID(), name: 'Fixed profile', agent: 'claude', modelProvider: selected, createdAt: 0, updatedAt: 0, archivedAt: null }))
+      await expect(service.setModelProvider(created.id, null)).rejects.toMatchObject({ reason: 'profile-managed' })
+      expect(service.get(created.id).modelProvider).toBe(selected)
+    })
+
+    it('retains the explicitly chosen provider after a failed restart and never falls back on retry', async () => {
+      const saved = await providers.save(gateway())
+      const created = await service.create('claude', [root])
+      await service.stop(created.id)
+      const launch = vi.spyOn(daemon, 'request')
+      launch.mockRejectedValueOnce(new Error('spawn failed'))
+      await expect(service.setModelProvider(created.id, saved.id)).rejects.toThrow('spawn failed')
+      launch.mockRestore()
+      service = serve()
+      service.setModelProviders(providers)
+      expect(service.get(created.id)).toMatchObject({ modelProvider: saved.id, providerChangePending: true })
+      const resumed = await service.continue(created.id)
+      expect(resumed.route?.reason).toBe('served')
+      expect(lastSpawn().env).toMatchObject({ ANTHROPIC_AUTH_TOKEN: KEY })
+      await service.stop(created.id)
+      await providers.remove(saved.id)
+      await expect(service.continue(created.id)).rejects.toMatchObject({ reason: 'model-provider-unavailable' })
+    })
+
     it('starts the agent on the provider, keeps the route with the stage, and resumes on the same route', async () => {
       const { id: providerId } = await providers.save(gateway())
       const created = await service.create('claude', [root], undefined, { modelProvider: providerId })

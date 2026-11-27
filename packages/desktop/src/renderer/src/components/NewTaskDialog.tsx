@@ -1,4 +1,6 @@
 import { SupportActions } from './ContactAuthor'
+import { ProviderPicker } from './ProviderPicker'
+import { usePreferences } from '../preferences'
 import { t, tr } from '../i18n'
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import { AgentKind, IMAGE_MIME_TYPES, type TaskImage } from '@antumi/protocol'
@@ -42,6 +44,9 @@ export function NewTaskDialog() {
   const [title, setTitle] = useState(draft?.title ?? '')
   const [repos, setRepos] = useState<string[]>(() => [...(draft?.repos ?? [])])
   const [agent, setAgent] = useState<AgentKind | null>(() => (draft ? draft.agent : defaultAgent(tasks, useCore.getState().conversations)))
+  const providersSupported = useCore((state) => state.rpc?.features.includes('provider-selection-v2') ?? false)
+  const defaults = usePreferences((state) => state.defaultProviders)
+  const providerId = agent ? defaults[agent] ?? null : null
   const installed = useInstalledAgents()
   const recommended = useRecommendation(installed)?.agent ?? null
   const squads = useCore((state) => state.squads)
@@ -98,7 +103,7 @@ export function NewTaskDialog() {
         repos,
         dependsOn,
         agent,
-        ...(squadId ? { squadId } : {}),
+        ...(squadId ? { squadId } : providersSupported ? { launch: { modelProvider: providerId } } : {}),
         images: images.map(({ id, name }) => ({ id, name }))
       })
     )
@@ -242,6 +247,7 @@ export function NewTaskDialog() {
               }}
             />
           </span>
+          {providersSupported && agent && !squadId && <ProviderPicker agent={agent} value={providerId} onChange={() => {}} size="large" placement="below" />}
           <span className="menu-anchor">
             <button type="button" className="new-task-property-chip" aria-label={t('NewTaskDialog.moreOptions')} aria-haspopup="dialog" aria-expanded={moreOpen} onClick={() => setMoreOpen((open) => !open)}>
               <MoreIcon />

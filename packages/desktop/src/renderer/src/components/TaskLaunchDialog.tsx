@@ -1,3 +1,4 @@
+import { usePreferences } from '../preferences'
 import { SupportActions } from './ContactAuthor'
 import { t } from '../i18n'
 import { useEffect, useRef, useState } from 'react'
@@ -15,7 +16,7 @@ import { AgentIcon, CloseIcon } from './icons'
 import { SquadLaunchDialog } from './SquadLaunchDialog'
 import { useEditsInPlace } from './TaskLaunch'
 import { OtherProjectsHint } from './OtherProjectsHint'
-import { providerFor, servingProviders } from '../model-provider-choice'
+import { providerFor } from '../model-provider-choice'
 import { ProviderPicker } from './ProviderPicker'
 
 
@@ -52,9 +53,9 @@ function LaunchForm({ task, onSquad }: { task: Task; onSquad(): void }) {
   const providers = useCore((s) => s.modelProviders)
   const providersSupported = rpc?.features.includes('model-providers') ?? false
   const providerFixed = Boolean(task.conversationId)
-  const [providerId, setProviderId] = useState<string | null>(() => conversation?.modelProvider ?? task.launch.modelProvider ?? null)
+  const [providerId, setProviderId] = useState<string | null>(() => conversation ? conversation.modelProvider ?? null : task.launch.modelProvider !== undefined ? task.launch.modelProvider : (agent ? usePreferences.getState().defaultProviders[agent] : null) ?? null)
   const provider = providerFor(providers, providerId, agent)
-  const catalog = useAgentCatalog(agent, supported, provider)
+  const catalog = useAgentCatalog(agent, supported, provider, providerId)
   // What the task keeps (a core with Task.launch), else what its chat last ran in.
   const [choices, setChoices] = useState<Partial<Record<AgentKind, ModelChoice>>>(() => {
     if (!task.agent) return {}
@@ -91,7 +92,7 @@ function LaunchForm({ task, onSquad }: { task: Task; onSquad(): void }) {
   // from then on is the app's, not the closed dialog's.
   const submit = async () => {
     // On a provider it spends the provider's plan, not the agent's own quota.
-    if (!agent || busy || blocker || (!provider && !await confirmQuota(agent, modelText(model)))) return
+    if (!agent || busy || blocker || (!providerId && !await confirmQuota(agent, modelText(model)))) return
     setBusy(true)
     dismissError()
     if ((agent !== task.agent || task.squadId) && !await updateTask(task.id, { agent, ...(task.squadId ? { squadId: null } : {}) })) {
@@ -102,7 +103,7 @@ function LaunchForm({ task, onSquad }: { task: Task; onSquad(): void }) {
       id: task.id,
       ...(rpc?.features.includes('chat-options') ? { allowBypass: true } : {}),
       ...(supported ? { permissionMode: mode, model: modelId ?? null, effort: effort ?? null } : {}),
-      ...(providersSupported && !providerFixed ? { modelProvider: provider?.id ?? null } : {})
+      ...(providersSupported && !providerFixed ? { modelProvider: providerId } : {})
     }
     closeTaskLaunch()
     await openChatWhileStarting(task.id, () => perform((connection) => connection.call('tasks.start', params)))
@@ -130,11 +131,11 @@ function LaunchForm({ task, onSquad }: { task: Task; onSquad(): void }) {
               options={agents.map((kind) => ({ value: kind, label: agentLabel(kind), icon: <AgentIcon agent={kind} />, description: installed.includes(kind) ? (kind === recommended ? t('AgentPicker.recommended') : null) : t('AgentPicker.notInstalled') }))}
               onChange={(value) => {
                 const next = agents.find((each) => each === value)
-                if (next) setAgent(next)
+                if (next) { setAgent(next); if (!providerFixed) setProviderId(usePreferences.getState().defaultProviders[next] ?? null); setChoices({}) }
               }}
             />
           </div>
-          {providersSupported && agent && servingProviders(providers, agent).length > 0 && (
+          {providersSupported && agent && (
             <div className="task-launch-field"><span>{t('ProviderPicker.provider')}</span>
               <ProviderPicker agent={agent} value={providerId} size="field" placement="below" disabled={providerFixed}
                 onChange={(next) => { setProviderId(next); setChoices({}) }} />
@@ -165,7 +166,7 @@ function LaunchForm({ task, onSquad }: { task: Task; onSquad(): void }) {
         </p>
         {inPlace && mode !== 'plan' && mode !== 'readOnly' && <p className="task-launch-description muted">{t('SquadLaunchDialog.thisProjectIsNotAGitRepositoryChanges')}</p>}
         <OtherProjectsHint agent={agent} projectCount={task.repos.length} />
-        {agent && !provider && <AgentQuotaHint agent={agent} model={modelText(model)} />}
+        {agent && !providerId && <AgentQuotaHint agent={agent} model={modelText(model)} />}
         {blocker && <p className="modal-error">{reasonText(blocker, blocker)}</p>}
         {error && <p className="modal-error" role="alert">{error}<SupportActions error={error} /></p>}
         <footer className="modal-footer">

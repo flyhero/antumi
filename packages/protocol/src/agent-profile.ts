@@ -61,6 +61,7 @@ export const DelegationTarget = z.object({
 export type DelegationTarget = z.infer<typeof DelegationTarget>
 export const DirectAgentCall = z.object({
   agent: AgentKind,
+  modelProvider: ModelProviderId.nullable().optional(),
   model: z.string().trim().min(1).max(200).optional(),
   effort: z.string().trim().min(1).max(200).optional(),
   capability: z.enum(['readOnly', 'develop']).optional()

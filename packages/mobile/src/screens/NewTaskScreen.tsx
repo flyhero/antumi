@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { StyleSheet, TextInput, View } from 'react-native'
 import { Folder, Plus } from 'lucide-react-native'
-import { AgentPicker, ProjectsSheet, useStartChoices } from '../components/pickers'
+import { AgentPicker, ProjectsSheet, StartOptionsGroup, useStartOptions, useStartChoices } from '../components/pickers'
 import { Button, EmptyState, ListGroup, ListRow, Screen, confirmTap } from '../components/ui'
 import { t } from '../i18n'
 import { folderName } from '../labels'
@@ -17,6 +17,7 @@ export function NewTaskScreen() {
   const [chosen, setChosen] = useState<string[] | null>(null)
   const picked = chosen ?? (project ? [project] : [])
   const primary = picked[0] ?? null
+  const options = useStartOptions(agent)
   const [title, setTitle] = useState('')
   const [details, setDetails] = useState('')
   const [busy, setBusy] = useState(false)
@@ -25,7 +26,7 @@ export function NewTaskScreen() {
     if (!primary || !agent || !title.trim()) return
     confirmTap()
     setBusy(true)
-    const task = await createTask({ title: title.trim(), details: details.trim(), repos: picked, agent })
+    const task = await createTask({ title: title.trim(), details: details.trim(), repos: picked, agent, ...options?.picked })
     setBusy(false)
     if (task) {
       pop()
@@ -58,6 +59,7 @@ export function NewTaskScreen() {
         />
       </View>
       <AgentPicker title={t('assignee')} agents={agents} agent={agent} onPick={setAgent} failed={agentsFailed} onRetry={retryAgents} />
+      {agent && options && <StartOptionsGroup agent={agent} options={options} />}
       <ListGroup title={t('project')}>
         <ListRow leading={<Folder size={20} color={theme.accent} strokeWidth={1.8} />} title={primary ? folderName(primary) : '…'}
           subtitle={picked.length > 1 ? t('alsoProjects', { names: picked.slice(1).map(folderName).join('、') }) : primary} onPress={() => setPicking(true)} />

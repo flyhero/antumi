@@ -89,6 +89,17 @@ describe('islandActivity', () => {
 })
 
 describe('popupQueue', () => {
+  it('keeps a delegated approval actionable from outside the parent conversation', () => {
+    const asked = request('delegated')
+    const parent = conversation('parent', { chat: { turn: 'running' }, delegation: { open: 1, awaiting: 1, writing: false } })
+    const child = awaiting('child', asked, { parentConversationId: parent.id })
+    const conversations = byId([parent, child])
+    expect(newlyWaiting(byId([parent, conversation('child', { parentConversationId: parent.id })]), conversations)).toBe(true)
+    expect(popupQueue({ conversations, tasks: {} }, new Set())).toEqual([
+      { conversationId: child.id, title: child.title, target: { kind: 'conversation', id: child.id }, request: asked }
+    ])
+  })
+
   it('offers the chats held up on the user, longest waiting first, a task chat under the task', () => {
     const conversations = byId([
       awaiting('b', request('r2'), { updatedAt: 20 }),

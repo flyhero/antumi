@@ -10937,6 +10937,10 @@ export const MESSAGES = {
     "zh": "等待确认",
     "en": "Awaiting approval"
   },
+  "conversationState.delegationNeedsInput": {
+    "zh": "委派等你处理",
+    "en": "Delegation needs your input"
+  },
   "conversationState.agentHasAQuestionForYouAnswerIn": {
     "zh": "Agent 问了你一个问题，在对话里回答",
     "en": "Agent has a question for you. Answer in the conversation"

@@ -80,6 +80,9 @@ describe('ACP without a dialect of its own', () => {
     ask(10, { toolCallId: 'write', title: 'Run write_to_file?', kind: 'edit', locations: [{ path: '/refs/docs/new.md' }], rawInput: { TargetFile: '/refs/docs/new.md' } })
     expect(due(driver)).toEqual([{ jsonrpc: '2.0', id: 10, result: { outcome: { outcome: 'selected', optionId: 'no' } } }])
     expect(driver.activity()).not.toBe('awaiting')
+    // Rejecting for good would bar edits of the project itself too.
+    receive(driver, { id: 11, method: 'session/request_permission', params: { sessionId: 'session', toolCall: { toolCallId: 'again', title: 'Edit', kind: 'edit', rawInput: { path: '/refs/docs/README.md' } }, options: [options[0], { optionId: 'never', name: 'Always reject', kind: 'reject_always' }] } })
+    expect(due(driver)).toEqual([{ jsonrpc: '2.0', id: 11, result: { outcome: { outcome: 'cancelled' } } }])
     // Reading there, editing elsewhere, or a folder that only shares the name, is the user's to answer.
     ask(8, { toolCallId: 'read', title: 'Read', kind: 'read', locations: [{ path: '/refs/docs/README.md' }] })
     ask(9, { toolCallId: 'other', title: 'Edit', kind: 'edit', rawInput: { filePath: '/refs/docs-v2/README.md' } })
@@ -302,5 +305,15 @@ describe('ACP agents that run a little off the standard', () => {
     const driver = openedWith({ ...plain, maxLineBytes: 1024 })
     expect(() => driver.send('x'.repeat(2048))).toThrow(expect.objectContaining({ reason: 'chat-prompt-too-large' }))
     expect(driver.send('short').wire).toMatchObject({ method: 'session/prompt' })
+  })
+
+  it('refuses read-only stages when a dialect declares neither a native readOnly mode nor a readOnlyMode fallback', () => {
+    const driver = new AcpDriver(plain, 'stage', { ...OPTIONS, readOnly: true })
+    due(driver)
+    receive(driver, { id: 'plain-init', result: { protocolVersion: 1 } })
+    due(driver)
+    receive(driver, { id: 'plain-session', result: { sessionId: 'session', modes } })
+    expect(driver.ready()).toBe(false)
+    expect(driver.failure()).toContain('readOnly')
   })
 })

@@ -22,6 +22,9 @@ export interface AcpDialect {
   isSessionLostError?(message: string): boolean
   // The session mode the agent offers for each of Antumi's permission modes it has.
   readonly modes: Partial<Record<ChatPermissionMode, string>>
+  // When an agent has no native readOnly mode, lock read-only stages to this mode (typically
+  // 'ask') and automatically deny file-write permission requests in Antumi instead.
+  readonly readOnlyMode?: ChatPermissionMode
   // Bypass is controlled by a process launch flag rather than session/set_config_option, so
   // entering or leaving bypass requires restarting the process (and resuming the session).
   readonly processBypass?: boolean

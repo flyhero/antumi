@@ -57,9 +57,11 @@ const AUTH_REQUIRED = -32000
 function writtenPaths(tool: z.infer<typeof Permission>['toolCall']): string[] {
   const diffs = z.array(z.looseObject({ type: z.string(), path: z.string().optional() })).safeParse(tool.content).data?.flatMap((entry) => (entry.type === 'diff' && entry.path ? [entry.path] : [])) ?? []
   if (!['edit', 'delete', 'move'].includes(String(tool.kind)) && diffs.length === 0) return []
-  const input = z.looseObject({ path: z.string().optional(), filePath: z.string().optional(), file_path: z.string().optional() }).safeParse(tool.rawInput).data
-  return [...diffs, ...(tool.locations ?? []).map((location) => location.path), ...[input?.path, input?.filePath, input?.file_path].filter((each) => each !== undefined)]
+  const input = z.looseObject({ path: z.string().optional(), filePath: z.string().optional(), file_path: z.string().optional(), TargetFile: z.string().optional(), targetFile: z.string().optional(), target_file: z.string().optional() }).safeParse(tool.rawInput).data
+  return [...diffs, ...(tool.locations ?? []).map((location) => location.path), ...[input?.path, input?.filePath, input?.file_path, input?.TargetFile, input?.targetFile, input?.target_file].filter((each) => each !== undefined)]
 }
+// A notification has no id to clear it by once sent, so it goes under this key.
+const READ_ONLY_CANCEL = 'read-only-cancel'
 // The requests that open the session a stage works in.
 const RESTORING: ReadonlySet<string> = new Set(['session/load', 'session/resume'])
 const OPENING: ReadonlySet<string> = new Set(['session/new', ...RESTORING, 'session/fork'])
@@ -170,6 +172,9 @@ export class AcpDriver implements ChatDriver {
   private hasMode(mode: string): boolean {
     const known = ChatPermissionMode.safeParse(mode)
     return known.success && this.dialect.modes[known.data] !== undefined
+  }
+  private readOnlyPermissionMode(): ChatPermissionMode {
+    return this.dialect.readOnlyMode ?? 'readOnly'
   }
   private allowProcessBypass(): boolean {
     return Boolean(this.dialect.processBypass && this.options.allowBypass && !this.options.planOnly && !this.options.readOnly && !this.options.lockdown)
@@ -319,7 +324,7 @@ export class AcpDriver implements ChatDriver {
 
   private change(option: ChatOption, value: string, id: string): unknown {
     if (option === 'permissionMode' && this.options.planOnly && value !== 'plan') throw new Rejection('plan-only', '此阶段只能规划')
-    if (option === 'permissionMode' && this.options.readOnly && value !== 'readOnly') throw new Rejection('plan-only', '只读成员不能换模式')
+    if (option === 'permissionMode' && !this.options.planOnly && this.options.readOnly && value !== this.readOnlyPermissionMode()) throw new Rejection('plan-only', '只读成员不能换模式')
     if (option === 'permissionMode' && this.dialect.processBypass && (this.inProcessBypass() || value === 'bypass')) {
       throw new Rejection('chat-option-invalid', `${this.name} 切换全部放行模式需要重启会话进程`)
     }
@@ -425,7 +430,7 @@ export class AcpDriver implements ChatDriver {
       else if (frame.method === 'authenticate') this.authSent = true
       else if (frame.method === this.dialect.models?.method) this.modelsSent = true
       else if (OPENING.has(frame.method)) this.sessionSent = true
-      else if (frame.method === 'session/cancel') { this.stopping = true; this.execution = null }
+      else if (frame.method === 'session/cancel') { this.stopping = true; this.execution = null; this.owed.delete(READ_ONLY_CANCEL) }
       else if (frame.method === 'session/prompt' && frame.id !== undefined) {
         const prompt = Prompt.safeParse(frame.params)
         if (!prompt.success) return
@@ -574,7 +579,7 @@ export class AcpDriver implements ChatDriver {
       }
       this.catalog(opened.data)
       this.setup = true
-      const preferred = { ...this.options.preferred, ...(this.options.planOnly ? { permissionMode: 'plan' } : this.options.readOnly ? { permissionMode: 'readOnly' } : {}) }
+      const preferred = { ...this.options.preferred, ...(this.options.planOnly ? { permissionMode: 'plan' } : this.options.readOnly ? { permissionMode: this.readOnlyPermissionMode() } : {}) }
       this.initialChoices = (['permissionMode', 'model', 'effort'] as const).flatMap((option) => preferred[option] ? [{ option, value: preferred[option] }] : [])
       // A log from before the catalog came second has it already.
       if (this.modelsRead) this.nextInitial(at)
@@ -624,7 +629,7 @@ export class AcpDriver implements ChatDriver {
       // Process-level bypass is already enabled by a CLI flag, not session/set_config_option.
       if (option === 'permissionMode' && value === 'bypass' && this.inProcessBypass()) continue
       // A resumed session keeps what it last ran with; setting it again costs a round trip.
-      if (this.current(option) === (option === 'permissionMode' ? this.nativeMode(value) : value)) continue
+      if ((option !== 'permissionMode' || this.hasMode(value)) && this.current(option) === (option === 'permissionMode' ? this.nativeMode(value) : value)) continue
       try {
         const requestId = this.id(`initial-${option}`)
         this.initial.set(keyOf(requestId), this.change(option, value, requestId))
@@ -635,6 +640,7 @@ export class AcpDriver implements ChatDriver {
         else this.items.notice('warning', `${this.name} 未采用保存的 ${option}: ${value}`, at)
       }
     }
+    this.enforceLockedMode()
   }
 
   private current(option: ChatOption): string | null {
@@ -705,7 +711,8 @@ export class AcpDriver implements ChatDriver {
     const mode = this.config.find((entry) => entry.category === 'mode')
     const model = this.config.find((entry) => entry.category === 'model')
     const effort = this.config.find((entry) => entry.category === 'thought_level')
-    const mappedModes = mode ? valuesOf(mode).flatMap((entry) => { const mapped = this.antumiMode(entry.value); return mapped && (!this.options.planOnly || mapped === 'plan') && (!this.options.readOnly || mapped === 'readOnly') ? [mapped] : [] }) : []
+    const readOnlyMode = this.readOnlyPermissionMode()
+    const mappedModes = mode ? valuesOf(mode).flatMap((entry) => { const mapped = this.antumiMode(entry.value); return mapped && (!this.options.planOnly || mapped === 'plan') && (this.options.planOnly || !this.options.readOnly || mapped === readOnlyMode) ? [mapped] : [] }) : []
     const permissionModes = this.allowProcessBypass() && !mappedModes.includes('bypass') ? [...mappedModes, 'bypass'] : mappedModes
     this.state.set({
       permissionMode: this.inProcessBypass() ? 'bypass' : (mode ? this.antumiMode(mode.currentValue) : null),
@@ -714,7 +721,20 @@ export class AcpDriver implements ChatDriver {
       models: model ? this.offered(valuesOf(model)).map((entry) => ({ id: entry.value, label: entry.name, description: entry.description ?? null, ...(entry.contextWindow != null ? { contextWindow: entry.contextWindow } : {}), ...(entry.costRate != null ? { costRate: entry.costRate } : {}), efforts: this.models.find((one) => one.id === entry.value)?.efforts ?? (entry.value === model.currentValue ? (effort ? valuesOf(effort).map((one) => one.value) : []) : this.thoughts.get(entry.value)?.values.map((one) => one.value) ?? []), isDefault: entry.value === (this.catalogOnly ? (this.defaultModel ?? model.currentValue) : model.currentValue) })) : [],
       effort: effort?.currentValue ?? null
     })
-    if (this.options.planOnly && mode && mode.currentValue !== 'plan' && this.setup && !this.initial.size && !this.initialChoices.length) this.startError = `${this.name} 离开了仅规划模式`
+    this.enforceLockedMode()
+  }
+
+  private enforceLockedMode(): void {
+    if (this.startError || !this.setup || this.initial.size || this.initialChoices.length) return
+    const mode = this.config.find((entry) => entry.category === 'mode')
+    if (this.options.planOnly && mode && mode.currentValue !== 'plan') {
+      this.startError = `${this.name} 离开了仅规划模式`
+    } else if (!this.options.planOnly && this.options.readOnly && mode && mode.currentValue !== this.nativeMode(this.readOnlyPermissionMode())) {
+      this.startError = `${this.name} 离开了只读模式`
+      if (this.turn && this.session && !this.stopping) {
+        this.owed.set(READ_ONLY_CANCEL, { jsonrpc: '2.0', method: 'session/cancel', params: { sessionId: this.session } })
+      }
+    }
   }
 
   // On a provider, only its models: the agent also lists every other one it knows, which would run
@@ -911,9 +931,20 @@ export class AcpDriver implements ChatDriver {
           try { input = JSON.parse(toolItem.input) } catch { /* A non-JSON input carries no file fields. */ }
           announcedWrites.push(...writtenPaths({ kind: 'edit', rawInput: input }))
         }
-        const fenced = referencePathIn(this.options.references ?? [], [...writtenPaths(tool), ...announcedWrites])
+        const writePaths = [...writtenPaths(tool), ...announcedWrites]
+        const hasDiff = z.array(z.looseObject({ type: z.string() })).safeParse(tool.content).data?.some((entry) => entry.type === 'diff') ?? false
+        const isFileWrite = ['edit', 'delete', 'move'].includes(String(tool.kind)) || ['fileChange', 'delete', 'move'].includes(name) || hasDiff || writePaths.length > 0
+        const reject = request.data.options.find((option) => option.kind === 'reject_once')
+        if (!this.options.planOnly && this.options.readOnly && isFileWrite) {
+          // Rejecting for good is safe only where the whole stage reads.
+          const refusal = reject ?? request.data.options.find((option) => option.kind === 'reject_always')
+          this.owed.set(id, result(frame.id, { outcome: refusal ? { outcome: 'selected', optionId: refusal.optionId } : { outcome: 'cancelled' } }))
+          const target = writePaths[0]
+          this.items.put({ id: itemId, kind: 'approval', requestId: id, tool: name, title: tool.title ?? target ?? `${this.name} 文件修改`, detail: target ? `只读模式，Antumi 已拒绝修改 ${target}` : '只读模式，Antumi 已拒绝修改文件', toolItemId: tool.toolCallId ? `tool:${tool.toolCallId}` : null, decisions: ['allow', 'deny'], resolution: 'denied' }, at)
+          return
+        }
+        const fenced = referencePathIn(this.options.references ?? [], writePaths)
         if (fenced) {
-          const reject = request.data.options.find((option) => option.kind === 'reject_once')
           this.owed.set(id, result(frame.id, { outcome: reject ? { outcome: 'selected', optionId: reject.optionId } : { outcome: 'cancelled' } }))
           this.items.put({ id: itemId, kind: 'approval', requestId: id, tool: name, title: tool.title ?? fenced, detail: `参考项目只读，Antumi 已拒绝修改 ${fenced}`, toolItemId: tool.toolCallId ? `tool:${tool.toolCallId}` : null, decisions: ['allow', 'deny'], resolution: 'denied' }, at)
           return

@@ -1,6 +1,6 @@
 import type { AgentProfile } from '@antumi/protocol'
 import { randomUUID } from 'node:crypto'
-import { agentDescriptor, checkSquadStart, SquadFields, squadModes, squadWorkOpen, squadWorkActive, type AgentKind, type ChatItem, type Conversation, type Squad, type SquadPlanRef, type SquadRun, type SquadWork, type Task, type TaskLaunchOptions } from '@antumi/protocol'
+import { agentDescriptor, agentSupportsReadOnly, checkSquadStart, SquadFields, squadModes, squadReadOnlyIssues, squadWorkOpen, squadWorkActive, type AgentKind, type ChatItem, type Conversation, type Squad, type SquadPlanRef, type SquadReadOnlyIssue, type SquadRun, type SquadWork, type Task, type TaskLaunchOptions } from '@antumi/protocol'
 import type { ConversationService } from './conversation-service'
 import type { TaskService } from './task-service'
 import { Rejection } from './rejection'
@@ -11,6 +11,13 @@ type Events = { squad: (squad: Squad) => void; run: (run: SquadRun) => void }
 type Chats = Pick<ConversationService, 'get' | 'create' | 'continue' | 'send' | 'stop' | 'interrupt' | 'delete' | 'chatPage' | 'messages' | 'planForTransfer' | 'validateStartOptions' | 'capacityAvailable'>
 const failure = (error: unknown) => error instanceof Rejection ? error.reason : error instanceof Error ? error.message : String(error)
 const refOf = (work: SquadWork) => `squad:${work.id}`
+
+export function squadReadOnlyReason(issue: SquadReadOnlyIssue): string {
+  const label = agentDescriptor(issue.agent).label
+  return issue.leader
+    ? `队长「${issue.memberName}」使用的 ${label} 不支持只读模式，请在团队设置中更换为支持只读的外部智能体`
+    : `只读成员「${issue.memberName}」使用的 ${label} 不支持只读模式，请在团队设置中更换为支持只读的外部智能体，或将该成员切换为开发测试`
+}
 
 type SquadRunPolicy = {
   snapshot(taskId: string): Squad | null
@@ -47,8 +54,26 @@ export class SquadService {
   private memberAllowed(member: Squad['members'][number]): void { for (const policy of this.runPolicies) policy.memberAllowed(member) }
   async close(): Promise<void> { this.closed = true; await Promise.allSettled([...this.chains.values()]); this.store.close() }
   list(): Squad[] { return this.store.list() }
-  create(fields: SquadFields): Squad { const squad = this.store.create(fields); this.events.squad(squad); return squad }
-  update(id: string, fields: SquadFields): Squad { const squad = this.store.update(id, fields); this.events.squad(squad); return squad }
+  private assertReadOnlySupported(squad: Pick<Squad, 'members' | 'leaderId'>): void {
+    const issue = squadReadOnlyIssues(squad)[0]
+    if (issue) throw new Rejection('squad-read-only-unsupported', squadReadOnlyReason(issue))
+  }
+  private validateFields(fields: SquadFields): void {
+    const squad = this.resolve({ ...SquadFields.parse(fields), id: '', archivedAt: null, createdAt: 0, updatedAt: 0 })
+    this.assertReadOnlySupported(squad)
+  }
+  create(fields: SquadFields): Squad {
+    this.validateFields(fields)
+    const squad = this.store.create(fields)
+    this.events.squad(squad)
+    return squad
+  }
+  update(id: string, fields: SquadFields): Squad {
+    this.validateFields(fields)
+    const squad = this.store.update(id, fields)
+    this.events.squad(squad)
+    return squad
+  }
   archive(id: string, archived: boolean): Squad { const squad = this.store.archive(id, archived); this.events.squad(squad); return squad }
   preparing(id: string): boolean { return this.starting.has(id) }
   agent(id: string): AgentKind {
@@ -90,6 +115,7 @@ export class SquadService {
       if (this.busy(task.id)) throw new Rejection('squad-busy')
       const squad = this.snapshot(task.id) ?? this.resolve(this.store.get(squadId ?? task.squadId ?? ''))
       if (squad.archivedAt !== null) throw new Rejection('squad-archived')
+      this.assertReadOnlySupported(squad)
       for (const policy of this.runPolicies) await policy.beforeStart(task.id)
       const mode = options.permissionMode ?? 'ask'
       if (!squadModes(squad, allowBypass).includes(mode)) throw new Rejection('chat-option-invalid', '团队开发成员不共同支持此权限模式')
@@ -138,6 +164,7 @@ export class SquadService {
       if (task.status !== 'pending') throw new Rejection('not-pending')
       const squad = this.snapshot(task.id) ?? this.resolve(this.store.get(squadId ?? task.squadId ?? ''))
       if (squad.archivedAt !== null) throw new Rejection('squad-archived')
+      this.assertReadOnlySupported(squad)
       const mode = options.permissionMode ?? 'ask'
       if (!squadModes(squad, allowBypass).includes(mode)) throw new Rejection('chat-option-invalid', '团队开发成员不共同支持此权限模式')
       const leader = squad.members.find((member) => member.id === squad.leaderId)!
@@ -192,6 +219,10 @@ export class SquadService {
       if (run.summary) throw new Rejection('squad-finishing')
       const member = run.squad.members.find((each) => each.id === memberId)
       if (!member || memberId === run.squad.leaderId || (capability === 'develop' && member.capability !== 'develop')) throw new Rejection('squad-member-invalid')
+      if (capability === 'readOnly' && !agentSupportsReadOnly(member.agent)) {
+        const suffix = member.capability === 'develop' ? '或选择开发测试' : ''
+        throw new Rejection('squad-read-only-unsupported', `成员「${member.name}」使用的 ${agentDescriptor(member.agent).label} 不支持只读模式，请改派支持只读的成员${suffix}`)
+      }
       this.memberAllowed(member)
       if (retryOf) this.retireRetry(run, retryOf)
       const at = Date.now()
@@ -215,6 +246,11 @@ export class SquadService {
     return this.serially(id, async () => {
       const run = this.store.run(id)
       if (run.state !== 'running' && run.state !== 'paused') throw new Rejection('not-running')
+      const target = run.works.find((each) => each.id === workId)
+      const member = run.squad.members.find((each) => each.id === target?.memberId)
+      if (target?.capability === 'readOnly' && member && !agentSupportsReadOnly(member.agent)) {
+        throw new Rejection('squad-read-only-unsupported', `成员「${member.name}」使用的 ${agentDescriptor(member.agent).label} 不支持只读模式，无法重试这项只读工作`)
+      }
       const work = this.retireRetry(run, workId)
       const at = Date.now()
       this.announce(this.store.patchRun(id, { works: [...this.store.run(id).works, { ...work, id: randomUUID(), retryOf: work.id, conversationId: null, state: 'queued', result: null, error: null, delivered: false, createdAt: at, updatedAt: at }] }))
@@ -240,6 +276,8 @@ export class SquadService {
     if (!run) throw new Rejection('squad-run-not-found')
     const task = this.tasks.get(taskId)
     if (task.status === 'abandoned' || task.status === 'pending') throw new Rejection('not-running')
+    const leader = run.squad.members.find((member) => member.id === run.squad.leaderId)
+    if (leader) this.assertReadOnlySupported({ members: [leader], leaderId: leader.id })
     return this.serially(run.id, async () => {
       // Starts on the frozen roster, even if the template was edited or archived.
       const result = await this.tasks.resumeSquadLeader(taskId, allowBypass)

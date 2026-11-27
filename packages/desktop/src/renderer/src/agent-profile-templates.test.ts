@@ -32,8 +32,9 @@ describe('agent role templates', () => {
   it('prefers an installed tool that can run a read-only role', () => {
     const explorer = AGENT_PROFILE_TEMPLATES[0]!
     const tester = AGENT_PROFILE_TEMPLATES.find((item) => item.id === 'tester')!
-    expect(agentProfileTemplateSeed(explorer, ['antigravity', 'codex']).agent).toBe('codex')
-    expect(agentProfileTemplateSeed(tester, ['antigravity', 'codex']).agent).toBe('antigravity')
+    expect(agentProfileTemplateSeed(explorer, ['gemini', 'codex']).agent).toBe('codex')
+    expect(agentProfileTemplateSeed(explorer, ['antigravity', 'codex']).agent).toBe('antigravity')
+    expect(agentProfileTemplateSeed(tester, ['gemini', 'codex']).agent).toBe('gemini')
   })
 
   it('selects a real lightweight model independently of effort, respecting a valid preference', () => {

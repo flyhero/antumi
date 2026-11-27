@@ -80,6 +80,8 @@ const REASON_TEXT: Record<string, string> = localized(() => ({
   'dsh-version-probe-failed': t('Readiness.probe-failed'),
   'dsh-runtime-install-failed': t('labels.dshRuntimeInstallFailed'),
   'dsh-runtime-missing': t('labels.dshRuntimeMissing'),
+  'squad-read-only-unsupported': t('squad.readOnlyUnsupported'),
+  'agent-read-only-unsupported': t('labels.agentReadOnlyUnsupported'),
   'squad-leader-read-only': t('squad.leaderReadOnly'),
   'squad-developer-required': t('squad.developerRequired'),
   'squad-member-duplicate': t('squad.memberDuplicate'),

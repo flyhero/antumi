@@ -2379,4 +2379,12 @@ describe('ConversationService', () => {
     })
   })
 
+  it('rejects read-only conversations on agents without read-only support before persisting or spawning', async () => {
+    const legacy = AgentProfile.parse({ id: randomUUID(), name: 'Legacy reader', agent: 'gemini', capability: 'readOnly', archivedAt: null, createdAt: 0, updatedAt: 0 })
+    await expect(service.create('gemini', [], false, { profile: legacy })).rejects.toMatchObject({ reason: 'agent-read-only-unsupported' })
+    await expect(service.create('kimi', [], false, { readOnly: true })).rejects.toMatchObject({ reason: 'agent-read-only-unsupported' })
+    expect(service.list()).toEqual([])
+    expect(daemon.spawns).toEqual([])
+  })
+
 })

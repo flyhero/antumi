@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'nod
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { agentDescriptor, type Squad, type SquadRun, type SquadWork } from '@antumi/protocol'
+import { AgentProfile, agentDescriptor, type Squad, type SquadRun, type SquadWork } from '@antumi/protocol'
 import { AttachmentStore } from './attachment-store'
 import { ConversationService } from './conversation-service'
 import { ConversationStore } from './conversation-store'
@@ -24,6 +24,7 @@ describe('squad execution', () => {
   let chats: ConversationService
   let service: TaskService
   let squads: SquadService
+  let store: SquadStore
   let squad: Squad
   let taskId: string
   const changed: SquadRun[] = []
@@ -48,7 +49,8 @@ describe('squad execution', () => {
       else if (event.type === 'planApproved') service.recordPlan(event.taskId, event.plan)
     }, projects, attachments)
     service = new TaskService(tasks, projects, path.join(root, 'worktrees'), () => {}, attachments, chats)
-    squads = new SquadService(new SquadStore(db), service, chats, { squad: () => {}, run: (run) => changed.push(run) })
+    store = new SquadStore(db)
+    squads = new SquadService(store, service, chats, { squad: () => {}, run: (run) => changed.push(run) })
     service.setSquads(squads); chats.setSquadGuard((conversation) => squads.guardMember(conversation))
     chats.setCapacity({ maxConcurrentAgents: 20, agentConcurrency: { claude: 6 } }, () => squads.tick())
     daemon.deliver = (event) => {
@@ -75,6 +77,97 @@ describe('squad execution', () => {
     return squads.dispatch(leaderId(), memberId, 'Do this part and report validation', capability)
   }
   async function releaseLeader() { complete(chats.get(leaderId()).sessionId!, 'delegated'); await waitFor(() => current().works.some((work) => work.state === 'running')) }
+
+  const withAgent = (memberId: string, agent: Squad['members'][number]['agent']) => ({
+    ...squad, members: squad.members.map((member) => member.id === memberId ? { ...member, agent } : member)
+  })
+
+  it.each([[id(1), 'gemini'], [id(4), 'kimi']] as const)('refuses unsupported read-only members on create and update', (memberId, agent) => {
+    const fields = withAgent(memberId, agent)
+    const error = expect.objectContaining({ reason: 'squad-read-only-unsupported', message: expect.stringContaining(agentDescriptor(agent).label) })
+    expect(() => squads.create(fields)).toThrow(error)
+    expect(() => squads.update(squad.id, fields)).toThrow(error)
+    expect(squads.list()).toEqual([squad])
+  })
+
+  it('allows Antigravity as squad leader, read-only member, or developer', () => {
+    const antiLead = squads.create({ ...squad, name: 'Anti Lead', members: squad.members.map((member) =>
+      member.id === id(1) || member.id === id(4) ? { ...member, agent: 'antigravity' } : member) })
+    expect(antiLead.members[0]).toMatchObject({ agent: 'antigravity', capability: 'readOnly' })
+    expect(antiLead.members[3]).toMatchObject({ agent: 'antigravity', capability: 'readOnly' })
+  })
+
+  it('validates the squad leader against readOnlyMode rather than developers permissionMode when starting', async () => {
+    const validated: Array<{ agent: string; permissionMode?: string }> = []
+    const original = chats.validateStartOptions.bind(chats)
+    chats.validateStartOptions = async (agent, options, providerId) => {
+      validated.push({ agent, permissionMode: options.permissionMode })
+      return original(agent, options, providerId)
+    }
+    try {
+      await squads.start(taskId, true, { permissionMode: 'bypass' })
+      expect(validated.filter((entry) => entry.agent === 'claude').map((entry) => entry.permissionMode)).toEqual([
+        'ask', 'bypass', 'bypass', 'ask', 'ask'
+      ])
+    } finally { chats.validateStartOptions = original }
+  })
+
+  it('allows Gemini as a developer and refuses to dispatch or retry read-only work on unsupported agents', async () => {
+    const developer = squads.create(withAgent(id(2), 'gemini'))
+    expect(developer.members[1]).toMatchObject({ agent: 'gemini', capability: 'develop' })
+    const run = await start()
+    store.saveRun({ ...run, squad: { ...developer, members: developer.members.map((member) => member.id === id(4) ? { ...member, agent: 'kimi' } : member) } })
+    await expect(dispatch(id(2), 'readOnly')).rejects.toMatchObject({
+      reason: 'squad-read-only-unsupported', message: expect.stringContaining('或选择开发测试')
+    })
+    await expect(dispatch(id(4), 'readOnly')).rejects.toMatchObject({
+      reason: 'squad-read-only-unsupported', message: expect.not.stringContaining('或选择开发测试')
+    })
+    expect(current().works).toEqual([])
+    const failedWork: SquadWork = {
+      id: id(9), memberId: id(4), instruction: 'Inspect', capability: 'readOnly',
+      conversationId: null, state: 'failed', result: null, error: 'unsupported', delivered: true, createdAt: 0, updatedAt: 0
+    }
+    store.patchRun(run.id, { works: [failedWork] })
+    await expect(squads.retry(run.id, failedWork.id)).rejects.toMatchObject({ reason: 'squad-read-only-unsupported' })
+    expect(current().works).toEqual([failedWork])
+  })
+
+  it('checks the linked profile instead of the saved agent when validating a read-only member', () => {
+    const profile = AgentProfile.parse({ id: id(5), name: 'Linked', agent: 'gemini', capability: 'develop', createdAt: 0, updatedAt: 0, archivedAt: null })
+    squads.setProfiles(() => profile)
+    const link = (memberId: string) => ({ ...squad, members: squad.members.map((member) =>
+      member.id === memberId ? { ...member, profileId: profile.id } : member) })
+    expect(() => squads.create(link(id(1)))).toThrow(expect.objectContaining({ reason: 'squad-read-only-unsupported' }))
+    expect(() => squads.update(squad.id, link(id(4)))).toThrow(expect.objectContaining({ reason: 'squad-read-only-unsupported' }))
+    expect(squads.create(link(id(2))).members[1]?.profileId).toBe(profile.id)
+  })
+
+  it.each([[id(1), '队长「Lead」'], [id(4), '只读成员「Review」']] as const)('loads a legacy roster and blocks both launch paths before changing the task', async (memberId, role) => {
+    const legacy = store.update(squad.id, withAgent(memberId, 'gemini'))
+    expect(squads.list()).toEqual([legacy])
+    const pending = service.get(taskId)
+    for (const planFirst of [false, true]) {
+      await expect(squads.start(taskId, false, {}, legacy.id, undefined, planFirst)).rejects.toMatchObject({
+        reason: 'squad-read-only-unsupported', message: expect.stringContaining(role)
+      })
+      expect(squads.runs(taskId)).toEqual([])
+      expect(service.get(taskId)).toEqual(pending)
+      expect(daemon.spawns).toEqual([])
+    }
+  })
+
+  it('loads a legacy run and refuses to resume its unsupported lead', async () => {
+    const run = await start()
+    await squads.control(run.id, 'stop')
+    const paused = store.patchRun(run.id, { state: 'paused' })
+    const legacy = store.saveRun({ ...paused, squad: withAgent(id(1), 'gemini') })
+    expect(squads.runs(taskId)).toEqual([legacy])
+    const spawnCount = daemon.spawns.length
+    await expect(squads.resume(taskId)).rejects.toMatchObject({ reason: 'squad-read-only-unsupported' })
+    expect(current()).toEqual(legacy)
+    expect(daemon.spawns).toHaveLength(spawnCount)
+  })
 
   it('launches a read-only coordinator, binds MCP scope before first dispatch and freezes the roster', async () => {
     const run = await start()

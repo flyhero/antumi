@@ -534,7 +534,7 @@ export class TaskService {
       const modeBlocker = checkStartMode(dependencies, permissionMode)
       if (modeBlocker) throw new Rejection(modeBlocker)
       if (permissionMode === 'bypass' && !allowBypass && unattended !== 'bypass') throw new Rejection('chat-option-invalid', '全部放行需要先在设置中开启')
-      await chats.validateStartOptions(agent, { ...launch, permissionMode }, this.providerOf(task, launch))
+      await chats.validateStartOptions(agent, { ...launch, permissionMode: coordinator ? agentDescriptor(agent).readOnlyMode : permissionMode }, this.providerOf(task, launch))
       if (!unattended) this.changed(this.store.update(task.id, { launch: { ...launch, permissionMode } }))
       const images = await this.images(task)
       const imageIds = this.chatImageIds(task, images.prompt)

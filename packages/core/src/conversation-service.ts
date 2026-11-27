@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import { mkdir, realpath, rm, rmdir, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import { branchSwitchMessage, withoutBranchSwitchNote, chatReferencesFor, canHaveHelper, helperAllowsMode, isHelper, agentDescriptor, modelPrice, providerEndpoint, type CostBaseline, checkEditAdditionalProjects, checkSwitchBranch, handoffMessage, isPlanApproval, parseHandoffMessage, MAX_TASK_REPOS, type AgentKind, type ChatCatalog, type ChatImage, type ChatItem, type ChatModel, type ChatOption, type ChatSettings, type CommitPushResult, type CommitResult, type PushResult, type Conversation, type ConversationMessage, type ConversationSearchHit, type ConversationStage, type FileDiff, type FolderChanges, type ProjectBranches, type ProjectHead, type ChatDecision, type KnowledgeBase, type TaskSource, type UnattendedMode, type ChatPermissionMode, startModes, unattendedPermission, isAntumiRequest , PROCESS_OWNER_ENV, processOwner, parseProcessOwner } from '@antumi/protocol'
+import { branchSwitchMessage, withoutBranchSwitchNote, chatReferencesFor, canHaveHelper, helperAllowsMode, isHelper, agentDescriptor, agentSupportsReadOnly, modelPrice, providerEndpoint, type CostBaseline, checkEditAdditionalProjects, checkSwitchBranch, handoffMessage, isPlanApproval, parseHandoffMessage, MAX_TASK_REPOS, type AgentKind, type ChatCatalog, type ChatImage, type ChatItem, type ChatModel, type ChatOption, type ChatSettings, type CommitPushResult, type CommitResult, type PushResult, type Conversation, type ConversationMessage, type ConversationSearchHit, type ConversationStage, type FileDiff, type FolderChanges, type ProjectBranches, type ProjectHead, type ChatDecision, type KnowledgeBase, type TaskSource, type UnattendedMode, type ChatPermissionMode, startModes, unattendedPermission, isAntumiRequest , PROCESS_OWNER_ENV, processOwner, parseProcessOwner } from '@antumi/protocol'
 import type { DaemonEvent, SessionInfo } from '@antumi/protocol/node'
 import { ALLOW_SITE_ALWAYS, canReuseConversation, DEFAULT_ACCOUNT, type ConversationChannel, type ConversationConfiguration, type TaskLaunchOptions } from '@antumi/protocol'
 import { channelPrompt } from './channel-prompt'
@@ -645,6 +645,9 @@ export class ConversationService {
     if (worktree && (!worktreesRoot || projectPaths.length === 0)) throw new Rejection('missing-repo', 'a worktree needs a project to lay out')
     if (!start.deferStart && !this.capacityAvailable(agent)) throw new Rejection('agent-capacity')
     if (start.modelProvider) this.requireProvider(start.modelProvider, agent)
+    if (!start.channel && (start.readOnly || start.profile?.capability === 'readOnly' || squad?.readOnly) && !agentSupportsReadOnly(agent)) {
+      throw new Rejection('agent-read-only-unsupported', `${agentDescriptor(agent).label} 不支持只读模式，请选择支持只读的外部智能体`)
+    }
     await this.validateStartOptions(agent, { permissionMode, model, effort }, start.modelProvider)
     if (start.account) this.requireAccount(agent, start.account, start.modelProvider ?? null)
     const resolved = await resolveProjects(projectPaths)
@@ -1053,6 +1056,9 @@ export class ConversationService {
   ): Promise<Conversation> {
     if (issue.automaticId && this.store.get(issue.automaticId)) {
       const existing = this.get(issue.automaticId)
+      if (start.readOnly && (!agentSupportsReadOnly(agent) || !agentSupportsReadOnly(existing.agent))) {
+        throw new Rejection('agent-read-only-unsupported', `${agentDescriptor(agent).label} 不支持只读模式，请选择支持只读的外部智能体`)
+      }
       if (start.readOnly) this.store.setWorkspaceReadOnly(existing.id, true)
       if (!existing.sessionId && this.store.stages(existing.id).length === 0) {
         await this.validateStartOptions(agent, start, start.modelProvider)

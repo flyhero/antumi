@@ -1,6 +1,6 @@
 import { SupportActions } from './ContactAuthor'
 import { useEffect, useId, useState } from 'react'
-import { agentDescriptor, AgentProfileFields, DELEGATION_MODES, AGENT_KINDS, forChannels, allowsChannels, type AgentKind, type AgentProfile, type DelegationMode, type SkillRef, type SkillRepo } from '@antumi/protocol'
+import { agentDescriptor, agentSupportsReadOnly, AgentProfileFields, DELEGATION_MODES, AGENT_KINDS, forChannels, allowsChannels, type AgentKind, type AgentProfile, type DelegationMode, type SkillRef, type SkillRepo } from '@antumi/protocol'
 import { useAgentCatalog } from '../agent-models'
 import { agentProfileTemplateModel, type AgentProfileTemplate } from '../agent-profile-templates'
 import { perform, useCore, useProfileDelegationModeSupported } from '../core-store'
@@ -57,7 +57,7 @@ export function AgentProfileEditor({ profile, seed, template, onSaved }: { profi
   const hasProviders = useCore((state) => servingProviders(state.modelProviders, fields.agent).length > 0)
   const modeSupported = useProfileDelegationModeSupported()
   const channels = useChannels()
-  const readOnlyUnsupported = !forChannels(fields) && fields.capability !== 'develop' && agentDescriptor(fields.agent).capabilities.readOnly === false
+  const readOnlyUnsupported = !forChannels(fields) && fields.capability !== 'develop' && !agentSupportsReadOnly(fields.agent)
   const catalog = useAgentCatalog(readOnlyUnsupported ? null : fields.agent, true, provider)
   const quickPreference = usePreferences((state) => state.quickModels[fields.agent])
   const [modelPending, setModelPending] = useState(Boolean(template))

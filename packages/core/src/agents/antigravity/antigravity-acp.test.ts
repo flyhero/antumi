@@ -3,7 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { agentDescriptor, type ChatItem } from '@antumi/protocol'
+import { agentDescriptor, agentSupportsReadOnly, type ChatItem } from '@antumi/protocol'
 import type { AgentLaunch } from '../agent-adapter'
 import { antigravityAccounts } from './antigravity-account'
 import type { ChatRecord, ChatStageOptions } from '../../chat-driver'
@@ -223,10 +223,85 @@ describe('Antigravity ACP', () => {
     expect(items(driver, 'state').at(-1)?.permissionMode).toBe('acceptEdits')
   })
 
-  it('refuses to start a stage that must stay read-only, having no such mode', () => {
-    const { driver } = start({ readOnly: true })
-    expect(driver.ready()).toBe(false)
-    expect(driver.failure()).toBeTruthy()
+  it('locks read-only stages to default mode, auto-denies file writes, and leaves commands to permission approval', () => {
+    const { driver, apply, receive, due } = start({ readOnly: true, allowBypass: true, preferred: { permissionMode: 'bypass' } })
+    expect(driver.ready()).toBe(true)
+    expect(driver.failure()).toBeNull()
+    expect(items(driver, 'state').at(-1)).toMatchObject({ permissionMode: 'ask', permissionModes: ['ask'] })
+    expect(() => driver.setOption('permissionMode', 'acceptEdits')).toThrow(/只读成员不能换模式/)
+
+    apply({ dir: 'out', at: 10, frame: driver.send('inspect and coordinate').logged })
+    const options = [{ optionId: 'yes', name: 'Allow', kind: 'allow_once' }, { optionId: 'no', name: 'Reject', kind: 'reject_once' }]
+    // Antigravity file write requests are automatically rejected in read-only mode.
+    receive({ id: 11, method: 'session/request_permission', params: { sessionId: opened.sessionId, toolCall: { toolCallId: 'w1', title: 'Run write_to_file?', kind: 'edit', locations: [{ path: '/project/src/app.ts' }], rawInput: { TargetFile: '/project/src/app.ts' } }, options } })
+    expect(due()).toEqual([{ jsonrpc: '2.0', id: 11, result: { outcome: { outcome: 'selected', optionId: 'no' } } }])
+    expect(items(driver, 'approval')[0]).toMatchObject({ resolution: 'denied', detail: '只读模式，Antumi 已拒绝修改 /project/src/app.ts' })
+    expect(driver.activity()).toBe('running')
+
+    // Announced delete/move calls whose permission frame omits kind are also denied, falling back to reject_always.
+    receive({ method: 'session/update', params: { sessionId: opened.sessionId, update: { sessionUpdate: 'tool_call', toolCallId: 'd1', title: 'Delete temp file', kind: 'delete', status: 'pending' } } })
+    receive({ id: 13, method: 'session/request_permission', params: { sessionId: opened.sessionId, toolCall: { toolCallId: 'd1', title: 'Delete temp file' }, options: [{ optionId: 'yes', name: 'Allow', kind: 'allow_once' }, { optionId: 'never', name: 'Always reject', kind: 'reject_always' }] } })
+    expect(due()).toEqual([{ jsonrpc: '2.0', id: 13, result: { outcome: { outcome: 'selected', optionId: 'never' } } }])
+    expect(items(driver, 'approval').at(-1)).toMatchObject({ resolution: 'denied', detail: '只读模式，Antumi 已拒绝修改文件' })
+
+    // Mid-turn mode drift out of default fails the stage and cancels the active turn.
+    receive({ method: 'session/update', params: { sessionId: opened.sessionId, update: { sessionUpdate: 'current_mode_update', currentModeId: 'auto_edit' } } })
+    expect(driver.failure()).toContain('离开了只读模式')
+    expect(due()).toEqual([{ jsonrpc: '2.0', method: 'session/cancel', params: { sessionId: opened.sessionId } }])
+    // Sent once, not again on every later pump.
+    expect(due()).toEqual([])
+
+    // Shell commands follow normal permission approval instead of being auto-denied.
+    const cmdDriver = start({ readOnly: true })
+    cmdDriver.apply({ dir: 'out', at: 10, frame: cmdDriver.driver.send('inspect').logged })
+    cmdDriver.receive({ id: 12, method: 'session/request_permission', params: { sessionId: opened.sessionId, toolCall: { toolCallId: 'cmd1', title: 'git status', kind: 'execute', rawInput: { command_line: 'git status', working_dir: '/project' } }, options } })
+    expect(cmdDriver.due()).toEqual([])
+    expect(cmdDriver.driver.activity()).toBe('awaiting')
+    expect(items(cmdDriver.driver, 'approval').at(-1)).toMatchObject({ title: 'git status', resolution: null })
+
+    // Resuming an agy-cli session from plan mode into read-only switches back to default.
+    const agyModeOptions = [
+      { value: 'default', name: 'Default' },
+      { value: 'accept-edits', name: 'Accept edits' },
+      { value: 'auto', name: 'Auto' },
+      { value: 'plan', name: 'Plan' }
+    ]
+    const resumed = new AcpDriver(antigravityAgyCliDialect, 'stage', { cwd: '/project', extraDirs: [], resume: 'planned', readOnly: true })
+    const step = (result: unknown) => {
+      const frame = Request.parse(resumed.due()[0])
+      resumed.apply({ dir: 'out', at: 0, frame })
+      resumed.apply({ dir: 'in', at: 0, frame: { id: frame.id, result } })
+      return frame
+    }
+    step(initialized)
+    step({})
+    expect(step({ sessionId: 'planned', configOptions: [{ id: 'mode', name: 'Mode', category: 'mode', currentValue: 'plan', options: agyModeOptions }] }).method).toBe('session/resume')
+    const backToDefault = step({ configOptions: [{ id: 'mode', name: 'Mode', category: 'mode', currentValue: 'default', options: agyModeOptions }] })
+    expect(backToDefault.method).toBe('session/set_config_option')
+    expect(backToDefault.params).toMatchObject({ configId: 'mode', value: 'default' })
+    expect(resumed.ready()).toBe(true)
+    expect(items(resumed, 'state').at(-1)).toMatchObject({ permissionMode: 'ask', permissionModes: ['ask'] })
+
+    // If mode reset fails silently and a trailing preferred model already matches, enforceLockedMode still catches it.
+    const stuck = new AcpDriver(antigravityAgyCliDialect, 'stage', { cwd: '/project', extraDirs: [], resume: 'stuck', readOnly: true, preferred: { model: 'gemini-3.8-flash' } })
+    const stuckStep = (result: unknown) => {
+      const frame = Request.parse(stuck.due()[0])
+      stuck.apply({ dir: 'out', at: 0, frame })
+      stuck.apply({ dir: 'in', at: 0, frame: { id: frame.id, result } })
+      return frame
+    }
+    stuckStep(initialized)
+    stuckStep({})
+    stuckStep({ sessionId: 'stuck', configOptions: [
+      { id: 'mode', name: 'Mode', category: 'mode', currentValue: 'auto', options: agyModeOptions },
+      { id: 'model', name: 'Model', category: 'model', currentValue: 'gemini-3.8-flash', options: [{ value: 'gemini-3.8-flash', name: 'Flash' }] }
+    ] })
+    stuckStep({ configOptions: [
+      { id: 'mode', name: 'Mode', category: 'mode', currentValue: 'auto', options: agyModeOptions },
+      { id: 'model', name: 'Model', category: 'model', currentValue: 'gemini-3.8-flash', options: [{ value: 'gemini-3.8-flash', name: 'Flash' }] }
+    ] })
+    expect(stuck.ready()).toBe(false)
+    expect(stuck.failure()).toContain('离开了只读模式')
   })
 
   it('names the other projects only on the wire of its first prompt', () => {
@@ -256,7 +331,8 @@ describe('agy CLI backend', () => {
     expect(antigravity.restartForModes?.('agy-cli')).toEqual(['bypass'])
     expect(antigravity.permissionModesFor?.('managed-acp')).toEqual(['ask', 'acceptEdits', 'bypass'])
     expect(antigravity.restartForModes?.('managed-acp')).toEqual([])
-    expect(agentDescriptor('antigravity').capabilities).toMatchObject({ unattended: false, readOnly: false, bypass: true, autoMode: true })
+    expect(agentDescriptor('antigravity').capabilities).toMatchObject({ unattended: false, bypass: true, autoMode: true })
+    expect(agentSupportsReadOnly('antigravity')).toBe(true)
     expect(dialectForBackend()).toBe(antigravityDialect)
     expect(dialectForBackend('agy-cli')).toBe(antigravityAgyCliDialect)
     expect(antigravityAgyCliDialect.preferResume).toBe(true)

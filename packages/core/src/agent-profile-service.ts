@@ -2,7 +2,7 @@ import type { DelegationResultSource } from './delegation-delivery-service'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { adapterOf } from './agents'
-import { AGENT_CALL_NOT_STARTED, AGENT_KINDS, agentCallOpen, agentDescriptor, forChannels, allowsChannels, canDelegate, callerReadOnly, checkResumeAgentCall, type AgentCallResumeCheck, agentReadiness, AgentCall, AgentProfile, quotaVerdict, type AgentCallWorkspace, type AgentCallWorktree, type AgentKind, type AgentProfileFields, type AgentUsage, type ChatItem, type Conversation, type DelegationQuota, type DelegationTarget, type DirectAgentCall, type Environment, type ModelProvider } from '@antumi/protocol'
+import { AGENT_CALL_NOT_STARTED, AGENT_KINDS, agentCallOpen, agentDescriptor, agentSupportsReadOnly, forChannels, allowsChannels, canDelegate, callerReadOnly, checkResumeAgentCall, type AgentCallResumeCheck, agentReadiness, AgentCall, AgentProfile, quotaVerdict, type AgentCallWorkspace, type AgentCallWorktree, type AgentKind, type AgentProfileFields, type AgentUsage, type ChatItem, type Conversation, type DelegationQuota, type DelegationTarget, type DirectAgentCall, type Environment, type ModelProvider } from '@antumi/protocol'
 import type { ConversationService } from './conversation-service'
 import { AgentProfileStore } from './agent-profile-store'
 import { committedHead, describeWorktreeOutcome, isGitCheckout, layOutDelegationWorktree, readWorktreeOutcome, worktreeMemberNote } from './delegation-worktree'
@@ -105,6 +105,7 @@ export class AgentProfileService {
       if (target === id) throw new Rejection('profile-self-call', '不能调用自己')
       this.get(target)
     }
+    if (!forChannels(fields) && fields.capability !== 'develop' && !agentSupportsReadOnly(fields.agent)) throw new Rejection('agent-read-only-unsupported', `${agentDescriptor(fields.agent).label} 不支持只读模式，请选择其他外部智能体或切换为开发测试`)
     const channels = allowsChannels(fields)
     if (channels && !agentDescriptor(fields.agent).capabilities.lockdown) throw new Rejection('agent-no-lockdown', `${agentDescriptor(fields.agent).label} 不能接入聊天平台`)
     if (id && this.onChannel(id) && !channels) throw new Rejection('profile-has-channels', '先移除这个智能体的聊天平台接入')
@@ -197,12 +198,11 @@ export class AgentProfileService {
   delegates(id: string): boolean { return this.available(id).length > 0 || this.agents(id).length > 0 }
   // Everyone it can delegate to, profiles first, each with what it has left.
   targets(id: string): DelegationTarget[] {
-    const readOnly = (agent: AgentKind) => agentDescriptor(agent).capabilities.readOnly !== false
     return [
       ...this.available(id).map((profile) => ({ profileId: profile.id, name: profile.name, description: profile.description, agent: profile.agent,
-        capability: profile.capability, readOnly: readOnly(profile.agent), quota: this.quota(profile.agent, profile.model, profile.modelProvider) })),
+        capability: profile.capability, readOnly: agentSupportsReadOnly(profile.agent), quota: this.quota(profile.agent, profile.model, profile.modelProvider) })),
       ...this.agents(id).map(({ agent, modelProvider }) => ({ profileId: null, name: agentDescriptor(agent).label, description: '', agent,
-        capability: null, readOnly: readOnly(agent), quota: this.quota(agent, null, modelProvider), modelProvider }))
+        capability: null, readOnly: agentSupportsReadOnly(agent), quota: this.quota(agent, null, modelProvider), modelProvider }))
     ]
   }
   private quota(agent: AgentKind, model: string | null, modelProvider: string | null): DelegationQuota {
@@ -239,7 +239,14 @@ export class AgentProfileService {
         throw new Rejection('agent-quota-exhausted', `${profile.name} 的额度已用完${reset}。请换一个智能体，或等额度恢复后再委派`)
       }
       if (this.store.calls(id).filter(agentCallOpen).length >= 10) throw new Rejection('agent-call-limit', '请先等待已有委派完成')
-      const readOnly = profile.capability === 'readOnly' || callerReadOnly(parent)
+      const readOnlyCaller = callerReadOnly(parent)
+      const readOnly = profile.capability === 'readOnly' || readOnlyCaller
+      if (readOnly && !agentSupportsReadOnly(profile.agent)) {
+        const label = agentDescriptor(profile.agent).label
+        throw new Rejection('agent-read-only-unsupported', readOnlyCaller
+          ? `${label} 不支持只读模式，当前会话只能委派支持只读的智能体`
+          : `${label} 不支持只读模式，请修改「${profile.name}」的外部智能体或将其切换为开发测试`)
+      }
       const adapter = adapterOf(profile.agent)
       const backend = adapter.resolveBackend ? await adapter.resolveBackend() : undefined
       const permissionMode = readOnly ? agentDescriptor(profile.agent).readOnlyMode
@@ -276,9 +283,9 @@ export class AgentProfileService {
   private direct(id: string, target: DirectAgentCall): AgentProfile | null {
     const ready = this.agents(id).find((each) => each.agent === target.agent)
     if (!ready) return null
-    const { label, capabilities } = agentDescriptor(target.agent)
+    const { label } = agentDescriptor(target.agent)
     const capability = target.capability ?? 'readOnly'
-    if (capability === 'readOnly' && capabilities.readOnly === false) throw new Rejection('invalid-params', `${label} 不能只读工作，需要修改文件时请指定 capability: develop`)
+    if (capability === 'readOnly' && !agentSupportsReadOnly(target.agent)) throw new Rejection('invalid-params', `${label} 不能只读工作，需要修改文件时请指定 capability: develop`)
     const at = Date.now()
     return AgentProfile.parse({ id: randomUUID(), name: label, agent: target.agent, model: target.model ?? null, effort: target.effort ?? null,
       modelProvider: ready.modelProvider, capability, archivedAt: null, createdAt: at, updatedAt: at })

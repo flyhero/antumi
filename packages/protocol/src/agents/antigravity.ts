@@ -2,8 +2,8 @@ import type { AgentDescriptor } from './agent-descriptor'
 
 // Google's Antigravity runs over either agy's native ACP (default, accept-edits, auto, plan, plus
 // process-level --dangerously-skip-permissions for bypass) or the standalone Antigravity ACP server
-// (default, auto_edit, yolo). Neither backend provides a general read-only worker mode, so a stage
-// that must stay read-only refuses to start.
+// (default, auto_edit, yolo). Read-only stages stay locked in default (ask) mode while Antumi
+// automatically denies file-write permission requests over ACP.
 export const antigravity: AgentDescriptor = {
   translations: { en: {
     modes: {
@@ -44,7 +44,7 @@ export const antigravity: AgentDescriptor = {
   readOnlyMode: 'ask',
   // Signed in with a personal account, its file tools refuse anything outside its cwd.
   primaryOnlyFiles: true,
-  capabilities: { readOnly: false, unattended: false, bypass: true, autoMode: true, pathMentions: false, optionsWhileBusy: false, skills: false, userMcp: true, modelProviders: [], accounts: true },
+  capabilities: { unattended: false, bypass: true, autoMode: true, pathMentions: false, optionsWhileBusy: false, skills: false, userMcp: true, modelProviders: [], accounts: true },
   environment: {
     role: '聊天界面运行 Google 的 Antigravity ACP 服务（Zed、JetBrains 扩展用的同一个），由 Antumi 下载到自己的目录；不需要 agy 或 Antigravity 编辑器。',
     install: '在 设置 → 外部智能体 里下载 Antigravity ACP 服务',

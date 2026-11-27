@@ -1,10 +1,12 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { Squad, SquadRun, Task, createRpcClient, type Conversation, type RpcConnection } from '@antumi/protocol'
+import { AgentProfile, Squad, SquadRun, Task, createRpcClient, type Conversation, type RpcConnection } from '@antumi/protocol'
 import { actionableItems, attentionCount, noticesBetween } from './attention'
 import { openAttentionItem, selectSquad, useCore } from './core-store'
-import { saveSquad } from './squads'
+import { defaultAddedMember, defaultSquadMembers, resolveSquadMembers, saveSquad, squadReadOnlyIssueText } from './squads'
+import { getLocale, setLocale } from './i18n'
+import { SquadLaunchDialog } from './components/SquadLaunchDialog'
 import { SquadsEntry, SquadsView } from './components/Squads'
 import { SquadWorkPanel } from './components/SquadWorkPanel'
 
@@ -25,7 +27,119 @@ const run = SquadRun.parse({ id: id(6), taskId: 'task', squad, leaderConversatio
 const task = Task.parse({ id: 'task', title: 'Export', details: '', status: 'running', agent: 'claude', squadId: squad.id, repos: [], dependsOn: [], conversationId: id(7), awaitingInput: true, createdAt: 0, updatedAt: 0 })
 const conversation: Conversation = { id: id(9), title: 'Build', titleLocked: true, agent: 'codex', workspacePath: '/wt', projectPaths: ['/wt'], managedWorkspace: false, sessionId: 'worker', createdAt: 0, updatedAt: 0, squadRunId: run.id, chat: { turn: 'awaiting', request: { kind: 'approval', requestId: 'approve', title: 'Run tests', tool: 'shell', open: 1, decisions: ['allow', 'deny'] } } }
 
+const labels = { leader: 'Lead', leaderRole: 'Coordinate', developer: 'Build', developerRole: 'Implement', reviewer: 'Review', reviewerRole: 'Verify' }
+const members = (installed: Parameters<typeof defaultSquadMembers>[0]) => {
+  let next = 0
+  return defaultSquadMembers(installed, labels, () => id(++next))
+}
+const linkedRole = AgentProfile.parse({ id: id(10), name: 'Linked role', agent: 'gemini', model: 'flash', effort: 'high', capability: 'develop',
+  archivedAt: null, createdAt: 0, updatedAt: 0 })
+
 beforeEach(() => useCore.setState(useCore.getInitialState(), true))
+describe('squad member settings', () => {
+  it('prefills the lead and reviewer with read-only engines and preserves the first installed developer', () => {
+    expect(members(['gemini', 'codex', 'codebuddy', 'antigravity']).map(({ agent, capability }) => [agent, capability])).toEqual([
+      ['codex', 'readOnly'], ['gemini', 'develop'], ['antigravity', 'readOnly']
+    ])
+    expect(members(['kimi']).map(({ agent }) => agent)).toEqual(['claude', 'kimi', 'claude'])
+    expect(members([]).map(({ agent }) => agent)).toEqual(['claude', 'claude', 'claude'])
+  })
+
+  it('adds a read-only member when supported and a developer otherwise', () => {
+    const add = (installed: Parameters<typeof defaultAddedMember>[0]) => defaultAddedMember(installed, 'Extra', () => id(6))
+    expect(add(['codebuddy', 'antigravity'])).toMatchObject({ id: id(6), name: 'Extra', agent: 'antigravity', capability: 'readOnly' })
+    expect(add(['gemini', 'kimi'])).toMatchObject({ agent: 'gemini', capability: 'develop' })
+    expect(add([])).toMatchObject({ agent: 'claude', capability: 'develop' })
+  })
+
+  it('overlays linked role runtime fields while preserving squad member names and capabilities', () => {
+    const linked = members(['claude']).map((member) => ({ ...member, profileId: member.capability === 'readOnly' ? linkedRole.id : id(11) }))
+    const resolved = resolveSquadMembers(linked, { [linkedRole.id]: linkedRole })
+    expect(resolved[0]).toMatchObject({ name: 'Lead', agent: linkedRole.agent, model: 'flash', effort: 'high', capability: 'readOnly' })
+    expect(resolved[1]).toBe(linked[1])
+    expect(resolved[2]).toMatchObject({ name: 'Review', agent: linkedRole.agent, model: 'flash', effort: 'high', capability: 'readOnly' })
+  })
+
+  it('formats leader and member guidance in Chinese and English', () => {
+    const previous = getLocale()
+    try {
+      const issue = { memberId: id(1), memberName: 'Lead', agent: 'gemini', leader: true } as const
+      setLocale('zh-CN')
+      expect(squadReadOnlyIssueText(issue)).toContain('队长「Lead」使用的 Gemini CLI')
+      expect(squadReadOnlyIssueText({ ...issue, leader: false, memberName: 'Review' })).toContain('只读成员「Review」使用的 Gemini CLI')
+      setLocale('en')
+      expect(squadReadOnlyIssueText(issue)).toContain('Lead, the team lead, uses Gemini CLI')
+      expect(squadReadOnlyIssueText({ ...issue, leader: false, memberName: 'Review' })).toContain('Read-only member Review uses Gemini CLI')
+    } finally { setLocale(previous) }
+  })
+})
+
+describe('squad read-only warnings', () => {
+  const pending = Task.parse({ ...task, status: 'pending', conversationId: null, repos: [{ path: '/project', branch: null, worktreePath: null }] })
+  const renderLaunch = () => renderToStaticMarkup(createElement(SquadLaunchDialog, { task: pending, onSingle: () => {} }))
+  const renderOverview = () => renderToStaticMarkup(createElement(SquadsView))
+  const submit = (html: string) => html.match(/<button type="submit"[^>]*>/)?.[0]
+
+  beforeEach(() => {
+    const rpc: RpcConnection = { ...createRpcClient(() => {}), features: ['squads', 'squad-leader-planning'], close() {}, closed: new Promise(() => {}) }
+    useCore.setState({ rpc, tasks: { [pending.id]: pending }, selectedSquadId: squad.id })
+  })
+
+  it.each([[id(1), '队长「Lead」'], [id(3), '只读成员「Review」']] as const)('blocks a legacy read-only assignment in the launch dialog and team overview', (memberId, label) => {
+    const saved = { ...squad, members: members(['claude']).map((member) => member.id === memberId ? { ...member, agent: linkedRole.agent } : member) }
+    useCore.setState({ squads: { [squad.id]: saved }, error: 'Earlier error' })
+    const launch = renderLaunch()
+    const overview = renderOverview()
+    const message = label + '使用的 Gemini CLI 不支持只读模式'
+    expect(launch).toContain(message)
+    expect(launch).toContain('>去修改团队</button>')
+    expect(launch).not.toContain('Earlier error')
+    expect(submit(launch)).toContain('disabled')
+    expect(overview).toContain(message)
+    expect(overview).toContain('data-kind="error">不支持只读</span>')
+  })
+
+  it('blocks when an assigned read-only member is now linked to an unsupported developer role', () => {
+    const saved = { ...squad, members: members(['claude']).map((member) => member.id === id(3) ? { ...member, profileId: linkedRole.id } : member) }
+    useCore.setState({ squads: { [squad.id]: saved }, agentProfiles: { [linkedRole.id]: linkedRole } })
+    const launch = renderLaunch()
+    expect(launch).toContain('只读成员「Review」使用的 Gemini CLI 不支持只读模式')
+    expect(submit(launch)).toContain('disabled')
+  })
+
+  it('allows Antigravity as squad lead, disabling plan-first on managed-acp and keeping both options on agy-cli', () => {
+    const saved = { ...squad, members: members(['antigravity', 'claude']) }
+    useCore.setState({
+      squads: { [squad.id]: saved },
+      environment: { checkedAt: 0, searchPath: [], checks: [{ tool: 'antigravity', status: 'ok', version: '1.4.1', path: '/bin/agy_acp_server', signedIn: true, runtime: { active: 'managed-acp', available: ['managed-acp'] } }] }
+    })
+    const managedLaunch = renderLaunch()
+    expect(managedLaunch).not.toContain('不支持只读')
+    expect(managedLaunch).toContain('当前后端不支持规划模式')
+    expect(managedLaunch).toContain('开始团队开发</button>')
+    expect(submit(managedLaunch)).toBe('<button type="submit" class="button primary">')
+    expect(renderOverview()).not.toContain('data-kind="error"')
+
+    useCore.setState({
+      environment: { checkedAt: 0, searchPath: [], checks: [{ tool: 'antigravity', status: 'ok', version: '1.5.17', path: '/bin/agy', signedIn: true, runtime: { active: 'agy-cli', available: ['agy-cli', 'managed-acp'] } }] }
+    })
+    const agyLaunch = renderLaunch()
+    expect(agyLaunch).not.toContain('当前后端不支持规划模式')
+    expect(agyLaunch).toContain('开始规划</button>')
+    expect(submit(agyLaunch)).toBe('<button type="submit" class="button primary">')
+  })
+
+  it('allows launch with Gemini assigned development and testing', () => {
+    const saved = { ...squad, members: members(['gemini', 'claude']) }
+    useCore.setState({ squads: { [squad.id]: saved } })
+    const launch = renderLaunch()
+    expect(launch).not.toContain('不支持只读')
+    expect(launch).not.toContain('去修改团队')
+    expect(submit(launch)).toBe('<button type="submit" class="button primary">')
+    expect(renderOverview()).not.toContain('data-kind="error"')
+  })
+})
+
 describe('development squad user paths', () => {
   it('waits for successful creation before opening the saved squad', async () => {
     const sent: Array<{ id: number; method: string; params: unknown }> = []

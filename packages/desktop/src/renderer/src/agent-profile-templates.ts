@@ -1,4 +1,4 @@
-import { AGENT_KINDS, agentDescriptor, quickModel, type AgentKind, type AgentProfileFields, type ChatCatalog } from '@antumi/protocol'
+import { AGENT_KINDS, agentDescriptor, agentSupportsReadOnly, quickModel, type AgentKind, type AgentProfileFields, type ChatCatalog } from '@antumi/protocol'
 import { localized, t } from './i18n'
 import { providerSmallModel } from './model-provider-choice'
 
@@ -22,7 +22,7 @@ export const AGENT_PROFILE_TEMPLATES: readonly AgentProfileTemplate[] = localize
 
 // Templates stay presentation data until the user saves an independent copy.
 export function agentProfileTemplateSeed(template: AgentProfileTemplate, installed: readonly AgentKind[]): AgentProfileFields {
-  const agent = installed.find((kind) => template.capability !== 'readOnly' || agentDescriptor(kind).capabilities.readOnly !== false) ?? installed[0] ?? AGENT_KINDS[0]
+  const agent = installed.find((kind) => template.capability !== 'readOnly' || agentSupportsReadOnly(kind)) ?? installed[0] ?? AGENT_KINDS[0]
   return {
     name: template.name,
     description: template.description,

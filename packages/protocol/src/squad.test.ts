@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { SquadFields, checkSquadStart, squadModes } from './squad'
+import { Squad, SquadFields, agentSupportsPlan, agentSupportsReadOnly, checkSquadStart, squadModes, squadReadOnlyIssues } from './squad'
 import { Task } from './task'
 import { checkScheduleTask } from './schedule'
 import { rpcSchemas } from './rpc'
@@ -20,6 +20,36 @@ describe('squad contracts', () => {
     expect(SquadFields.safeParse({ ...squad, members: [squad.members[0], squad.members[0], squad.members[1]] }).success).toBe(false)
     expect(SquadFields.safeParse({ ...squad, members: [squad.members[0], { ...squad.members[1], name: 'lead' }] }).success).toBe(false)
   })
+  it.each(['gemini', 'codebuddy', 'kimi'] as const)('requires %s to work as a developer', (agent) => {
+    expect(agentSupportsReadOnly(agent)).toBe(false)
+    const squad = SquadFields.parse(fields())
+    expect(squadReadOnlyIssues({ ...squad, members: squad.members.map((member) =>
+      member.capability === 'develop' ? { ...member, agent } : member) })).toEqual([])
+  })
+
+  it.each(['claude', 'codex', 'cursor', 'opencode', 'pi', 'dsh', 'zcode', 'codearts', 'antigravity'] as const)('%s supports read-only work', (agent) => {
+    expect(agentSupportsReadOnly(agent)).toBe(true)
+  })
+
+  it('checks backend-specific plan mode support for squad leaders', () => {
+    expect(agentSupportsPlan('antigravity', 'agy-cli')).toBe(true)
+    expect(agentSupportsPlan('antigravity', 'managed-acp')).toBe(false)
+    expect(agentSupportsPlan('antigravity', null)).toBe(true)
+    expect(agentSupportsPlan('claude', null)).toBe(true)
+  })
+
+  it('loads legacy squads and reports an unsupported lead before the other read-only members', () => {
+    const squad = Squad.parse({ ...fields(), id: id(4), archivedAt: null, createdAt: 0, updatedAt: 0, members: [
+      { id: id(3), name: 'Review', agent: 'kimi', capability: 'readOnly' },
+      { id: id(2), name: 'Build', agent: 'antigravity', capability: 'develop' },
+      { id: id(1), name: 'Lead', agent: 'gemini', capability: 'readOnly' }
+    ] })
+    expect(squadReadOnlyIssues(squad)).toEqual([
+      { memberId: id(1), memberName: 'Lead', agent: 'gemini', leader: true },
+      { memberId: id(3), memberName: 'Review', agent: 'kimi', leader: false }
+    ])
+  })
+
   it('offers the intersection of development modes without promoting permissions', () => {
     const squad = SquadFields.parse(fields())
     expect(squadModes(squad)).toEqual(['ask', 'acceptEdits'])

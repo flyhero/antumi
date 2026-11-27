@@ -10,6 +10,7 @@ export const antigravityDialect: AcpDialect = {
   name: 'Antigravity',
   idPrefix: 'antigravity',
   modes: { ask: 'default', acceptEdits: 'auto_edit', bypass: 'yolo' },
+  readOnlyMode: 'ask',
   authMethod: 'oauth-personal',
   // A command arrives as { command_line, working_dir }: shown as the command any agent runs.
   toolInput: (rawInput) => {
@@ -26,6 +27,7 @@ export const antigravityAgyCliDialect: AcpDialect = {
   name: 'Antigravity',
   idPrefix: 'antigravity',
   modes: { ask: 'default', acceptEdits: 'accept-edits', auto: 'auto', plan: 'plan' },
+  readOnlyMode: 'ask',
   processBypass: true,
   preferResume: true,
   authMethod: 'oauth-personal',

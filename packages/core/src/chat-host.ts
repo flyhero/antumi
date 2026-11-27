@@ -417,6 +417,13 @@ export class ChatHost {
     await sent
   }
 
+  moveQueued(conversationId: string, ref: string, direction: 'up' | 'down'): void {
+    const live = this.running(conversationId)
+    if (!this.queued(live).some((entry) => entry.ref === ref)) throw new Rejection('chat-nothing-queued', 'no message is waiting')
+    this.record(live, { dir: 'queue', at: this.now(), text: null, ref, move: direction })
+    this.flush(live)
+  }
+
   // Drops the waiting message with this ref, or all of them.
   cancelQueued(conversationId: string, ref?: string): void {
     const live = this.running(conversationId)

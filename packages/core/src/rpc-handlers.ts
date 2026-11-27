@@ -618,6 +618,7 @@ export function createRpcHandlers(
     'conversations.setAccount': ({ id, account }) => { notChannel(id); profiles?.guardUser(id, true); squads?.guardUser(id, true); return conversations.setAccount(id, account) },
     'conversations.setOption': async ({ id, option, value }) => { notChannel(id); profiles?.guardUser(id, true); squads?.guardUser(id, true); if (option === 'permissionMode') conversations.attend(id); await conversations.setOption(id, option, value); return OK },
     'conversations.send': ({ id, text, images, queue, steer, ref, references }) => { notChannel(id); return userSent(id, async () => { profiles?.guardUser(id, true); squads?.guardUser(id, true); await conversations.send(id, text, images, queue, steer, ref, references); return OK }) },
+    'conversations.moveQueued': ({ id, ref, direction }) => { notChannel(id); conversations.moveQueued(id, ref, direction); return OK },
     'conversations.cancelQueued': ({ id, ref }) => { notChannel(id); conversations.cancelQueued(id, ref); return OK },
     'conversations.sendQueued': ({ id, ref, now }) => { notChannel(id); return userSent(id, async () => { await conversations.sendQueued(id, ref, now); return OK }) },
     'conversations.setUsageLimitAutoContinue': ({ id, stageId, itemId, autoContinue }) => { notChannel(id);

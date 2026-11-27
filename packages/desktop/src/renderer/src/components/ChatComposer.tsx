@@ -25,7 +25,7 @@ import { MentionField, useMentionedText } from './ChatMentionField'
 import { ChatOptionsBar } from './ChatOptionsBar'
 import { RouteBadge } from './RouteBadge'
 import { HandoffAgentPicker, HandoffModePicker, HandoffModelPicker, HandoffProviderPicker, useComposerHandoff } from './ChatHandoff'
-import { ChevronDownIcon, ClockIcon, CloseIcon, EnterIcon, PencilIcon, StopIcon } from './icons'
+import { ArrowUpIcon, ArrowDownIcon, ChevronDownIcon, ClockIcon, CloseIcon, EnterIcon, PencilIcon, StopIcon } from './icons'
 import { SchedulePicker } from './SchedulePicker'
 import { createSchedule } from '../schedules'
 import { ChatMessageRelay } from './chat-message-relay'
@@ -143,9 +143,11 @@ function ScheduleSendButton({ conversationId, text, references, quotes, images, 
 // failed turn holds them; the first is released from the header, any of them from its row. Each
 // can be edited back into the input, dropped, or, where the agent takes it, put into the running
 // turn at once.
-function QueuedRow({ entry, index, steerable, onEdit, onRelease, onNow, onCancel }: {
+function QueuedRow({ entry, index, count, steerable, onMove, onEdit, onRelease, onNow, onCancel }: {
   entry: ChatQueued
   index: number
+  count?: number
+  onMove?: (ref: string, direction: 'up' | 'down') => void
   steerable: boolean
   onEdit: (entry: ChatQueued) => void
   onRelease: (ref: string) => void
@@ -158,6 +160,10 @@ function QueuedRow({ entry, index, steerable, onEdit, onRelease, onNow, onCancel
       <span className="chat-queued-text" title={entry.text}>{queuedText(entry.text)}</span>
       {entry.images.length > 0 && <span className="chat-queued-images">{tr('ChatComposer.images', { value1: entry.images.length })}</span>}
       <span className="chat-queued-actions">
+        {onMove && count !== undefined && count > 1 && <>
+          <button type="button" className="chat-queued-action" disabled={index === 0} aria-label={t('ChatComposer.moveUp')} data-tooltip={t('ChatComposer.moveUp')} data-tooltip-side="top-end" onClick={() => onMove(entry.ref, 'up')}><ArrowUpIcon /></button>
+          <button type="button" className="chat-queued-action" disabled={index === count - 1} aria-label={t('ChatComposer.moveDown')} data-tooltip={t('ChatComposer.moveDown')} data-tooltip-side="top-end" onClick={() => onMove(entry.ref, 'down')}><ArrowDownIcon /></button>
+        </>}
         {entry.held && index > 0 && (
           <button type="button" className="chat-queued-action" aria-label={t('ChatComposer.sendThisMessage')} data-tooltip={t('ChatComposer.sendThisMessage')} data-tooltip-side="top-end" onClick={() => onRelease(entry.ref)}><EnterIcon /></button>
         )}
@@ -177,6 +183,7 @@ function QueuedRow({ entry, index, steerable, onEdit, onRelease, onNow, onCancel
 // dropped, or, where the agent takes it, put into the running turn at once.
 function QueuedList({ queue, held, steerable, ...actions }: {
   queue: readonly ChatQueued[]
+  onMove?: (ref: string, direction: 'up' | 'down') => void
   held: boolean
   steerable: boolean
   onEdit: (entry: ChatQueued) => void
@@ -208,7 +215,7 @@ function QueuedList({ queue, held, steerable, ...actions }: {
         <ol className="chat-queue-list">
           {queue.map((entry, index) => (
             <li key={entry.ref} className="chat-queued" data-held={entry.held || undefined}>
-              <QueuedRow entry={entry} index={index} steerable={steerable} {...actions} />
+              <QueuedRow entry={entry} index={index} count={queue.length} steerable={steerable} {...actions} />
             </li>
           ))}
         </ol>
@@ -283,6 +290,7 @@ export function ChatComposer({ conversation, state, compact = false }: { convers
   const submitting = useRef(false)
   const delivering = useChatDeliveries((messages) => messages[id]?.some((message) => message.phase === 'sending') ?? false)
   const quotes = useQuotes(id)
+  const queueOrderSupported = useCore((state) => state.rpc?.features.includes('chat-queue-order') ?? false)
   const imagesSupported = useChatImagesSupported()
   const deliveryRefsSupported = useCore((state) => !state.rpc || state.rpc.features.includes('deferred-conversation-start'))
   const optionsSupported = useChatOptionsSupported()
@@ -510,6 +518,7 @@ export function ChatComposer({ conversation, state, compact = false }: { convers
         steerable={steerable && working}
         onEdit={(entry) => void editQueued(entry)}
         onRelease={releaseQueued}
+        onMove={queueOrderSupported ? (ref, direction) => { void perform((rpc) => rpc.call('conversations.moveQueued', { id, ref, direction })) } : undefined}
         onNow={sendQueuedNow}
         onCancel={(ref) => void cancelQueued(ref)}
       />

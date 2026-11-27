@@ -9,10 +9,11 @@ type Entry = { text: string; images: ChatImage[]; ref: string; held: boolean; re
 export class ChatQueue {
   private entries: Entry[] = []
 
-  // A queue record from the log: a message to wait, one released from being held, one dropped,
+  // A queue record from the log: a message to wait, one moved, released from being held, or dropped,
   // or, with no ref, every one dropped.
   apply(record: Extract<ChatRecord, { dir: 'queue' }>): void {
-    if (record.text !== null && record.ref) this.add(record.text, record.ref, record.images, record.held, record.references, record.before)
+    if (record.move && record.ref) this.move(record.ref, record.move)
+    else if (record.text !== null && record.ref) this.add(record.text, record.ref, record.images, record.held, record.references, record.before)
     else if (record.release && record.ref) this.release(record.ref)
     else this.drop(record.ref)
   }
@@ -26,6 +27,17 @@ export class ChatQueue {
     }
     const next = before ? this.entries.findIndex((each) => each.ref === before) : -1
     this.entries.splice(next < 0 ? this.entries.length : next, 0, entry)
+  }
+
+  private move(ref: string, direction: 'up' | 'down'): void {
+    const index = this.entries.findIndex((entry) => entry.ref === ref)
+    if (index < 0) return
+    const target = index + (direction === 'up' ? -1 : 1)
+    if (target < 0 || target >= this.entries.length) return
+    const entry = this.entries[index]
+    if (!entry) return
+    this.entries.splice(index, 1)
+    this.entries.splice(target, 0, entry)
   }
 
   drop(ref: string | undefined): void {

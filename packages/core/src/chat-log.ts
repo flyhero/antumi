@@ -23,7 +23,7 @@ const LogLine = z.discriminatedUnion('dir', [
     action: z.object({ kind: z.enum(['retryTurn', 'retryCursorTurn']).transform(() => 'retryTurn' as const), userItemId: z.string(), stop: z.boolean().optional() }).nullable().optional()
   }),
   z.object({ dir: z.literal('option'), at: z.number(), option: ChatOption, value: z.string() }),
-  z.object({ dir: z.literal('queue'), at: z.number(), text: z.string().nullable(), ref: z.string().optional(), images: Images, references: z.array(ChatReference).optional(), release: z.boolean().optional(), held: z.boolean().optional(), before: z.string().optional() }),
+  z.object({ dir: z.literal('queue'), at: z.number(), text: z.string().nullable(), ref: z.string().optional(), images: Images, references: z.array(ChatReference).optional(), release: z.boolean().optional(), held: z.boolean().optional(), before: z.string().optional(), move: z.enum(['up', 'down']).optional() }),
   z.object({ dir: z.literal('exit'), at: z.number(), code: z.number().nullable(), stderr: z.string() }),
   z.object({ dir: z.literal('item'), at: z.number(), item: ChatItem }),
   z.object({

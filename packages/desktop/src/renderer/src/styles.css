@@ -9013,7 +9013,8 @@ div.inspector-empty > p { margin: 0 0 8px; }
    icons, named on hover. */
 .chat-queued-actions { flex: none; display: flex; gap: 2px; }
 .chat-queued-action { display: grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: var(--radius-xs); background: transparent; color: var(--text-muted); cursor: pointer; }
-.chat-queued-action:hover, .chat-queued-action:focus-visible { background: var(--fill-2); color: var(--text); }
+.chat-queued-action:hover:not(:disabled), .chat-queued-action:focus-visible { background: var(--fill-2); color: var(--text); }
+.chat-queued-action:disabled { opacity: .35; cursor: default; }
 .chat-queued-action svg { width: 14px; height: 14px; }
 .chat-queue .link-button { margin-left: 0; }
 /* Beside the send button while the agent works: the message goes in now rather than waiting. */

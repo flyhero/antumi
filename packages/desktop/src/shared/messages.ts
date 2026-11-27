@@ -2298,6 +2298,8 @@ export const MESSAGES = {
     "zh": "立刻插入到进行中的回合",
     "en": "Insert into the current turn immediately"
   },
+  "ChatComposer.moveUp": { "zh": "上移", "en": "Move up" },
+  "ChatComposer.moveDown": { "zh": "下移", "en": "Move down" },
   "ChatComposer.insertNow": {
     "zh": "立刻插入",
     "en": "Insert now"

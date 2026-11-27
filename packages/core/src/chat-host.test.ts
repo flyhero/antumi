@@ -422,6 +422,27 @@ describe('ChatHost', () => {
     expect(recorded.usage).toEqual([{ at: expect.any(Number), windows: [expect.objectContaining({ kind: 'session', usedPercent: 50 })], refresh: false }])
   })
 
+  it('persists queue moves and sends the new first message after the current turn', async () => {
+    const { host, sessionId } = await started()
+    daemon.reply = () => {}
+    await host.send(STAGE.conversationId, 'working')
+    for (const ref of ['first', 'second', 'third']) await host.send(STAGE.conversationId, ref, [], true, false, ref)
+    host.moveQueued(STAGE.conversationId, 'third', 'up')
+    host.moveQueued(STAGE.conversationId, 'first', 'down')
+    expect(stateOf(host)).toMatchObject({ queue: [{ ref: 'third' }, { ref: 'first' }, { ref: 'second' }] })
+    expect(userFrames(sessionId)).toHaveLength(1)
+    const replayed = new ChatHost(daemon, root, attachments, recordingSink().sink)
+    expect(replayed.items(STAGE).find((item) => item.kind === 'state')).toMatchObject({
+      queue: [{ ref: 'third' }, { ref: 'first' }, { ref: 'second' }]
+    })
+    finish(sessionId, 'completed')
+    await flushMicrotasks()
+    expect(userFrames(sessionId)).toHaveLength(2)
+    expect(JSON.stringify(userFrames(sessionId)[1])).toContain('third')
+    expect(() => host.moveQueued(STAGE.conversationId, 'third', 'up')).toThrow('no message is waiting')
+    expect(stateOf(host)).toMatchObject({ queue: [{ ref: 'first' }, { ref: 'second' }] })
+  })
+
   it('sends a message queued during a turn once the turn completes', async () => {
     const { host, sessionId } = await started()
     daemon.reply = () => {}

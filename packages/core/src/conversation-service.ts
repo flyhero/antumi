@@ -2059,6 +2059,11 @@ export class ConversationService {
     return images
   }
 
+  moveQueued(id: string, ref: string, direction: 'up' | 'down'): void {
+    this.get(id)
+    this.chats.moveQueued(id, ref, direction)
+  }
+
   cancelQueued(id: string, ref?: string): void {
     this.get(id)
     this.chats.cancelQueued(id, ref)

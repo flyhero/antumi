@@ -52,6 +52,26 @@ describe('ChatQueue', () => {
     expect(queue.view.every((entry) => entry.held)).toBe(true)
   })
 
+  it('moves held messages without changing their content, attachments or release state', () => {
+    const queue = new ChatQueue()
+    const image = { id: `${'a'.repeat(64)}.png`, width: 4, height: 3 }
+    queue.apply({ dir: 'queue', at, text: 'first', ref: 'first' })
+    queue.apply({ dir: 'queue', at, text: 'look', ref: 'second', images: [image] })
+    queue.turnEnded('failed')
+    const original = queue.view
+    queue.apply({ dir: 'queue', at, text: null, ref: 'second', move: 'up' })
+    expect(queue.view).toEqual([original[1], original[0]])
+    expect(queue.next()).toBeNull()
+    queue.apply({ dir: 'queue', at, text: null, ref: 'second', move: 'up' })
+    queue.apply({ dir: 'queue', at, text: null, ref: 'first', move: 'down' })
+    queue.apply({ dir: 'queue', at, text: null, ref: 'missing', move: 'up' })
+    expect(queue.view).toEqual([original[1], original[0]])
+    queue.apply({ dir: 'queue', at, text: null, ref: 'second', move: 'down' })
+    expect(queue.view).toEqual(original)
+    queue.apply({ dir: 'queue', at, text: null, ref: 'second', release: true })
+    expect(queue.next()).toMatchObject({ ref: 'second', images: [image] })
+  })
+
   it('keeps the images a message waits with', () => {
     const queue = new ChatQueue()
     const image = { id: `${'a'.repeat(64)}.png`, width: 4, height: 3 }

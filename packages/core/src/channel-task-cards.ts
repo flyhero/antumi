@@ -303,7 +303,7 @@ export class ChannelTaskCards {
   private async draw(card: StoredCard, task: Task, channel: StoredChannel): Promise<ChannelCard> {
     const source = task.channelSource
     const owners = channel.ownerUsers ?? []
-    const head = `**#${shortTaskId(task.id)} ${cardText(await this.hooks.clean(channel, task, task.title), 200)}**`
+    const head = `**Antumi 任务 #${shortTaskId(task.id)} ${cardText(await this.hooks.clean(channel, task, task.title), 200)}**`
     const by = (kind: CardAction) => this.store.usedAction(task.id, kind)?.usedBy ?? null
     if (card.kind === 'task') {
       const details = task.details.trim() ? cardText(await this.hooks.clean(channel, task, task.details.trim()), EXCERPT_CHARS) : ''
@@ -314,7 +314,7 @@ export class ChannelTaskCards {
         case 'pending': {
           const start = channel.taskCards?.start
           return {
-            title: '新任务，待开始', tone: 'blue',
+            title: 'Antumi 任务，待开始', tone: 'blue',
             sections: [...lines, ...(card.notice ? [card.notice] : [])],
             buttons: [...(start ? [this.button(card, 'start', '开始执行', 'primary')] : []), this.button(card, 'decline', '不做', 'danger', '确定不做这个任务？它会被取消。')],
             note: start ? '只有主人能开始执行，也可以在 Antumi 里开始。' : '请主人在 Antumi 里开始。'

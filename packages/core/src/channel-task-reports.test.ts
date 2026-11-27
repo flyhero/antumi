@@ -105,7 +105,7 @@ describe('channel task reports', () => {
     move(task, 'running')
     expect(reports.list(task.id)).toMatchObject([{ stage: 'start', state: 'pending', channelId: CHANNEL }])
     await reports.drain()
-    expect(posts).toMatchObject([{ channelId: CHANNEL, place: 'oc_1', thread: 'om_1', text: `已开始执行：#${shortTaskId(task.id)} 加导出`, mention: null }])
+    expect(posts).toMatchObject([{ channelId: CHANNEL, place: 'oc_1', thread: 'om_1', text: `已开始执行：Antumi 任务 #${shortTaskId(task.id)} 加导出`, mention: null }])
     expect(posts[0]?.reportId).toBe(reports.list(task.id)[0]?.id)
     expect(reports.list(task.id)[0]?.state).toBe('queued')
     expect(changes.at(-1)?.[0]?.state).toBe('queued')
@@ -119,7 +119,7 @@ describe('channel task reports', () => {
     await reports.drain()
     expect(posts.at(-1)).toMatchObject({
       mention: 'ou_asker',
-      text: `已提交验收：#${shortTaskId(task.id)} 加导出\n\n列表页加了导出按钮，导出当前筛选的结果。\n\n在订单列表筛选后点导出。\n\nPR：https://github.com/acme/app/pull/12`
+      text: `已提交验收：Antumi 任务 #${shortTaskId(task.id)} 加导出\n\n列表页加了导出按钮，导出当前筛选的结果。\n\n在订单列表筛选后点导出。\n\nPR：https://github.com/acme/app/pull/12`
     })
   })
 
@@ -131,11 +131,11 @@ describe('channel task reports', () => {
     condensed = '加了导出按钮。'
     const review = move(running, 'review')
     await reports.drain()
-    expect(posts.at(-1)?.text).toBe(`已提交验收：#${shortTaskId(task.id)} 加导出\n\n加了导出按钮。`)
+    expect(posts.at(-1)?.text).toBe(`已提交验收：Antumi 任务 #${shortTaskId(task.id)} 加导出\n\n加了导出按钮。`)
     condensed = null
     move(move(review, 'running'), 'review')
     await reports.drain()
-    expect(posts.at(-1)?.text).toBe(`已提交验收：#${shortTaskId(task.id)} 加导出`)
+    expect(posts.at(-1)?.text).toBe(`已提交验收：Antumi 任务 #${shortTaskId(task.id)} 加导出`)
     expect(posts.map((post) => post.text.split('：')[0])).toEqual(['已开始执行', '已提交验收', '已开始返工', '已提交验收'])
   })
 

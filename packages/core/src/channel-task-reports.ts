@@ -163,7 +163,8 @@ export class ChannelTaskReports {
   }
 
   private async compose(stage: ChannelTaskStage, task: Task, platform: string): Promise<{ headline: string; summary: string[]; links: string[] }> {
-    const headline = `${HEADLINE[stage]}：#${shortTaskId(task.id)} ${task.title}`
+    // Antumi's, said outright: the platform may have tasks of its own.
+    const headline = `${HEADLINE[stage]}：Antumi 任务 #${shortTaskId(task.id)} ${task.title}`
     if (stage !== 'review') return { headline, summary: [], links: [] }
     return { headline, summary: await this.summary(task, platform), links: this.hooks.pullRequests(task.id).map((link) => link.url) }
   }

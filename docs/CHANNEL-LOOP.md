@@ -264,16 +264,16 @@ core：ChannelService ─ 入站、提问、发件队列（已有）
 
 ### 什么时候回什么
 
-阶段名是 `ChannelTaskStage`（`stageOf` 从状态变化算出）。
+阶段名是 `ChannelTaskStage`（`stageOf` 从状态变化算出）。每条都写明是「Antumi 任务」：飞书等平台有自己的任务，同事看到「任务」容易当成那个；任务卡的标题和智能体建任务后的回答也这样写。
 
 | 任务状态变化 | 阶段 | 回什么 | 群里 @ 谁 |
 |---|---|---|---|
-| `pending → running` | `start` | 「已开始执行：#编号 标题」；有卡片时只更新卡片（第二期） | — |
-| `review → running` | `rework` | 「已开始返工：#编号 标题」 | — |
-| `running → review` | `review` | 「已提交验收：#编号 标题」+ 总结 + 验证说明 + PR 链接；有卡片时发验收卡（第二期） | 提问人 |
-| `review → done`、`running → done` | `done` | 「已完成：#编号 标题」 | 提问人 |
-| `pending → done` | `closed` | 「主人已关闭这个任务：#编号 标题」 | — |
-| `→ abandoned` | `abandoned` | 「主人取消了这个任务：#编号 标题」 | 提问人 |
+| `pending → running` | `start` | 「已开始执行：Antumi 任务 #编号 标题」；有卡片时只更新卡片（第二期） | — |
+| `review → running` | `rework` | 「已开始返工：Antumi 任务 #编号 标题」 | — |
+| `running → review` | `review` | 「已提交验收：Antumi 任务 #编号 标题」+ 总结 + 验证说明 + PR 链接；有卡片时发验收卡（第二期） | 提问人 |
+| `review → done`、`running → done` | `done` | 「已完成：Antumi 任务 #编号 标题」 | 提问人 |
+| `pending → done` | `closed` | 「主人已关闭这个任务：Antumi 任务 #编号 标题」 | — |
+| `→ abandoned` | `abandoned` | 「主人取消了这个任务：Antumi 任务 #编号 标题」 | 提问人 |
 
 私聊里来的任务每一条都带上提问人（那本来就是他的私聊，钉钉还要靠它找到发给谁）。
 

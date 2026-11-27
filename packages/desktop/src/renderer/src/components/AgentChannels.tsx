@@ -90,7 +90,7 @@ function ChannelRow({ channel, requestsOpen, onToggle, onRequests, onEdit, onRem
     t('AgentChannels.scopeProjects', { count: channel.projectPaths.length }),
     t('AgentChannels.scopeAskers', { count: channel.allowedUsers.length }),
     t('AgentChannels.scopeDaily', { count: channel.dailyPerUser }),
-    ...(channel.allowTaskCreation ? [t('AgentChannels.allowTaskCreation')] : []),
+    ...(channel.allowTaskCreation ? [t('AgentChannels.taskCreationChip')] : []),
     ...(channel.allowTaskCreation && channel.reportTasks ? [t('AgentChannels.reportTasksChip')] : []),
     ...(channel.reportTasks && channel.taskCards ? [t('AgentChannels.cardsChip')] : []),
     ...(channel.platformTools?.length ? [t('AgentChannels.toolsChip', { count: channel.platformTools.length })] : []),
@@ -271,7 +271,7 @@ function ChannelDialog({ profileId, platform, channel, agent, hasProvider, onClo
       </div>}
     </div>
     {taskCreationSupported && <div className="agent-channel-step">
-      {heading(5, t('AgentChannels.stepTasks'))}
+      {heading(5, t('AgentChannels.stepTasks'), t('AgentChannels.stepTasksHint'))}
       <Option checked={draft.allowTaskCreation} onChange={(allowTaskCreation) => setDraft({ ...draft, allowTaskCreation, reportTasks: draft.reportTasks ?? (allowTaskCreation || undefined) })} label={t('AgentChannels.allowTaskCreation')} info={t('AgentChannels.taskCreationHint')} />
       {/* Still there with collecting off: tasks collected before go on reporting until it is turned off. */}
       {reportsSupported && (draft.allowTaskCreation || draft.reportTasks) && <Option checked={draft.reportTasks ?? false} onChange={(reportTasks) => setDraft({ ...draft, reportTasks })} label={t('AgentChannels.reportTasks')} info={t('AgentChannels.reportTasksHint')} />}

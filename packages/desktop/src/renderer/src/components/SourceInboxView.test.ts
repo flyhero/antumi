@@ -76,6 +76,21 @@ describe('source inbox', () => {
     expect(row(html, '2')).not.toContain('>会话排查</button>')
   })
 
+  it('puts the analysis and task result together below the issue title', () => {
+    connect(['source-issue-preview'])
+    const item = issue('1', { autoInvestigation: {
+      id: conversationId, provider: 'github', instance: 'default', key: '1', title: 'Bug 1', url: 'https://github.com/acme/app/issues/1',
+      status: 'completed', conversationId, reason: null, message: null, attempts: 1, retryAt: null,
+      createdAt: 0, updatedAt: 0, startedAt: 0, canRetry: false,
+      fix: { taskId: null, state: 'skipped', urls: [], message: '事项不再独归你，或事项已完成' }
+    } })
+    useCore.setState({ inboxes: { 'github/default': inbox([item, issue('2')]) } })
+
+    const html = render()
+    expect(row(html, '1')).toMatch(/>Bug 1<\/button><div class="inbox-row-automation">.*分析完成.*没有新建任务.*事项不再独归你，或事项已完成/)
+    expect(row(html, '2')).not.toContain('inbox-row-automation')
+  })
+
   it('treats an issue whose conversation is gone as not looked into, and offers nothing new to an older core', () => {
     connect(['source-investigate'])
     expect(row(render(), '2')).toContain('>会话排查</button>')

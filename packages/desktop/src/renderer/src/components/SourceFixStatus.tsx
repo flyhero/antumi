@@ -4,9 +4,9 @@ import { selectTask, useCore } from '../core-store'
 import { t } from '../i18n'
 
 export function SourceFixStatus({ info }: { info: SourceFixInfo }) {
-  return <div className="auto-investigation-summary" role="status">
+  return <div className="auto-investigation-summary source-fix-status" role="status">
     <span>{t(`SourceFix.state.${info.state}`)}</span>
-    {info.message && <span>{info.message}</span>}
+    {info.message && <span className="source-fix-message">{info.message}</span>}
     {info.taskId && <button type="button" className="link-button" onClick={() => selectTask(info.taskId)}>{t('SourceFix.openTask')}</button>}
     {info.urls.map((url) => <a key={url} href={url} target="_blank" rel="noreferrer">{url}</a>)}
   </div>

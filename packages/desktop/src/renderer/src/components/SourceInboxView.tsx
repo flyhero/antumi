@@ -24,6 +24,7 @@ function updatedOn(ms: number): string {
 export const settingsSectionOf = (provider: string) => `source-${provider}`
 
 function IssueRow({ issue, name, busy, investigating = false, selected = false, panelId, onView, children }: { issue: SourceIssue; name: string; busy: boolean; investigating?: boolean; selected?: boolean; panelId?: string; onView?: (trigger: HTMLButtonElement) => void; children: ReactNode }) {
+  const automation = issue.autoInvestigation
   return (
     <li className="inbox-row" aria-busy={busy || undefined} data-selected={selected || undefined}>
       <div className="inbox-row-text">
@@ -38,11 +39,14 @@ function IssueRow({ issue, name, busy, investigating = false, selected = false, 
           </span>
           {issue.updatedAt !== null && <span>{tr('SourceInboxView.updated', { value1: updatedOn(issue.updatedAt) })}</span>}
           {issue.conversationId && <SourceCommentBadge target={{ kind: 'conversation', id: issue.conversationId }} />}
-          {issue.autoInvestigation?.fix && <SourceFixStatus info={issue.autoInvestigation.fix} />}
-          {issue.autoInvestigation && <span className="inbox-investigating" data-auto-state={issue.autoInvestigation.status} title={autoInvestigationReason(issue.autoInvestigation.reason, issue.autoInvestigation.message) ?? undefined}>{autoInvestigationStatus(issue.autoInvestigation.status)}</span>}
-          {investigating && !issue.autoInvestigation && <span className="inbox-investigating">{t('SourceInboxView.investigating')}</span>}
         </div>
         {onView ? <button type="button" className="inbox-row-title inbox-row-view-title" aria-expanded={selected} aria-controls={panelId} onClick={(event) => onView(event.currentTarget)}>{issue.title}</button> : <div className="inbox-row-title">{issue.title}</div>}
+        {(automation || investigating) && <div className="inbox-row-automation">
+          {automation
+            ? <span className="inbox-investigating" data-auto-state={automation.status} title={autoInvestigationReason(automation.reason, automation.message) ?? undefined}>{autoInvestigationStatus(automation.status)}</span>
+            : <span className="inbox-investigating">{t('SourceInboxView.investigating')}</span>}
+          {automation?.fix && <SourceFixStatus info={automation.fix} />}
+        </div>}
       </div>
       <div className="inbox-row-actions">
         {onView && <button type="button" className="button inbox-view" aria-expanded={selected} aria-controls={panelId} onClick={(event) => onView(event.currentTarget)}>{t('InboxIssueDetail.view')}</button>}

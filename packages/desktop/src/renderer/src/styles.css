@@ -5972,6 +5972,26 @@ div.inspector-empty > p { margin: 0 0 8px; }
   overflow-wrap: anywhere;
 }
 
+.inbox-row-automation {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: 12px;
+}
+
+.inbox-row-automation .source-fix-status {
+  flex: 1;
+  flex-direction: row;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  min-width: 0;
+}
+
+.inbox-row-automation .source-fix-message::before { content: '·'; margin-inline-end: 8px; }
+.inbox-row-automation .link-button { margin-left: 0; }
+
 .inbox-row-actions {
   display: flex;
   flex-shrink: 0;

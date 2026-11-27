@@ -7,17 +7,17 @@ import { isShortcut, useShortcutLabel } from '../keyboard-shortcuts'
 import { defaultAgent } from '../default-agent'
 import { canPickFolder, pickFolder } from '../desktop-bridge'
 import { useInstalledAgents } from '../installed-agents'
-import { agentLabel } from '../labels'
 import { latestProjects } from '../task-board'
 import { ChatPicker } from './ChatPicker'
-import { AgentIcon, FolderIcon } from './icons'
+import { FolderIcon } from './icons'
 import { parentDir, projectName, projectNames } from './ProjectPicker'
+import { executorOptions } from './TaskExecutorPicker'
 
 // What is being written, kept while the board is away so a half-written title is still there.
 // Projects and agent are null until the first open, which takes them from the latest task; after
 // that they stay as picked, since a batch of tasks usually shares them.
-type QuickAdd = { open: boolean; title: string; repos: readonly string[] | null; agent: AgentKind | null | undefined }
-const useQuickAdd = create<QuickAdd>(() => ({ open: false, title: '', repos: null, agent: undefined }))
+type QuickAdd = { open: boolean; title: string; repos: readonly string[] | null; agent: AgentKind | null | undefined; squadId: string | null }
+const useQuickAdd = create<QuickAdd>(() => ({ open: false, title: '', repos: null, agent: undefined, squadId: null }))
 
 export function openQuickAdd(): void {
   const { tasks, conversations } = useCore.getState()
@@ -34,7 +34,7 @@ export function TaskQuickAdd({ onCreated }: { onCreated: (id: string) => void })
   const quickAddKey = useShortcutLabel('quick-add-task')
   const submitKey = useShortcutLabel('quick-add-submit')
   const expandKey = useShortcutLabel('quick-add-expand')
-  const { open, title, repos, agent } = useQuickAdd()
+  const { open, title, repos, agent, squadId } = useQuickAdd()
   const connected = useCore((s) => s.connection === 'connected')
   const editor = useRef<HTMLDivElement>(null)
   const input = useRef<HTMLTextAreaElement>(null)
@@ -69,11 +69,11 @@ export function TaskQuickAdd({ onCreated }: { onCreated: (id: string) => void })
     )
   }
 
-  const draft = { title: title.trim(), repos: repos ?? [], agent: agent ?? null }
+  const draft = { title: title.trim(), repos: repos ?? [], agent: agent ?? null, squadId }
   const createTask = async () => {
     if (!draft.title || busy || !connected) return
     setBusy(true)
-    const task = await perform((rpc) => rpc.call('tasks.create', { title: draft.title, repos: [...draft.repos], agent: draft.agent }))
+    const task = await perform((rpc) => rpc.call('tasks.create', { title: draft.title, repos: [...draft.repos], agent: draft.agent, ...(draft.squadId ? { squadId: draft.squadId } : {}) }))
     setBusy(false)
     if (!task) return
     useQuickAdd.setState({ title: '' })
@@ -109,7 +109,7 @@ export function TaskQuickAdd({ onCreated }: { onCreated: (id: string) => void })
       />
       <div className="task-quick-add-picks">
         <ProjectPick repos={draft.repos} />
-        <AgentPick agent={draft.agent} />
+        <ExecutorPick agent={draft.agent} squadId={squadId} />
       </div>
       <div className="task-quick-add-hint">
         {submitKey && <span>{tr('TaskQuickAdd.create', { value1: <kbd>{submitKey}</kbd> })}</span>}
@@ -153,20 +153,21 @@ function ProjectPick({ repos }: { repos: readonly string[] }) {
   )
 }
 
-function AgentPick({ agent }: { agent: AgentKind | null }) {
+function ExecutorPick({ agent, squadId }: { agent: AgentKind | null; squadId: string | null }) {
   const installed = useInstalledAgents()
+  const squads = useCore((s) => s.squads)
   const choices = agent && !installed.includes(agent) ? [...installed, agent] : installed
   return (
     <ChatPicker
-      label={t('TaskQuickAdd.agentForNewTask')}
-      value={agent ?? ''}
-      placeholder={t('AgentPicker.chooseAgent')}
+      label={t('NewTaskDialog.assignee')}
+      value={squadId ? `squad:${squadId}` : agent ?? ''}
+      placeholder={squadId ? t('NewTaskDialog.developmentSquad') : t('AgentPicker.chooseAgent')}
       placement="below"
-      options={[
-        ...choices.map((each) => ({ value: each, label: agentLabel(each), icon: <AgentIcon agent={each} />, description: installed.includes(each) ? null : t('AgentPicker.notInstalled') })),
-        { value: '', label: t('TaskQuickAdd.chooseLater'), icon: <AgentIcon agent={null} /> }
-      ]}
-      onChange={(value) => useQuickAdd.setState({ agent: choices.find((each) => each === value) ?? null })}
+      options={executorOptions(choices, squads, squadId)}
+      onChange={(value) => {
+        if (value.startsWith('squad:')) useQuickAdd.setState({ squadId: value.slice(6) })
+        else useQuickAdd.setState({ squadId: null, agent: choices.find((each) => each === value) ?? null })
+      }}
     />
   )
 }

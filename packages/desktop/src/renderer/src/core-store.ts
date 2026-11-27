@@ -1062,7 +1062,7 @@ export async function openChatWhileStarting(taskId: string, start: () => Promise
   return Boolean(started)
 }
 
-export type NewTaskDraft = { title: string; repos: readonly string[]; agent: AgentKind | null }
+export type NewTaskDraft = { title: string; repos: readonly string[]; agent: AgentKind | null; squadId?: string | null }
 
 export function setNewTaskOpen(open: boolean, draft: NewTaskDraft | null = null): void {
   useCore.setState({ newTaskOpen: open, newTaskDraft: open ? draft : null })

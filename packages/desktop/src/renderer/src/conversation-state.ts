@@ -1,6 +1,6 @@
 import { t } from './i18n'
 import { reasonText } from './labels'
-import type { Conversation } from '@antumi/protocol'
+import { conversationWaiting, type Conversation } from '@antumi/protocol'
 
 export type ConversationState = { label: string; running: boolean; failed: boolean; detail: string | null }
 
@@ -8,10 +8,14 @@ export type ConversationState = { label: string; running: boolean; failed: boole
 // work, it failed, a turn finished while the user was elsewhere, or nothing is going on.
 export type ConversationGlyph = 'awaiting' | 'running' | 'failed' | 'unseen' | 'idle'
 
+export function delegationNeedsInput(conversation: Conversation): boolean {
+  return conversation.archivedAt == null && (conversation.delegation?.awaiting ?? 0) > 0
+}
+
 export function conversationGlyph(conversation: Conversation, unseen: boolean): ConversationGlyph {
+  if (conversationWaiting(conversation) || delegationNeedsInput(conversation)) return 'awaiting'
   const state = conversationState(conversation)
-  if (conversation.sessionId && conversation.chat?.turn === 'awaiting') return 'awaiting'
-  if (state.running && (conversation.starting || conversation.chat?.turn !== 'idle')) return 'running'
+  if (state.running && (conversation.starting || conversation.chat?.turn !== 'idle' || conversation.delegation?.open)) return 'running'
   if (state.failed) return 'failed'
   return unseen ? 'unseen' : 'idle'
 }
@@ -37,10 +41,11 @@ export function conversationState(conversation: Conversation): ConversationState
   const { preparing } = conversation
   if (preparing?.error) return { label: t('conversationState.issueNotFetched'), running: false, failed: true, detail: preparingError(preparing) }
   if (preparing) return { label: t(preparing.step === 'images' ? 'conversationState.fetchingImages' : 'conversationState.fetchingIssue'), running: true, failed: false, detail: t('conversationState.agentStartsOnceTheIssueIsIn') }
+  if (conversationWaiting(conversation)) return { label: t('conversationState.awaitingApproval'), running: true, failed: false, detail: t('attention.agentNeedsYourApprovalOrAnswer') }
+  if (delegationNeedsInput(conversation)) return { label: t('conversationState.delegationNeedsInput'), running: false, failed: false, detail: null }
   if (conversation.starting) return { label: t('conversationState.starting'), running: true, failed: false, detail: t('conversationState.preparingAgentYourMessageWillBeSentAfterward') }
-  if (sessionId && chat?.turn === 'awaiting') return { label: t('conversationState.awaitingApproval'), running: true, failed: false, detail: t('attention.agentNeedsYourApprovalOrAnswer') }
   if (sessionId && chat?.turn === 'running') return { label: t('ConversationList.running'), running: true, failed: false, detail: null }
-  if (conversation.delegation?.open) return { label: t(conversation.delegation.awaiting ? 'AgentProfiles.awaiting' : 'AgentProfiles.delegating'), running: !conversation.delegation.awaiting, failed: false, detail: t('AgentProfiles.calls') }
+  if (conversation.delegation?.open) return { label: t('AgentProfiles.delegating'), running: true, failed: false, detail: t('AgentProfiles.calls') }
   // A question the agent asked in passing, still open after its turn.
   if (sessionId && chat?.turn === 'idle' && chat.request?.async) return { label: t('ChatWorking.waitingForYourAnswer'), running: false, failed: false, detail: t('conversationState.agentHasAQuestionForYouAnswerIn') }
   if (!sessionId && lastExit?.code) return { label: t('SettingsPage.unexpectedExit'), running: false, failed: true, detail: t('attention.agentExitedUnexpectedlyCodeSendAMessageTo', { value1: lastExit.code }) }

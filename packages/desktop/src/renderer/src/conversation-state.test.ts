@@ -53,6 +53,17 @@ describe('conversationGlyph', () => {
     expect(glyph({ sessionId: 's', chat: { turn: 'idle' } }, true)).toBe('unseen')
     expect(glyph({ sessionId: 's', chat: { turn: 'idle' } })).toBe('idle')
   })
+
+  it.each(['idle', 'running', null] as const)('shows a delegated request on the parent while its turn is %s', (turn) => {
+    const patch = { sessionId: turn ? 's' : null, chat: turn ? { turn } : null, delegation: { open: 1, awaiting: 1, writing: false } }
+    expect(glyph(patch, true)).toBe('awaiting')
+    expect(label(patch).label).toBe('委派等你处理')
+    expect(glyph({ ...patch, delegation: { ...patch.delegation, awaiting: 0 } })).toBe('running')
+  })
+
+  it('gives the parent’s own request priority when both need attention', () => {
+    expect(label({ sessionId: 's', chat: { turn: 'awaiting' }, delegation: { open: 1, awaiting: 1, writing: false } }).label).toBe('等待确认')
+  })
 })
 
 describe('timeAgo', () => {

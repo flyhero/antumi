@@ -1,7 +1,7 @@
 import { AGENT_KINDS, type AgentKind, type Conversation, type Discussion, type Task } from '@antumi/protocol'
 import { getLocale, t } from './i18n'
 import { agentLabel } from './labels'
-import { conversationState } from './conversation-state'
+import { conversationState, delegationNeedsInput } from './conversation-state'
 import { primaryProjectName, projectName } from './components/ProjectPicker'
 import type { Preferences } from './preferences'
 
@@ -82,7 +82,7 @@ export function groupActivity(items: readonly ListItem[], unseen: Readonly<Recor
     const conversation = item.conversation
     const state = conversationState(conversation)
     const awaiting = conversation.sessionId !== null && (conversation.chat?.turn === 'awaiting' || conversation.chat?.turn === 'idle' && conversation.chat.request?.async)
-      || conversation.delegation?.open && conversation.delegation.awaiting
+      || delegationNeedsInput(conversation)
     if (awaiting) counts.awaiting++
     else if (state.failed) counts.failed++
     else if (state.running) counts.running++

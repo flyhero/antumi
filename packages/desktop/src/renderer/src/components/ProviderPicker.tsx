@@ -7,17 +7,19 @@ import { servingProviders } from '../model-provider-choice'
 import { ChatPicker, type PickerSize } from './ChatPicker'
 
 // An empty selection preserves the agent's native account or provider configuration.
-export function ProviderPicker({ agent, value, onChange, disabled = false, placement, size, remember = true }: {
+export function ProviderPicker({ agent, value, onChange, disabled = false, hideWhenLocalOnly, placement, size, remember = true }: {
   agent: AgentKind
   value: string | null
   onChange: (providerId: string | null) => void
   remember?: boolean
   disabled?: boolean
+  hideWhenLocalOnly?: boolean
   placement?: 'above' | 'below'
   size?: PickerSize
 }) {
   const providers = servingProviders(useCore((s) => s.modelProviders), agent)
   if (agentDescriptor(agent).capabilities.modelProviders.length === 0) return null
+  if (hideWhenLocalOnly && !value && providers.length === 0) return null
   const picked = value
   const missing = Boolean(value && !providers.some((provider) => provider.id === value))
   return (

@@ -619,7 +619,7 @@ export const MESSAGES = {
   "SettingsPage.providerCustomAdd": {"zh": "添加自定义服务商", "en": "Add a custom provider"},
   "SettingsPage.providerChoosePlan": {"zh": "选择要配置的套餐", "en": "Choose a plan to configure"},
   "SettingsPage.providerAccountAlternative": {"zh": "已有账号或服务商配置？直接沿用", "en": "Already have an account or provider configured? Keep using it"},
-  "SettingsPage.providerAccountHint": {"zh": "选择「沿用本机配置」，即可使用 Agent 现有的账号或服务商配置，包括 CC Switch 为 Claude Code 或 Codex 配好的中转 API，无需重新填写 Key。切换本机配置后，在新启动的 Agent 进程中生效。", "en": "Choose “Use local configuration” to keep the agent’s existing account or provider, including relay APIs configured for Claude Code or Codex with CC Switch. There is no need to enter the key again. Local configuration changes apply when a new agent process starts."},
+  "SettingsPage.providerAccountHint": {"zh": "选择「本机配置」，即可使用 Agent 现有的账号或服务商配置，包括 CC Switch 为 Claude Code 或 Codex 配好的中转 API，无需重新填写 Key。切换本机配置后，在新启动的 Agent 进程中生效。", "en": "Choose “Local configuration” to keep the agent’s existing account or provider, including relay APIs configured for Claude Code or Codex with CC Switch. There is no need to enter the key again. Local configuration changes apply when a new agent process starts."},
   "SettingsPage.automationLoadFailed": {"zh": "读取自动化设置失败，请重试。", "en": "Could not load automation settings. Try again."},
   "SettingsPage.automationLoading": {"zh": "正在读取额度自动化设置…", "en": "Loading quota automation settings…"},
   "SettingsPage.automationNoAccounts": {"zh": "还没有支持额度自动化的账号，添加账号后可配置预热和自动用卡。", "en": "No accounts support quota automation yet. Add an account to configure warmup and automatic reset credits."},
@@ -1008,7 +1008,7 @@ export const MESSAGES = {
   "InstalledAgentsSettings.verifyNativeModels": {"zh": "验证本机模型", "en": "Check local models"},
   "InstalledAgentsSettings.verifyNativeModelsAgain": {"zh": "重新验证", "en": "Check again"},
   "InstalledAgentsSettings.nativeModelsHint": {"zh": "只读取模型列表，不发送消息。首次验证可能需要准备运行时。", "en": "Only lists models, without sending a message. The first check may prepare the runtime."},
-  "InstalledAgentsSettings.nativeModelsHelp": {"zh": "可在新建会话中选择「沿用本机配置」查看模型，或检查 {agent} 的模型设置。也可以使用 Antumi 的服务商。", "en": "Choose Use local settings in a new chat, check the {agent} model configuration, or use an Antumi provider instead."},
+  "InstalledAgentsSettings.nativeModelsHelp": {"zh": "新建会话沿用本机配置时可查看模型，也可检查 {agent} 的模型设置或使用 Antumi 的服务商。", "en": "To view local models, start a new chat using the local configuration or check the {agent} model settings. You can also use an Antumi provider."},
   "Readiness.accountReady": {"zh": "环境已就绪", "en": "Environment ready"},
   "Readiness.providerReady": {"zh": "服务商已配置", "en": "Provider configured"},
   "ModelsUnavailable.text": {"zh": "选不了模型：{reason}", "en": "No models to pick: {reason}"},
@@ -10937,6 +10937,10 @@ export const MESSAGES = {
     "zh": "等待确认",
     "en": "Awaiting approval"
   },
+  "conversationState.delegationNeedsInput": {
+    "zh": "委派等你处理",
+    "en": "Delegation needs your input"
+  },
   "conversationState.agentHasAQuestionForYouAnswerIn": {
     "zh": "Agent 问了你一个问题，在对话里回答",
     "en": "Agent has a question for you. Answer in the conversation"
@@ -12999,7 +13003,7 @@ export const MESSAGES = {
   "CcSwitchImport.title": {"zh": "从 CC Switch 导入", "en": "Import from CC Switch"},
   "CcSwitchImport.entryHint": {"zh": "CC Switch 里已有多个 API 服务商？可一次读取并选择导入。", "en": "Already have API providers in CC Switch? Read the list and choose which to import."},
   "CcSwitchImport.back": {"zh": "返回服务商", "en": "Back to providers"},
-  "CcSwitchImport.hint": {"zh": "读取 Claude Code 和 Codex 的 API 服务商（包括未启用项）。导入是一次性复制，之后可在 Antumi 独立选择服务商。Key 直接存入 Antumi，不显示在预览里；不会修改 CC Switch 或覆盖现有服务商。官方订阅和 OAuth 托管项继续用「沿用本机配置」。", "en": "Read Claude Code and Codex API providers, including inactive entries. Import makes a one-time copy, so providers can then be selected independently in Antumi. Keys are stored directly in Antumi and are never shown in the preview. CC Switch and existing providers are left unchanged. Keep official subscriptions and managed OAuth entries on “Use local configuration”."},
+  "CcSwitchImport.hint": {"zh": "读取 Claude Code 和 Codex 的 API 服务商（包括未启用项）。导入是一次性复制，之后可在 Antumi 独立选择服务商。Key 直接存入 Antumi，不显示在预览里；不会修改 CC Switch 或覆盖现有服务商。官方订阅和 OAuth 托管项继续用「本机配置」。", "en": "Read Claude Code and Codex API providers, including inactive entries. Import makes a one-time copy, so providers can then be selected independently in Antumi. Keys are stored directly in Antumi and are never shown in the preview. CC Switch and existing providers are left unchanged. Keep official subscriptions and managed OAuth entries on “Local configuration”."},
   "CcSwitchImport.directory": {"zh": "CC Switch 数据目录（留空使用默认位置）", "en": "CC Switch data directory (leave blank for the default)"},
   "CcSwitchImport.locationHint": {"zh": "读取的是运行 Antumi 后端的电脑。默认目录为用户主目录下的 .cc-switch；改过数据位置时可填写实际目录。", "en": "Reads from the computer running the Antumi backend. The default is .cc-switch in its user home; enter the actual directory if you moved CC Switch data."},
   "CcSwitchImport.read": {"zh": "读取服务商", "en": "Read providers"},
@@ -13026,12 +13030,12 @@ export const MESSAGES = {
   "SettingsPage.modelProviders": { "zh": "服务商", "en": "Model providers" },
   "SettingsPage.modelProvidersDescription": { "zh": "让 Agent 用第三方编程套餐的模型，比如火山方舟、智谱 GLM。新建会话时选用哪一个。", "en": "Let agents use a third-party coding plan's models, such as Volcengine Ark or Zhipu GLM. Pick one when starting a conversation." },
   "ProviderPicker.provider": { "zh": "服务商", "en": "Provider" },
-  "ProviderPicker.ownAccount": { "zh": "沿用本机配置", "en": "Use local configuration" },
+  "ProviderPicker.ownAccount": { "zh": "本机配置", "en": "Local configuration" },
   "ProviderPicker.ownAccountDescription": { "zh": "使用 {value1} 现有的账号或服务商配置，无需重新填写 Key", "en": "Use {value1}’s existing account or provider configuration without entering the key again" },
   "ProviderPicker.manage": { "zh": "管理服务商…", "en": "Manage providers…" },
   "RouteBadge.onProvider": { "zh": "在服务商「{value1}」上运行，这个会话固定用它", "en": "Runs on {value1}, fixed for this conversation" },
   "RouteBadge.ownAccount": { "zh": "服务商「{value2}」不服务 {value1}，它沿用本机的账号或服务商配置", "en": "{value2} does not serve {value1}, which uses its local account or provider configuration" },
-  "RouteBadge.ownAccountShort": { "zh": "沿用本机配置", "en": "Use local configuration" },
+  "RouteBadge.ownAccountShort": { "zh": "本机配置", "en": "Local configuration" },
   "RouteBadge.unavailable": { "zh": "服务商「{value1}」已删除或没有 Key，补上之前 Agent 不能继续", "en": "{value1} is gone or has no key; the agent cannot go on until it is back" },
   "RouteBadge.removedProvider": { "zh": "已删除的服务商", "en": "Removed provider" },
   "ChatHandoff.keepsProvider": { "zh": "沿用服务商「{value1}」", "en": "Keeps {value1}" },

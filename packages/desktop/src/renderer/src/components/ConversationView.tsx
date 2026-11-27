@@ -132,11 +132,13 @@ export function ConversationView({ id, pane }: { id: string; pane?: Conversation
   >
     <header className="detail-header conversation-header">
       {pane && <button type="button" className="pane-chip" data-active={pane.active} aria-label={[t('ConversationView.paneLabel', { number: pane.index + 1, active: pane.active ? t('ConversationView.active') : '' }), paneKey].filter(Boolean).join(' · ')} data-tooltip={paneKey || undefined} onClick={pane.focus}>{pane.index + 1}</button>}
-      <ConversationStatus conversation={conversation} />
       <div className="header-meta">
-        {renaming
-          ? <TitleEditor title={conversation.title} label={t('ConversationList.conversationTitle')} onSave={rename} onDone={() => setRenaming(false)} />
-          : <button type="button" className="terminal-view-title conversation-title" title={t('ConversationView.clickToRename', { value1: conversation.title })} disabled={busy} onClick={() => setRenaming(true)}>{conversation.title}</button>}
+        <div className="conversation-heading">
+          <ConversationStatus conversation={conversation} />
+          {renaming
+            ? <TitleEditor title={conversation.title} label={t('ConversationList.conversationTitle')} onSave={rename} onDone={() => setRenaming(false)} />
+            : <button type="button" className="terminal-view-title conversation-title" title={t('ConversationView.clickToRename', { value1: conversation.title })} disabled={busy} onClick={() => setRenaming(true)}>{conversation.title}</button>}
+        </div>
         <span className="muted">{agentLabel(conversation.agent)}</span>
         <RouteBadge conversation={conversation} />
         <span className="muted" title={conversation.projectPaths.join('\n') || conversation.workspacePath}>{primaryProjectName(conversation.projectPaths)}</span>

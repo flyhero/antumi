@@ -1,8 +1,9 @@
-import { getLocale } from './i18n'
+import { getLocale, t } from './i18n'
 import { useMemo } from 'react'
 import type { AgentKind, Conversation, SquadRun, Task } from '@antumi/protocol'
 import { useCore } from './core-store'
 import { agentLabel } from './labels'
+import { delegationNeedsInput } from './conversation-state'
 import { doingText, memberProgress } from './squad-progress'
 
 // Who is at work on something right now, said one way on the board, in a task's header and in
@@ -15,9 +16,11 @@ export type WorkActivity = {
 }
 
 export function conversationActivity(conversation: Conversation | undefined, agent: AgentKind, name = agentLabel(agent)): WorkActivity | null {
-  if (!conversation?.sessionId) return null
+  if (!conversation) return null
   const turn = conversation.chat?.turn
-  if (turn === 'awaiting') return { state: 'awaiting', workers: [{ agent, name }], detail: conversation.chat?.request?.title || null }
+  if (conversation.sessionId && turn === 'awaiting') return { state: 'awaiting', workers: [{ agent, name }], detail: conversation.chat?.request?.title || null }
+  if (delegationNeedsInput(conversation)) return { state: 'awaiting', workers: [{ agent, name }], detail: t('conversationState.delegationNeedsInput') }
+  if (!conversation.sessionId) return null
   if (turn === 'running' || conversation.starting) return { state: 'running', workers: [{ agent, name }], detail: doingText(conversation.chat?.doing) }
   return null
 }

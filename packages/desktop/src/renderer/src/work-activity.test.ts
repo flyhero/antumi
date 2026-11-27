@@ -26,6 +26,12 @@ describe('who is at work', () => {
     expect(taskActivity(task, { [id(7)]: conversation(7, { turn: 'running' }) }, {})).toMatchObject({ state: 'running', detail: null })
   })
 
+  it('shows a delegated request before the parent’s current action', () => {
+    const parent = { ...conversation(7, { turn: 'running', doing: { tool: 'Bash', title: 'pnpm test' } }), delegation: { open: 1, awaiting: 1, writing: false } }
+    expect(conversationActivity(parent, 'codex')).toMatchObject({ state: 'awaiting', detail: '委派等你处理' })
+    expect(conversationActivity({ ...parent, delegation: { ...parent.delegation, awaiting: 0 } }, 'codex')).toMatchObject({ state: 'running', detail: '命令 pnpm test' })
+  })
+
   it('reads a squad\'s task through its members, a member waiting on the user first', () => {
     const working = taskActivity(squadTask, { [id(20)]: conversation(20, { turn: 'running', doing: { tool: null, title: '汇总' } }), [id(21)]: conversation(21, { turn: 'running', doing: { tool: 'Bash', title: 'pnpm test' } }) }, { [run.id]: run })
     expect(working).toEqual({ state: 'running', workers: [{ agent: 'claude', name: '队长' }, { agent: 'codex', name: '开发' }, { agent: 'cursor', name: '审查' }], detail: '开发：命令 pnpm test' })

@@ -160,7 +160,7 @@ export function HandoffProviderPicker({ conversationId, agent }: { conversationI
   const chosen = useCore((s) => s.conversations[conversationId]?.modelProvider)
   const pending = useHandoffs((s) => s[conversationId])
   if (!supported) return null
-  return <ProviderPicker agent={agent} value={pending?.modelProvider !== undefined ? pending.modelProvider : chosen ?? null} onChange={(value) => chooseHandoffProvider(conversationId, value)} />
+  return <ProviderPicker agent={agent} value={pending?.modelProvider !== undefined ? pending.modelProvider : chosen ?? null} hideWhenLocalOnly onChange={(value) => chooseHandoffProvider(conversationId, value)} />
 }
 
 // The model and effort the agent taking over starts in, where core takes them.

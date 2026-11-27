@@ -118,7 +118,7 @@ describe('the Feishu connector', () => {
   let feishu: ReturnType<typeof fakeFeishu>
   let emitted: ChannelGatewayToCore[]
   let connector: ChannelConnector
-  const open = (appSecret = 'good') => { connector = feishuConnector({ id: CHANNEL, platform: 'feishu', credentials: { appId: 'cli_1', appSecret } }, (message) => emitted.push(message), { api: feishu.api(), mcp: `${feishu.api()}/mcp`, retryMs: [30], clickAnswerMs: 300 }) }
+  const open = (appSecret = 'good', followUps = false) => { connector = feishuConnector({ id: CHANNEL, platform: 'feishu', credentials: { appId: 'cli_1', appSecret }, options: { followUps } }, (message) => emitted.push(message), { api: feishu.api(), mcp: `${feishu.api()}/mcp`, retryMs: [30], clickAnswerMs: 300 }) }
   const events = () => emitted.flatMap((message) => (message.type === 'event' ? [message] : []))
   const actions = () => emitted.flatMap((message) => (message.type === 'action' ? [message] : []))
   const answerOf = (frame: { payload?: Uint8Array } | undefined) => {
@@ -185,6 +185,24 @@ describe('the Feishu connector', () => {
     await when(() => events().length === 2)
     connector.accepted('om_1')
     await when(() => feishu.acks().length === 2)
+  })
+
+  it('hands in what is said in a topic without a mention only where the channel takes it, and never what is said outside one or by a bot', async () => {
+    const plain = (fields: Record<string, unknown>, sender: Record<string, unknown> = {}) => received({ content: JSON.stringify({ text: '还要加个排序' }), mentions: [], ...fields }, sender)
+    feishu.send(plain({ message_id: 'om_2', root_id: 'om_root', thread_id: 'omt_1' }))
+    await when(() => feishu.acks().length === 1)
+    expect(events()).toEqual([])
+    connector.stop()
+    await when(() => feishu.connected() === 0)
+    const before = states().length
+    open('good', true)
+    await when(() => feishu.connected() === 1 && states().slice(before).some((each) => each.state === 'connected'))
+    feishu.send(plain({ message_id: 'om_3', root_id: 'om_root', thread_id: 'omt_1' }))
+    feishu.send(plain({ message_id: 'om_4' }))
+    feishu.send(plain({ message_id: 'om_5', root_id: 'om_quoted' }))
+    feishu.send(plain({ message_id: 'om_6', root_id: 'om_root', thread_id: 'omt_1' }, { sender_type: 'app' }))
+    await when(() => events().length === 1 && feishu.acks().length === 4)
+    expect(events()[0]).toMatchObject({ eventKey: 'om_3', kind: 'followUp', place: 'oc_1', thread: 'om_root', user: 'ou_1', text: '还要加个排序' })
   })
 
   it('takes a direct message, a topic and a bot\'s message, and leaves a group message not for it with a plain acknowledgement', async () => {

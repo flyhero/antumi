@@ -17,8 +17,11 @@ export type ChannelPlatformDescriptor = {
   // One message's longest text, and the least time between two posts in one place.
   textLimit: number
   minGapMs: number
-  // cards: buttons on a message, their clicks reported back (docs/CHANNEL-LOOP.md).
-  features: { reactions: boolean; cards: boolean }
+  // cards: buttons on a message, their clicks reported back (docs/CHANNEL-LOOP.md). followUps: a
+  // message in a thread can be told from one outside it, so a thread can go on without a mention.
+  features: { reactions: boolean; cards: boolean; followUps: boolean }
+  // What the app must also be granted to go on without a mention: every message of its groups.
+  followUpScopes?: readonly string[]
   // The platform's hosted MCP its tools are reached through, those that may be given, and the scope
   // giving the asker access to a document the bot made needs. The catalog only names and groups
   // them: what each takes is what the platform lists.
@@ -73,8 +76,8 @@ export const CHANNEL_PLATFORM_DESCRIPTORS = {
     manifest: SLACK_MANIFEST,
     textLimit: 3500,
     minGapMs: 1100,
-    // Block Kit buttons are not wired yet.
-    features: { reactions: true, cards: false }
+    // Block Kit buttons and replies in threads without a mention are not wired yet.
+    features: { reactions: true, cards: false, followUps: false }
   },
   feishu: {
     label: '飞书',
@@ -88,7 +91,8 @@ export const CHANNEL_PLATFORM_DESCRIPTORS = {
     textLimit: 4000,
     // Five messages a second to one chat, shared by every bot in it.
     minGapMs: 250,
-    features: { reactions: true, cards: true },
+    features: { reactions: true, cards: true, followUps: true },
+    followUpScopes: ['im:message.group_msg'],
     tools: { mcp: 'https://mcp.feishu.cn/mcp', catalog: FEISHU_TOOLS, accessScopes: ['docs:permission.member:create'] }
   },
   // Feishu outside China: the same platform, apps and limits, on its own domain.
@@ -102,7 +106,8 @@ export const CHANNEL_PLATFORM_DESCRIPTORS = {
     manifest: FEISHU_SCOPES,
     textLimit: 4000,
     minGapMs: 250,
-    features: { reactions: true, cards: true }
+    features: { reactions: true, cards: true, followUps: true },
+    followUpScopes: ['im:message.group_msg']
   },
   dingtalk: {
     label: '钉钉',
@@ -116,8 +121,8 @@ export const CHANNEL_PLATFORM_DESCRIPTORS = {
     textLimit: 3500,
     // Twenty messages a minute from a robot to one chat.
     minGapMs: 3100,
-    // A robot has no way to react to a message; interactive cards are not wired yet.
-    features: { reactions: false, cards: false }
+    // A robot has no way to react to a message, and a group has no threads; interactive cards are not wired yet.
+    features: { reactions: false, cards: false, followUps: false }
   }
 } satisfies Record<ChannelPlatform, ChannelPlatformDescriptor>
 

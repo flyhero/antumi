@@ -9,7 +9,9 @@ import { ChannelPlatform, ChannelState } from '@antumi/protocol'
 // platform's own string, which core stores and hands back without reading.
 const Ref = z.string().min(1).max(500)
 
-export const GatewayChannel = z.object({ id: z.string().uuid(), platform: ChannelPlatform, credentials: z.record(z.string(), z.string()) })
+// options: what the connection hands in besides mentions and direct messages (followUps: what
+// is said in a thread without a mention). Absent: nothing more.
+export const GatewayChannel = z.object({ id: z.string().uuid(), platform: ChannelPlatform, credentials: z.record(z.string(), z.string()), options: z.object({ followUps: z.boolean() }).optional() })
 export type GatewayChannel = z.infer<typeof GatewayChannel>
 
 export const ChannelDelivery = z.object({
@@ -87,7 +89,8 @@ export const ChannelEvent = z.object({
   channelId: z.string().uuid(),
   // The platform's id of the delivery, the same when it is delivered again.
   eventKey: Ref,
-  kind: z.enum(['mention', 'direct']),
+  // followUp: said in a thread without a mention, handed in only where the channel takes those.
+  kind: z.enum(['mention', 'direct', 'followUp']),
   tenant: Ref,
   place: Ref,
   // The thread it was written in, or null at the top of the chat.

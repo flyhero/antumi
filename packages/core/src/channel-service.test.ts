@@ -155,7 +155,7 @@ describe('ChannelService', () => {
     expect(JSON.stringify(announced)).not.toContain('xoxb-1')
     expect(JSON.stringify(channels.list())).not.toContain('xapp-1')
     expect(launches).toBe(1)
-    expect(sent('channels').at(-1)?.channels).toEqual([{ id: channel.id, platform: 'slack', credentials: { appToken: 'xapp-1', botToken: 'xoxb-1' } }])
+    expect(sent('channels').at(-1)?.channels).toEqual([{ id: channel.id, platform: 'slack', credentials: { appToken: 'xapp-1', botToken: 'xoxb-1' }, options: { followUps: false } }])
     expect(channels.list()[0]).toMatchObject({ state: 'connected', tenant: 'T1', tenantName: 'Acme', botUserId: 'B1' })
     // Saved again without them, they stay; the workspace found on connecting stays too.
     const again = await channels.save({ id: channel.id, profileId: profile.id, platform: 'slack', projectPaths: [repo], allowedUsers: ['U1'], allowedPlaces: ['C1'] })
@@ -515,6 +515,32 @@ describe('ChannelService', () => {
     await channels.save({ ...feishu, allowedUsers: ['ou_2'] })
     expect(await channels.callTool(conversationId, 'lark_fetch_doc', { doc_id: 'doxA' })).toEqual({ text: '提问人或聊天已不在接入的授权范围内。', isError: true })
     expect(channels.toolCalls(request!.id).at(-1)).toMatchObject({ tool: 'lark_fetch_doc', target: 'fetch-doc ✗' })
+  })
+
+  it('goes on in a thread without a mention only for its one asker, until anyone else speaks there', async () => {
+    const feishu = await channels.save({ profileId: profile.id, platform: 'feishu', projectPaths: [repo], allowedUsers: ['ou_1', 'ou_2'], allowedPlaces: ['oc_1'], credentials: { appId: 'cli_1', appSecret: 's' }, followUps: true })
+    expect(sent('channels').at(-1)?.channels.find((each) => each.id === feishu.id)?.options).toEqual({ followUps: true })
+    fromGateway({ type: 'state', channelId: feishu.id, state: 'connected', error: null, tenant: 'T1', tenantName: 'Acme', botUserId: 'ou_bot' })
+    const followUp = (over: Partial<ChannelEvent>) => ask({ channelId: feishu.id, kind: 'followUp', place: 'oc_1', thread: 'om_root', user: 'ou_1', text: '还要加个排序', ...over })
+    const outcomes = () => store.outcomes(feishu.id)
+    await followUp({ thread: 'om_elsewhere' })
+    expect(outcomes().at(-1)).toBe('dropped:not-ours')
+    await ask({ channelId: feishu.id, place: 'oc_1', user: 'ou_1', messageId: 'om_root', text: '加个搜索' })
+    await deliverAll()
+    await followUp({})
+    await deliverAll()
+    expect(outcomes().at(-1)).toBe('accepted')
+    const [second, first] = channels.requests(feishu.id, null, 2).items
+    expect(second).toMatchObject({ text: '还要加个排序', direct: false })
+    expect(second?.conversationId).toBe(first?.conversationId)
+    await followUp({ user: 'ou_2', text: '我也说两句' })
+    expect(outcomes().at(-1)).toBe('dropped:bystander')
+    await followUp({ text: '那就按我说的' })
+    expect(outcomes().at(-1)).toBe('dropped:needs-mention')
+    expect(channels.requests(feishu.id, null, 10).items.map((each) => each.text)).not.toContain('我也说两句')
+    await channels.save({ ...feishu, followUps: false })
+    await followUp({ thread: 'om_other' })
+    expect(outcomes().at(-1)).toBe('dropped:follow-ups-off')
   })
 
   it('answers a click on a card once, however often the platform sends it', async () => {

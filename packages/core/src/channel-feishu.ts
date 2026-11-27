@@ -149,6 +149,9 @@ export function feishuConnector(channel: GatewayChannel, emit: ConnectorEmit, op
   const retryMs = options.retryMs ?? RETRY_MS
   const clickAnswerMs = options.clickAnswerMs ?? CLICK_ANSWER_MS
   const { appId = '', appSecret = '' } = channel.credentials
+  // With the app granted every group message: what is said in a topic without a mention goes to
+  // core too, which decides whether it is for the bot. Outside topics it is never handed on.
+  const followUps = channel.options?.followUps === true
   let stopped = false
   let socket: WebSocket | null = null
   let attempts = 0
@@ -389,7 +392,9 @@ export function feishuConnector(channel: GatewayChannel, emit: ConnectorEmit, op
     const mentions = message.mentions ?? []
     const direct = message.chat_type === 'p2p'
     const mention = !direct && mentions.some((each) => each.id?.open_id === botOpenId)
-    if ((!direct && !mention) || !user) return null
+    const thread = message.thread_id && message.root_id && message.root_id !== message.message_id ? message.root_id : null
+    const followUp = followUps && !direct && !mention && thread !== null && sender?.sender_type === 'user'
+    if ((!direct && !mention && !followUp) || !user) return null
     const tenantKey = sender?.tenant_key || header.tenant_key
     if (!tenantKey) return null
     const content = feishuContent(message.message_type, message.content, mentions, botOpenId)
@@ -402,11 +407,11 @@ export function feishuConnector(channel: GatewayChannel, emit: ConnectorEmit, op
     return {
       channelId: channel.id,
       eventKey: message.message_id,
-      kind: direct ? 'direct' as const : 'mention' as const,
+      kind: direct ? 'direct' as const : mention ? 'mention' as const : 'followUp' as const,
       tenant: tenantKey,
       place: message.chat_id,
       // In a topic, the message it started from, which a reply goes under; a quoted reply is no topic.
-      thread: message.thread_id && message.root_id && message.root_id !== message.message_id ? message.root_id : null,
+      thread,
       messageId: message.message_id,
       user,
       ignorable: sender?.sender_type !== 'user',

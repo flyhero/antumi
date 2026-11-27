@@ -171,6 +171,16 @@ export class ChannelStore {
     return row ? thread(row) : null
   }
 
+  // Everyone asking in one thread of a chat, and whether anyone else has spoken there.
+  threadsAt(channelId: string, threadKey: string): { asker: string; bystanders: boolean }[] {
+    return this.db.prepare('SELECT asker, bystanders FROM channel_threads WHERE channel_id = ? AND thread_key = ?').all(channelId, threadKey)
+      .map((row) => ({ asker: String(row.asker), bystanders: Boolean(row.bystanders) }))
+  }
+
+  markBystanders(channelId: string, threadKey: string): void {
+    this.db.prepare('UPDATE channel_threads SET bystanders = 1 WHERE channel_id = ? AND thread_key = ?').run(channelId, threadKey)
+  }
+
   saveThread(next: ChannelThread): void {
     this.db.prepare(`INSERT INTO channel_threads (id, channel_id, thread_key, asker, conversation_id, reply_place, reply_thread, last_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET conversation_id = excluded.conversation_id, reply_place = excluded.reply_place, reply_thread = excluded.reply_thread, last_at = excluded.last_at`)

@@ -19,6 +19,10 @@ export function useChannelTaskReportsSupported(): boolean {
   return useCore((state) => state.rpc?.features.includes('channel-task-reports') ?? false)
 }
 
+export function useChannelFollowUpsSupported(): boolean {
+  return useCore((state) => state.rpc?.features.includes('channel-follow-ups') ?? false)
+}
+
 export function useChannelPlatformToolsSupported(): boolean {
   return useCore((state) => state.rpc?.features.includes('channel-platform-tools') ?? false)
 }

@@ -4,7 +4,7 @@ import {
   AGENT_KINDS, CHANNEL_DEFAULTS, CHANNEL_PLATFORMS, ChannelInput, agentDescriptor, channelPlatform, translatedText,
   type AgentKind, type Channel, type ChannelCredentialKey, type ChannelPlatform, type ChannelRequest, type DocAccess, type DocLocation, type TaskCardReview
 } from '@antumi/protocol'
-import { setChannels, useChannelPlatformToolsSupported, useChannelReadiness, useChannels, useChannelsSupported, useChannelTaskCardsSupported, useChannelTaskReportsSupported, useChannelTasksSupported } from '../channels'
+import { setChannels, useChannelFollowUpsSupported, useChannelPlatformToolsSupported, useChannelReadiness, useChannels, useChannelsSupported, useChannelTaskCardsSupported, useChannelTaskReportsSupported, useChannelTasksSupported } from '../channels'
 import { askConfirm } from '../confirm-dialog'
 import { timeAgo } from '../conversation-state'
 import { perform, useCore } from '../core-store'
@@ -92,7 +92,8 @@ function ChannelRow({ channel, requestsOpen, onToggle, onRequests, onEdit, onRem
     ...(channel.allowTaskCreation ? [t('AgentChannels.allowTaskCreation')] : []),
     ...(channel.allowTaskCreation && channel.reportTasks ? [t('AgentChannels.reportTasksChip')] : []),
     ...(channel.reportTasks && channel.taskCards ? [t('AgentChannels.cardsChip')] : []),
-    ...(channel.platformTools?.length ? [t('AgentChannels.toolsChip', { count: channel.platformTools.length })] : [])
+    ...(channel.platformTools?.length ? [t('AgentChannels.toolsChip', { count: channel.platformTools.length })] : []),
+    ...(channel.followUps ? [t('AgentChannels.followUpsChip')] : [])
   ]
   return <div className="agent-channel-row">
     <span className="agent-channel-logo" aria-hidden="true"><ChannelPlatformIcon platform={channel.platform} /></span>
@@ -117,6 +118,7 @@ type Draft = {
   reportTasks: boolean | undefined
   cards: boolean; owners: string; cardStart: boolean; cardAgent: AgentKind; cardReview: TaskCardReview | 'none'
   tools: string[]; docKind: DocLocation['kind']; docValue: string; docAccess: DocAccess
+  followUps: boolean
   dailyPerUser: string; dailyTotal: string; maxConcurrent: string; turnTimeoutSec: string
 }
 
@@ -138,6 +140,7 @@ function ChannelDialog({ profileId, platform, channel, agent, hasProvider, onClo
   const reportsSupported = useChannelTaskReportsSupported()
   const cardsSupported = useChannelTaskCardsSupported() && descriptor.features.cards
   const toolCatalog = useChannelPlatformToolsSupported() ? descriptor.tools : undefined
+  const followUpsSupported = useChannelFollowUpsSupported() && descriptor.features.followUps
   const locale = useLocale((state) => state.locale)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -148,6 +151,7 @@ function ChannelDialog({ profileId, platform, channel, agent, hasProvider, onClo
     cards: !!channel?.taskCards, owners: (channel?.ownerUsers ?? []).join('\n'),
     cardStart: channel?.taskCards ? channel.taskCards.start !== null : true, cardAgent: channel?.taskCards?.start?.agent ?? agent,
     cardReview: channel?.taskCards ? channel.taskCards.review ?? 'none' : 'ownerOrAsker',
+    followUps: channel?.followUps ?? false,
     tools: channel?.platformTools ?? [], docKind: channel?.docLocation?.kind ?? 'wikiNode', docValue: channel?.docLocation?.value ?? '', docAccess: channel?.docAccess ?? 'edit',
     dailyPerUser: String(channel?.dailyPerUser ?? CHANNEL_DEFAULTS.dailyPerUser), dailyTotal: String(channel?.dailyTotal ?? CHANNEL_DEFAULTS.dailyTotal),
     maxConcurrent: String(channel?.maxConcurrent ?? CHANNEL_DEFAULTS.maxConcurrent), turnTimeoutSec: String(channel?.turnTimeoutSec ?? CHANNEL_DEFAULTS.turnTimeoutSec)
@@ -167,6 +171,7 @@ function ChannelDialog({ profileId, platform, channel, agent, hasProvider, onClo
       ...(channel ? { id: channel.id } : {}), profileId, platform, enabled: channel?.enabled ?? true, credentials,
       projectPaths: draft.projectPaths, allowedUsers: lines(draft.users), allowedPlaces: lines(draft.places), allowDirect: draft.allowDirect, allowTaskCreation: draft.allowTaskCreation,
       ...(reportsSupported && draft.reportTasks !== undefined ? { reportTasks: draft.reportTasks } : {}),
+      ...(followUpsSupported ? { followUps: draft.followUps } : {}),
       ...(toolCatalog ? {
         platformTools: draft.tools,
         docLocation: draft.docValue.trim() ? { kind: draft.docKind, value: draft.docValue.trim() } : null,
@@ -317,6 +322,14 @@ function ChannelDialog({ profileId, platform, channel, agent, hasProvider, onClo
       </div>
       <p className="squad-block-hint muted">{t(`AgentChannels.${platform}.ids`)}</p>
       <label className="agent-profile-check"><input type="checkbox" checked={draft.allowDirect} onChange={(event) => setDraft({ ...draft, allowDirect: event.target.checked })} />{t('AgentChannels.allowDirect')}</label>
+      {followUpsSupported && <>
+        <label className="agent-profile-check"><input type="checkbox" checked={draft.followUps} onChange={(event) => setDraft({ ...draft, followUps: event.target.checked })} />{t('AgentChannels.followUps')}</label>
+        <p className="squad-block-hint muted">{t('AgentChannels.followUpsHint')}</p>
+        {draft.followUps && descriptor.followUpScopes && <>
+          <p className="squad-block-hint muted">{t('AgentChannels.followUpsScope', { scope: descriptor.followUpScopes.join('、') })}</p>
+          <CopyButton text={JSON.stringify({ scopes: { tenant: descriptor.followUpScopes, user: [] } }, null, 2)} label={t('AgentChannels.copyScopes')}>{t('AgentChannels.copyScopes')}</CopyButton>
+        </>}
+      </>}
     </div>
     <div className="agent-channel-step">
       <h4><span className="agent-channel-step-number" aria-hidden="true">5</span>{t('AgentChannels.step5')}</h4>

@@ -70,6 +70,12 @@ describe('chat platforms', () => {
     expect(ChannelFields.parse({ profileId: PROFILE, platform: 'feishu' }).platformTools).toBeUndefined()
   })
 
+  it('goes on in a thread without a mention only where the platform has threads, asking for every group message', () => {
+    expect(CHANNEL_PLATFORMS.filter((platform) => channelPlatform(platform).features.followUps)).toEqual(['feishu', 'lark'])
+    expect(channelPlatform('feishu').followUpScopes).toEqual(['im:message.group_msg'])
+    expect(ChannelFields.parse({ profileId: PROFILE, platform: 'feishu' }).followUps).toBeUndefined()
+  })
+
   it('gives Slack a manifest asking for no more than it uses', () => {
     const manifest = JSON.parse(CHANNEL_PLATFORM_DESCRIPTORS.slack.manifest)
     expect(manifest.oauth_config.scopes.bot).toEqual(['app_mentions:read', 'chat:write', 'reactions:write', 'im:history', 'files:read'])

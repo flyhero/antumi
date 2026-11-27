@@ -65,6 +65,9 @@ export const ChannelFields = z.object({
   docLocation: DocLocation.nullable().optional(),
   // What the asker may do with a document the bot created for them. Absent: edit.
   docAccess: DocAccess.optional(),
+  // In a thread the bot answered and only the asker has spoken in, the asker goes on without
+  // mentioning it. Needs the platform to deliver every group message. Absent: off.
+  followUps: z.boolean().optional(),
   dailyPerUser: z.number().int().min(1).max(500).default(CHANNEL_DEFAULTS.dailyPerUser),
   dailyTotal: z.number().int().min(1).max(10_000).default(CHANNEL_DEFAULTS.dailyTotal),
   maxConcurrent: z.number().int().min(1).max(5).default(CHANNEL_DEFAULTS.maxConcurrent),

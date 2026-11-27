@@ -1,6 +1,6 @@
 # 聊天平台上的需求闭环（技术方案）
 
-> 状态：第一到第三节（结果回到原话题、卡片、飞书工具）已实现：第一节在真实飞书上走通过提问和建任务，卡片和飞书的写入还只对本地的假平台验证过；第四节以后是设计（2026-11-27）。需求来自飞书上的产品团队。本文汇总并取代 CHANNELS.md 原「主人在聊天平台上同意」「结果回到原话题」两节和 LARK.md 原 B 节，接入、锁死会话、网关这些已有部分仍以 [CHANNELS.md](CHANNELS.md) 为准。
+> 状态：第一到第四节（结果回到原话题、卡片、飞书工具、话题里免 @）已实现：在真实飞书上走通过提问和建任务、调过托管 MCP 的只读接口，卡片、飞书的写入和免 @ 还只对本地的假平台验证过；第五节是以后（2026-11-27）。需求来自飞书上的产品团队。本文汇总并取代 CHANNELS.md 原「主人在聊天平台上同意」「结果回到原话题」两节和 LARK.md 原 B 节，接入、锁死会话、网关这些已有部分仍以 [CHANNELS.md](CHANNELS.md) 为准。
 
 同事在飞书群里 @ 机器人讨论需求，机器人读代码、读写飞书文档，把明确的需求收成任务；主人在飞书卡片上点「开始执行」，主人的 Agent 在本机实施；进展和总结回到提出需求的那条消息下，提问人在卡片上验收或退回，退回后由主人点「继续执行」返工。
 
@@ -486,6 +486,8 @@ lark_create_doc → channelTools.call → ChannelService.callTool → platform.t
 
 ## 四、话题里免 @
 
+> 状态：已实现（2026-11-27），只对本地的假飞书验证过；要在真实飞书上开 `im:message.group_msg` 才能试（见「待验证」5）。实现在 `ChannelService.followUpRefusal` 和 `channel-feishu.ts` 的 `toEvent`。
+
 - 接入加 `followUps?: boolean`，默认关；平台描述 `features.followUps` 为真的平台才显示（飞书、Lark；钉钉没有话题，Slack 以后）。打开要去开放平台申请 `im:message.group_msg`（获取群组中所有消息，敏感权限，要管理员审批），界面写明并给出可复制的权限名。
 - `GatewayChannel` 加 `options: { followUps }`。开关关着时连接器照旧把没 @ 它的群消息自己 ACK 掉；开着时只把**话题里**（有 `thread_id`）的消息以 `kind: 'followUp'` 交给 core，话题外的仍在连接器里丢掉。
 - core 对 `followUp`：
@@ -594,7 +596,7 @@ ALTER TABLE channel_tool_calls ADD COLUMN write INTEGER NOT NULL DEFAULT 0;
 | 1 | 结果回到原话题（文字），**已实现** | protocol：`thread`/`direct`、`reportTasks`、`channel-task-reports`；core：`channel-task-reports.ts`、日志组合、`source_report` 对聊天任务开放、`mention`；desktop：开关和回报记录 | 无 |
 | 2 | 卡片：开始、验收、返工，**已实现** | protocol：`ownerUsers`、`taskCards`、`cards`、`created` 阶段、`ChannelTaskFeedback`；core：`channel-cards.ts`、`channel-task-cards.ts`、outbox 的 `card` / `update`、飞书连接器的卡片回调；desktop：主人 ID、卡片的开关和执行设置、退回意见和「按意见继续」 | 待验证 3、6（实测） |
 | 3 | 飞书工具，**已实现** | protocol：`platformTools`、`docLocation`、`docAccess`、平台描述 `tools`；core：`channel-tools/platform.ts`、按会话的工具名单、`channelTools.list`、`channel-feishu-tools.ts`；desktop：「飞书工具」 | 待验证 1、2、4 |
-| 4 | 话题里免 @ | protocol：`followUps`；core：`followUp` 事件、`bystanders`；desktop：开关和说明 | 待验证 5 |
+| 4 | 话题里免 @，**已实现** | protocol：`followUps`；core：`followUp` 事件、`bystanders`；desktop：开关和说明 | 待验证 5 |
 
 建议的提交（照 AGENTS.md 的格式，每个带测试）：
 

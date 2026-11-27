@@ -246,6 +246,7 @@ export class ChannelService {
       platformTools: fields.platformTools ? givenTools(fields.platform, fields.platformTools) : existing?.platformTools,
       docLocation: fields.docLocation !== undefined ? fields.docLocation : existing?.docLocation,
       docAccess: fields.docAccess ?? existing?.docAccess,
+      followUps: fields.followUps ?? existing?.followUps,
       // A client from before it leaves it out: what was chosen stays.
       reportTasks: fields.reportTasks ?? existing?.reportTasks,
       dailyPerUser: fields.dailyPerUser ?? 20, dailyTotal: fields.dailyTotal ?? 200, maxConcurrent: fields.maxConcurrent ?? 2,
@@ -544,7 +545,7 @@ export class ChannelService {
     if (!this.link) this.launch()
     this.link?.send({
       type: 'channels',
-      channels: wanted.map((each) => ({ id: each.id, platform: each.platform, credentials: this.options.credentials.get(credentialProvider(each), each.id)?.payload ?? {} }))
+      channels: wanted.map((each) => ({ id: each.id, platform: each.platform, credentials: this.options.credentials.get(credentialProvider(each), each.id)?.payload ?? {}, options: { followUps: this.takesFollowUps(each) } }))
     })
   }
 
@@ -615,6 +616,10 @@ export class ChannelService {
     if (event.ignorable || event.user === channel.botUserId) return outcome('dropped:ignorable')
     // Another workspace's people in a shared chat are not this one's colleagues.
     if (channel.tenant && event.tenant !== channel.tenant) return outcome('dropped:tenant')
+    if (event.kind === 'followUp') {
+      const refused = this.followUpRefusal(channel, event)
+      if (refused) return outcome(refused)
+    }
     const direct = event.kind === 'direct'
     const reply = { place: event.place, thread: direct ? event.thread : event.thread ?? event.messageId }
     const allowed = channel.allowedUsers.includes(event.user) && (direct ? channel.allowDirect : channel.allowedPlaces.includes(event.place))
@@ -674,6 +679,27 @@ export class ChannelService {
     const cards = this.options.cards
     if (!cards) return reply({ kind: 'error', text: '请在 Antumi 里处理。' })
     reply(await cards.click(event).catch(() => ({ kind: 'error' as const, text: '没能处理，请在 Antumi 里查看。' })))
+  }
+
+  private takesFollowUps(channel: StoredChannel): boolean {
+    return channel.followUps === true && channelPlatform(channel.platform).features.followUps
+  }
+
+  // Whether something said in a thread without a mention is for the bot: in a thread it answered,
+  // by the only one who has asked there, where nobody else has spoken. Anyone else speaking there
+  // is only noted, never kept, and the thread needs a mention from then on. Null when it is for the bot.
+  private followUpRefusal(channel: StoredChannel, event: ChannelEvent): string | null {
+    if (!this.takesFollowUps(channel)) return 'dropped:follow-ups-off'
+    if (!event.thread) return 'dropped:not-in-thread'
+    const key = `${event.place}:${event.thread}`
+    const threads = this.store.threadsAt(channel.id, key)
+    if (threads.length === 0) return 'dropped:not-ours'
+    if (threads.some((each) => each.bystanders)) return 'dropped:needs-mention'
+    if (threads.length > 1 || threads[0]?.asker !== event.user) {
+      this.store.markBystanders(channel.id, key)
+      return 'dropped:bystander'
+    }
+    return null
   }
 
   private async imagePart(requestId: string, ref: string, data: string, done: boolean, error: string | null): Promise<void> {

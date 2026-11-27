@@ -484,7 +484,9 @@ export const MIGRATIONS = [
      text TEXT NOT NULL, created_at INTEGER NOT NULL, used_at INTEGER);
    CREATE INDEX channel_task_feedback_task ON channel_task_feedback(task_id, created_at);`,
   // A platform tool's call that may have changed something there (docs/CHANNEL-LOOP.md, 三).
-  `ALTER TABLE channel_tool_calls ADD COLUMN write INTEGER NOT NULL DEFAULT 0;`
+  `ALTER TABLE channel_tool_calls ADD COLUMN write INTEGER NOT NULL DEFAULT 0;`,
+  // Someone other than its asker spoke in a thread: from then on the bot answers there only when mentioned.
+  `ALTER TABLE channel_threads ADD COLUMN bystanders INTEGER NOT NULL DEFAULT 0;`
 ]
 
 

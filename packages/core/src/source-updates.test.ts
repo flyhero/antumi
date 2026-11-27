@@ -29,6 +29,8 @@ describe('watched issue updates', () => {
   let snapshot: SourceSnapshot
   let changedSnapshot: SourceSnapshot | null
   let fetchedImages: string[]
+  const listOwners = vi.fn(() => owners)
+  const emitSummaries = vi.fn()
   function make() {
     return new SourceUpdates(store, { updateConnection: () => ({ binding, supported: true,
       fetch: async () => snapshot,
@@ -45,8 +47,8 @@ describe('watched issue updates', () => {
         return { comments: eligible.slice(offset, offset + 100), continuation: eligible.length > offset + 100 ? String(offset + 100) : null,
           checkpoint: { createdAt, ids: comments.filter((comment) => comment.createdAt === createdAt).map((comment) => comment.id) } }
       }
-    }) }, { owners: () => owners, snapshot: (_target, next) => { changedSnapshot = next }, send,
-      receipt: (delivery) => receipts.get(delivery.ref) ?? null, changed: () => {} }, () => now)
+    }) }, { owners: listOwners, snapshot: (_target, next) => { changedSnapshot = next }, send,
+      receipt: (delivery) => receipts.get(delivery.ref) ?? null, changed: emitSummaries }, () => now)
   }
   beforeEach(() => {
     root = mkdtempSync(path.join(os.tmpdir(), 'antumi-source-updates-'))
@@ -67,6 +69,21 @@ describe('watched issue updates', () => {
     updates.initial(target, source, baseline)
   })
   afterEach(async () => { await updates.close(); store.close(); tasks.close(); rmSync(root, { recursive: true, force: true }); vi.useRealTimers() })
+
+  it('lists owners once per bulk summary or change notification', () => {
+    const other = { kind: 'conversation', id: 'two' } as const
+    owners = [{ ...owners[0]!, active: false }, { ...owners[0]!, target: other, active: false }]
+    listOwners.mockClear()
+    const summaries = updates.summaries()
+    expect(summaries.map((summary) => summary.target)).toEqual([target, other])
+    expect(listOwners).toHaveBeenCalledTimes(1)
+
+    listOwners.mockClear()
+    emitSummaries.mockClear()
+    updates.changed()
+    expect(emitSummaries).toHaveBeenCalledWith(summaries)
+    expect(listOwners).toHaveBeenCalledTimes(1)
+  })
 
   it('syncs automatically without waking the agent, and keeps seen separate from sent', async () => {
     comments.push(comment('new'))

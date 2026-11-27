@@ -131,12 +131,14 @@ export class SourceUpdates {
     return { target, item, comments, deliveries, reserved }
   }
   summary(target: SourceUpdateTarget): SourceUpdateSummary {
-    const owner = this.owner(target)
+    return this.summarize(this.owner(target))
+  }
+  private summarize(owner: SourceUpdateOwner): SourceUpdateSummary {
     const data = this.records(owner)
     const connection = this.sources.updateConnection(owner.source)
     const rebound = !!connection && !!data.item.binding && connection.binding !== data.item.binding
     const revision = createHash('sha256').update(JSON.stringify([data.item.refreshedAt, data.deliveries.map((batch) => [batch.id, batch.state, batch.error])])).digest('hex')
-    return { revision, target, watching: data.target.watching, active: owner.active && data.target.watching && !!connection && !rebound && !data.item.blocked,
+    return { revision, target: owner.target, watching: data.target.watching, active: owner.active && data.target.watching && !!connection && !rebound && !data.item.blocked,
       supported: connection?.supported ?? false,
       unread: data.comments.filter((comment) => comment.sequence > data.target.seen).length,
       pending: data.comments.filter((comment) => !data.reserved.has(comment.id)).length,
@@ -145,8 +147,9 @@ export class SourceUpdates {
       sendBlocker: owner.sendBlocker }
   }
   summaries(): SourceUpdateSummary[] {
-    this.reconcile()
-    return this.hooks.owners().map((owner) => this.summary(owner.target))
+    const owners = this.hooks.owners()
+    this.reconcile(owners)
+    return owners.map((owner) => this.summarize(owner))
   }
   page(target: SourceUpdateTarget, before?: number): UpdatePage {
     this.reconcile()
@@ -169,8 +172,8 @@ export class SourceUpdates {
     this.emit()
     return this.summary(target)
   }
-  private reconcile(): void {
-    for (const owner of this.hooks.owners()) this.ensure(owner)
+  private reconcile(owners = this.hooks.owners()): void {
+    for (const owner of owners) this.ensure(owner)
     for (const delivery of this.store.deliveries()) {
       if (['cancelled', 'failed', 'submitted'].includes(delivery.state)) continue
       const receipt = this.hooks.receipt(delivery)
@@ -186,16 +189,17 @@ export class SourceUpdates {
     void this.poll()
   }
   changed(): void {
-    this.reconcile()
-    const active = new Set(this.hooks.owners().filter((owner) => owner.active).map((owner) => key(owner.target)))
-    const resumed = this.hooks.owners().filter((owner) => active.has(key(owner.target)) && !this.activeTargets.has(key(owner.target)))
-    this.activeTargets = active
-    this.emit()
+    const owners = this.hooks.owners()
+    this.reconcile(owners)
+    const active = owners.filter((owner) => owner.active)
+    const resumed = active.filter((owner) => !this.activeTargets.has(key(owner.target)))
+    this.activeTargets = new Set(active.map((owner) => key(owner.target)))
+    this.emit(owners)
     for (const owner of resumed) if (this.ensure(owner).watching) void this.refresh(owner.target).catch(() => {})
   }
-  private emit(): void {
+  private emit(owners?: SourceUpdateOwner[]): void {
     if (this.stopped) return
-    const summaries = this.hooks.owners().map((owner) => this.summary(owner.target))
+    const summaries = (owners ?? this.hooks.owners()).map((owner) => this.summarize(owner))
     const encoded = JSON.stringify(summaries)
     if (encoded === this.lastEmitted) return
     this.lastEmitted = encoded
@@ -280,14 +284,15 @@ export class SourceUpdates {
   }
   async poll(): Promise<void> {
     if (this.stopped) return
-    this.reconcile()
-    const owners = this.hooks.owners().filter((owner) => {
+    const owners = this.hooks.owners()
+    this.reconcile(owners)
+    const eligible = owners.filter((owner) => {
       const { target, item } = this.records(owner)
       return owner.active && target.watching && !item.blocked && item.retryAt <= this.now()
     })
     const done = new Set<string>()
     // Bounded workers keep many watched issues from spawning a process storm.
-    const queue = owners.filter((owner) => { const id = this.ensure(owner).itemId; if (done.has(id)) return false; done.add(id); return true })
+    const queue = eligible.filter((owner) => { const id = this.ensure(owner).itemId; if (done.has(id)) return false; done.add(id); return true })
     const instances = new Map<string, number>()
     const worker = async () => {
       for (;;) {

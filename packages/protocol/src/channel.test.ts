@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { CHANNEL_PLATFORMS, Channel, ChannelFields, ChannelInput } from './channel'
+import { CHANNEL_PLATFORMS, Channel, ChannelFields, ChannelInput, TaskChannelSource } from './channel'
 import { CHANNEL_PLATFORM_DESCRIPTORS, channelPlatform } from './channel-platforms'
 import { mobileMayCall } from './mobile-access'
 import { rpcSchemas, type RpcMethod } from './rpc'
@@ -12,6 +12,11 @@ describe('a channel', () => {
     expect(fields).toMatchObject({ enabled: true, projectPaths: [], allowedUsers: [], allowedPlaces: [], allowDirect: false, dailyPerUser: 20 })
     expect(fields.allowTaskCreation).toBeUndefined()
     expect(ChannelInput.parse({ profileId: PROFILE, platform: 'slack', allowTaskCreation: true }).allowTaskCreation).toBe(true)
+  })
+
+  it('keeps its tasks\' progress to itself until told otherwise, and a save without the switch leaves it', () => {
+    expect(ChannelFields.parse({ profileId: PROFILE, platform: 'feishu' }).reportTasks).toBeUndefined()
+    expect(ChannelInput.parse({ profileId: PROFILE, platform: 'feishu', reportTasks: true }).reportTasks).toBe(true)
   })
 
   it('never carries a credential to a client, only which are stored', () => {
@@ -32,6 +37,21 @@ describe('a channel', () => {
   })
 })
 
+describe('a task from a chat platform', () => {
+  const source = { channelId: '22222222-2222-4222-8222-222222222222', requestId: '33333333-3333-4333-8333-333333333333', conversationId: '44444444-4444-4444-8444-444444444444', platform: 'feishu', tenant: 'T', asker: 'ou_1', place: 'oc_1', messageId: 'om_1', text: '加个导出', createdAt: 1 }
+
+  it('reads one saved before it knew its thread', () => {
+    const parsed = TaskChannelSource.parse(source)
+    expect(parsed.thread).toBeUndefined()
+    expect(parsed.direct).toBeUndefined()
+  })
+
+  it('keeps the thread its answer went to, a direct chat\'s none', () => {
+    expect(TaskChannelSource.parse({ ...source, thread: 'om_1', direct: false })).toMatchObject({ thread: 'om_1', direct: false })
+    expect(TaskChannelSource.parse({ ...source, thread: null, direct: true })).toMatchObject({ thread: null, direct: true })
+  })
+})
+
 describe('chat platforms', () => {
   it('describes every platform, with credentials to ask for', () => {
     for (const platform of CHANNEL_PLATFORMS) {
@@ -39,6 +59,21 @@ describe('chat platforms', () => {
       expect(descriptor.credentials.length, platform).toBeGreaterThan(0)
       expect(descriptor.textLimit, platform).toBeGreaterThan(500)
     }
+  })
+
+  it('offers the platform\'s own tools only where the bot can use them, none of them a user\'s', () => {
+    const tools = CHANNEL_PLATFORM_DESCRIPTORS.feishu.tools
+    expect(tools.mcp).toBe('https://mcp.feishu.cn/mcp')
+    expect(tools.catalog.map((tool) => tool.name)).toEqual(['fetch-doc', 'list-docs', 'get-comments', 'fetch-file', 'create-doc', 'update-doc', 'add-comments'])
+    expect(tools.catalog.filter((tool) => tool.write).map((tool) => tool.name)).toEqual(['create-doc', 'update-doc', 'add-comments'])
+    for (const platform of ['slack', 'lark', 'dingtalk'] as const) expect(channelPlatform(platform).tools, platform).toBeUndefined()
+    expect(ChannelFields.parse({ profileId: PROFILE, platform: 'feishu' }).platformTools).toBeUndefined()
+  })
+
+  it('goes on in a thread without a mention only where the platform has threads, asking for every group message', () => {
+    expect(CHANNEL_PLATFORMS.filter((platform) => channelPlatform(platform).features.followUps)).toEqual(['feishu', 'lark'])
+    expect(channelPlatform('feishu').followUpScopes).toEqual(['im:message.group_msg'])
+    expect(ChannelFields.parse({ profileId: PROFILE, platform: 'feishu' }).followUps).toBeUndefined()
   })
 
   it('gives Slack a manifest asking for no more than it uses', () => {
@@ -59,7 +94,7 @@ describe('chat platforms', () => {
 describe('channels over RPC', () => {
   it('are no phone\'s to set up, read or run tools for', () => {
     const methods = (Object.keys(rpcSchemas) as RpcMethod[]).filter((method) => method.startsWith('channels.') || method.startsWith('channelTools.'))
-    expect(methods).toEqual(['channels.list', 'channels.save', 'channels.remove', 'channels.requests', 'channels.toolCalls', 'channels.readiness', 'channelTools.call'])
+    expect(methods).toEqual(['channels.list', 'channels.save', 'channels.remove', 'channels.requests', 'channels.toolCalls', 'channels.readiness', 'channels.taskReports', 'channels.taskFeedback', 'channels.continueTask', 'channelTools.call', 'channelTools.list'])
     for (const method of methods) expect(mobileMayCall(method, 'operate'), method).toBe(false)
   })
 })

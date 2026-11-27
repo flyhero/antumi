@@ -139,7 +139,7 @@ describe('a question from Slack to an agent and back', () => {
       if (change.type === 'changed' && change.conversation.channel && change.conversation.sessionId === null) channels.conversationEnded(change.conversation.id)
       if (change.type === 'chatItems') channels.conversationItems(change.conversationId, change.items)
     }, projects, attachments, null)
-    conversations.setChannelTools({ mcp: (id) => ({ command: 'node', args: ['mcp.mjs', '--conversation', id, '--tool-set', 'channel'] }), tools: ['project_read'] })
+    conversations.setChannelTools({ mcp: (id) => ({ command: 'node', args: ['mcp.mjs', '--conversation', id, '--tool-set', 'channel'] }), tools: () => ['project_read'] })
     daemon.deliver = (delivered) => {
       if (delivered.event === 'data') conversations.handleData(delivered)
       else if (delivered.event === 'exit') conversations.handleExit(delivered.sessionId, delivered.exitCode)
@@ -184,6 +184,13 @@ describe('a question from Slack to an agent and back', () => {
     expect(slack.calls.filter((call) => call.method === 'reactions.add')).toEqual([{ method: 'reactions.add', token: 'xoxb-good', body: { channel: 'C1', timestamp: '100.1', name: 'eyes' } }])
     expect(slack.posts()).toEqual([{ channel: 'C1', text: 'echo: where is this (https://example.com) &amp; that?', thread_ts: '100.1', mrkdwn: true, unfurl_links: false, unfurl_media: false }])
     expect(channels.requests(channel.id, null, 5).items[0]).toMatchObject({ asker: 'U1', text: 'where is this (https://example.com) & that?', state: 'answered' })
+  })
+
+  it('names the asker a task\'s progress is for at the start of the post', async () => {
+    const task = tasks.create('加导出')
+    expect(await channels.postReport({ channelId: channel.id, reportId: '55555555-5555-4555-8555-555555555555', place: 'C1', thread: '100.1', text: '已完成：#1 加导出', mention: 'U1', task })).toBe(true)
+    await when(() => slack.posts().length === 1)
+    expect(slack.posts()[0]).toMatchObject({ channel: 'C1', thread_ts: '100.1', text: '<@U1> 已完成：#1 加导出' })
   })
 
   it('acknowledges a redelivered event and answers it once', async () => {

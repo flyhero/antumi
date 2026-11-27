@@ -9,21 +9,46 @@ import { ChannelPlatform, ChannelState } from '@antumi/protocol'
 // platform's own string, which core stores and hands back without reading.
 const Ref = z.string().min(1).max(500)
 
-export const GatewayChannel = z.object({ id: z.string().uuid(), platform: ChannelPlatform, credentials: z.record(z.string(), z.string()) })
+// options: what the connection hands in besides mentions and direct messages (followUps: what
+// is said in a thread without a mention). Absent: nothing more.
+export const GatewayChannel = z.object({ id: z.string().uuid(), platform: ChannelPlatform, credentials: z.record(z.string(), z.string()), options: z.object({ followUps: z.boolean() }).optional() })
 export type GatewayChannel = z.infer<typeof GatewayChannel>
 
 export const ChannelDelivery = z.object({
   outboxId: z.string().uuid(),
   channelId: z.string().uuid(),
-  // react: an emoji on target · post: text in place, under thread where there is one
-  op: z.enum(['react', 'post']),
+  // react: an emoji on target · post: text in place, under thread where there is one · card: a card
+  // there · update: the card target is, drawn again
+  op: z.enum(['react', 'post', 'card', 'update']),
   place: Ref,
   thread: Ref.nullable(),
   target: Ref.nullable(),
   text: z.string().nullable(),
-  emoji: z.string().nullable()
+  emoji: z.string().nullable(),
+  // A user to notify with the post, named by core: the asker a task's progress is for.
+  mention: Ref.nullable().optional(),
+  // The platform's own card, drawn by core.
+  card: z.unknown().optional(),
+  // A user whose direct chat with the bot it goes to, in place of the chat at place.
+  recipient: Ref.nullable().optional()
 })
 export type ChannelDelivery = z.infer<typeof ChannelDelivery>
+
+export const PlatformMcpCall = z.object({
+  channelId: z.string().uuid(),
+  method: z.enum(['tools/list', 'tools/call']),
+  allowed: z.array(z.string().min(1).max(100)).max(50),
+  tool: z.string().min(1).max(100).nullable(),
+  arguments: z.unknown().optional()
+})
+export type PlatformMcpCall = z.infer<typeof PlatformMcpCall>
+export const PlatformGrant = z.object({ channelId: z.string().uuid(), token: Ref, docType: z.string().min(1).max(20), user: Ref, perm: z.enum(['edit', 'view']) })
+export type PlatformGrant = z.infer<typeof PlatformGrant>
+// What came of either: the MCP result as the platform gave it, or why there is none.
+export const PlatformAnswer = z.object({ ok: z.boolean(), result: z.unknown().optional(), error: z.string().max(2000).nullable() })
+export type PlatformAnswer = z.infer<typeof PlatformAnswer>
+
+const CardToastShape = z.object({ kind: z.enum(['info', 'success', 'warning', 'error']), text: z.string().max(300) })
 
 export const CoreToChannelGateway = z.discriminatedUnion('type', [
   // Every channel to hold a connection for, whole each time: the gateway opens, replaces and closes to match.
@@ -32,9 +57,29 @@ export const CoreToChannelGateway = z.discriminatedUnion('type', [
   z.object({ type: z.literal('accepted'), channelId: z.string().uuid(), eventKey: Ref }),
   // Pictures of a question that passed every check; none is fetched before.
   z.object({ type: z.literal('fetch'), requestId: z.string().uuid(), channelId: z.string().uuid(), images: z.array(Ref).max(16) }),
-  z.object({ type: z.literal('deliver') }).extend(ChannelDelivery.shape)
+  z.object({ type: z.literal('deliver') }).extend(ChannelDelivery.shape),
+  // What to tell whoever clicked a card's button, which the platform waits a few seconds for.
+  z.object({ type: z.literal('actionReply'), channelId: z.string().uuid(), eventKey: Ref, toast: CardToastShape }),
+  // A request to the platform's hosted MCP as the bot, for the tools core names and no others.
+  z.object({ type: z.literal('mcp'), callId: z.string().uuid() }).extend(PlatformMcpCall.shape),
+  // Giving a user access to a document the bot made, as the bot.
+  z.object({ type: z.literal('grant'), callId: z.string().uuid() }).extend(PlatformGrant.shape)
 ])
 export type CoreToChannelGateway = z.infer<typeof CoreToChannelGateway>
+
+// A click on a button of a card core posted, as the platform reported it: who, where, the token
+// the button carried and what its form held. Nothing in it but the clicker is believed.
+export const ChannelAction = z.object({
+  channelId: z.string().uuid(),
+  eventKey: Ref,
+  tenant: Ref,
+  user: Ref,
+  place: Ref,
+  messageId: Ref,
+  token: z.string().min(1).max(200),
+  form: z.record(z.string().max(100), z.string().max(2000))
+})
+export type ChannelAction = z.infer<typeof ChannelAction>
 
 export const ChannelEventImage = z.object({ ref: Ref, name: z.string().max(300), mime: z.string().max(100), bytes: z.number().int().nonnegative() })
 export type ChannelEventImage = z.infer<typeof ChannelEventImage>
@@ -44,7 +89,8 @@ export const ChannelEvent = z.object({
   channelId: z.string().uuid(),
   // The platform's id of the delivery, the same when it is delivered again.
   eventKey: Ref,
-  kind: z.enum(['mention', 'direct']),
+  // followUp: said in a thread without a mention, handed in only where the channel takes those.
+  kind: z.enum(['mention', 'direct', 'followUp']),
   tenant: Ref,
   place: Ref,
   // The thread it was written in, or null at the top of the chat.
@@ -65,6 +111,8 @@ export const ChannelGatewayToCore = z.discriminatedUnion('type', [
   z.object({ type: z.literal('event') }).extend(ChannelEvent.shape),
   // A fetched picture in pieces, in order; done on the last, error instead where it could not be had.
   z.object({ type: z.literal('image'), requestId: z.string().uuid(), ref: Ref, data: z.string(), done: z.boolean(), error: z.string().nullable() }),
-  z.object({ type: z.literal('delivered'), outboxId: z.string().uuid(), ok: z.boolean(), platformId: z.string().nullable(), retryAfterMs: z.number().int().nonnegative().nullable(), error: z.string().nullable() })
+  z.object({ type: z.literal('delivered'), outboxId: z.string().uuid(), ok: z.boolean(), platformId: z.string().nullable(), retryAfterMs: z.number().int().nonnegative().nullable(), error: z.string().nullable() }),
+  z.object({ type: z.literal('action') }).extend(ChannelAction.shape),
+  z.object({ type: z.literal('platformAnswer'), callId: z.string().uuid() }).extend(PlatformAnswer.shape)
 ])
 export type ChannelGatewayToCore = z.infer<typeof ChannelGatewayToCore>

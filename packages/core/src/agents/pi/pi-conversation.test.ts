@@ -101,7 +101,7 @@ it('starts Pi in RPC mode with Antumi extension, written for this start, and its
 })
 
 it('starts a platform conversation with scoped project tools, a clean environment and MCP readiness intact', async () => {
-  service.setChannelTools({ mcp: (id) => ({ command: 'node', args: ['mcp', '--conversation', id, '--tool-set', 'channel'] }), tools: ['project_list', 'project_read'] })
+  service.setChannelTools({ mcp: (id) => ({ command: 'node', args: ['mcp', '--conversation', id, '--tool-set', 'channel'] }), tools: () => ['project_list', 'project_read'] })
   const created = await service.create('pi', [], undefined, { channel: { channelId: '22222222-2222-4222-8222-222222222222', platform: 'slack', asker: 'U1', place: 'C1' } })
   const { args, env } = spawn(0)
   expect(daemon.clean.has(0)).toBe(true)

@@ -1,5 +1,9 @@
 import type { ChannelCredentialKey, ChannelPlatform } from './channel'
 
+// One of a platform's own tools an agent may be given to use as the bot (docs/CHANNEL-LOOP.md): its
+// name on the platform, whether it can change something, and the scopes the app needs for it.
+export type PlatformTool = { name: string; write: boolean; label: string; scopes: readonly string[]; translations?: { en: { label: string } } }
+
 // Everything core and the desktop know of one chat platform beyond its connector: a platform is
 // added by an entry here, a connector in core's gateway and a formatter (docs/CHANNELS.md, 扩展点).
 export type ChannelPlatformDescriptor = {
@@ -13,7 +17,15 @@ export type ChannelPlatformDescriptor = {
   // One message's longest text, and the least time between two posts in one place.
   textLimit: number
   minGapMs: number
-  features: { reactions: boolean }
+  // cards: buttons on a message, their clicks reported back (docs/CHANNEL-LOOP.md). followUps: a
+  // message in a thread can be told from one outside it, so a thread can go on without a mention.
+  features: { reactions: boolean; cards: boolean; followUps: boolean }
+  // What the app must also be granted to go on without a mention: every message of its groups.
+  followUpScopes?: readonly string[]
+  // The platform's hosted MCP its tools are reached through, those that may be given, and the scope
+  // giving the asker access to a document the bot made needs. The catalog only names and groups
+  // them: what each takes is what the platform lists.
+  tools?: { mcp: string; catalog: readonly PlatformTool[]; accessScopes: readonly string[] }
 }
 
 const SLACK_MANIFEST = JSON.stringify({
@@ -41,6 +53,18 @@ const FEISHU_SCOPES = JSON.stringify({
   }
 }, null, 2)
 
+const DOC_WRITE_SCOPES = ['docx:document:create', 'docx:document:write_only', 'docx:document:readonly', 'wiki:node:read', 'wiki:node:create', 'docs:document.media:upload', 'board:whiteboard:node:create']
+// Feishu's hosted MCP as the bot (tenant token) may use it: search-doc and search-user take a user's.
+const FEISHU_TOOLS = [
+  { name: 'fetch-doc', write: false, label: '读文档', scopes: ['docx:document:readonly', 'task:task:read', 'im:chat:read'], translations: { en: { label: 'Read documents' } } },
+  { name: 'list-docs', write: false, label: '浏览知识库目录', scopes: ['wiki:wiki:readonly'], translations: { en: { label: 'Browse wiki pages' } } },
+  { name: 'get-comments', write: false, label: '读文档评论', scopes: ['docs:document.comment:read', 'contact:contact.base:readonly'], translations: { en: { label: 'Read comments' } } },
+  { name: 'fetch-file', write: false, label: '读文档里的图片和附件', scopes: ['docs:document.media:download', 'board:whiteboard:node:read'], translations: { en: { label: 'Read images and attachments' } } },
+  { name: 'create-doc', write: true, label: '新建文档', scopes: DOC_WRITE_SCOPES, translations: { en: { label: 'Create documents' } } },
+  { name: 'update-doc', write: true, label: '修改文档', scopes: DOC_WRITE_SCOPES, translations: { en: { label: 'Edit documents' } } },
+  { name: 'add-comments', write: true, label: '发评论', scopes: ['docs:document.comment:create'], translations: { en: { label: 'Comment on documents' } } }
+] satisfies PlatformTool[]
+
 export const CHANNEL_PLATFORM_DESCRIPTORS = {
   slack: {
     label: 'Slack',
@@ -52,7 +76,8 @@ export const CHANNEL_PLATFORM_DESCRIPTORS = {
     manifest: SLACK_MANIFEST,
     textLimit: 3500,
     minGapMs: 1100,
-    features: { reactions: true }
+    // Block Kit buttons and replies in threads without a mention are not wired yet.
+    features: { reactions: true, cards: false, followUps: false }
   },
   feishu: {
     label: '飞书',
@@ -66,7 +91,9 @@ export const CHANNEL_PLATFORM_DESCRIPTORS = {
     textLimit: 4000,
     // Five messages a second to one chat, shared by every bot in it.
     minGapMs: 250,
-    features: { reactions: true }
+    features: { reactions: true, cards: true, followUps: true },
+    followUpScopes: ['im:message.group_msg'],
+    tools: { mcp: 'https://mcp.feishu.cn/mcp', catalog: FEISHU_TOOLS, accessScopes: ['docs:permission.member:create'] }
   },
   // Feishu outside China: the same platform, apps and limits, on its own domain.
   lark: {
@@ -79,7 +106,8 @@ export const CHANNEL_PLATFORM_DESCRIPTORS = {
     manifest: FEISHU_SCOPES,
     textLimit: 4000,
     minGapMs: 250,
-    features: { reactions: true }
+    features: { reactions: true, cards: true, followUps: true },
+    followUpScopes: ['im:message.group_msg']
   },
   dingtalk: {
     label: '钉钉',
@@ -93,8 +121,8 @@ export const CHANNEL_PLATFORM_DESCRIPTORS = {
     textLimit: 3500,
     // Twenty messages a minute from a robot to one chat.
     minGapMs: 3100,
-    // A robot has no way to react to a message.
-    features: { reactions: false }
+    // A robot has no way to react to a message, and a group has no threads; interactive cards are not wired yet.
+    features: { reactions: false, cards: false, followUps: false }
   }
 } satisfies Record<ChannelPlatform, ChannelPlatformDescriptor>
 

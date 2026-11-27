@@ -189,6 +189,18 @@ describe('the DingTalk connector', () => {
     expect(dingtalk.calls.filter((call) => call.path === '/v1.0/oauth2/accessToken')).toEqual([{ path: '/v1.0/oauth2/accessToken', token: '', body: { appKey: 'dingapp1', appSecret: 'good' } }])
   })
 
+  it('mentions whom core names in a group, and reaches a direct chat\'s asker it no longer remembers by that name', async () => {
+    dingtalk.send(message())
+    await when(() => events().length === 1)
+    expect(await connector.deliver(delivery({ text: '已完成', mention: 'staff9' }))).toMatchObject({ ok: true })
+    expect(await connector.deliver(delivery({ place: 'cidDm==', thread: null, text: '已开始', mention: 'staff2' }))).toMatchObject({ ok: true })
+    expect(await connector.deliver(delivery({ place: 'cidDm==', thread: null, text: '没人' }))).toMatchObject({ ok: false, error: 'asker no longer known' })
+    expect(posted().map(({ path, body }) => ({ path, body }))).toEqual([
+      { path: '/robot/send?session=s1', body: { msgtype: 'markdown', markdown: { title: '已完成', text: '已完成\n\n@staff9' }, at: { atUserIds: ['staff9'], isAtAll: false } } },
+      { path: '/v1.0/robot/oToMessages/batchSend', body: { robotCode: 'dingapp1', userIds: ['staff2'], msgKey: 'sampleMarkdown', msgParam: JSON.stringify({ title: '已开始', text: '已开始' }) } }
+    ])
+  })
+
   it('waits when the webhook says it is posted to too fast', async () => {
     dingtalk.send(message())
     await when(() => events().length === 1)

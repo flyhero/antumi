@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { ATTACHMENT_CHUNK_BYTES, MAX_ATTACHMENT_BYTES } from '@antumi/protocol'
 import type { ChannelConnector, ConnectorEmit, Delivered } from './channel-connector'
 import { FRAME_CONTROL, FRAME_DATA, decodeFrame, encodeFrame, frameHeader, type FeishuFrame } from './channel-feishu-frame'
-import type { ChannelDelivery, ChannelEventImage, GatewayChannel } from './channel-gateway-ipc'
+import type { ChannelAction, ChannelDelivery, ChannelEventImage, GatewayChannel, PlatformAnswer, PlatformGrant, PlatformMcpCall } from './channel-gateway-ipc'
 
 // Feishu over its long connection (长连接, for 企业自建应用 only): the connection is opened from
 // here, so nothing listens for Feishu and core stays on loopback. Spoken directly, as Slack is: a
@@ -13,7 +13,10 @@ import type { ChannelDelivery, ChannelEventImage, GatewayChannel } from './chann
 export type FeishuOptions = {
   // The open platform's base: the token goes to no other.
   api?: string
+  // The hosted MCP the bot's tools are reached through: the tenant token goes to no other.
+  mcp?: string
   retryMs?: readonly number[]
+  clickAnswerMs?: number
 }
 
 const RETRY_MS = [1_000, 2_000, 5_000, 10_000, 30_000]
@@ -22,6 +25,15 @@ const FETCH_TIMEOUT_MS = 30_000
 const CALL_TIMEOUT_MS = 15_000
 // An event core never accepted is forgotten, and Feishu sends it again.
 const UNACCEPTED_MS = 30_000
+// Feishu waits 3 seconds for a click's answer: what core has not said by then is said for it.
+const CLICK_ANSWER_MS = 2_500
+// Core gives up on a tool at a minute; the request ends before that, and a reply too large to be an
+// answer is not read through.
+const MCP_TIMEOUT_MS = 55_000
+const MCP_MAX_BYTES = 4 * 1024 * 1024
+// The hosted MCP's word for a token it does not take, besides HTTP 401.
+const MCP_BAD_TOKEN = new Set([-32003, -32010, -32011])
+const McpReply = z.object({ result: z.unknown().optional(), error: z.object({ code: z.number(), message: z.string().optional() }).loose().optional() }).loose()
 const KNOWN_FILES = 500
 // A token is taken again this long before Feishu says it ends.
 const TOKEN_MARGIN_MS = 5 * 60_000
@@ -40,6 +52,18 @@ const TenantReply = Reply.extend({ data: z.object({ tenant: z.object({ name: z.s
 const EndpointReply = Reply.extend({ data: z.object({ URL: z.string().optional(), ClientConfig: z.object({ PingInterval: z.number().optional() }).loose().nullish() }).loose().nullish() })
 const Sent = Reply.extend({ data: z.object({ message_id: z.string().optional() }).loose().optional() })
 const Pong = z.object({ PingInterval: z.number().optional() }).loose()
+
+// A click on a card's button (card.action.trigger, schema 2.0), as it comes over the long connection.
+const Click = z.object({
+  header: z.object({ event_type: z.literal('card.action.trigger'), event_id: z.string().min(1), tenant_key: z.string().optional() }).loose(),
+  event: z.object({
+    operator: z.object({ open_id: z.string().min(1), tenant_key: z.string().optional() }).loose(),
+    action: z.object({ value: z.object({ t: z.string().min(1).max(200) }).loose(), form_value: z.record(z.string(), z.unknown()).optional() }).loose(),
+    context: z.object({ open_message_id: z.string().min(1), open_chat_id: z.string().min(1) }).loose().optional(),
+    open_message_id: z.string().optional(),
+    open_chat_id: z.string().optional()
+  }).loose()
+}).loose()
 
 const Mention = z.object({ key: z.string(), id: z.object({ open_id: z.string().optional() }).loose().optional(), name: z.string().optional() }).loose()
 type Mention = z.infer<typeof Mention>
@@ -116,13 +140,18 @@ export function feishuContent(type: string, content: string, mentions: readonly 
 
 // Lark, Feishu outside China, speaks the same on its own domain.
 export function larkConnector(channel: GatewayChannel, emit: ConnectorEmit): ChannelConnector {
-  return feishuConnector(channel, emit, { api: 'https://open.larksuite.com' })
+  return feishuConnector(channel, emit, { api: 'https://open.larksuite.com', mcp: 'https://mcp.larksuite.com/mcp' })
 }
 
 export function feishuConnector(channel: GatewayChannel, emit: ConnectorEmit, options: FeishuOptions = {}): ChannelConnector {
   const api = options.api ?? 'https://open.feishu.cn'
+  const mcpUrl = options.mcp ?? 'https://mcp.feishu.cn/mcp'
   const retryMs = options.retryMs ?? RETRY_MS
+  const clickAnswerMs = options.clickAnswerMs ?? CLICK_ANSWER_MS
   const { appId = '', appSecret = '' } = channel.credentials
+  // With the app granted every group message: what is said in a topic without a mention goes to
+  // core too, which decides whether it is for the bot. Outside topics it is never handed on.
+  const followUps = channel.options?.followUps === true
   let stopped = false
   let socket: WebSocket | null = null
   let attempts = 0
@@ -135,13 +164,15 @@ export function feishuConnector(channel: GatewayChannel, emit: ConnectorEmit, op
   let token: { value: string; until: number } | null = null
   // An event Feishu delivered again before core took the first: each copy is acknowledged.
   const unaccepted = new Map<string, { acknowledge: (() => void)[]; at: number }>()
+  // Clicks handed to core and not yet answered: each copy Feishu sent is answered once core is.
+  const clicks = new Map<string, { answer: ((body: Record<string, unknown>) => void)[]; timer: NodeJS.Timeout }>()
   const pieces = new Map<string, { parts: (Uint8Array | undefined)[]; at: number }>()
   const files = new Map<string, string>()
 
   const state = (next: 'connecting' | 'connected' | 'failed', error: string | null = null) =>
     emit({ type: 'state', channelId: channel.id, state: next, error, ...(tenant ? { tenant: tenant.id, tenantName: tenant.name, botUserId: botOpenId } : {}) })
 
-  async function request<T extends z.ZodType>(method: 'GET' | 'POST', path: string, body: Record<string, unknown> | null, shape: T, auth: string | null): Promise<{ status: number; reply: z.infer<T> | null; code: number | null; retryAfterMs: number | null }> {
+  async function request<T extends z.ZodType>(method: 'GET' | 'POST' | 'PATCH', path: string, body: Record<string, unknown> | null, shape: T, auth: string | null): Promise<{ status: number; reply: z.infer<T> | null; code: number | null; retryAfterMs: number | null }> {
     const response = await fetch(`${api}${path}`, {
       method,
       headers: { ...(auth ? { Authorization: `Bearer ${auth}` } : {}), ...(body ? { 'Content-Type': 'application/json; charset=utf-8' } : {}) },
@@ -166,7 +197,7 @@ export function feishuConnector(channel: GatewayChannel, emit: ConnectorEmit, op
   }
 
   // A call as the app, with one fresh token where Feishu says the one it had is no longer good.
-  async function call<T extends z.ZodType>(method: 'GET' | 'POST', path: string, body: Record<string, unknown> | null, shape: T) {
+  async function call<T extends z.ZodType>(method: 'GET' | 'POST' | 'PATCH', path: string, body: Record<string, unknown> | null, shape: T) {
     for (let tries = 0; ; tries += 1) {
       const auth = await tenantToken()
       if (!auth || 'error' in auth) return { status: 0, reply: null, code: null, retryAfterMs: null, error: auth?.error ?? null }
@@ -251,7 +282,18 @@ export function feishuConnector(channel: GatewayChannel, emit: ConnectorEmit, op
       const whole = merge(frame)
       if (!whole) return
       const acknowledge = () => send(ws, { ...frame, headers: [...frame.headers, { key: 'biz_rt', value: '0' }], payload: Buffer.from(JSON.stringify({ code: 200 })) })
-      const event = toEvent(parse(whole))
+      const payload = parse(whole)
+      const click = toClick(payload)
+      if (click) {
+        // The answer rides on the acknowledgement, base64 JSON as the official SDK sends it.
+        const answer = (body: Record<string, unknown>) => send(ws, { ...frame, headers: [...frame.headers, { key: 'biz_rt', value: '0' }], payload: Buffer.from(JSON.stringify({ code: 200, data: Buffer.from(JSON.stringify(body)).toString('base64') })) })
+        const waiting = clicks.get(click.eventKey)
+        if (waiting) return void waiting.answer.push(answer)
+        const timer = setTimeout(() => answerClick(click.eventKey, { toast: { type: 'info', content: '已收到，正在处理。' } }), clickAnswerMs)
+        clicks.set(click.eventKey, { answer: [answer], timer })
+        return emit({ type: 'action', ...click })
+      }
+      const event = toEvent(payload)
       // Nothing for core in it (another event, a message not for the bot): taken here.
       if (!event) return acknowledge()
       const waiting = unaccepted.get(event.eventKey)
@@ -285,6 +327,63 @@ export function feishuConnector(channel: GatewayChannel, emit: ConnectorEmit, op
     return Buffer.concat(known.parts.flatMap((part) => (part ? [part] : []))).toString('utf8')
   }
 
+  // One JSON-RPC request to the hosted MCP as the bot, offering only the tools core named; one
+  // fresh token where it says the one it had is no longer good.
+  async function mcp(call: PlatformMcpCall): Promise<PlatformAnswer> {
+    for (let tries = 0; ; tries += 1) {
+      const auth = await tenantToken()
+      if (!auth || 'error' in auth) return { ok: false, error: auth?.error ?? 'no token' }
+      const response = await fetch(mcpUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Lark-MCP-TAT': auth.value, 'X-Lark-MCP-Allowed-Tools': call.allowed.join(',') },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: call.method, params: call.method === 'tools/call' ? { name: call.tool, arguments: call.arguments ?? {} } : {} }),
+        redirect: 'manual',
+        signal: AbortSignal.timeout(MCP_TIMEOUT_MS)
+      })
+      if (Number(response.headers.get('content-length') ?? 0) > MCP_MAX_BYTES) return { ok: false, error: 'too large' }
+      const text = await response.text()
+      if (Buffer.byteLength(text) > MCP_MAX_BYTES) return { ok: false, error: 'too large' }
+      const reply = McpReply.safeParse(parse(text))
+      const code = reply.success ? reply.data.error?.code : undefined
+      if ((response.status === 401 || (code !== undefined && MCP_BAD_TOKEN.has(code))) && tries === 0) {
+        token = null
+        continue
+      }
+      if (!reply.success) return { ok: false, error: `http ${response.status}` }
+      if (reply.data.error) return { ok: false, error: `${reply.data.error.code}: ${reply.data.error.message ?? ''}`.slice(0, 2000) }
+      return { ok: true, result: reply.data.result, error: null }
+    }
+  }
+
+  // Lets a user open a document the bot made, as the bot. Feishu sends no notice for an app's grant.
+  async function grant(request: PlatformGrant): Promise<PlatformAnswer> {
+    const path = `/open-apis/drive/v1/permissions/${encodeURIComponent(request.token)}/members?type=${encodeURIComponent(request.docType)}&need_notification=false`
+    const answer = await call('POST', path, { member_type: 'openid', member_id: request.user, perm: request.perm, type: 'user' }, Reply)
+    if (answer.reply?.code === 0) return { ok: true, error: null }
+    return { ok: false, error: answer.error ?? (answer.reply ? `${answer.reply.code}: ${answer.reply.msg ?? ''}` : answer.status ? `http ${answer.status}` : 'no token') }
+  }
+
+  function answerClick(eventKey: string, body: Record<string, unknown>): void {
+    const waiting = clicks.get(eventKey)
+    if (!waiting) return
+    clearTimeout(waiting.timer)
+    clicks.delete(eventKey)
+    for (const answer of waiting.answer) answer(body)
+  }
+
+  function toClick(payload: unknown): ChannelAction | null {
+    const parsed = Click.safeParse(payload)
+    if (!parsed.success) return null
+    const { header, event } = parsed.data
+    const messageId = event.context?.open_message_id ?? event.open_message_id
+    const place = event.context?.open_chat_id ?? event.open_chat_id
+    const tenantKey = event.operator.tenant_key || header.tenant_key
+    if (!messageId || !place || !tenantKey) return null
+    // Only what was typed into the card's form, as text.
+    const form = Object.fromEntries(Object.entries(event.action.form_value ?? {}).flatMap(([key, value]) => (typeof value === 'string' ? [[key.slice(0, 100), value.slice(0, 2000)]] : [])))
+    return { channelId: channel.id, eventKey: `card:${header.event_id}`, tenant: tenantKey, user: event.operator.open_id, place, messageId, token: event.action.value.t, form }
+  }
+
   function toEvent(payload: unknown) {
     const parsed = Received.safeParse(payload)
     if (!parsed.success || parsed.data.header.event_type !== 'im.message.receive_v1') return null
@@ -293,7 +392,9 @@ export function feishuConnector(channel: GatewayChannel, emit: ConnectorEmit, op
     const mentions = message.mentions ?? []
     const direct = message.chat_type === 'p2p'
     const mention = !direct && mentions.some((each) => each.id?.open_id === botOpenId)
-    if ((!direct && !mention) || !user) return null
+    const thread = message.thread_id && message.root_id && message.root_id !== message.message_id ? message.root_id : null
+    const followUp = followUps && !direct && !mention && thread !== null && sender?.sender_type === 'user'
+    if ((!direct && !mention && !followUp) || !user) return null
     const tenantKey = sender?.tenant_key || header.tenant_key
     if (!tenantKey) return null
     const content = feishuContent(message.message_type, message.content, mentions, botOpenId)
@@ -306,11 +407,11 @@ export function feishuConnector(channel: GatewayChannel, emit: ConnectorEmit, op
     return {
       channelId: channel.id,
       eventKey: message.message_id,
-      kind: direct ? 'direct' as const : 'mention' as const,
+      kind: direct ? 'direct' as const : mention ? 'mention' as const : 'followUp' as const,
       tenant: tenantKey,
       place: message.chat_id,
       // In a topic, the message it started from, which a reply goes under; a quoted reply is no topic.
-      thread: message.thread_id && message.root_id && message.root_id !== message.message_id ? message.root_id : null,
+      thread,
       messageId: message.message_id,
       user,
       ignorable: sender?.sender_type !== 'user',
@@ -347,14 +448,21 @@ export function feishuConnector(channel: GatewayChannel, emit: ConnectorEmit, op
     async deliver(job: ChannelDelivery): Promise<Delivered> {
       try {
         // The outbox row's id: Feishu posts one message per uuid however often it is sent.
-        const content = JSON.stringify({ zh_cn: { content: [[{ tag: 'md', text: job.text ?? '' }]] } })
+        // An md node is a paragraph of its own, so a mention goes in the one before it.
+        const card = job.op === 'card' || job.op === 'update'
+        const content = card ? JSON.stringify(job.card ?? {}) : JSON.stringify({ zh_cn: { content: [...(job.mention ? [[{ tag: 'at', user_id: job.mention }]] : []), [{ tag: 'md', text: job.text ?? '' }]] } })
+        const type = card ? 'interactive' : 'post'
         const answer = job.op === 'react'
           ? await call('POST', `/open-apis/im/v1/messages/${encodeURIComponent(job.target ?? '')}/reactions`, { reaction_type: { emoji_type: EMOJI[job.emoji ?? ''] ?? job.emoji ?? '' } }, Sent)
-          : job.thread
-            ? await call('POST', `/open-apis/im/v1/messages/${encodeURIComponent(job.thread)}/reply`, { msg_type: 'post', content, reply_in_thread: true, uuid: job.outboxId }, Sent)
-            : await call('POST', '/open-apis/im/v1/messages?receive_id_type=chat_id', { receive_id: job.place, msg_type: 'post', content, uuid: job.outboxId }, Sent)
+          : job.op === 'update'
+            ? await call('PATCH', `/open-apis/im/v1/messages/${encodeURIComponent(job.target ?? '')}`, { content }, Sent)
+            : job.recipient
+              ? await call('POST', '/open-apis/im/v1/messages?receive_id_type=open_id', { receive_id: job.recipient, msg_type: type, content, uuid: job.outboxId }, Sent)
+              : job.thread
+                ? await call('POST', `/open-apis/im/v1/messages/${encodeURIComponent(job.thread)}/reply`, { msg_type: type, content, reply_in_thread: true, uuid: job.outboxId }, Sent)
+                : await call('POST', '/open-apis/im/v1/messages?receive_id_type=chat_id', { receive_id: job.place, msg_type: type, content, uuid: job.outboxId }, Sent)
         if (answer.retryAfterMs !== null) return { ok: false, platformId: null, retryAfterMs: answer.retryAfterMs, error: 'ratelimited' }
-        if (answer.reply?.code === 0) return { ok: true, platformId: answer.reply.data?.message_id ?? null, retryAfterMs: null, error: null }
+        if (answer.reply?.code === 0) return { ok: true, platformId: answer.reply.data?.message_id ?? (job.op === 'update' ? job.target : null), retryAfterMs: null, error: null }
         return { ok: false, platformId: null, retryAfterMs: null, error: answer.error ?? (answer.reply ? `${answer.reply.code}: ${answer.reply.msg ?? ''}` : answer.status ? `http ${answer.status}` : 'no token') }
       } catch (error) {
         return { ok: false, platformId: null, retryAfterMs: null, error: error instanceof Error ? error.message : 'failed' }
@@ -373,10 +481,17 @@ export function feishuConnector(channel: GatewayChannel, emit: ConnectorEmit, op
         }
       }
     },
+    reply(eventKey, toast) {
+      answerClick(eventKey, { toast: { type: toast.kind, content: toast.text } })
+    },
+    mcp: (request) => mcp(request).catch((error: unknown) => ({ ok: false, error: error instanceof Error ? error.message : 'failed' })),
+    grant: (request) => grant(request).catch((error: unknown) => ({ ok: false, error: error instanceof Error ? error.message : 'failed' })),
     stop() {
       stopped = true
       if (retry) clearTimeout(retry)
       if (ping) clearTimeout(ping)
+      for (const { timer } of clicks.values()) clearTimeout(timer)
+      clicks.clear()
       socket?.close()
       socket = null
     }

@@ -1,6 +1,6 @@
 # 聊天平台上的需求闭环（技术方案）
 
-> 状态：设计，未实现（2026-11-27）。需求来自飞书上的产品团队。本文汇总并取代 CHANNELS.md 原「主人在聊天平台上同意」「结果回到原话题」两节和 LARK.md 原 B 节，接入、锁死会话、网关这些已有部分仍以 [CHANNELS.md](CHANNELS.md) 为准。
+> 状态：第一到第四节（结果回到原话题、卡片、飞书工具、话题里免 @）已实现：在真实飞书上走通过提问和建任务、调过托管 MCP 的只读接口，卡片、飞书的写入和免 @ 还只对本地的假平台验证过；第五节是以后（2026-11-27）。需求来自飞书上的产品团队。本文汇总并取代 CHANNELS.md 原「主人在聊天平台上同意」「结果回到原话题」两节和 LARK.md 原 B 节，接入、锁死会话、网关这些已有部分仍以 [CHANNELS.md](CHANNELS.md) 为准。
 
 同事在飞书群里 @ 机器人讨论需求，机器人读代码、读写飞书文档，把明确的需求收成任务；主人在飞书卡片上点「开始执行」，主人的 Agent 在本机实施；进展和总结回到提出需求的那条消息下，提问人在卡片上验收或退回，退回后由主人点「继续执行」返工。
 
@@ -28,7 +28,7 @@ flowchart TD
   H --> I[回答之后发任务卡<br/>「开始执行」「不做」]
   I --> J{主人同意？<br/>卡片上或 Antumi 里点}
   J -- 不做 --> K([任务取消，回到话题告知])
-  J -- 开始执行 --> S[按接入的执行设置开始，无人值守<br/>卡片更新「已开始」]
+  J -- 开始执行 --> S[按任务的执行设置开始，无人值守<br/>卡片更新「已开始」]
   S --> L[主人的 Agent 实施<br/>改代码、测试、提交、开 PR<br/>读 PRD 用主人的 lark-cli]
   L --> M[source_report 写总结<br/>提交验收]
   M --> N[回到话题：总结 + PR<br/>发验收卡 @ 提问人]
@@ -105,7 +105,7 @@ sequenceDiagram
     F->>A: card.action.trigger
     A->>A: 核对令牌、主人身份、任务状态
     A-->>F: 3 秒内回提示，卡片「已开始」
-    A->>D: 按接入的执行设置开始（无人值守）
+    A->>D: 按任务的执行设置开始（无人值守）
   else 主人点「不做」
     O->>F: 点击
     F->>A: card.action.trigger
@@ -174,7 +174,7 @@ sequenceDiagram
 | 答疑：读项目代码回答（已有） | 接入本身 | — | 全部 | — |
 | 收需求成任务（已有） | `allowTaskCreation` | — | 全部 | 只答疑 |
 | 进展回到原话题（第一节） | `reportTasks` | 收需求 | 全部；钉钉没有话题，回成群里的一条新消息并 @ 提问人 | 进展只在 Antumi 里看 |
-| 卡片上开始执行（第二节） | `taskCards.start`（用哪个 Agent 和模型）、`ownerUsers` | 进展回报 | 飞书、Lark；Slack 以后 | 只在 Antumi 里开始 |
+| 卡片上开始执行（第二节） | `taskCards.start`、`ownerUsers` | 进展回报 | 飞书、Lark；Slack 以后 | 只在 Antumi 里开始 |
 | 卡片上验收和退回（第二节） | `taskCards.review`：只有主人，或主人和提问人 | 进展回报 | 同上 | 待验收是一条文字，验收在 Antumi 里 |
 | 飞书文档工具（第三节） | `platformTools` 逐个勾选；建文档时另有 `docLocation`、`docAccess` | —，答疑时也能用 | 飞书；Lark 联调后 | 只能读项目代码 |
 | 话题里免 @（第四节） | `followUps` | — | 飞书、Lark | 每次都要 @ |
@@ -207,7 +207,7 @@ sequenceDiagram
 
 提需求的产品团队那一套，不需要专门的代码：
 
-- 开关：收需求、进展回报、卡片（开始用 Claude Code，验收是主人和提问人），飞书工具勾 `fetch-doc`、`create-doc`、`update-doc`，文档建在他们的需求知识库节点下、给提问人开编辑权限，话题里免 @。
+- 开关：收需求、进展回报、卡片（主人在卡片上开始，验收是主人和提问人），飞书工具勾 `fetch-doc`、`create-doc`、`update-doc`，文档建在他们的需求知识库节点下、给提问人开编辑权限，话题里免 @。
 - 智能体的工作指令（主人自己写，管「什么时候做什么」），例如：
 
   > 讨论需求时，先读相关代码和对方贴的飞书文档。需求讨论清楚后，把需求和技术方案写成一篇飞书文档，发链接请对方确认；对方确认后再用 task_create 建任务，说明里附文档链接和验收标准。普通咨询直接回答。
@@ -260,16 +260,22 @@ core：ChannelService ─ 入站、提问、发件队列（已有）
 
 从消息建的任务（`task.channelSource` 不为空），进展回到提出需求的那条消息下，提问人不用来 Antumi 看。
 
+> 状态：已实现（2026-11-27），只用本地的假平台验证过。实现在 `core/src/channel-task-reports.ts`（`ChannelTaskReports`）和 `ChannelService.postReport`。
+
 ### 什么时候回什么
 
-| 任务状态变化 | 回什么 | @ 谁 |
-|---|---|---|
-| `pending → running` | 「已开始执行 #编号」；有卡片时只更新卡片 | — |
-| `review → running` | 「已开始返工」；有卡片时只更新卡片 | — |
-| `running → review` | 总结 + 验证说明 + PR 链接；有卡片时发验收卡 | 提问人 |
-| `review → done` | 「已完成」；在卡片上验收的只更新卡片 | 提问人 |
-| `pending → done` | 「主人已关闭这个任务」 | — |
-| `→ abandoned` | 「主人取消了这个任务」；卡片上选「不做」的写明 | 提问人 |
+阶段名是 `ChannelTaskStage`（`stageOf` 从状态变化算出）。每条都写明是「Antumi 任务」：飞书等平台有自己的任务，同事看到「任务」容易当成那个；任务卡的标题和智能体建任务后的回答也这样写。
+
+| 任务状态变化 | 阶段 | 回什么 | 群里 @ 谁 |
+|---|---|---|---|
+| `pending → running` | `start` | 「已开始执行：Antumi 任务 #编号 标题」；有卡片时只更新卡片（第二期） | — |
+| `review → running` | `rework` | 「已开始返工：Antumi 任务 #编号 标题」 | — |
+| `running → review` | `review` | 「已提交验收：Antumi 任务 #编号 标题」+ 总结 + 验证说明 + PR 链接；有卡片时发验收卡（第二期） | 提问人 |
+| `review → done`、`running → done` | `done` | 「已完成：Antumi 任务 #编号 标题」 | 提问人 |
+| `pending → done` | `closed` | 「主人已关闭这个任务：Antumi 任务 #编号 标题」 | — |
+| `→ abandoned` | `abandoned` | 「主人取消了这个任务：Antumi 任务 #编号 标题」 | 提问人 |
+
+私聊里来的任务每一条都带上提问人（那本来就是他的私聊，钉钉还要靠它找到发给谁）。
 
 - 取消原因不发：在 Antumi 里写的原因是写给主人自己的。
 - Antumi 的任务没有「失败」状态，执行出错时任务停在执行中等主人处理，不回报，免得刷屏。
@@ -280,22 +286,23 @@ core：ChannelService ─ 入站、提问、发件队列（已有）
 和来源回写同一套（SOURCE-WRITEBACK.md「总结评论从哪来」），读者是提问人和群里的同事：
 
 - 任务提示：`setSourcePrompt` 对开了回报的聊天平台任务追加一段说明（新函数 `channelReportInstruction`，和 `reportInstruction` 共用 `reportRules()`），把「用事项原文的语言」换成「用提问人原话的语言」。
-- 工具：`source_report` 对这类任务也出现。`mcp-server.ts` 的 scope 多一个条件：会话属于有 `channelSource` 的任务，且 core 有 `channel-task-reports`。`SourceWriteback.saveReport` 的守卫从「有来源」放宽为「有来源或是聊天平台任务」（hooks 加 `reportable(target)`），草稿照存 `source_reports`。
-- 没有草稿时用 `Condense` 压缩最后一条回复；`condensePrompt` 加一个参数说清写到哪（「飞书话题」而不是「事项」）。失败或太长就只发「已提交验收，请在 Antumi 或 PR 里查看」加 PR 链接。
-- PR 链接取自 `PullRequestService` 记录的这个任务的 PR。`verification` 单独一段附在后面。
+- 工具：`source_report` 对这类任务也出现。`SourceWriteback` 的 hooks 加 `reportable(target)`（任务没有来源、有 `channelSource`、接入开着回报），`sources.writeback` 的结果多一个可选的 `reportable`；`mcp-server.ts` 看到 `reportable` 就给这个工具，说明改成「给提出这个任务的同事写」（`sourceToolsOverCore` 的 `audience: 'chat'`）。`saveReport` 的守卫从「有来源」放宽为「有来源或 `reportable`」，草稿照存 `source_reports`。
+- 没有草稿时用 `Condense` 压缩最后一条回复（`SourceWriteback.condenseFor`）；`condensePrompt` 加 `audience` 参数说清写到哪（「聊天话题」而不是「事项」）。压缩失败或太长，就只发标题行和 PR 链接。
+- PR 链接取自 `PullRequestStore` 记录的这个任务的 PR。`verification` 单独一段附在后面。
 - 发出前过 `redact`、`withoutMachinePaths`（任务的仓库和工作树）和这个 Agent 账号邮箱的打码，再按平台格式化（`channelMessages`）。
 
 ### 发到哪里
 
 - `TaskChannelSource` 加可选的 `thread` 和 `direct`，`createChannelTask` 时从提问取：`thread` 就是那次回答发去的话题（`ChannelThread.replyThread`），所以回报和回答在同一个话题里。旧任务没有 `thread`：按原消息 `messageId` 回复（飞书 `reply_in_thread`，Slack 的 `thread_ts` 也是它）。
 - 发送走现有的 `channel_outbox`：同一处一次一条、限速、重试、重启后接着发。
-- @ 人由 core 加，不来自 Agent 的文字：`ChannelDelivery` 加 `mention: string | null`（平台用户 ID），连接器各自渲染（飞书富文本的 `at` 节点；Slack 以后用 `<@U…>`）。Agent 文字里的 `<at …>` 照旧被 `toFeishu` 弄失效。
+- @ 人由 core 加，不来自 Agent 的文字：outbox 的 payload 和 `ChannelDelivery` 加 `mention`（平台用户 ID），分段时只放在第一段，连接器各自渲染：飞书富文本里 `md` 节点前单独一段 `at` 节点；Slack 在文字前加 `<@U…>`；钉钉群里经 webhook 的 `at.atUserIds`，私聊在已经不记得提问人时（网关重启过）用它当 `oToMessages` 的收件人。Agent 文字里的 `<at …>` 照旧被 `toFeishu` 弄失效。
 
 ### 持久和失败
 
 - `TaskService` 的状态日志和监听现在各只有一个槽，给来源回写用。改成在 `main.ts` 里组合：`setStatusJournal((before, status) => joinLinks(writeback.journal(before, status), channelReports.journal(before, status)))`，监听同理。`joinLinks` 放在 `task-store.ts`，把几个 `TaskWriteLink` 合成一个。
 - `ChannelTaskReports.journal` 只为有 `channelSource` 的任务写一行 `channel_task_reports`（阶段、状态 `pending`），和任务状态在同一事务里：core 在两者之间退出也不会漏，也不会给历史任务补发。
-- `drain()` 按任务、按创建顺序逐条处理：发之前再查一次接入（在、启用、`reportTasks` 没关、`tenant` 和任务记下的一致），不满足就记 `skipped` 和原因；满足就组好内容写进 outbox（`channel_outbox` 加 `task_id` 列），状态 `queued`。outbox 发出或放弃后回填 `sent` / `failed`。
+- `drain()` 按任务、按创建顺序逐条处理：发之前再查一次接入（在、启用、`reportTasks` 没关、`tenant` 和任务记下的一致），不满足就记 `skipped` 和原因；满足就交给 `ChannelService.postReport` 写进 outbox（`channel_outbox` 加 `report_id` 列），状态 `queued`。每条 outbox 发出或放弃后告诉 `ChannelTaskReports.posted`：都发出了记 `sent`，有一条放弃了记 `failed`。还没有 `ChannelService`（core 启动早期）时留在 `pending`，`channels.start()` 之后再处理一遍。
+- 原因是代码，桌面端翻译：`channel-removed`、`channel-off`、`reports-off`、`tenant-changed`、`task-gone`、`platform-refused`、`compose-failed`。删接入时它还没发完的回报一起记 `channel-removed`。
 - 机器人被移出群、接入删了：飞书回错误码，outbox 5 次后放弃，记 `failed`，任务本身不受影响。
 - 记录给主人看：任务详情的来源卡片（`TaskChannelSourceCard`）下列出每一条回报和结果；新 RPC `channels.taskReports({ taskId })`，通知 `channels.taskReportsChanged`。
 
@@ -304,6 +311,8 @@ core：ChannelService ─ 入站、提问、发件队列（已有）
 - 接入加 `reportTasks?: boolean`，没有就是关（升级后已有接入不变）。界面在「允许创建任务」下面：「任务的进展回到原话题」，打开收需求时预先勾上。
 
 ## 二、卡片：主人开始、提问人验收、主人返工
+
+> 状态：已实现（2026-11-27），只对本地的假飞书验证过，没有在真实飞书上联调（见「待验证」3、6）。实现在 `core/src/channel-task-cards.ts`（`ChannelTaskCards`：投哪、画成什么样、每个按钮做什么）、`channel-cards.ts`（与平台无关的卡片和飞书卡片 JSON 2.0）、`channel-feishu.ts`（回调和发卡）。
 
 前提：接入开了 `taskCards` 并填了 `ownerUsers`，进展回报开着，平台描述的 `features.cards` 为真（飞书、Lark），core 有 `channel-task-cards`，开放平台订阅了卡片回调。不满足时只有第一节的文字回报，开始、验收都在 Antumi 里。
 
@@ -320,7 +329,7 @@ core：ChannelService ─ 入站、提问、发件队列（已有）
 - 任务卡随状态更新（已开始 · 由谁 / 在 Antumi 里 → 待验收 → 已完成 / 已取消），用过的按钮去掉。更新卡片不会通知人，所以要人看的（待验收、退回）都是新发一张并 @ 人。
 - 任务卡排在回答后面：`task_create` 只记下这次提问建了哪个任务，`ChannelService.answer` / `fail` 把回答放进 outbox 之后再放卡片，同一处的发件按顺序走，卡片不会抢在回答前面。
 - 主人不在那个群里就看不到任务卡，仍可在 Antumi 里开始；群里的需求另给主人发私信放在以后（第五节）。
-- `taskCards.start` 为空时任务卡没有「开始执行」，写「请主人在 Antumi 里开始」；`taskCards.review` 为空时不发验收卡，待验收是第一节的一条文字。
+- `taskCards.start` 为假时任务卡没有「开始执行」，写「请主人在 Antumi 里开始」；`taskCards.review` 为空时不发验收卡，待验收是第一节的一条文字。
 - 卡片由 core 渲染：与平台无关的 `ChannelCard`（标题、几段 Markdown、字段、按钮 `{ label, style, token, confirm? }`、可选的输入框）经 `CARD_FORMATTERS`（`satisfies Partial<Record<ChannelPlatform, …>>`）转成平台 JSON。飞书用卡片 JSON 2.0，`config.update_multi: true`（之后要更新，发之前就要设）。说明摘要和总结来自 Agent，照答案一样打码，并让 `<at …>` 失效。
 - outbox 的 `op` 加 `card`（发一张）和 `update`（按平台消息 ID 改一张），payload 加 `card`。卡片记在 `channel_task_cards`，平台消息 ID 在 outbox 发出后回填。
 
@@ -330,7 +339,7 @@ core：ChannelService ─ 入站、提问、发件队列（已有）
 
 | 按钮 | 谁能点 | 做什么 |
 |---|---|---|
-| 开始执行 | `ownerUsers`（开了 `taskCards.start` 才有） | 按 `taskCards.start` 开始任务 |
+| 开始执行 | `ownerUsers`（开了 `taskCards.start` 才有） | 按任务在 Antumi 里的执行设置开始 |
 | 不做 | `ownerUsers`（带二次确认） | 取消任务，原因「在飞书里选择不做」 |
 | 通过 | `ownerUsers`；`taskCards.review` 是 `ownerOrAsker` 时还有任务的提问人，且他仍在白名单里 | `review → done`，和在 Antumi 里验收一样 |
 | 退回 | 同上，原因必填（500 字内） | 主人点：直接返工；提问人点：存原因、发返工卡 |
@@ -343,23 +352,26 @@ core：ChannelService ─ 入站、提问、发件队列（已有）
 ### 回调怎么走
 
 ```
-飞书 card.action.trigger（长连接）
- → 连接器：取 event_id、operator.open_id、tenant_key、action.value.t、form_value、context.open_message_id / open_chat_id
- → IPC action { channelId, eventKey, tenant, user, place, messageId, token, form }
- → core ChannelActions：去重（channel_events）→ 接入启用、tenant 相符 → 令牌在、没用过、没过期、属于这张卡
-     → 这个人能点 → 任务状态对得上 → BEGIN IMMEDIATE 标记已用 → 开始执行动作（异步）
- → IPC actionReply { channelId, eventKey, toast, card }    // 提示 + 更新后的卡片
- → 连接器在 3 秒内把它作为回调的响应发回
+飞书 card.action.trigger（长连接上是 type: event 的数据帧，event_type 为 card.action.trigger）
+ → 连接器：取 header.event_id、operator.open_id、tenant_key、action.value.t、form_value（只要文字）、context.open_message_id / open_chat_id
+ → IPC action { channelId, eventKey: 'card:<event_id>', tenant, user, place, messageId, token, form }
+ → ChannelService：去重（channel_events）→ ChannelTaskCards.click：接入启用、tenant 相符 → 令牌在、属于这个接入、没用过、没过期
+     → 卡片开着 → 这个人能点 → 任务状态对得上 → 原子地标记已用 → 做（开始的最多等 2 秒）
+ → IPC actionReply { channelId, eventKey, toast }
+ → 连接器把提示作为 ACK 帧的载荷发回：{"code":200,"data":"<base64 的 {toast:{type,content}}>"}
 ```
 
-- 飞书要求 3 秒内响应。连接器最多等 core 2.5 秒；没等到就回「已收到，正在处理」，之后 core 用 outbox 的 `update` 改卡片。
-- 同一次点击重投：`channel_events` 去重，令牌已用，第二次只回当前卡片。
-- 现有连接器只处理 `type: event` 的数据帧；卡片回调在长连接上的帧类型和响应放法照官方 Node SDK 的 `WSClient` 核对（见「待验证」）。
+- 帧和响应的放法照官方 Node SDK 1.74 的 `WSClient`：它只处理 `type: event` 的数据帧，卡片回调和消息事件一样交给分发器，处理函数的返回值 base64 后放进 ACK 的 `data`。
+- 飞书要求 3 秒内响应。连接器最多等 core 2.5 秒；没等到就回「已收到，正在处理」。回调里不带卡片：卡片一律由 core 经 outbox 的 `update` 改。
+- 同一次点击重投：`channel_events` 去重，第二次回「已经处理过了」。
+- 做不成的（开始失败、状态变了）把令牌还回去，可以再点；给点击人的话只来自固定的几句和原因代码的翻译，不带 core 的英文诊断。
 
 ### 开始执行
 
-- `taskCards.start` 是 `{ agent, model?, effort?, modelProvider? }`：从卡片开始时用哪个 Agent 和模型。权限模式不在这里设：和排查中枢自动开的任务一样，按本机的「无人值守」设置（`conversations.unattendedStartMode`，见 `main.ts` 的 `validateSourceTaskProposal`）。主人不在电脑前，Agent 若要审批就会等着，所以界面上说明这一点。不像自动开的任务那样要求项目配好交付检查：主人点了开始，和在 Antumi 里点一样。
-- 动作：任务还没有 `agent` 时先 `update` 写上 `taskCards.start` 的 Agent 和 `launch`，再 `TaskService.start`。开不了（Agent 没装、依赖没完成、项目不在了）：卡片上写「没能开始：<本地化的原因>，请在 Antumi 里处理」，只给原因代码，不给本机诊断。
+- 执行设置就是任务自己的：Agent、模型、推理强度、服务商都在 Antumi 的任务详情里，卡片上的「开始执行」按任务当时的设置开跑，和在 Antumi 里点开始一样。接入里不另设：只能选 Agent 的设置既不完整，又和任务的重复。
+- 从消息建的任务，`createChannelTask` 时就填上 Agent：取 `latestStartedAgent`（你最近一次开工用的 Agent，和桌面端新建任务的默认值同一条规则，只认本机检测到的），主人可以先在任务详情里改。不让聊天里的智能体选：它被同事的话驱动，用哪个 Agent、花谁的额度是主人的事。
+- 权限模式按本机的「无人值守」设置（`conversations.unattendedStartMode`，见 `main.ts` 的 `validateSourceTaskProposal`）。主人不在电脑前，Agent 若要审批就会等着，所以界面上说明这一点。不像自动开的任务那样要求项目配好交付检查：主人点了开始，和在 Antumi 里点一样。
+- 动作：任务没有 Agent 时（旧任务）先补上默认的，再 `TaskService.start`。开不了（Agent 没装、依赖没完成、项目不在了）：卡片上写「没能开始：<本地化的原因>，请在 Antumi 里处理」，只给原因代码，不给本机诊断。
 - Antumi 里的「开始执行」不变。哪边先开始都行，另一边的按钮随任务状态失效。
 
 ### 通过
@@ -390,9 +402,11 @@ core：ChannelService ─ 入站、提问、发件队列（已有）
 
 ## 三、飞书工具：以机器人身份读写文档
 
+> 状态：已实现（2026-11-27）。用真实的飞书测试应用以应用身份调过 `tools/list` 和几个只读调用；新建、修改文档和开权限还没有在真实飞书上调过（见「待验证」）。实现在 `core/src/channel-tools/platform.ts`、`ChannelService.callPlatform` / `toolSpecs`、`channel-feishu.ts` 的 `mcp` / `grant`。
+
 ### 用哪个 MCP
 
-飞书托管的远程 MCP（`https://mcp.feishu.cn/mcp`，JSON-RPC over HTTP POST，只有 `initialize`、`tools/list`、`tools/call`）。请求头：
+飞书托管的远程 MCP（`https://mcp.feishu.cn/mcp`，JSON-RPC over HTTP POST，只有 `initialize`、`tools/list`、`tools/call`；不发会话 ID，回的是普通 JSON，不是事件流）。请求头：
 
 - `X-Lark-MCP-TAT`：应用的 tenant_access_token（不用 `X-Lark-MCP-UAT`）。
 - `X-Lark-MCP-Allowed-Tools`：逗号分隔的工具名。不给就一个工具都不列；`tools/call` 只接受名单里的工具。
@@ -412,7 +426,15 @@ Lark 的 `mcp.larksuite.com/mcp` 能连上，但没有文档，联调后再开�
 | `add-comments` | 写（整篇评论，不能 @ 人、不能带图） | 是 | `docs:document.comment:create` |
 | `search-doc`、`search-user` | — | 否，只支持用户身份 | — |
 
-飞书说工具的参数和返回格式可能变，所以参数 schema 和说明一律取网关从 `tools/list` 拿到的，不写死；平台描述里的目录只用来在界面上分组、显示名字和要开的权限。勾了但这次 `tools/list` 里没有的工具不提供，界面注明「飞书暂未提供」。
+飞书说工具的参数和返回格式可能变，所以参数 schema 和说明一律取 `tools/list` 拿到的，不写死；平台描述里的目录只用来在界面上分组、显示名字和要开的权限。勾了但 `tools/list` 里没有的工具不提供。
+
+实测（2026-11-27，应用身份）：
+
+- 不带 `X-Lark-MCP-Allowed-Tools` 时 `tools/list` 是空的；带上后名单里的都列出来，不论应用身份能不能用（能不能用要到调用时才知道）。
+- `create-doc`：`title`、`markdown`，位置 `wiki_node`（节点 token 或链接）、`wiki_space`（空间 ID，`my_library` 是个人知识库）、`folder_token` 三选一，都不给就建在空间根目录；带 `task_id` 是查一次异步建档的进度。返回 `doc_id`、`doc_url`。Markdown 支持飞书的扩展（高亮块、分栏、`<mention-user>`、mermaid 转画板）。
+- `update-doc`：`overwrite`、`append`、`replace_range`、`replace_all`、`insert_before`、`insert_after`、`delete_range` 七种。`fetch-doc`：`doc_id`，可分页（`offset`、`limit`）。
+- 出错都是 HTTP 200、`isError: true`、正文一段文字；缺权限时文字里写明缺哪个权限并附开通链接，原样交给智能体。`search-doc` 用应用身份时报的是缺 `search:docs:read`，和文档说的「只支持用户身份」不一样，目录里先不放它。
+- 列表里还有文档里没写的消息类工具（`get-messages`、`get-thread-messages`、`search-messages` 等），目录里不放。
 
 ### 工具怎么到智能体手里
 
@@ -420,7 +442,7 @@ Lark 的 `mcp.larksuite.com/mcp` 能连上，但没有文档，联调后再开�
 - 智能体看到的名字是 `lark_` 加原名、`-` 换成 `_`（`lark_create_doc`）。
 - **工具名单按会话生成**：现在 `ConversationService` 的 `channelTools.tools` 是全局的一份（`CHANNEL_TOOL_NAMES`），channel MCP 也静态列出 `CHANNEL_TOOLS`。改成按会话所属接入生成：`channelTools.tools(conversationId)` 给 `lockdown.tools`；channel MCP 在 `tools/list` 时经限定连接问 core 要名单（新方法 `channelTools.list({ conversationId })`，`rpc-server.ts` 里这种连接只能调 `channelTools.call` 和它）。
 - 主人中途改了勾选：下一条提问起生效。`ChannelService.run` 发送前比较会话启动时的工具名单，不同就先重启这个会话的 Agent。
-- 网关连上后 `initialize` + `tools/list` 一次（带全部目录里的工具名），报 `mcpTools`；core 缓存，用来生成说明和 schema。
+- 列出时 core 经网关调一次 `tools/list`（只带勾选的工具名），按接入缓存 10 分钟，勾选变了就作废；问不到时只列 Antumi 自己的工具，不猜。
 
 ### 调用链
 
@@ -429,9 +451,9 @@ lark_create_doc → channelTools.call → ChannelService.callTool → platform.t
   → core 复查（和 task_create 共用 authorizedNow）：接入在且启用、工具在 platformTools 里、
     这个会话正有一条提问在跑、提问人和所在的群或私聊仍在授权范围、tenant 未变
   → create-doc：用接入的 docLocation 覆盖参数里的位置
-  → IPC mcp { callId, channelId, tool: 'create-doc', allowed, arguments }
-  → 网关：取 tenant token（过期换一次），附 X-Lark-MCP-TAT、X-Lark-MCP-Allowed-Tools，POST
-  → IPC mcpResult { callId, ok, content, error, retryAfterMs }
+  → IPC mcp { callId, channelId, method: 'tools/call', allowed, tool: 'create-doc', arguments }
+  → 网关：取 tenant token（401 或 -32003 时换一个再试一次），附 X-Lark-MCP-TAT、X-Lark-MCP-Allowed-Tools，POST
+  → IPC platformAnswer { callId, ok, result, error }
   → create-doc 成功：给提问人开权限（下一节）
   → 截到 20,000 字，作为不受信的资料交回；记 channel_tool_calls（工具、文档链接或标题、写操作标「写」）
 ```
@@ -442,7 +464,7 @@ lark_create_doc → channelTools.call → ChannelService.callTool → platform.t
 
 ### 文档放哪、给谁开权限
 
-- 接入加 `docLocation?: { wikiNode: string } | null`：知识库节点的 token（界面上可以粘节点链接，取出 token）。`create-doc` 支持建在「我的文档库」或某个知识库节点下；用应用身份时「我的文档库」是应用自己的空间，只有应用能看。所以设了位置就由 core 把位置参数写成它，智能体选不了别的地方；没设就建在应用空间，只能靠下面给提问人开权限。知识库要先把应用加为成员或这个节点的协作者。
+- 接入加 `docLocation?: { kind: 'wikiNode' | 'wikiSpace' | 'folder', value } | null`：知识库节点（链接或 token，原样交给 `wiki_node`）、知识空间 ID，或云盘文件夹（链接里取出 token）。core 去掉智能体给的位置参数，换成这里设的，智能体选不了别的地方；没设就建在应用自己的空间，只能靠下面给提问人开权限。知识库或文件夹要先把应用加为成员。
 - 建好后 core 让网关给提问人开权限：`POST /open-apis/drive/v1/permissions/:token/members?type=docx`，`{ member_type: 'openid', member_id: <提问人>, perm: 'edit', type: 'user' }`，应用身份，要多开 `docs:permission.member:create`。结果接在工具的回答后面（「已给你开了编辑权限」或「没能开权限：…，请找主人」）。
 - 接入加 `docAccess?: 'edit' | 'view' | 'none'`，没有就是 `edit`。
 - 只给发起这次提问的人开，只对这次提问里 `create-doc` 建的文档；智能体没有开权限的工具，不能把文档分享给别人。
@@ -465,6 +487,8 @@ lark_create_doc → channelTools.call → ChannelService.callTool → platform.t
 > Antumi 不会把机器人的密钥交给智能体，每次调用都记在提问记录里。
 
 ## 四、话题里免 @
+
+> 状态：已实现（2026-11-27），只对本地的假飞书验证过；要在真实飞书上开 `im:message.group_msg` 才能试（见「待验证」5）。实现在 `ChannelService.followUpRefusal` 和 `channel-feishu.ts` 的 `toEvent`。
 
 - 接入加 `followUps?: boolean`，默认关；平台描述 `features.followUps` 为真的平台才显示（飞书、Lark；钉钉没有话题，Slack 以后）。打开要去开放平台申请 `im:message.group_msg`（获取群组中所有消息，敏感权限，要管理员审批），界面写明并给出可复制的权限名。
 - `GatewayChannel` 加 `options: { followUps }`。开关关着时连接器照旧把没 @ 它的群消息自己 ACK 掉；开着时只把**话题里**（有 `thread_id`）的消息以 `kind: 'followUp'` 交给 core，话题外的仍在连接器里丢掉。
@@ -493,7 +517,7 @@ lark_create_doc → channelTools.call → ChannelService.callTool → platform.t
 reportTasks: z.boolean().optional()                                   // 没有 = 关
 ownerUsers: z.array(PlatformId).max(20).optional()
 taskCards: z.object({
-  start: z.object({ agent: AgentKind, model, effort, modelProvider }).nullable(),   // 后三个取 TaskLaunchOptions 的定义；null：没有「开始执行」
+  start: z.boolean(),                                                  // false：没有「开始执行」
   review: z.enum(['owner', 'ownerOrAsker']).nullable()                               // null：不发验收卡
 }).nullable().optional()                                              // 没有或 null = 不发卡片
 platformTools: z.array(z.string().max(100)).max(50).optional()
@@ -532,20 +556,24 @@ ChannelGatewayToCore +=
 ## 存储（`task-store.ts` 的 `MIGRATIONS` 末尾，`ChannelStore` 读写）
 
 ```sql
-ALTER TABLE channel_outbox ADD COLUMN task_id TEXT;
+-- 第一期，已实现
 CREATE TABLE channel_task_reports (id TEXT PRIMARY KEY, task_id TEXT NOT NULL, channel_id TEXT NOT NULL, stage TEXT NOT NULL,
-  state TEXT NOT NULL, reason TEXT, outbox_id TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
+  state TEXT NOT NULL, reason TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
+ALTER TABLE channel_outbox ADD COLUMN report_id TEXT;
+-- 第二期，已实现。summary：验收卡的总结（已打码）；notice：开始失败的原因；rendered：上次画成的样子，没变就不改
 CREATE TABLE channel_task_cards (id TEXT PRIMARY KEY, task_id TEXT NOT NULL, channel_id TEXT NOT NULL, kind TEXT NOT NULL,
-  outbox_id TEXT NOT NULL, message_id TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
+  place TEXT NOT NULL, thread TEXT, recipient TEXT, feedback_id TEXT, summary TEXT NOT NULL DEFAULT '[]', notice TEXT,
+  message_id TEXT, rendered TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
 CREATE TABLE channel_actions (token TEXT PRIMARY KEY, channel_id TEXT NOT NULL, card_id TEXT NOT NULL, task_id TEXT NOT NULL,
   action TEXT NOT NULL, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, used_at INTEGER, used_by TEXT);
 CREATE TABLE channel_task_feedback (id TEXT PRIMARY KEY, task_id TEXT NOT NULL, channel_id TEXT NOT NULL, author TEXT NOT NULL,
   text TEXT NOT NULL, created_at INTEGER NOT NULL, used_at INTEGER);
+-- 之后几期
 ALTER TABLE channel_threads ADD COLUMN bystanders INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE channel_tool_calls ADD COLUMN write INTEGER NOT NULL DEFAULT 0;
 ```
 
-- 回报、卡片、退回意见跟着任务，删任务时一起删；不受接入记录 90 天清理的影响，接入移除后记录留着，之后的回报记 `skipped`。
+- 回报、卡片、退回意见跟着任务：任务删了，每天的清理把它的回报一起删掉；不受接入记录 90 天清理的影响，接入移除后记录留着，之后的回报记 `skipped`。
 - 过期的令牌每天清一次（和现有清理同时）。
 
 ## 安全
@@ -567,10 +595,10 @@ ALTER TABLE channel_tool_calls ADD COLUMN write INTEGER NOT NULL DEFAULT 0;
 
 | 期 | 内容 | 主要改动 | 前置 |
 |---|---|---|---|
-| 1 | 结果回到原话题（文字） | protocol：`thread`/`direct`、`reportTasks`、`channel-task-reports`；core：`channel-task-reports.ts`、日志组合、`source_report` 对聊天任务开放、`mention`；desktop：开关和回报记录 | 无 |
-| 2 | 卡片：开始、验收、返工 | protocol：`ownerUsers`、`taskCards`、`cards`；core：`channel-cards.ts`、`channel-actions.ts`、outbox 的 `card` / `update`、飞书连接器的卡片回调；desktop：主人 ID、卡片的两个开关和执行设置、退回意见 | 待验证 3、6 |
-| 3 | 飞书工具 | protocol：`platformTools`、`docLocation`、`docAccess`、平台描述 `tools`；core：`channel-tools/platform.ts`、按会话的工具名单、`channelTools.list`、`channel-feishu-tools.ts`；desktop：「飞书工具」 | 待验证 1、2、4 |
-| 4 | 话题里免 @ | protocol：`followUps`；core：`followUp` 事件、`bystanders`；desktop：开关和说明 | 待验证 5 |
+| 1 | 结果回到原话题（文字），**已实现** | protocol：`thread`/`direct`、`reportTasks`、`channel-task-reports`；core：`channel-task-reports.ts`、日志组合、`source_report` 对聊天任务开放、`mention`；desktop：开关和回报记录 | 无 |
+| 2 | 卡片：开始、验收、返工，**已实现** | protocol：`ownerUsers`、`taskCards`、`cards`、`created` 阶段、`ChannelTaskFeedback`；core：`channel-cards.ts`、`channel-task-cards.ts`、outbox 的 `card` / `update`、飞书连接器的卡片回调；desktop：主人 ID、卡片的开关和执行设置、退回意见和「按意见继续」 | 待验证 3、6（实测） |
+| 3 | 飞书工具，**已实现** | protocol：`platformTools`、`docLocation`、`docAccess`、平台描述 `tools`；core：`channel-tools/platform.ts`、按会话的工具名单、`channelTools.list`、`channel-feishu-tools.ts`；desktop：「飞书工具」 | 待验证 1、2、4 |
+| 4 | 话题里免 @，**已实现** | protocol：`followUps`；core：`followUp` 事件、`bystanders`；desktop：开关和说明 | 待验证 5 |
 
 建议的提交（照 AGENTS.md 的格式，每个带测试）：
 
@@ -595,7 +623,7 @@ CHANGELOG 草稿：
 
 - `protocol/src/channel.test.ts`：新字段旧客户端不带时保留；只有飞书、Lark 的描述有 `cards`、`followUps`、`tools`。
 - `core/src/channel-task-reports.test.ts`：每种状态变化回什么；和状态同一事务（模拟在中间退出）；接入关了、停用、换了组织时跳过并记原因；草稿优先、没有草稿压缩、压缩失败只发 PR；打码；`thread` 缺失的旧任务按原消息回复；outbox 放弃后记 `failed`。
-- `core/src/channel-actions.test.ts`：每个按钮的有权人；不是主人、令牌过期、用过、属于别的卡片、组织不同、任务已变；重投只处理一次；开始用 `taskCards.start` 和无人值守模式；只开 `start` 或只开 `review` 时各自的卡片和按钮；`review` 是 `owner` 时提问人点不了；关了卡片后旧按钮的回答；通过走 `review → done`；提问人退回只存意见、发返工卡；主人退回直接返工；继续执行带上意见并把它标为已用。
+- `core/src/channel-actions.test.ts`：每个按钮的有权人；不是主人、令牌过期、用过、属于别的卡片、组织不同、任务已变；重投只处理一次；开始用任务的执行设置和无人值守模式；只开 `start` 或只开 `review` 时各自的卡片和按钮；`review` 是 `owner` 时提问人点不了；关了卡片后旧按钮的回答；通过走 `review → done`；提问人退回只存意见、发返工卡；主人退回直接返工；继续执行带上意见并把它标为已用。
 - `core/src/channel-cards.test.ts`：飞书卡片 JSON 2.0、`update_multi`、按钮里只有令牌、摘要打码、`<at>` 失效、超过 14 天不更新。
 - `core/src/channel-tools/platform.test.ts`：名字映射；按会话列出；复查（没勾、提问已结束、提问人被移出白名单）；`docLocation` 覆盖参数；建好后开权限、开不了时的说明；截断；写失败不重试；记录目标和「写」。
 - `core/src/channel-feishu.test.ts`：假飞书加卡片回调帧和 3 秒内的响应、等不到 core 时的「正在处理」、`PATCH` 卡片、私聊发卡、富文本 `at`；假托管 MCP（头、工具名单、token 过期换一次、超大响应、`isError`）；假开权限接口；`followUps` 开关下话题内外的消息。
@@ -607,9 +635,9 @@ CHANGELOG 草稿：
 
 用 2026-11-15 联调过的飞书应用，先只读：
 
-1. 托管 MCP：用应用 token 调 `tools/list`，带和不带 `X-Lark-MCP-Allowed-Tools`；记下 `create-doc` 指定知识库节点的参数名和返回里文档链接、token 的字段，`update-doc` 各模式的参数，没权限时的错误形式。
+1. ~~托管 MCP 的 `tools/list` 和错误形式~~（2026-11-27 已实测，见第三节「实测」）。还要试：`create-doc` 建在知识库节点下和应用空间里各一篇，建在知识库里时 `doc_id` 拿去开权限用 `type=docx` 行不行。
 2. Lark 的 `mcp.larksuite.com/mcp` 是否认 `X-Lark-MCP-TAT`、工具是否相同。
-3. 卡片回调走长连接时：数据帧的 `type` 头（`event` 还是 `card`）、响应（提示和卡片）放在 ACK 帧的哪里，照官方 Node SDK 的 `WSClient` 核对；JSON 2.0 表单里输入框和提交按钮的 `form_value`。
+3. 卡片回调走长连接时：确认是 `type: event` 的数据帧、ACK 帧 `data` 里的提示能显示（已照 SDK 1.74 实现）；JSON 2.0 表单里带 `behaviors` 回调的提交按钮是否同时带回 `action.value` 和 `form_value`；卡片 Markdown 里的 `<at id=…></at>` 是否通知被 @ 的人；`PATCH` 改卡片要不要 `im:message:update`。
 4. 应用身份给同组织用户开 `edit` 权限；对方不在可用范围时的错误。
 5. 开了 `im:message.group_msg` 后，话题里的消息是否带 `thread_id` / `root_id`，机器人自己的回复是否也推来。
 6. 富文本里的 `at` 节点在 `reply_in_thread` 的回复里是否通知被 @ 的人；按 `open_id` 给主人私聊发卡片需要主人在应用的可用范围内。

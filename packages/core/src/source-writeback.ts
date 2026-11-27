@@ -21,6 +21,7 @@ import {
 import { Rejection } from './rejection'
 import type { SourceService } from './source-service'
 import { itemKey, type SourceWritebackStore, type StoredIntent } from './source-writeback-store'
+import type { ReportAudience } from './source-report-prompt'
 import type { TaskWriteLink } from './task-store'
 
 // Writing back to the issue a task or an investigation came from: by hand, or by the source's rules
@@ -36,10 +37,12 @@ type Hooks = {
   // A comment an agent's words go into, made fit for the tracker: no secret, no path of this machine.
   sanitize?(owner: WritebackOwner, text: string): string
   defer?(target: SourceUpdateTarget, trigger: Trigger): boolean
+  // A target with no issue whose summary is still wanted: a task from a chat platform, reported in its thread.
+  reportable?(target: SourceUpdateTarget): boolean
   changed(view: WritebackView): void
 }
 type Sources = Pick<SourceService, 'writer' | 'writebackFor' | 'writebackWanted'>
-export type Condense = (conversationId: string, platform: string, reply: string, guidance: string) => Promise<string | null>
+export type Condense = (conversationId: string, platform: string, reply: string, guidance: string, audience?: ReportAudience) => Promise<string | null>
 type Writer = NonNullable<ReturnType<SourceService['writer']>>
 type Trigger = Exclude<SourceWriteTrigger, 'manual'>
 
@@ -81,10 +84,21 @@ export class SourceWriteback {
   view(target: SourceUpdateTarget): WritebackView {
     const owner = this.hooks.owner(target)
     const writer = owner && this.sources.writer(owner.source)
-    return { target, supported: !!writer, comments: writer?.comments ?? true, report: this.store.report(target), writes: this.store.writes(target) }
+    const reportable = this.hooks.reportable?.(target) ?? false
+    return { target, supported: !!writer, comments: writer?.comments ?? true, report: this.store.report(target), writes: this.store.writes(target), ...(reportable ? { reportable } : {}) }
   }
 
   setCondenser(condense: Condense): void { this.condense = condense }
+
+  // The summary the agent drafted, for whoever else posts it (a chat platform's thread).
+  draft(target: SourceUpdateTarget): SourceReport | null {
+    return this.store.report(target)
+  }
+
+  // An agent's last reply shortened by the small model into a summary; null when it cannot be.
+  async condenseFor(conversationId: string, platform: string, reply: string, guidance: string, audience: ReportAudience): Promise<string | null> {
+    return await this.condense?.(conversationId, platform, reply, guidance, audience) ?? null
+  }
 
   ownComments(source: TaskSource): ReadonlySet<string> {
     return this.store.postedComments(source.provider, source.instance, source.key)
@@ -139,7 +153,7 @@ export class SourceWriteback {
   }
 
   saveReport(target: SourceUpdateTarget, text: string, result: Pick<SourceReport, 'outcome' | 'verification' | 'question' | 'blocker'> = {}): WritebackView {
-    if (!this.hooks.owner(target)) throw new Rejection('source-none', '这个会话不是从来源事项来的')
+    if (!this.hooks.owner(target) && !this.hooks.reportable?.(target)) throw new Rejection('source-none', '这个会话不是从来源事项来的')
     const report = text.trim().slice(0, MAX_SOURCE_REPORT)
     if (!report) throw new Rejection('source-writeback-empty', '总结不能为空')
     if (report.length > SOURCE_REPORT_LIMIT) throw new Rejection('source-report-too-long', `总结有 ${report.length} 字，超过 ${SOURCE_REPORT_LIMIT} 字。请压缩到 2 到 4 句、300 字以内，去掉过程、commit 号和本地路径，再调用一次。`)

@@ -65,3 +65,13 @@
 .agent-channel-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
 .agent-channel-chips span { padding: 2px 8px; border: 1px solid var(--border); border-radius: 999px; color: var(--text-muted); font-size: 12px; }
 .agent-channel-empty { margin: 0; padding: 20px; border: 1px dashed var(--border); border-radius: 12px; color: var(--text-muted); font-size: 13px; text-align: center; }
+/* A switch and its why on one line; a heading's why sits after its words. The why opens by its
+   icon: the agent page lets its tips hang off the heading, which here would put them under the
+   whole dialog, out of sight. */
+.agent-channel-option { display: flex; align-items: center; gap: 6px; }
+.agent-channel-dialog .agent-profile-info { position: relative; }
+.agent-channel-step > h4 .agent-profile-info { margin-left: 6px; }
+/* What a switch needs done or watched, in a line by it: kept in view, its details a hover away. */
+.agent-channel-needs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.agent-channel-needs > p { margin: 0; }
+.agent-channel-warning { margin: 0; color: var(--warning); }

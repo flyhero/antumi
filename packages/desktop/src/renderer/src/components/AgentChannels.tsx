@@ -1,18 +1,19 @@
 import { SupportActions } from './ContactAuthor'
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import {
-  CHANNEL_DEFAULTS, CHANNEL_PLATFORMS, ChannelInput, agentDescriptor, channelPlatform,
-  type AgentKind, type Channel, type ChannelCredentialKey, type ChannelPlatform, type ChannelRequest
+  CHANNEL_DEFAULTS, CHANNEL_PLATFORMS, ChannelInput, agentDescriptor, channelPlatform, translatedText,
+  type AgentKind, type Channel, type ChannelCredentialKey, type ChannelPlatform, type ChannelRequest, type DocAccess, type DocLocation, type TaskCardReview
 } from '@antumi/protocol'
-import { setChannels, useChannelReadiness, useChannels, useChannelsSupported, useChannelTasksSupported } from '../channels'
+import { setChannels, useChannelFollowUpsSupported, useChannelPlatformToolsSupported, useChannelReadiness, useChannels, useChannelsSupported, useChannelTaskCardsSupported, useChannelTaskReportsSupported, useChannelTasksSupported } from '../channels'
 import { askConfirm } from '../confirm-dialog'
 import { timeAgo } from '../conversation-state'
 import { perform, useCore } from '../core-store'
-import { t } from '../i18n'
+import { t, useLocale } from '../i18n'
 import { agentLabel } from '../labels'
 import { useOccludesBrowser } from '../browser-occlusion'
 import { CopyButton } from './CopyButton'
 import { ChannelRequestDetail } from './ChannelRequestDetail'
+import { ChatPicker } from './ChatPicker'
 import { ChannelPlatformIcon, ChatIcon, CloseIcon, InfoIcon, PlusIcon } from './icons'
 import { Toggle } from './SettingsControls'
 import './agent-channels.css'
@@ -89,7 +90,11 @@ function ChannelRow({ channel, requestsOpen, onToggle, onRequests, onEdit, onRem
     t('AgentChannels.scopeProjects', { count: channel.projectPaths.length }),
     t('AgentChannels.scopeAskers', { count: channel.allowedUsers.length }),
     t('AgentChannels.scopeDaily', { count: channel.dailyPerUser }),
-    ...(channel.allowTaskCreation ? [t('AgentChannels.allowTaskCreation')] : [])
+    ...(channel.allowTaskCreation ? [t('AgentChannels.taskCreationChip')] : []),
+    ...(channel.allowTaskCreation && channel.reportTasks ? [t('AgentChannels.reportTasksChip')] : []),
+    ...(channel.reportTasks && channel.taskCards ? [t('AgentChannels.cardsChip')] : []),
+    ...(channel.platformTools?.length ? [t('AgentChannels.toolsChip', { count: channel.platformTools.length })] : []),
+    ...(channel.followUps ? [t('AgentChannels.followUpsChip')] : [])
   ]
   return <div className="agent-channel-row">
     <span className="agent-channel-logo" aria-hidden="true"><ChannelPlatformIcon platform={channel.platform} /></span>
@@ -107,9 +112,46 @@ function ChannelRow({ channel, requestsOpen, onToggle, onRequests, onEdit, onRem
   </div>
 }
 
+// A tip's widest, and roughly how tall its text runs: about 22 characters a line of 17px.
+const TIP_WIDTH = 288
+const tipHeight = (text: string) => Math.ceil(text.length / 22) * 17 + 16
+
+// The longer why of a setting, on hover or focus, so the form reads as a list of choices. It opens
+// towards whichever side of the dialog's scrolling area has room for it, as it stands when pointed
+// at: an icon in the right column would have its tip cut off opening right, one near the bottom
+// opening down.
+function Info({ text }: { text: string }) {
+  const [place, setPlace] = useState<{ right: boolean; up: boolean }>({ right: true, up: false })
+  const fit = (icon: HTMLElement) => {
+    const box = icon.getBoundingClientRect()
+    const area = (icon.closest('.agent-channel-steps') ?? document.documentElement).getBoundingClientRect()
+    const toRight = area.right - box.left
+    const below = area.bottom - box.bottom
+    setPlace({ right: toRight >= TIP_WIDTH || toRight >= box.right - area.left, up: below < tipHeight(text) && box.top - area.top > below })
+  }
+  // data-tooltip's four corners: right and down is align start, left and down the default, right
+  // and up side top, left and up side top-end.
+  const corner = place.up ? { 'data-tooltip-side': place.right ? 'top' : 'top-end' } : place.right ? { 'data-tooltip-align': 'start' } : {}
+  return <span className="agent-profile-info" tabIndex={0} aria-label={text} data-tooltip={text} {...corner}
+    onPointerEnter={(event) => fit(event.currentTarget)} onFocus={(event) => fit(event.currentTarget)}><InfoIcon /></span>
+}
+
+// A switch with its why beside it, outside the label so pointing at the why does not flip the switch.
+function Option({ checked, onChange, label, info }: { checked: boolean; onChange: (checked: boolean) => void; label: string; info?: string }) {
+  return <div className="agent-channel-option">
+    <label className="agent-profile-check"><input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />{label}</label>
+    {info && <Info text={info} />}
+  </div>
+}
+
 type Draft = {
   credentials: Partial<Record<ChannelCredentialKey, string>>
   projectPaths: string[]; users: string; places: string; allowDirect: boolean; allowTaskCreation: boolean
+  // undefined until chosen: turning task creation on then ticks it.
+  reportTasks: boolean | undefined
+  cards: boolean; owners: string; cardStart: boolean; cardReview: TaskCardReview | 'none'
+  tools: string[]; docKind: DocLocation['kind']; docValue: string; docAccess: DocAccess
+  followUps: boolean
   dailyPerUser: string; dailyTotal: string; maxConcurrent: string; turnTimeoutSec: string
 }
 
@@ -128,11 +170,22 @@ function ChannelDialog({ profileId, platform, channel, agent, hasProvider, onClo
   const all = useChannels()
   const [projects, setProjects] = useState<string[]>([])
   const taskCreationSupported = useChannelTasksSupported()
+  const reportsSupported = useChannelTaskReportsSupported()
+  const cardsSupported = useChannelTaskCardsSupported() && descriptor.features.cards
+  const toolCatalog = useChannelPlatformToolsSupported() ? descriptor.tools : undefined
+  const followUpsSupported = useChannelFollowUpsSupported() && descriptor.features.followUps
+  const locale = useLocale((state) => state.locale)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [draft, setDraft] = useState<Draft>(() => ({
     credentials: {},
     projectPaths: channel?.projectPaths ?? [], users: (channel?.allowedUsers ?? []).join('\n'), places: (channel?.allowedPlaces ?? []).join('\n'), allowDirect: channel?.allowDirect ?? false, allowTaskCreation: channel?.allowTaskCreation ?? false,
+    reportTasks: channel?.reportTasks,
+    cards: !!channel?.taskCards, owners: (channel?.ownerUsers ?? []).join('\n'),
+    cardStart: channel?.taskCards?.start ?? true,
+    cardReview: channel?.taskCards ? channel.taskCards.review ?? 'none' : 'ownerOrAsker',
+    followUps: channel?.followUps ?? false,
+    tools: channel?.platformTools ?? [], docKind: channel?.docLocation?.kind ?? 'wikiNode', docValue: channel?.docLocation?.value ?? '', docAccess: channel?.docAccess ?? 'edit',
     dailyPerUser: String(channel?.dailyPerUser ?? CHANNEL_DEFAULTS.dailyPerUser), dailyTotal: String(channel?.dailyTotal ?? CHANNEL_DEFAULTS.dailyTotal),
     maxConcurrent: String(channel?.maxConcurrent ?? CHANNEL_DEFAULTS.maxConcurrent), turnTimeoutSec: String(channel?.turnTimeoutSec ?? CHANNEL_DEFAULTS.turnTimeoutSec)
   }))
@@ -150,6 +203,17 @@ function ChannelDialog({ profileId, platform, channel, agent, hasProvider, onClo
     const parsed = ChannelInput.safeParse({
       ...(channel ? { id: channel.id } : {}), profileId, platform, enabled: channel?.enabled ?? true, credentials,
       projectPaths: draft.projectPaths, allowedUsers: lines(draft.users), allowedPlaces: lines(draft.places), allowDirect: draft.allowDirect, allowTaskCreation: draft.allowTaskCreation,
+      ...(reportsSupported && draft.reportTasks !== undefined ? { reportTasks: draft.reportTasks } : {}),
+      ...(followUpsSupported ? { followUps: draft.followUps } : {}),
+      ...(toolCatalog ? {
+        platformTools: draft.tools,
+        docLocation: draft.docValue.trim() ? { kind: draft.docKind, value: draft.docValue.trim() } : null,
+        docAccess: draft.docAccess
+      } : {}),
+      ...(cardsSupported ? {
+        ownerUsers: lines(draft.owners),
+        taskCards: draft.cards ? { start: draft.cardStart, review: draft.cardReview === 'none' ? null : draft.cardReview } : null
+      } : {}),
       dailyPerUser: Number(draft.dailyPerUser), dailyTotal: Number(draft.dailyTotal), maxConcurrent: Number(draft.maxConcurrent), turnTimeoutSec: Number(draft.turnTimeoutSec)
     })
     if (!parsed.success) { setError(t('AgentChannels.invalid', { field: parsed.error.issues[0]?.path.join('.') ?? '' })); return }
@@ -168,6 +232,11 @@ function ChannelDialog({ profileId, platform, channel, agent, hasProvider, onClo
   }
   const number = (key: 'dailyPerUser' | 'dailyTotal' | 'maxConcurrent' | 'turnTimeoutSec', label: string, min: number, max: number) =>
     <div className="squad-field"><label htmlFor={`${formId}-${key}`}>{label}</label><input id={`${formId}-${key}`} className="input" type="number" min={min} max={max} value={draft[key]} onKeyDown={onEnter} onChange={(event) => setDraft({ ...draft, [key]: event.target.value })} /></div>
+  // Steps after the projects are numbered as they appear: the platform may have no tools, core no tasks.
+  const toolsStep = 5 + Number(taskCreationSupported)
+  const limitsStep = toolsStep + Number(Boolean(toolCatalog))
+  const heading = (step: number, text: string, info?: string, extra?: ReactNode) =>
+    <h4><span className="agent-channel-step-number" aria-hidden="true">{step}</span>{text}{info && <Info text={info} />}{extra}</h4>
   const title = t(channel ? 'AgentChannels.editTitle' : 'AgentChannels.add', { platform: descriptor.label })
   return <dialog ref={dialog} className="modal agent-channel-dialog" aria-labelledby={titleId}
     onCancel={(event) => { event.preventDefault(); onClose() }}
@@ -176,7 +245,7 @@ function ChannelDialog({ profileId, platform, channel, agent, hasProvider, onClo
     <header className="modal-header"><h2 id={titleId}>{title}</h2><button type="button" className="icon-button modal-close" aria-label={t('AgentChannels.cancel')} onClick={onClose}><CloseIcon /></button></header>
     <div className="agent-channel-steps">
     <div className="agent-channel-step">
-      <h4><span className="agent-channel-step-number" aria-hidden="true">1</span>{t('AgentChannels.step1')}</h4>
+      {heading(1, t('AgentChannels.step1'))}
       <p className="squad-block-hint muted">{t(`AgentChannels.${platform}.create`)}</p>
       <div className="agent-channel-step-actions">
         <a className="button" href={descriptor.console} target="_blank" rel="noreferrer">{t('AgentChannels.openConsole')}</a>
@@ -184,7 +253,7 @@ function ChannelDialog({ profileId, platform, channel, agent, hasProvider, onClo
       </div>
     </div>
     <div className="agent-channel-step">
-      <h4><span className="agent-channel-step-number" aria-hidden="true">2</span>{t('AgentChannels.step2')}</h4>
+      {heading(2, t('AgentChannels.step2'))}
       <p className="squad-block-hint muted">{t(`AgentChannels.${platform}.tokens`)}</p>
       <div className="agent-channel-grid">
         {descriptor.credentials.map(({ key, label, prefix }) => <div key={key} className="squad-field">
@@ -195,8 +264,7 @@ function ChannelDialog({ profileId, platform, channel, agent, hasProvider, onClo
       </div>
     </div>
     <div className="agent-channel-step">
-      <h4><span className="agent-channel-step-number" aria-hidden="true">3</span>{t('AgentChannels.step3')}{draft.projectPaths.length > 0 && <span className="agent-channel-step-count">{t('AgentChannels.projectsPicked', { count: draft.projectPaths.length })}</span>}</h4>
-      <p className="squad-block-hint muted">{t('AgentChannels.projectsHint')}</p>
+      {heading(3, t('AgentChannels.step3'), t('AgentChannels.projectsHint'), draft.projectPaths.length > 0 && <span className="agent-channel-step-count">{t('AgentChannels.projectsPicked', { count: draft.projectPaths.length })}</span>)}
       {offered.length > FILTER_FROM && <input className="input" type="search" value={filter} onKeyDown={(event) => { if (event.key === 'Enter') event.preventDefault() }} onChange={(event) => setFilter(event.target.value)} placeholder={t('AgentChannels.filterProjects')} aria-label={t('AgentChannels.filterProjects')} />}
       {offered.length === 0 ? <p className="squad-block-hint muted">{t('AgentChannels.noProjects')}</p> : <div className="agent-channel-projects">
         {shown.map((project) => <label key={project} className="agent-profile-check" title={project}>
@@ -205,22 +273,99 @@ function ChannelDialog({ profileId, platform, channel, agent, hasProvider, onClo
         </label>)}
         {shown.length === 0 && <p className="squad-block-hint muted">{t('AgentChannels.noMatch')}</p>}
       </div>}
-      {taskCreationSupported && <>
-        <label className="agent-profile-check"><input type="checkbox" checked={draft.allowTaskCreation} onChange={(event) => setDraft({ ...draft, allowTaskCreation: event.target.checked })} />{t('AgentChannels.allowTaskCreation')}</label>
-        <p className="squad-block-hint muted">{t('AgentChannels.taskCreationHint')}</p>
-      </>}
     </div>
     <div className="agent-channel-step">
-      <h4><span className="agent-channel-step-number" aria-hidden="true">4</span>{t('AgentChannels.step4')}</h4>
+      {heading(4, t('AgentChannels.step4'))}
       <div className="agent-channel-grid">
         <div className="squad-field"><label htmlFor={`${formId}-users`}>{t('AgentChannels.users')}</label><textarea id={`${formId}-users`} className="input" rows={3} spellCheck={false} value={draft.users} onChange={(event) => setDraft({ ...draft, users: event.target.value })} /></div>
         <div className="squad-field"><label htmlFor={`${formId}-places`}>{t('AgentChannels.places')}</label><textarea id={`${formId}-places`} className="input" rows={3} spellCheck={false} value={draft.places} onChange={(event) => setDraft({ ...draft, places: event.target.value })} /></div>
       </div>
       <p className="squad-block-hint muted">{t(`AgentChannels.${platform}.ids`)}</p>
-      <label className="agent-profile-check"><input type="checkbox" checked={draft.allowDirect} onChange={(event) => setDraft({ ...draft, allowDirect: event.target.checked })} />{t('AgentChannels.allowDirect')}</label>
+      <Option checked={draft.allowDirect} onChange={(allowDirect) => setDraft({ ...draft, allowDirect })} label={t('AgentChannels.allowDirect')} />
+      {followUpsSupported && <Option checked={draft.followUps} onChange={(followUps) => setDraft({ ...draft, followUps })} label={t('AgentChannels.followUps')} info={t('AgentChannels.followUpsHint')} />}
+      {followUpsSupported && draft.followUps && descriptor.followUpScopes && <div className="agent-channel-needs">
+        <p className="squad-block-hint muted">{t('AgentChannels.followUpsScope', { scope: descriptor.followUpScopes.join('、') })}</p>
+        <CopyButton text={JSON.stringify({ scopes: { tenant: descriptor.followUpScopes, user: [] } }, null, 2)} label={t('AgentChannels.copyScopes')}>{t('AgentChannels.copyScopes')}</CopyButton>
+      </div>}
     </div>
+    {taskCreationSupported && <div className="agent-channel-step">
+      {heading(5, t('AgentChannels.stepTasks'), t('AgentChannels.stepTasksHint'))}
+      <Option checked={draft.allowTaskCreation} onChange={(allowTaskCreation) => setDraft({ ...draft, allowTaskCreation, reportTasks: draft.reportTasks ?? (allowTaskCreation || undefined) })} label={t('AgentChannels.allowTaskCreation')} info={t('AgentChannels.taskCreationHint')} />
+      {/* Still there with collecting off: tasks collected before go on reporting until it is turned off. */}
+      {reportsSupported && (draft.allowTaskCreation || draft.reportTasks) && <Option checked={draft.reportTasks ?? false} onChange={(reportTasks) => setDraft({ ...draft, reportTasks })} label={t('AgentChannels.reportTasks')} info={t('AgentChannels.reportTasksHint')} />}
+      {/* Cards are a kind of report: with reports off there is nothing to put on them. */}
+      {cardsSupported && draft.reportTasks && <Option checked={draft.cards} onChange={(cards) => setDraft({ ...draft, cards })} label={t('AgentChannels.cards')} info={t('AgentChannels.cardsHint')} />}
+      {cardsSupported && draft.reportTasks && draft.cards && <div className="agent-channel-grid">
+        <div className="squad-field">
+          <span className="agent-channel-option"><label htmlFor={`${formId}-owners`}>{t('AgentChannels.owners')}</label><Info text={t('AgentChannels.ownersHint')} /></span>
+          <textarea id={`${formId}-owners`} className="input" rows={2} spellCheck={false} value={draft.owners} onChange={(event) => setDraft({ ...draft, owners: event.target.value })} />
+          {lines(draft.owners).length === 0 && <p className="squad-block-hint agent-channel-warning">{t('AgentChannels.ownersMissing')}</p>}
+        </div>
+        <div className="squad-field">
+          <Option checked={draft.cardStart} onChange={(cardStart) => setDraft({ ...draft, cardStart })} label={t('AgentChannels.cardStart')} info={t('AgentChannels.cardStartHint')} />
+          <span>{t('AgentChannels.cardReview')}</span>
+          <ChatPicker label={t('AgentChannels.cardReview')} value={draft.cardReview} placeholder="" size="field" placement="below"
+            options={[
+              { value: 'ownerOrAsker', label: t('AgentChannels.cardReviewOwnerOrAsker'), description: t('AgentChannels.cardReviewOwnerOrAskerHint') },
+              { value: 'owner', label: t('AgentChannels.cardReviewOwner'), description: t('AgentChannels.cardReviewOwnerHint') },
+              { value: 'none', label: t('AgentChannels.cardReviewNone'), description: t('AgentChannels.cardReviewNoneHint') }
+            ]}
+            onChange={(value) => setDraft({ ...draft, cardReview: value === 'owner' || value === 'ownerOrAsker' ? value : 'none' })} />
+        </div>
+      </div>}
+      {cardsSupported && draft.reportTasks && draft.cards && <div className="agent-channel-needs">
+        <p className="squad-block-hint muted">{t('AgentChannels.cardsSetupShort')}</p>
+        <Info text={t('AgentChannels.cardsSetup')} />
+      </div>}
+    </div>}
+    {toolCatalog && <div className="agent-channel-step">
+      {heading(toolsStep, t('AgentChannels.tools'), t('AgentChannels.toolsHint'))}
+      {[false, true].map((write) => <div key={String(write)} className="agent-channel-projects">
+        <p className="squad-block-hint muted">{t(write ? 'AgentChannels.toolsWrite' : 'AgentChannels.toolsRead')}</p>
+        {toolCatalog.catalog.filter((tool) => tool.write === write).map((tool) => <label key={tool.name} className="agent-profile-check">
+          <input type="checkbox" checked={draft.tools.includes(tool.name)} onChange={(event) => setDraft({ ...draft, tools: event.target.checked ? [...draft.tools, tool.name] : draft.tools.filter((each) => each !== tool.name) })} />
+          {translatedText(tool, locale).label} <span className="muted">{tool.name}</span>
+        </label>)}
+      </div>)}
+      {draft.tools.length > 0 && (() => {
+        const picked = toolCatalog.catalog.filter((tool) => draft.tools.includes(tool.name))
+        const writes = picked.some((tool) => tool.write)
+        const scopes = [...new Set([...picked.flatMap((tool) => tool.scopes), ...(writes && draft.docAccess !== 'none' ? toolCatalog.accessScopes : [])])]
+        return <>
+          {/* What it risks stays in view, in a line; the rest of it is a hover away. */}
+          <div className="agent-channel-needs">
+            <p className="squad-block-hint agent-channel-warning">{t(writes ? 'AgentChannels.toolsRiskWrite' : 'AgentChannels.toolsRiskRead')}</p>
+            <Info text={[t('AgentChannels.toolsRiskInstructions'), t('AgentChannels.toolsRiskShown'), t('AgentChannels.toolsRiskSecret')].join(' ')} />
+          </div>
+          <div className="agent-channel-needs">
+            <p className="squad-block-hint muted">{t('AgentChannels.toolsScopesShort', { count: scopes.length })}</p>
+            <Info text={t('AgentChannels.toolsScopes', { count: scopes.length })} />
+            <CopyButton text={JSON.stringify({ scopes: { tenant: scopes, user: [] } }, null, 2)} label={t('AgentChannels.copyScopes')}>{t('AgentChannels.copyScopes')}</CopyButton>
+          </div>
+          {writes && <div className="agent-channel-grid">
+            <div className="squad-field">
+              <span className="agent-channel-option"><label htmlFor={`${formId}-doc`}>{t('AgentChannels.docLocation')}</label><Info text={t('AgentChannels.docLocationHint')} /></span>
+              <select className="input" aria-label={t('AgentChannels.docLocationKind')} value={draft.docKind} onChange={(event) => setDraft({ ...draft, docKind: event.target.value === 'wikiSpace' || event.target.value === 'folder' ? event.target.value : 'wikiNode' })}>
+                <option value="wikiNode">{t('AgentChannels.docWikiNode')}</option>
+                <option value="wikiSpace">{t('AgentChannels.docWikiSpace')}</option>
+                <option value="folder">{t('AgentChannels.docFolder')}</option>
+              </select>
+              <input id={`${formId}-doc`} className="input" spellCheck={false} value={draft.docValue} placeholder={t('AgentChannels.docLocationPlaceholder')} onKeyDown={onEnter} onChange={(event) => setDraft({ ...draft, docValue: event.target.value })} />
+            </div>
+            <div className="squad-field">
+              <label htmlFor={`${formId}-access`}>{t('AgentChannels.docAccess')}</label>
+              <select id={`${formId}-access`} className="input" value={draft.docAccess} onChange={(event) => setDraft({ ...draft, docAccess: event.target.value === 'view' || event.target.value === 'none' ? event.target.value : 'edit' })}>
+                <option value="edit">{t('AgentChannels.docAccessEdit')}</option>
+                <option value="view">{t('AgentChannels.docAccessView')}</option>
+                <option value="none">{t('AgentChannels.docAccessNone')}</option>
+              </select>
+            </div>
+          </div>}
+        </>
+      })()}
+    </div>}
     <div className="agent-channel-step">
-      <h4><span className="agent-channel-step-number" aria-hidden="true">5</span>{t('AgentChannels.step5')}</h4>
+      {heading(limitsStep, t('AgentChannels.step5'))}
       <div className="agent-channel-grid agent-channel-limits">
         {number('dailyPerUser', t('AgentChannels.dailyPerUser'), 1, 500)}
         {number('dailyTotal', t('AgentChannels.dailyTotal'), 1, 10_000)}

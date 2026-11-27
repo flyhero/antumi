@@ -172,7 +172,10 @@ export const SourceWriteback = z.object({
   // Whether the tracker takes comments, or only status moves.
   comments: z.boolean().default(true),
   report: SourceReport.nullable(),
-  writes: z.array(SourceWrite)
+  writes: z.array(SourceWrite),
+  // A task from a chat platform whose summary goes back to its thread: its agent drafts one too,
+  // though there is no issue to write back to. Older cores leave it out.
+  reportable: z.boolean().optional()
 })
 export type SourceWriteback = z.infer<typeof SourceWriteback>
 

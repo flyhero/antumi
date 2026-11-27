@@ -111,7 +111,7 @@ export function startRpcServer(options: {
     if (connection.mobile && method !== 'system.hello' && !mobileMayCall(method, connection.mobile.access)) {
       return errorFrame(id, RPC_ERROR.rejected, `${method} is not available on this phone`, 'mobile-not-allowed')
     }
-    if (connection.channelTools && method !== 'channelTools.call') {
+    if (connection.channelTools && method !== 'channelTools.call' && method !== 'channelTools.list') {
       return errorFrame(id, RPC_ERROR.rejected, `${method} is not available to a channel's tools`, 'channel-tools-only')
     }
     try {

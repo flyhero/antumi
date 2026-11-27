@@ -465,6 +465,29 @@ export const MIGRATIONS = [
   `CREATE TABLE project_choices (path TEXT PRIMARY KEY, data TEXT NOT NULL);`,
   `ALTER TABLE conversation_stages ADD COLUMN backend TEXT;`,
   `ALTER TABLE conversations ADD COLUMN workspace_preparation TEXT;`,
+  // A chat platform task's progress posted back in its thread (docs/CHANNEL-LOOP.md): one row per
+  // status move, saved in the move's transaction; the outbox rows that carry it name it.
+  `CREATE TABLE channel_task_reports (id TEXT PRIMARY KEY, task_id TEXT NOT NULL, channel_id TEXT NOT NULL, stage TEXT NOT NULL,
+     state TEXT NOT NULL, reason TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
+   CREATE INDEX channel_task_reports_task ON channel_task_reports(task_id, created_at);
+   CREATE INDEX channel_task_reports_state ON channel_task_reports(state, created_at);
+   ALTER TABLE channel_outbox ADD COLUMN report_id TEXT;`,
+  // A chat platform task's cards (docs/CHANNEL-LOOP.md): each card posted, the one-use tokens its
+  // buttons carry, and why the asker sent the task back.
+  `CREATE TABLE channel_task_cards (id TEXT PRIMARY KEY, task_id TEXT NOT NULL, channel_id TEXT NOT NULL, kind TEXT NOT NULL,
+     place TEXT NOT NULL, thread TEXT, recipient TEXT, feedback_id TEXT, summary TEXT NOT NULL DEFAULT '[]', notice TEXT,
+     message_id TEXT, rendered TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
+   CREATE INDEX channel_task_cards_task ON channel_task_cards(task_id, created_at);
+   CREATE TABLE channel_actions (token TEXT PRIMARY KEY, channel_id TEXT NOT NULL, card_id TEXT NOT NULL, task_id TEXT NOT NULL,
+     action TEXT NOT NULL, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, used_at INTEGER, used_by TEXT);
+   CREATE INDEX channel_actions_card ON channel_actions(card_id, action);
+   CREATE TABLE channel_task_feedback (id TEXT PRIMARY KEY, task_id TEXT NOT NULL, channel_id TEXT NOT NULL, author TEXT NOT NULL,
+     text TEXT NOT NULL, created_at INTEGER NOT NULL, used_at INTEGER);
+   CREATE INDEX channel_task_feedback_task ON channel_task_feedback(task_id, created_at);`,
+  // A platform tool's call that may have changed something there (docs/CHANNEL-LOOP.md, 三).
+  `ALTER TABLE channel_tool_calls ADD COLUMN write INTEGER NOT NULL DEFAULT 0;`,
+  // Someone other than its asker spoke in a thread: from then on the bot answers there only when mentioned.
+  `ALTER TABLE channel_threads ADD COLUMN bystanders INTEGER NOT NULL DEFAULT 0;`
 ]
 
 
@@ -592,6 +615,12 @@ function groupBy<T extends { taskId: string }>(rows: T[]): Map<string, T[]> {
 // are saved together or not at all.
 export type TaskWriteLink = { write(db: DatabaseSync): void }
 export type TaskCreationLink = TaskWriteLink & { id: string }
+
+// Several stores' parts of one transaction as one, or null when none has anything to write.
+export function joinLinks(...links: readonly (TaskWriteLink | null)[]): TaskWriteLink | null {
+  const present = links.filter((link) => link !== null)
+  return present.length ? { write: (db) => { for (const link of present) link.write(db) } } : null
+}
 
 export class TaskStore {
   private readonly db: DatabaseSync

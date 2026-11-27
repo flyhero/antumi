@@ -12,7 +12,7 @@ import { pngBytes } from './image-fixtures'
 // The Feishu connector against a Feishu that is an HTTP and WebSocket server here, speaking the
 // long connection's protobuf frames.
 
-type Call = { method: string; path: string; token: string; body: Record<string, unknown> }
+type Call = { method: string; path: string; token: string; body: Record<string, unknown>; mcp?: { tat: string; allowed: string } }
 
 const CHANNEL = '22222222-2222-4222-8222-222222222222'
 // Past 2^53, so an acknowledgement that went through a number would come back wrong.
@@ -23,7 +23,7 @@ function fakeFeishu() {
   const frames: FeishuFrame[] = []
   const sockets = new Set<WebSocket>()
   const png = Buffer.from(pngBytes(8, 8))
-  const state = { limited: 0, staleOnce: false, tokens: 0 }
+  const state = { limited: 0, staleOnce: false, tokens: 0, mcpStale: false }
   const read = (request: IncomingMessage) => new Promise<string>((resolve) => {
     let body = ''
     request.on('data', (chunk) => { body += String(chunk) })
@@ -38,6 +38,13 @@ function fakeFeishu() {
     void read(request).then((raw) => {
       const path = request.url ?? ''
       const body: Record<string, unknown> = raw ? JSON.parse(raw) : {}
+      if (path === '/mcp') {
+        const tat = String(request.headers['x-lark-mcp-tat'] ?? '')
+        calls.push({ method: request.method ?? '', path, token, body, mcp: { tat, allowed: String(request.headers['x-lark-mcp-allowed-tools'] ?? '') } })
+        if (state.mcpStale && tat === 't-1') { state.mcpStale = false; return json({ jsonrpc: '2.0', id: body.id, error: { code: -32003, message: 'token expired' } }, 401) }
+        if (body.method === 'tools/list') return json({ jsonrpc: '2.0', id: body.id, result: { tools: [{ name: 'fetch-doc', description: '读', inputSchema: { type: 'object' } }] } })
+        return json({ jsonrpc: '2.0', id: body.id, result: { content: [{ type: 'text', text: JSON.stringify({ doc_id: 'doxA', doc_url: 'https://acme.feishu.cn/docx/doxA' }) }] } })
+      }
       calls.push({ method: request.method ?? '', path, token, body })
       if (path === '/open-apis/auth/v3/tenant_access_token/internal') {
         if (body.app_secret !== 'good') return json({ code: 10014, msg: 'app secret invalid' })
@@ -54,6 +61,7 @@ function fakeFeishu() {
         response.writeHead(200, { 'content-type': 'image/png', 'content-length': String(png.byteLength) })
         return response.end(png)
       }
+      if (path.startsWith('/open-apis/drive/v1/permissions/')) return json({ code: 0, data: { member: { member_type: 'openid' } } })
       if (path.startsWith('/open-apis/im/v1/messages')) {
         if (state.limited > 0) { state.limited -= 1; return json({ code: 230020, msg: 'frequency limit' }, 400, { 'x-ogw-ratelimit-reset': '2' }) }
         return json({ code: 0, data: { message_id: `om_sent${calls.length}` } })
@@ -110,8 +118,24 @@ describe('the Feishu connector', () => {
   let feishu: ReturnType<typeof fakeFeishu>
   let emitted: ChannelGatewayToCore[]
   let connector: ChannelConnector
-  const open = (appSecret = 'good') => { connector = feishuConnector({ id: CHANNEL, platform: 'feishu', credentials: { appId: 'cli_1', appSecret } }, (message) => emitted.push(message), { api: feishu.api(), retryMs: [30] }) }
+  const open = (appSecret = 'good', followUps = false) => { connector = feishuConnector({ id: CHANNEL, platform: 'feishu', credentials: { appId: 'cli_1', appSecret }, options: { followUps } }, (message) => emitted.push(message), { api: feishu.api(), mcp: `${feishu.api()}/mcp`, retryMs: [30], clickAnswerMs: 300 }) }
   const events = () => emitted.flatMap((message) => (message.type === 'event' ? [message] : []))
+  const actions = () => emitted.flatMap((message) => (message.type === 'action' ? [message] : []))
+  const answerOf = (frame: { payload?: Uint8Array } | undefined) => {
+    const body = JSON.parse(Buffer.from(frame?.payload ?? []).toString())
+    return { code: body.code, data: body.data ? JSON.parse(Buffer.from(body.data, 'base64').toString()) : undefined }
+  }
+  // A click on a card's button as Feishu sends it over the long connection (card.action.trigger, schema 2.0).
+  const click = (event: Record<string, unknown> = {}) => ({
+    schema: '2.0',
+    header: { event_id: 'evc1', event_type: 'card.action.trigger', tenant_key: 'tk1', app_id: 'cli_1' },
+    event: {
+      operator: { open_id: 'ou_owner', tenant_key: 'tk1' }, token: 'c-update', host: 'im_message',
+      action: { tag: 'button', value: { t: 'tok1' }, form_value: { reason: '颜色不对', count: 3 } },
+      context: { open_message_id: 'om_card', open_chat_id: 'oc_1' },
+      ...event
+    }
+  })
   const states = () => emitted.flatMap((message) => (message.type === 'state' ? [message] : []))
   const when = (holds: () => boolean, timeoutMs = 3000) => until(() => (holds() ? true : undefined), timeoutMs)
 
@@ -163,6 +187,24 @@ describe('the Feishu connector', () => {
     await when(() => feishu.acks().length === 2)
   })
 
+  it('hands in what is said in a topic without a mention only where the channel takes it, and never what is said outside one or by a bot', async () => {
+    const plain = (fields: Record<string, unknown>, sender: Record<string, unknown> = {}) => received({ content: JSON.stringify({ text: '还要加个排序' }), mentions: [], ...fields }, sender)
+    feishu.send(plain({ message_id: 'om_2', root_id: 'om_root', thread_id: 'omt_1' }))
+    await when(() => feishu.acks().length === 1)
+    expect(events()).toEqual([])
+    connector.stop()
+    await when(() => feishu.connected() === 0)
+    const before = states().length
+    open('good', true)
+    await when(() => feishu.connected() === 1 && states().slice(before).some((each) => each.state === 'connected'))
+    feishu.send(plain({ message_id: 'om_3', root_id: 'om_root', thread_id: 'omt_1' }))
+    feishu.send(plain({ message_id: 'om_4' }))
+    feishu.send(plain({ message_id: 'om_5', root_id: 'om_quoted' }))
+    feishu.send(plain({ message_id: 'om_6', root_id: 'om_root', thread_id: 'omt_1' }, { sender_type: 'app' }))
+    await when(() => events().length === 1 && feishu.acks().length === 4)
+    expect(events()[0]).toMatchObject({ eventKey: 'om_3', kind: 'followUp', place: 'oc_1', thread: 'om_root', user: 'ou_1', text: '还要加个排序' })
+  })
+
   it('takes a direct message, a topic and a bot\'s message, and leaves a group message not for it with a plain acknowledgement', async () => {
     feishu.send(received({ message_id: 'om_2', chat_id: 'oc_dm', chat_type: 'p2p', content: JSON.stringify({ text: 'hello  there' }), mentions: [] }))
     feishu.send(received({ message_id: 'om_3', root_id: 'om_root', thread_id: 'omt_1' }))
@@ -197,6 +239,62 @@ describe('the Feishu connector', () => {
       { path: '/open-apis/im/v1/messages?receive_id_type=chat_id', token: 't-1', body: { receive_id: 'oc_1', msg_type: 'post', content: JSON.stringify({ zh_cn: { content: [[{ tag: 'md', text: 'top' }]] } }), uuid: '33333333-3333-4333-8333-333333333333' } },
       { path: '/open-apis/im/v1/messages/om_1/reactions', token: 't-1', body: { reaction_type: { emoji_type: 'OnIt' } } }
     ])
+  })
+
+  it('puts a user core names in a paragraph of its own before the text', async () => {
+    expect(await connector.deliver(delivery({ thread: 'om_1', text: '已完成', mention: 'ou_asker' }))).toMatchObject({ ok: true })
+    expect(feishu.sentMessages().at(-1)?.body).toMatchObject({ content: JSON.stringify({ zh_cn: { content: [[{ tag: 'at', user_id: 'ou_asker' }], [{ tag: 'md', text: '已完成' }]] } }) })
+  })
+
+  it('hands core a click on a card and answers it in the acknowledgement once core has', async () => {
+    const [frame] = feishu.send(click())
+    await when(() => actions().length === 1)
+    expect(actions()[0]).toEqual({ type: 'action', channelId: CHANNEL, eventKey: 'card:evc1', tenant: 'tk1', user: 'ou_owner', place: 'oc_1', messageId: 'om_card', token: 'tok1', form: { reason: '颜色不对' } })
+    expect(events()).toEqual([])
+    expect(feishu.acks()).toEqual([])
+    connector.reply?.('card:evc1', { kind: 'success', text: '已开始执行。' })
+    await when(() => feishu.acks().length === 1)
+    expect(feishu.acks()[0]?.seqId).toBe(frame?.seqId)
+    expect(answerOf(feishu.acks()[0])).toEqual({ code: 200, data: { toast: { type: 'success', content: '已开始执行。' } } })
+  })
+
+  it('answers a click for core when core has said nothing in time, and leaves a click with no token alone', async () => {
+    feishu.send(click())
+    await when(() => feishu.acks().length === 1, 2000)
+    expect(answerOf(feishu.acks()[0])).toEqual({ code: 200, data: { toast: { type: 'info', content: '已收到，正在处理。' } } })
+    connector.reply?.('card:evc1', { kind: 'success', text: 'late' })
+    feishu.send(click({ action: { tag: 'button', value: {} } }))
+    await when(() => feishu.acks().length === 2)
+    expect(answerOf(feishu.acks()[1])).toEqual({ code: 200, data: undefined })
+    expect(actions()).toHaveLength(1)
+  })
+
+  it('posts a card under a message or to someone directly, and draws it again where it is', async () => {
+    const card = { schema: '2.0', config: { update_multi: true } }
+    expect(await connector.deliver(delivery({ op: 'card', thread: 'om_1', text: null, card }))).toMatchObject({ ok: true })
+    expect(await connector.deliver(delivery({ op: 'card', place: 'user:ou_owner', recipient: 'ou_owner', text: null, card }))).toMatchObject({ ok: true })
+    expect(await connector.deliver(delivery({ op: 'update', target: 'om_card', text: null, card: { ...card, header: {} } }))).toMatchObject({ ok: true })
+    expect(feishu.sentMessages().map(({ method, path, body }) => ({ method, path, body }))).toEqual([
+      { method: 'POST', path: '/open-apis/im/v1/messages/om_1/reply', body: { msg_type: 'interactive', content: JSON.stringify(card), reply_in_thread: true, uuid: '33333333-3333-4333-8333-333333333333' } },
+      { method: 'POST', path: '/open-apis/im/v1/messages?receive_id_type=open_id', body: { receive_id: 'ou_owner', msg_type: 'interactive', content: JSON.stringify(card), uuid: '33333333-3333-4333-8333-333333333333' } },
+      { method: 'PATCH', path: '/open-apis/im/v1/messages/om_card', body: { content: JSON.stringify({ ...card, header: {} }) } }
+    ])
+  })
+
+  it('calls the hosted MCP as the bot for the tools core names, with a fresh token once when it says so', async () => {
+    feishu.state.mcpStale = true
+    const answer = await connector.mcp?.({ channelId: CHANNEL, method: 'tools/call', allowed: ['fetch-doc', 'create-doc'], tool: 'create-doc', arguments: { title: '方案' } })
+    expect(answer).toEqual({ ok: true, result: { content: [{ type: 'text', text: JSON.stringify({ doc_id: 'doxA', doc_url: 'https://acme.feishu.cn/docx/doxA' }) }] }, error: null })
+    const calls = feishu.calls.filter((call) => call.path === '/mcp')
+    expect(calls.map((call) => call.mcp)).toEqual([{ tat: 't-1', allowed: 'fetch-doc,create-doc' }, { tat: 't-2', allowed: 'fetch-doc,create-doc' }])
+    expect(calls[1]?.body).toMatchObject({ jsonrpc: '2.0', method: 'tools/call', params: { name: 'create-doc', arguments: { title: '方案' } } })
+    expect(calls.every((call) => call.token === '')).toBe(true)
+    expect(await connector.mcp?.({ channelId: CHANNEL, method: 'tools/list', allowed: ['fetch-doc'], tool: null })).toMatchObject({ ok: true, result: { tools: [{ name: 'fetch-doc' }] } })
+  })
+
+  it('lets a user open a document the bot made, as the bot and with no notice', async () => {
+    expect(await connector.grant?.({ channelId: CHANNEL, token: 'doxA', docType: 'docx', user: 'ou_1', perm: 'edit' })).toEqual({ ok: true, error: null })
+    expect(feishu.calls.at(-1)).toMatchObject({ method: 'POST', path: '/open-apis/drive/v1/permissions/doxA/members?type=docx&need_notification=false', token: 't-1', body: { member_type: 'openid', member_id: 'ou_1', perm: 'edit', type: 'user' } })
   })
 
   it('waits as long as Feishu says when told to slow down', async () => {

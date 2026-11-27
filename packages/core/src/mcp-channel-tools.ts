@@ -1,6 +1,6 @@
 import readline from 'node:readline'
 import { z } from 'zod'
-import { connectRpc, coreUrl } from '@antumi/protocol'
+import { connectRpc, coreUrl, type ChannelToolSpec } from '@antumi/protocol'
 import { readCoreEndpoint } from '@antumi/protocol/node'
 import { CHANNEL_TOOLS } from './channel-tools'
 
@@ -16,8 +16,16 @@ const FALLBACK_PROTOCOL_VERSION = '2024-11-05'
 
 type Reply = { jsonrpc: '2.0'; id: string | number | null; result?: unknown; error?: { code: number; message: string } }
 
-export function channelMcpHandler(call: (tool: string, args: unknown) => Promise<{ text: string; isError: boolean }>, onList?: () => Promise<void>) {
-  const specs = CHANNEL_TOOLS.map(({ name, description, inputSchema, readOnly }) => ({ name, description, inputSchema, annotations: { readOnlyHint: readOnly !== false } }))
+const OWN: readonly ChannelToolSpec[] = CHANNEL_TOOLS.map(({ name, description, inputSchema, readOnly }) => ({ name, description, inputSchema, readOnly: readOnly !== false }))
+
+// list: the tools the conversation has now, as core says (the registry's, and the platform's its
+// channel gives); without it, or when core cannot say, the registry's own.
+export function channelMcpHandler(call: (tool: string, args: unknown) => Promise<{ text: string; isError: boolean }>, onList?: () => Promise<void>, list?: () => Promise<readonly ChannelToolSpec[]>) {
+  let known: readonly ChannelToolSpec[] | null = null
+  const current = async () => {
+    known = await list?.().catch(() => null) ?? known ?? OWN
+    return known
+  }
   return async (line: string): Promise<Reply | null> => {
     let raw: unknown
     try { raw = JSON.parse(line) } catch { return { jsonrpc: '2.0', id: null, error: { code: -32700, message: 'parse error' } } }
@@ -33,12 +41,15 @@ export function channelMcpHandler(call: (tool: string, args: unknown) => Promise
       }
       case 'ping':
         return reply({})
-      case 'tools/list':
+      case 'tools/list': {
+        const tools = await current()
         await onList?.()
-        return reply({ tools: specs })
+        return reply({ tools: tools.map(({ name, description, inputSchema, readOnly }) => ({ name, description, inputSchema, annotations: { readOnlyHint: readOnly } })) })
+      }
       case 'tools/call': {
         const asked = CallParams.safeParse(params)
-        if (!asked.success || !specs.some((spec) => spec.name === asked.data.name)) return { jsonrpc: '2.0', id, error: { code: -32602, message: 'unknown tool' } }
+        const tools = known ?? await current()
+        if (!asked.success || !tools.some((spec) => spec.name === asked.data.name)) return { jsonrpc: '2.0', id, error: { code: -32602, message: 'unknown tool' } }
         const result = await call(asked.data.name, asked.data.arguments).catch(() => ({ text: '工具调用失败', isError: true }))
         return reply({ content: [{ type: 'text', text: result.text }], isError: result.isError })
       }
@@ -50,16 +61,22 @@ export function channelMcpHandler(call: (tool: string, args: unknown) => Promise
 
 // Each call connects anew, as the full server does, so a core restart between calls is harmless.
 export async function serveChannelMcp(home: string | undefined, conversationId: string, onList?: () => Promise<void>): Promise<void> {
-  const handle = channelMcpHandler(async (tool, args) => {
+  const withCore = async <T>(fallback: T, act: (rpc: Awaited<ReturnType<typeof connectRpc>>) => Promise<T>): Promise<T> => {
     const endpoint = await readCoreEndpoint(home)
-    if (!endpoint) return { text: 'Antumi core 没有运行', isError: true }
+    if (!endpoint) return fallback
     const rpc = await connectRpc(coreUrl(endpoint), { kind: 'channel-tools', conversationId })
     try {
-      return await rpc.call('channelTools.call', { conversationId, tool, arguments: args })
+      return await act(rpc)
     } finally {
       rpc.close()
     }
-  }, onList)
+  }
+  const handle = channelMcpHandler(
+    (tool, args) => withCore({ text: 'Antumi core 没有运行', isError: true }, (rpc) => rpc.call('channelTools.call', { conversationId, tool, arguments: args })),
+    onList,
+    // A core from before the platform's tools lists none of them.
+    () => withCore(OWN, (rpc) => (rpc.features.includes('channel-platform-tools') ? rpc.call('channelTools.list', { conversationId }) : Promise.resolve(OWN)))
+  )
   const lines = readline.createInterface({ input: process.stdin, crlfDelay: Number.POSITIVE_INFINITY })
   for await (const line of lines) {
     if (!line.trim()) continue

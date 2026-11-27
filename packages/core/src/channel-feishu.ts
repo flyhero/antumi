@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { ATTACHMENT_CHUNK_BYTES, MAX_ATTACHMENT_BYTES } from '@antumi/protocol'
 import type { ChannelConnector, ConnectorEmit, Delivered } from './channel-connector'
 import { FRAME_CONTROL, FRAME_DATA, decodeFrame, encodeFrame, frameHeader, type FeishuFrame } from './channel-feishu-frame'
-import type { ChannelAction, ChannelDelivery, ChannelEventImage, GatewayChannel } from './channel-gateway-ipc'
+import type { ChannelAction, ChannelDelivery, ChannelEventImage, GatewayChannel, PlatformAnswer, PlatformGrant, PlatformMcpCall } from './channel-gateway-ipc'
 
 // Feishu over its long connection (长连接, for 企业自建应用 only): the connection is opened from
 // here, so nothing listens for Feishu and core stays on loopback. Spoken directly, as Slack is: a
@@ -13,6 +13,8 @@ import type { ChannelAction, ChannelDelivery, ChannelEventImage, GatewayChannel 
 export type FeishuOptions = {
   // The open platform's base: the token goes to no other.
   api?: string
+  // The hosted MCP the bot's tools are reached through: the tenant token goes to no other.
+  mcp?: string
   retryMs?: readonly number[]
   clickAnswerMs?: number
 }
@@ -25,6 +27,13 @@ const CALL_TIMEOUT_MS = 15_000
 const UNACCEPTED_MS = 30_000
 // Feishu waits 3 seconds for a click's answer: what core has not said by then is said for it.
 const CLICK_ANSWER_MS = 2_500
+// Core gives up on a tool at a minute; the request ends before that, and a reply too large to be an
+// answer is not read through.
+const MCP_TIMEOUT_MS = 55_000
+const MCP_MAX_BYTES = 4 * 1024 * 1024
+// The hosted MCP's word for a token it does not take, besides HTTP 401.
+const MCP_BAD_TOKEN = new Set([-32003, -32010, -32011])
+const McpReply = z.object({ result: z.unknown().optional(), error: z.object({ code: z.number(), message: z.string().optional() }).loose().optional() }).loose()
 const KNOWN_FILES = 500
 // A token is taken again this long before Feishu says it ends.
 const TOKEN_MARGIN_MS = 5 * 60_000
@@ -131,11 +140,12 @@ export function feishuContent(type: string, content: string, mentions: readonly 
 
 // Lark, Feishu outside China, speaks the same on its own domain.
 export function larkConnector(channel: GatewayChannel, emit: ConnectorEmit): ChannelConnector {
-  return feishuConnector(channel, emit, { api: 'https://open.larksuite.com' })
+  return feishuConnector(channel, emit, { api: 'https://open.larksuite.com', mcp: 'https://mcp.larksuite.com/mcp' })
 }
 
 export function feishuConnector(channel: GatewayChannel, emit: ConnectorEmit, options: FeishuOptions = {}): ChannelConnector {
   const api = options.api ?? 'https://open.feishu.cn'
+  const mcpUrl = options.mcp ?? 'https://mcp.feishu.cn/mcp'
   const retryMs = options.retryMs ?? RETRY_MS
   const clickAnswerMs = options.clickAnswerMs ?? CLICK_ANSWER_MS
   const { appId = '', appSecret = '' } = channel.credentials
@@ -314,6 +324,42 @@ export function feishuConnector(channel: GatewayChannel, emit: ConnectorEmit, op
     return Buffer.concat(known.parts.flatMap((part) => (part ? [part] : []))).toString('utf8')
   }
 
+  // One JSON-RPC request to the hosted MCP as the bot, offering only the tools core named; one
+  // fresh token where it says the one it had is no longer good.
+  async function mcp(call: PlatformMcpCall): Promise<PlatformAnswer> {
+    for (let tries = 0; ; tries += 1) {
+      const auth = await tenantToken()
+      if (!auth || 'error' in auth) return { ok: false, error: auth?.error ?? 'no token' }
+      const response = await fetch(mcpUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Lark-MCP-TAT': auth.value, 'X-Lark-MCP-Allowed-Tools': call.allowed.join(',') },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: call.method, params: call.method === 'tools/call' ? { name: call.tool, arguments: call.arguments ?? {} } : {} }),
+        redirect: 'manual',
+        signal: AbortSignal.timeout(MCP_TIMEOUT_MS)
+      })
+      if (Number(response.headers.get('content-length') ?? 0) > MCP_MAX_BYTES) return { ok: false, error: 'too large' }
+      const text = await response.text()
+      if (Buffer.byteLength(text) > MCP_MAX_BYTES) return { ok: false, error: 'too large' }
+      const reply = McpReply.safeParse(parse(text))
+      const code = reply.success ? reply.data.error?.code : undefined
+      if ((response.status === 401 || (code !== undefined && MCP_BAD_TOKEN.has(code))) && tries === 0) {
+        token = null
+        continue
+      }
+      if (!reply.success) return { ok: false, error: `http ${response.status}` }
+      if (reply.data.error) return { ok: false, error: `${reply.data.error.code}: ${reply.data.error.message ?? ''}`.slice(0, 2000) }
+      return { ok: true, result: reply.data.result, error: null }
+    }
+  }
+
+  // Lets a user open a document the bot made, as the bot. Feishu sends no notice for an app's grant.
+  async function grant(request: PlatformGrant): Promise<PlatformAnswer> {
+    const path = `/open-apis/drive/v1/permissions/${encodeURIComponent(request.token)}/members?type=${encodeURIComponent(request.docType)}&need_notification=false`
+    const answer = await call('POST', path, { member_type: 'openid', member_id: request.user, perm: request.perm, type: 'user' }, Reply)
+    if (answer.reply?.code === 0) return { ok: true, error: null }
+    return { ok: false, error: answer.error ?? (answer.reply ? `${answer.reply.code}: ${answer.reply.msg ?? ''}` : answer.status ? `http ${answer.status}` : 'no token') }
+  }
+
   function answerClick(eventKey: string, body: Record<string, unknown>): void {
     const waiting = clicks.get(eventKey)
     if (!waiting) return
@@ -433,6 +479,8 @@ export function feishuConnector(channel: GatewayChannel, emit: ConnectorEmit, op
     reply(eventKey, toast) {
       answerClick(eventKey, { toast: { type: toast.kind, content: toast.text } })
     },
+    mcp: (request) => mcp(request).catch((error: unknown) => ({ ok: false, error: error instanceof Error ? error.message : 'failed' })),
+    grant: (request) => grant(request).catch((error: unknown) => ({ ok: false, error: error instanceof Error ? error.message : 'failed' })),
     stop() {
       stopped = true
       if (retry) clearTimeout(retry)

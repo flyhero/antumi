@@ -1,6 +1,6 @@
 # 聊天平台上的需求闭环（技术方案）
 
-> 状态：第一节（结果回到原话题）和第二节（卡片）已实现，只对本地的假平台验证过；其余是设计（2026-11-27）。需求来自飞书上的产品团队。本文汇总并取代 CHANNELS.md 原「主人在聊天平台上同意」「结果回到原话题」两节和 LARK.md 原 B 节，接入、锁死会话、网关这些已有部分仍以 [CHANNELS.md](CHANNELS.md) 为准。
+> 状态：第一到第三节（结果回到原话题、卡片、飞书工具）已实现：第一节在真实飞书上走通过提问和建任务，卡片和飞书的写入还只对本地的假平台验证过；第四节以后是设计（2026-11-27）。需求来自飞书上的产品团队。本文汇总并取代 CHANNELS.md 原「主人在聊天平台上同意」「结果回到原话题」两节和 LARK.md 原 B 节，接入、锁死会话、网关这些已有部分仍以 [CHANNELS.md](CHANNELS.md) 为准。
 
 同事在飞书群里 @ 机器人讨论需求，机器人读代码、读写飞书文档，把明确的需求收成任务；主人在飞书卡片上点「开始执行」，主人的 Agent 在本机实施；进展和总结回到提出需求的那条消息下，提问人在卡片上验收或退回，退回后由主人点「继续执行」返工。
 
@@ -400,9 +400,11 @@ core：ChannelService ─ 入站、提问、发件队列（已有）
 
 ## 三、飞书工具：以机器人身份读写文档
 
+> 状态：已实现（2026-11-27）。用真实的飞书测试应用以应用身份调过 `tools/list` 和几个只读调用；新建、修改文档和开权限还没有在真实飞书上调过（见「待验证」）。实现在 `core/src/channel-tools/platform.ts`、`ChannelService.callPlatform` / `toolSpecs`、`channel-feishu.ts` 的 `mcp` / `grant`。
+
 ### 用哪个 MCP
 
-飞书托管的远程 MCP（`https://mcp.feishu.cn/mcp`，JSON-RPC over HTTP POST，只有 `initialize`、`tools/list`、`tools/call`）。请求头：
+飞书托管的远程 MCP（`https://mcp.feishu.cn/mcp`，JSON-RPC over HTTP POST，只有 `initialize`、`tools/list`、`tools/call`；不发会话 ID，回的是普通 JSON，不是事件流）。请求头：
 
 - `X-Lark-MCP-TAT`：应用的 tenant_access_token（不用 `X-Lark-MCP-UAT`）。
 - `X-Lark-MCP-Allowed-Tools`：逗号分隔的工具名。不给就一个工具都不列；`tools/call` 只接受名单里的工具。
@@ -422,7 +424,15 @@ Lark 的 `mcp.larksuite.com/mcp` 能连上，但没有文档，联调后再开�
 | `add-comments` | 写（整篇评论，不能 @ 人、不能带图） | 是 | `docs:document.comment:create` |
 | `search-doc`、`search-user` | — | 否，只支持用户身份 | — |
 
-飞书说工具的参数和返回格式可能变，所以参数 schema 和说明一律取网关从 `tools/list` 拿到的，不写死；平台描述里的目录只用来在界面上分组、显示名字和要开的权限。勾了但这次 `tools/list` 里没有的工具不提供，界面注明「飞书暂未提供」。
+飞书说工具的参数和返回格式可能变，所以参数 schema 和说明一律取 `tools/list` 拿到的，不写死；平台描述里的目录只用来在界面上分组、显示名字和要开的权限。勾了但 `tools/list` 里没有的工具不提供。
+
+实测（2026-11-27，应用身份）：
+
+- 不带 `X-Lark-MCP-Allowed-Tools` 时 `tools/list` 是空的；带上后名单里的都列出来，不论应用身份能不能用（能不能用要到调用时才知道）。
+- `create-doc`：`title`、`markdown`，位置 `wiki_node`（节点 token 或链接）、`wiki_space`（空间 ID，`my_library` 是个人知识库）、`folder_token` 三选一，都不给就建在空间根目录；带 `task_id` 是查一次异步建档的进度。返回 `doc_id`、`doc_url`。Markdown 支持飞书的扩展（高亮块、分栏、`<mention-user>`、mermaid 转画板）。
+- `update-doc`：`overwrite`、`append`、`replace_range`、`replace_all`、`insert_before`、`insert_after`、`delete_range` 七种。`fetch-doc`：`doc_id`，可分页（`offset`、`limit`）。
+- 出错都是 HTTP 200、`isError: true`、正文一段文字；缺权限时文字里写明缺哪个权限并附开通链接，原样交给智能体。`search-doc` 用应用身份时报的是缺 `search:docs:read`，和文档说的「只支持用户身份」不一样，目录里先不放它。
+- 列表里还有文档里没写的消息类工具（`get-messages`、`get-thread-messages`、`search-messages` 等），目录里不放。
 
 ### 工具怎么到智能体手里
 
@@ -430,7 +440,7 @@ Lark 的 `mcp.larksuite.com/mcp` 能连上，但没有文档，联调后再开�
 - 智能体看到的名字是 `lark_` 加原名、`-` 换成 `_`（`lark_create_doc`）。
 - **工具名单按会话生成**：现在 `ConversationService` 的 `channelTools.tools` 是全局的一份（`CHANNEL_TOOL_NAMES`），channel MCP 也静态列出 `CHANNEL_TOOLS`。改成按会话所属接入生成：`channelTools.tools(conversationId)` 给 `lockdown.tools`；channel MCP 在 `tools/list` 时经限定连接问 core 要名单（新方法 `channelTools.list({ conversationId })`，`rpc-server.ts` 里这种连接只能调 `channelTools.call` 和它）。
 - 主人中途改了勾选：下一条提问起生效。`ChannelService.run` 发送前比较会话启动时的工具名单，不同就先重启这个会话的 Agent。
-- 网关连上后 `initialize` + `tools/list` 一次（带全部目录里的工具名），报 `mcpTools`；core 缓存，用来生成说明和 schema。
+- 列出时 core 经网关调一次 `tools/list`（只带勾选的工具名），按接入缓存 10 分钟，勾选变了就作废；问不到时只列 Antumi 自己的工具，不猜。
 
 ### 调用链
 
@@ -439,9 +449,9 @@ lark_create_doc → channelTools.call → ChannelService.callTool → platform.t
   → core 复查（和 task_create 共用 authorizedNow）：接入在且启用、工具在 platformTools 里、
     这个会话正有一条提问在跑、提问人和所在的群或私聊仍在授权范围、tenant 未变
   → create-doc：用接入的 docLocation 覆盖参数里的位置
-  → IPC mcp { callId, channelId, tool: 'create-doc', allowed, arguments }
-  → 网关：取 tenant token（过期换一次），附 X-Lark-MCP-TAT、X-Lark-MCP-Allowed-Tools，POST
-  → IPC mcpResult { callId, ok, content, error, retryAfterMs }
+  → IPC mcp { callId, channelId, method: 'tools/call', allowed, tool: 'create-doc', arguments }
+  → 网关：取 tenant token（401 或 -32003 时换一个再试一次），附 X-Lark-MCP-TAT、X-Lark-MCP-Allowed-Tools，POST
+  → IPC platformAnswer { callId, ok, result, error }
   → create-doc 成功：给提问人开权限（下一节）
   → 截到 20,000 字，作为不受信的资料交回；记 channel_tool_calls（工具、文档链接或标题、写操作标「写」）
 ```
@@ -452,7 +462,7 @@ lark_create_doc → channelTools.call → ChannelService.callTool → platform.t
 
 ### 文档放哪、给谁开权限
 
-- 接入加 `docLocation?: { wikiNode: string } | null`：知识库节点的 token（界面上可以粘节点链接，取出 token）。`create-doc` 支持建在「我的文档库」或某个知识库节点下；用应用身份时「我的文档库」是应用自己的空间，只有应用能看。所以设了位置就由 core 把位置参数写成它，智能体选不了别的地方；没设就建在应用空间，只能靠下面给提问人开权限。知识库要先把应用加为成员或这个节点的协作者。
+- 接入加 `docLocation?: { kind: 'wikiNode' | 'wikiSpace' | 'folder', value } | null`：知识库节点（链接或 token，原样交给 `wiki_node`）、知识空间 ID，或云盘文件夹（链接里取出 token）。core 去掉智能体给的位置参数，换成这里设的，智能体选不了别的地方；没设就建在应用自己的空间，只能靠下面给提问人开权限。知识库或文件夹要先把应用加为成员。
 - 建好后 core 让网关给提问人开权限：`POST /open-apis/drive/v1/permissions/:token/members?type=docx`，`{ member_type: 'openid', member_id: <提问人>, perm: 'edit', type: 'user' }`，应用身份，要多开 `docs:permission.member:create`。结果接在工具的回答后面（「已给你开了编辑权限」或「没能开权限：…，请找主人」）。
 - 接入加 `docAccess?: 'edit' | 'view' | 'none'`，没有就是 `edit`。
 - 只给发起这次提问的人开，只对这次提问里 `create-doc` 建的文档；智能体没有开权限的工具，不能把文档分享给别人。
@@ -583,7 +593,7 @@ ALTER TABLE channel_tool_calls ADD COLUMN write INTEGER NOT NULL DEFAULT 0;
 |---|---|---|---|
 | 1 | 结果回到原话题（文字），**已实现** | protocol：`thread`/`direct`、`reportTasks`、`channel-task-reports`；core：`channel-task-reports.ts`、日志组合、`source_report` 对聊天任务开放、`mention`；desktop：开关和回报记录 | 无 |
 | 2 | 卡片：开始、验收、返工，**已实现** | protocol：`ownerUsers`、`taskCards`、`cards`、`created` 阶段、`ChannelTaskFeedback`；core：`channel-cards.ts`、`channel-task-cards.ts`、outbox 的 `card` / `update`、飞书连接器的卡片回调；desktop：主人 ID、卡片的开关和执行设置、退回意见和「按意见继续」 | 待验证 3、6（实测） |
-| 3 | 飞书工具 | protocol：`platformTools`、`docLocation`、`docAccess`、平台描述 `tools`；core：`channel-tools/platform.ts`、按会话的工具名单、`channelTools.list`、`channel-feishu-tools.ts`；desktop：「飞书工具」 | 待验证 1、2、4 |
+| 3 | 飞书工具，**已实现** | protocol：`platformTools`、`docLocation`、`docAccess`、平台描述 `tools`；core：`channel-tools/platform.ts`、按会话的工具名单、`channelTools.list`、`channel-feishu-tools.ts`；desktop：「飞书工具」 | 待验证 1、2、4 |
 | 4 | 话题里免 @ | protocol：`followUps`；core：`followUp` 事件、`bystanders`；desktop：开关和说明 | 待验证 5 |
 
 建议的提交（照 AGENTS.md 的格式，每个带测试）：
@@ -621,7 +631,7 @@ CHANGELOG 草稿：
 
 用 2026-11-15 联调过的飞书应用，先只读：
 
-1. 托管 MCP：用应用 token 调 `tools/list`，带和不带 `X-Lark-MCP-Allowed-Tools`；记下 `create-doc` 指定知识库节点的参数名和返回里文档链接、token 的字段，`update-doc` 各模式的参数，没权限时的错误形式。
+1. ~~托管 MCP 的 `tools/list` 和错误形式~~（2026-11-27 已实测，见第三节「实测」）。还要试：`create-doc` 建在知识库节点下和应用空间里各一篇，建在知识库里时 `doc_id` 拿去开权限用 `type=docx` 行不行。
 2. Lark 的 `mcp.larksuite.com/mcp` 是否认 `X-Lark-MCP-TAT`、工具是否相同。
 3. 卡片回调走长连接时：确认是 `type: event` 的数据帧、ACK 帧 `data` 里的提示能显示（已照 SDK 1.74 实现）；JSON 2.0 表单里带 `behaviors` 回调的提交按钮是否同时带回 `action.value` 和 `form_value`；卡片 Markdown 里的 `<at id=…></at>` 是否通知被 @ 的人；`PATCH` 改卡片要不要 `im:message:update`。
 4. 应用身份给同组织用户开 `edit` 权限；对方不在可用范围时的错误。

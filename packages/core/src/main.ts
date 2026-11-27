@@ -683,7 +683,7 @@ channels = new ChannelService(channelStore, {
   }
 })
 profiles.setChannelGuard((id) => channels?.hasChannels(id) ?? false)
-conversations.setChannelTools({ mcp: (id) => antumiChannelMcpServer(paths.home, id), tools: CHANNEL_TOOL_NAMES })
+conversations.setChannelTools({ mcp: (id) => antumiChannelMcpServer(paths.home, id), tools: (id) => channels?.toolNames(id) ?? CHANNEL_TOOL_NAMES, instructions: (id) => channels?.instructions(id) ?? null })
 // The backend each agent with several runs new conversations on: told to its adapter at start and
 // on every change, which then reaches its catalog, accounts, check and usage anew.
 const backendChoices = new Map<AgentKind, string>()

@@ -238,12 +238,17 @@ export class ChannelStore {
   }
 
   addToolCall(requestId: string, call: ChannelToolCall): void {
-    this.db.prepare('INSERT INTO channel_tool_calls (request_id, tool, target, bytes, at) VALUES (?, ?, ?, ?, ?)').run(requestId, call.tool, call.target, call.bytes, call.at)
+    this.db.prepare('INSERT INTO channel_tool_calls (request_id, tool, target, bytes, at, write) VALUES (?, ?, ?, ?, ?, ?)').run(requestId, call.tool, call.target, call.bytes, call.at, Number(call.write ?? false))
   }
 
   toolCalls(requestId: string): ChannelToolCall[] {
-    return this.db.prepare('SELECT tool, target, bytes, at FROM channel_tool_calls WHERE request_id = ? ORDER BY id').all(requestId)
-      .map((row) => ({ tool: String(row.tool), target: String(row.target), bytes: Number(row.bytes), at: Number(row.at) }))
+    return this.db.prepare('SELECT tool, target, bytes, at, write FROM channel_tool_calls WHERE request_id = ? ORDER BY id').all(requestId)
+      .map((row) => ({ tool: String(row.tool), target: String(row.target), bytes: Number(row.bytes), at: Number(row.at), ...(row.write ? { write: true } : {}) }))
+  }
+
+  // The conversations a channel's askers have, to start again when what its agent may use changes.
+  conversationsOf(channelId: string): string[] {
+    return this.db.prepare('SELECT DISTINCT conversation_id AS id FROM channel_threads WHERE channel_id = ? AND conversation_id != \'\'').all(channelId).map((row) => String(row.id))
   }
 
   addOutbox(row: { id: string; channelId: string; requestId: string | null; reportId?: string | null; op: OutboxOp; payload: OutboxPayload }, now: number): void {

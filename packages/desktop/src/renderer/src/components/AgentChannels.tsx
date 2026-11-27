@@ -1,14 +1,14 @@
 import { SupportActions } from './ContactAuthor'
 import { useEffect, useId, useRef, useState } from 'react'
 import {
-  AGENT_KINDS, CHANNEL_DEFAULTS, CHANNEL_PLATFORMS, ChannelInput, agentDescriptor, channelPlatform,
-  type AgentKind, type Channel, type ChannelCredentialKey, type ChannelPlatform, type ChannelRequest, type TaskCardReview
+  AGENT_KINDS, CHANNEL_DEFAULTS, CHANNEL_PLATFORMS, ChannelInput, agentDescriptor, channelPlatform, translatedText,
+  type AgentKind, type Channel, type ChannelCredentialKey, type ChannelPlatform, type ChannelRequest, type DocAccess, type DocLocation, type TaskCardReview
 } from '@antumi/protocol'
-import { setChannels, useChannelReadiness, useChannels, useChannelsSupported, useChannelTaskCardsSupported, useChannelTaskReportsSupported, useChannelTasksSupported } from '../channels'
+import { setChannels, useChannelPlatformToolsSupported, useChannelReadiness, useChannels, useChannelsSupported, useChannelTaskCardsSupported, useChannelTaskReportsSupported, useChannelTasksSupported } from '../channels'
 import { askConfirm } from '../confirm-dialog'
 import { timeAgo } from '../conversation-state'
 import { perform, useCore } from '../core-store'
-import { t } from '../i18n'
+import { t, useLocale } from '../i18n'
 import { agentLabel } from '../labels'
 import { useOccludesBrowser } from '../browser-occlusion'
 import { CopyButton } from './CopyButton'
@@ -91,7 +91,8 @@ function ChannelRow({ channel, requestsOpen, onToggle, onRequests, onEdit, onRem
     t('AgentChannels.scopeDaily', { count: channel.dailyPerUser }),
     ...(channel.allowTaskCreation ? [t('AgentChannels.allowTaskCreation')] : []),
     ...(channel.allowTaskCreation && channel.reportTasks ? [t('AgentChannels.reportTasksChip')] : []),
-    ...(channel.reportTasks && channel.taskCards ? [t('AgentChannels.cardsChip')] : [])
+    ...(channel.reportTasks && channel.taskCards ? [t('AgentChannels.cardsChip')] : []),
+    ...(channel.platformTools?.length ? [t('AgentChannels.toolsChip', { count: channel.platformTools.length })] : [])
   ]
   return <div className="agent-channel-row">
     <span className="agent-channel-logo" aria-hidden="true"><ChannelPlatformIcon platform={channel.platform} /></span>
@@ -115,6 +116,7 @@ type Draft = {
   // undefined until chosen: turning task creation on then ticks it.
   reportTasks: boolean | undefined
   cards: boolean; owners: string; cardStart: boolean; cardAgent: AgentKind; cardReview: TaskCardReview | 'none'
+  tools: string[]; docKind: DocLocation['kind']; docValue: string; docAccess: DocAccess
   dailyPerUser: string; dailyTotal: string; maxConcurrent: string; turnTimeoutSec: string
 }
 
@@ -135,6 +137,8 @@ function ChannelDialog({ profileId, platform, channel, agent, hasProvider, onClo
   const taskCreationSupported = useChannelTasksSupported()
   const reportsSupported = useChannelTaskReportsSupported()
   const cardsSupported = useChannelTaskCardsSupported() && descriptor.features.cards
+  const toolCatalog = useChannelPlatformToolsSupported() ? descriptor.tools : undefined
+  const locale = useLocale((state) => state.locale)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [draft, setDraft] = useState<Draft>(() => ({
@@ -144,6 +148,7 @@ function ChannelDialog({ profileId, platform, channel, agent, hasProvider, onClo
     cards: !!channel?.taskCards, owners: (channel?.ownerUsers ?? []).join('\n'),
     cardStart: channel?.taskCards ? channel.taskCards.start !== null : true, cardAgent: channel?.taskCards?.start?.agent ?? agent,
     cardReview: channel?.taskCards ? channel.taskCards.review ?? 'none' : 'ownerOrAsker',
+    tools: channel?.platformTools ?? [], docKind: channel?.docLocation?.kind ?? 'wikiNode', docValue: channel?.docLocation?.value ?? '', docAccess: channel?.docAccess ?? 'edit',
     dailyPerUser: String(channel?.dailyPerUser ?? CHANNEL_DEFAULTS.dailyPerUser), dailyTotal: String(channel?.dailyTotal ?? CHANNEL_DEFAULTS.dailyTotal),
     maxConcurrent: String(channel?.maxConcurrent ?? CHANNEL_DEFAULTS.maxConcurrent), turnTimeoutSec: String(channel?.turnTimeoutSec ?? CHANNEL_DEFAULTS.turnTimeoutSec)
   }))
@@ -162,6 +167,11 @@ function ChannelDialog({ profileId, platform, channel, agent, hasProvider, onClo
       ...(channel ? { id: channel.id } : {}), profileId, platform, enabled: channel?.enabled ?? true, credentials,
       projectPaths: draft.projectPaths, allowedUsers: lines(draft.users), allowedPlaces: lines(draft.places), allowDirect: draft.allowDirect, allowTaskCreation: draft.allowTaskCreation,
       ...(reportsSupported && draft.reportTasks !== undefined ? { reportTasks: draft.reportTasks } : {}),
+      ...(toolCatalog ? {
+        platformTools: draft.tools,
+        docLocation: draft.docValue.trim() ? { kind: draft.docKind, value: draft.docValue.trim() } : null,
+        docAccess: draft.docAccess
+      } : {}),
       ...(cardsSupported ? {
         ownerUsers: lines(draft.owners),
         taskCards: draft.cards ? { start: draft.cardStart ? { agent: draft.cardAgent } : null, review: draft.cardReview === 'none' ? null : draft.cardReview } : null
@@ -251,6 +261,52 @@ function ChannelDialog({ profileId, platform, channel, agent, hasProvider, onClo
           {draft.cards && <p className="squad-block-hint muted">{t('AgentChannels.cardsSetup')}</p>}
           {draft.cards && lines(draft.owners).length === 0 && <p className="squad-block-hint muted">{t('AgentChannels.ownersMissing')}</p>}
         </>}
+      </>}
+      {toolCatalog && <>
+        <p><strong>{t('AgentChannels.tools')}</strong></p>
+        <p className="squad-block-hint muted">{t('AgentChannels.toolsHint')}</p>
+        {[false, true].map((write) => <div key={String(write)} className="agent-channel-projects">
+          <p className="squad-block-hint muted">{t(write ? 'AgentChannels.toolsWrite' : 'AgentChannels.toolsRead')}</p>
+          {toolCatalog.catalog.filter((tool) => tool.write === write).map((tool) => <label key={tool.name} className="agent-profile-check">
+            <input type="checkbox" checked={draft.tools.includes(tool.name)} onChange={(event) => setDraft({ ...draft, tools: event.target.checked ? [...draft.tools, tool.name] : draft.tools.filter((each) => each !== tool.name) })} />
+            {translatedText(tool, locale).label} <span className="muted">{tool.name}</span>
+          </label>)}
+        </div>)}
+        {draft.tools.length > 0 && (() => {
+          const picked = toolCatalog.catalog.filter((tool) => draft.tools.includes(tool.name))
+          const writes = picked.some((tool) => tool.write)
+          const scopes = [...new Set([...picked.flatMap((tool) => tool.scopes), ...(writes && draft.docAccess !== 'none' ? toolCatalog.accessScopes : [])])]
+          return <>
+            <ul className="agent-channel-notes muted">
+              <li>{writes ? <strong>{t('AgentChannels.toolsRiskWrite')}</strong> : t('AgentChannels.toolsRiskRead')}</li>
+              <li>{t('AgentChannels.toolsRiskInstructions')}</li>
+              <li>{t('AgentChannels.toolsRiskShown')}</li>
+              <li>{t('AgentChannels.toolsRiskSecret')}</li>
+            </ul>
+            <p className="squad-block-hint muted">{t('AgentChannels.toolsScopes', { count: scopes.length })}</p>
+            <CopyButton text={JSON.stringify({ scopes: { tenant: scopes, user: [] } }, null, 2)} label={t('AgentChannels.copyScopes')}>{t('AgentChannels.copyScopes')}</CopyButton>
+            {writes && <div className="agent-channel-grid">
+              <div className="squad-field">
+                <label htmlFor={`${formId}-doc`}>{t('AgentChannels.docLocation')}</label>
+                <select className="input" aria-label={t('AgentChannels.docLocationKind')} value={draft.docKind} onChange={(event) => setDraft({ ...draft, docKind: event.target.value === 'wikiSpace' || event.target.value === 'folder' ? event.target.value : 'wikiNode' })}>
+                  <option value="wikiNode">{t('AgentChannels.docWikiNode')}</option>
+                  <option value="wikiSpace">{t('AgentChannels.docWikiSpace')}</option>
+                  <option value="folder">{t('AgentChannels.docFolder')}</option>
+                </select>
+                <input id={`${formId}-doc`} className="input" spellCheck={false} value={draft.docValue} placeholder={t('AgentChannels.docLocationPlaceholder')} onKeyDown={onEnter} onChange={(event) => setDraft({ ...draft, docValue: event.target.value })} />
+              </div>
+              <div className="squad-field">
+                <label htmlFor={`${formId}-access`}>{t('AgentChannels.docAccess')}</label>
+                <select id={`${formId}-access`} className="input" value={draft.docAccess} onChange={(event) => setDraft({ ...draft, docAccess: event.target.value === 'view' || event.target.value === 'none' ? event.target.value : 'edit' })}>
+                  <option value="edit">{t('AgentChannels.docAccessEdit')}</option>
+                  <option value="view">{t('AgentChannels.docAccessView')}</option>
+                  <option value="none">{t('AgentChannels.docAccessNone')}</option>
+                </select>
+              </div>
+            </div>}
+            {writes && <p className="squad-block-hint muted">{t('AgentChannels.docLocationHint')}</p>}
+          </>
+        })()}
       </>}
     </div>
     <div className="agent-channel-step">

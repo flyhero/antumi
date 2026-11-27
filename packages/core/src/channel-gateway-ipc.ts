@@ -32,6 +32,20 @@ export const ChannelDelivery = z.object({
 })
 export type ChannelDelivery = z.infer<typeof ChannelDelivery>
 
+export const PlatformMcpCall = z.object({
+  channelId: z.string().uuid(),
+  method: z.enum(['tools/list', 'tools/call']),
+  allowed: z.array(z.string().min(1).max(100)).max(50),
+  tool: z.string().min(1).max(100).nullable(),
+  arguments: z.unknown().optional()
+})
+export type PlatformMcpCall = z.infer<typeof PlatformMcpCall>
+export const PlatformGrant = z.object({ channelId: z.string().uuid(), token: Ref, docType: z.string().min(1).max(20), user: Ref, perm: z.enum(['edit', 'view']) })
+export type PlatformGrant = z.infer<typeof PlatformGrant>
+// What came of either: the MCP result as the platform gave it, or why there is none.
+export const PlatformAnswer = z.object({ ok: z.boolean(), result: z.unknown().optional(), error: z.string().max(2000).nullable() })
+export type PlatformAnswer = z.infer<typeof PlatformAnswer>
+
 const CardToastShape = z.object({ kind: z.enum(['info', 'success', 'warning', 'error']), text: z.string().max(300) })
 
 export const CoreToChannelGateway = z.discriminatedUnion('type', [
@@ -43,7 +57,11 @@ export const CoreToChannelGateway = z.discriminatedUnion('type', [
   z.object({ type: z.literal('fetch'), requestId: z.string().uuid(), channelId: z.string().uuid(), images: z.array(Ref).max(16) }),
   z.object({ type: z.literal('deliver') }).extend(ChannelDelivery.shape),
   // What to tell whoever clicked a card's button, which the platform waits a few seconds for.
-  z.object({ type: z.literal('actionReply'), channelId: z.string().uuid(), eventKey: Ref, toast: CardToastShape })
+  z.object({ type: z.literal('actionReply'), channelId: z.string().uuid(), eventKey: Ref, toast: CardToastShape }),
+  // A request to the platform's hosted MCP as the bot, for the tools core names and no others.
+  z.object({ type: z.literal('mcp'), callId: z.string().uuid() }).extend(PlatformMcpCall.shape),
+  // Giving a user access to a document the bot made, as the bot.
+  z.object({ type: z.literal('grant'), callId: z.string().uuid() }).extend(PlatformGrant.shape)
 ])
 export type CoreToChannelGateway = z.infer<typeof CoreToChannelGateway>
 
@@ -91,6 +109,7 @@ export const ChannelGatewayToCore = z.discriminatedUnion('type', [
   // A fetched picture in pieces, in order; done on the last, error instead where it could not be had.
   z.object({ type: z.literal('image'), requestId: z.string().uuid(), ref: Ref, data: z.string(), done: z.boolean(), error: z.string().nullable() }),
   z.object({ type: z.literal('delivered'), outboxId: z.string().uuid(), ok: z.boolean(), platformId: z.string().nullable(), retryAfterMs: z.number().int().nonnegative().nullable(), error: z.string().nullable() }),
-  z.object({ type: z.literal('action') }).extend(ChannelAction.shape)
+  z.object({ type: z.literal('action') }).extend(ChannelAction.shape),
+  z.object({ type: z.literal('platformAnswer'), callId: z.string().uuid() }).extend(PlatformAnswer.shape)
 ])
 export type ChannelGatewayToCore = z.infer<typeof ChannelGatewayToCore>

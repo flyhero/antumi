@@ -1,4 +1,4 @@
-import type { ChannelDelivery, ChannelGatewayToCore, CoreToChannelGateway, GatewayChannel } from './channel-gateway-ipc'
+import type { ChannelDelivery, ChannelGatewayToCore, CoreToChannelGateway, GatewayChannel, PlatformAnswer, PlatformGrant, PlatformMcpCall } from './channel-gateway-ipc'
 
 export type Delivered = { ok: boolean; platformId: string | null; retryAfterMs: number | null; error: string | null }
 
@@ -13,6 +13,9 @@ export interface ChannelConnector {
   fetch(requestId: string, refs: readonly string[]): Promise<void>
   // Core's answer to a click it was handed: told to the clicker, where the platform has cards.
   reply?(eventKey: string, toast: Extract<CoreToChannelGateway, { type: 'actionReply' }>['toast']): void
+  // The platform's hosted MCP and document access, as the bot, where the platform has them.
+  mcp?(call: PlatformMcpCall): Promise<PlatformAnswer>
+  grant?(grant: PlatformGrant): Promise<PlatformAnswer>
   stop(): void
 }
 

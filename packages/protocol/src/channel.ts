@@ -27,6 +27,13 @@ export const TaskCardReview = z.enum(['owner', 'ownerOrAsker'])
 export type TaskCardReview = z.infer<typeof TaskCardReview>
 export const TaskCards = z.object({ start: TaskCardStart.nullable(), review: TaskCardReview.nullable() })
 export type TaskCards = z.infer<typeof TaskCards>
+
+// Where a document the bot creates goes (docs/CHANNEL-LOOP.md): under a wiki node (its link or
+// token), at a wiki space's root, or in a folder. The agent cannot pick another place.
+export const DocLocation = z.object({ kind: z.enum(['wikiNode', 'wikiSpace', 'folder']), value: z.string().trim().min(1).max(500) })
+export type DocLocation = z.infer<typeof DocLocation>
+export const DocAccess = z.enum(['edit', 'view', 'none'])
+export type DocAccess = z.infer<typeof DocAccess>
 // Pictures taken from one question; the rest are left out and the answer says so.
 export const MAX_CHANNEL_IMAGES = 4
 // However long the agent's instructions let an answer run, no more than this is posted.
@@ -53,6 +60,11 @@ export const ChannelFields = z.object({
   ownerUsers: z.array(PlatformId).max(20).optional(),
   // Absent or null: no cards, progress as plain posts.
   taskCards: TaskCards.nullable().optional(),
+  // The platform's own tools the agent may use as the bot, by their names there (create-doc). Absent or none: no such tool.
+  platformTools: z.array(z.string().trim().min(1).max(100)).max(50).optional(),
+  docLocation: DocLocation.nullable().optional(),
+  // What the asker may do with a document the bot created for them. Absent: edit.
+  docAccess: DocAccess.optional(),
   dailyPerUser: z.number().int().min(1).max(500).default(CHANNEL_DEFAULTS.dailyPerUser),
   dailyTotal: z.number().int().min(1).max(10_000).default(CHANNEL_DEFAULTS.dailyTotal),
   maxConcurrent: z.number().int().min(1).max(5).default(CHANNEL_DEFAULTS.maxConcurrent),
@@ -122,8 +134,13 @@ export type ChannelRequest = z.infer<typeof ChannelRequest>
 export const ChannelReadiness = z.object({ daemon: z.enum(['ready', 'outdated', 'unavailable']), pid: z.number().int().nullable() })
 export type ChannelReadiness = z.infer<typeof ChannelReadiness>
 
-// Every tool call goes through core, including task collection and refused calls.
-export const ChannelToolCall = z.object({ tool: z.string(), target: z.string(), bytes: z.number().int().nonnegative(), at: z.number() })
+// Every tool call goes through core, including task collection and refused calls. write: it may
+// have changed something on the platform (a platform tool's write). Older cores leave it out.
+export const ChannelToolCall = z.object({ tool: z.string(), target: z.string(), bytes: z.number().int().nonnegative(), at: z.number(), write: z.boolean().optional() })
+
+// A tool as a locked-down agent's MCP server lists it: the registry's, and the platform's ones its channel gives.
+export const ChannelToolSpec = z.object({ name: z.string(), description: z.string(), inputSchema: z.record(z.string(), z.unknown()), readOnly: z.boolean() })
+export type ChannelToolSpec = z.infer<typeof ChannelToolSpec>
 export type ChannelToolCall = z.infer<typeof ChannelToolCall>
 
 // On a conversation opened for a platform's asker: it is locked down, and only core speaks in it.

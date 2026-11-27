@@ -29,6 +29,15 @@ export class ChannelGateway {
       }
       case 'actionReply':
         return this.live.get(message.channelId)?.connector.reply?.(message.eventKey, message.toast)
+      case 'mcp':
+      case 'grant': {
+        const connector = this.live.get(message.channelId)?.connector
+        const { callId } = message
+        const asked = !connector ? null : message.type === 'mcp' ? connector.mcp?.(message) : connector.grant?.(message)
+        const answer = asked ?? Promise.resolve({ ok: false, error: connector ? 'unsupported' : 'not connected' })
+        return void answer.catch((error: unknown) => ({ ok: false, error: error instanceof Error ? error.message : 'failed' }))
+          .then((done) => this.emit({ type: 'platformAnswer', callId, ...done }))
+      }
       case 'deliver': {
         const { type: _type, ...job } = message
         const connector = this.live.get(job.channelId)?.connector

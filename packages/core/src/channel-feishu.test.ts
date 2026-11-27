@@ -12,7 +12,7 @@ import { pngBytes } from './image-fixtures'
 // The Feishu connector against a Feishu that is an HTTP and WebSocket server here, speaking the
 // long connection's protobuf frames.
 
-type Call = { method: string; path: string; token: string; body: Record<string, unknown> }
+type Call = { method: string; path: string; token: string; body: Record<string, unknown>; mcp?: { tat: string; allowed: string } }
 
 const CHANNEL = '22222222-2222-4222-8222-222222222222'
 // Past 2^53, so an acknowledgement that went through a number would come back wrong.
@@ -23,7 +23,7 @@ function fakeFeishu() {
   const frames: FeishuFrame[] = []
   const sockets = new Set<WebSocket>()
   const png = Buffer.from(pngBytes(8, 8))
-  const state = { limited: 0, staleOnce: false, tokens: 0 }
+  const state = { limited: 0, staleOnce: false, tokens: 0, mcpStale: false }
   const read = (request: IncomingMessage) => new Promise<string>((resolve) => {
     let body = ''
     request.on('data', (chunk) => { body += String(chunk) })
@@ -38,6 +38,13 @@ function fakeFeishu() {
     void read(request).then((raw) => {
       const path = request.url ?? ''
       const body: Record<string, unknown> = raw ? JSON.parse(raw) : {}
+      if (path === '/mcp') {
+        const tat = String(request.headers['x-lark-mcp-tat'] ?? '')
+        calls.push({ method: request.method ?? '', path, token, body, mcp: { tat, allowed: String(request.headers['x-lark-mcp-allowed-tools'] ?? '') } })
+        if (state.mcpStale && tat === 't-1') { state.mcpStale = false; return json({ jsonrpc: '2.0', id: body.id, error: { code: -32003, message: 'token expired' } }, 401) }
+        if (body.method === 'tools/list') return json({ jsonrpc: '2.0', id: body.id, result: { tools: [{ name: 'fetch-doc', description: '读', inputSchema: { type: 'object' } }] } })
+        return json({ jsonrpc: '2.0', id: body.id, result: { content: [{ type: 'text', text: JSON.stringify({ doc_id: 'doxA', doc_url: 'https://acme.feishu.cn/docx/doxA' }) }] } })
+      }
       calls.push({ method: request.method ?? '', path, token, body })
       if (path === '/open-apis/auth/v3/tenant_access_token/internal') {
         if (body.app_secret !== 'good') return json({ code: 10014, msg: 'app secret invalid' })
@@ -54,6 +61,7 @@ function fakeFeishu() {
         response.writeHead(200, { 'content-type': 'image/png', 'content-length': String(png.byteLength) })
         return response.end(png)
       }
+      if (path.startsWith('/open-apis/drive/v1/permissions/')) return json({ code: 0, data: { member: { member_type: 'openid' } } })
       if (path.startsWith('/open-apis/im/v1/messages')) {
         if (state.limited > 0) { state.limited -= 1; return json({ code: 230020, msg: 'frequency limit' }, 400, { 'x-ogw-ratelimit-reset': '2' }) }
         return json({ code: 0, data: { message_id: `om_sent${calls.length}` } })
@@ -110,7 +118,7 @@ describe('the Feishu connector', () => {
   let feishu: ReturnType<typeof fakeFeishu>
   let emitted: ChannelGatewayToCore[]
   let connector: ChannelConnector
-  const open = (appSecret = 'good') => { connector = feishuConnector({ id: CHANNEL, platform: 'feishu', credentials: { appId: 'cli_1', appSecret } }, (message) => emitted.push(message), { api: feishu.api(), retryMs: [30], clickAnswerMs: 300 }) }
+  const open = (appSecret = 'good') => { connector = feishuConnector({ id: CHANNEL, platform: 'feishu', credentials: { appId: 'cli_1', appSecret } }, (message) => emitted.push(message), { api: feishu.api(), mcp: `${feishu.api()}/mcp`, retryMs: [30], clickAnswerMs: 300 }) }
   const events = () => emitted.flatMap((message) => (message.type === 'event' ? [message] : []))
   const actions = () => emitted.flatMap((message) => (message.type === 'action' ? [message] : []))
   const answerOf = (frame: { payload?: Uint8Array } | undefined) => {
@@ -253,6 +261,22 @@ describe('the Feishu connector', () => {
       { method: 'POST', path: '/open-apis/im/v1/messages?receive_id_type=open_id', body: { receive_id: 'ou_owner', msg_type: 'interactive', content: JSON.stringify(card), uuid: '33333333-3333-4333-8333-333333333333' } },
       { method: 'PATCH', path: '/open-apis/im/v1/messages/om_card', body: { content: JSON.stringify({ ...card, header: {} }) } }
     ])
+  })
+
+  it('calls the hosted MCP as the bot for the tools core names, with a fresh token once when it says so', async () => {
+    feishu.state.mcpStale = true
+    const answer = await connector.mcp?.({ channelId: CHANNEL, method: 'tools/call', allowed: ['fetch-doc', 'create-doc'], tool: 'create-doc', arguments: { title: '方案' } })
+    expect(answer).toEqual({ ok: true, result: { content: [{ type: 'text', text: JSON.stringify({ doc_id: 'doxA', doc_url: 'https://acme.feishu.cn/docx/doxA' }) }] }, error: null })
+    const calls = feishu.calls.filter((call) => call.path === '/mcp')
+    expect(calls.map((call) => call.mcp)).toEqual([{ tat: 't-1', allowed: 'fetch-doc,create-doc' }, { tat: 't-2', allowed: 'fetch-doc,create-doc' }])
+    expect(calls[1]?.body).toMatchObject({ jsonrpc: '2.0', method: 'tools/call', params: { name: 'create-doc', arguments: { title: '方案' } } })
+    expect(calls.every((call) => call.token === '')).toBe(true)
+    expect(await connector.mcp?.({ channelId: CHANNEL, method: 'tools/list', allowed: ['fetch-doc'], tool: null })).toMatchObject({ ok: true, result: { tools: [{ name: 'fetch-doc' }] } })
+  })
+
+  it('lets a user open a document the bot made, as the bot and with no notice', async () => {
+    expect(await connector.grant?.({ channelId: CHANNEL, token: 'doxA', docType: 'docx', user: 'ou_1', perm: 'edit' })).toEqual({ ok: true, error: null })
+    expect(feishu.calls.at(-1)).toMatchObject({ method: 'POST', path: '/open-apis/drive/v1/permissions/doxA/members?type=docx&need_notification=false', token: 't-1', body: { member_type: 'openid', member_id: 'ou_1', perm: 'edit', type: 'user' } })
   })
 
   it('waits as long as Feishu says when told to slow down', async () => {

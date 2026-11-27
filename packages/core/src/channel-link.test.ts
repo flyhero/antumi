@@ -139,7 +139,7 @@ describe('a question from Slack to an agent and back', () => {
       if (change.type === 'changed' && change.conversation.channel && change.conversation.sessionId === null) channels.conversationEnded(change.conversation.id)
       if (change.type === 'chatItems') channels.conversationItems(change.conversationId, change.items)
     }, projects, attachments, null)
-    conversations.setChannelTools({ mcp: (id) => ({ command: 'node', args: ['mcp.mjs', '--conversation', id, '--tool-set', 'channel'] }), tools: ['project_read'] })
+    conversations.setChannelTools({ mcp: (id) => ({ command: 'node', args: ['mcp.mjs', '--conversation', id, '--tool-set', 'channel'] }), tools: () => ['project_read'] })
     daemon.deliver = (delivered) => {
       if (delivered.event === 'data') conversations.handleData(delivered)
       else if (delivered.event === 'exit') conversations.handleExit(delivered.sessionId, delivered.exitCode)

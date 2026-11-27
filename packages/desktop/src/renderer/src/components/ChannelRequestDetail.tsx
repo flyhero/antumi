@@ -42,7 +42,7 @@ export function ChannelRequestDetailContent({ request, detail, error }: { reques
       <h5>{t('AgentChannels.answer')}</h5>
       {detail?.answer ? <pre>{detail.answer}</pre> : <p className="squad-block-hint muted">{detail ? emptyAnswer : '…'}</p>}
       <h5>{t('AgentChannels.reads')}</h5>
-      {detail?.reads.length ? <pre>{detail.reads.map((call) => `${call.tool}  ${call.target}`).join('\n')}</pre> : <p className="squad-block-hint muted">{detail ? t('AgentChannels.noReads') : '…'}</p>}
+      {detail?.reads.length ? <pre>{detail.reads.map((call) => `${call.write ? `${t('AgentChannels.wrote')} ` : ''}${call.tool}  ${call.target}`).join('\n')}</pre> : <p className="squad-block-hint muted">{detail ? t('AgentChannels.noReads') : '…'}</p>}
     </>}
   </div>
 }

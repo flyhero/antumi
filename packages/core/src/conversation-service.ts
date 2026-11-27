@@ -335,8 +335,9 @@ export class ConversationService {
 
   // What a conversation opened for a chat platform's asker starts with in place of everything
   // above: Antumi's MCP server serving only these tools. Without it none can start.
-  private channelTools: { mcp(conversationId: string): McpServer; tools: readonly string[] } | null = null
-  setChannelTools(provider: { mcp(conversationId: string): McpServer; tools: readonly string[] }): void {
+  // A locked-down agent's tools and what it is told of them, as its channel gives them now.
+  private channelTools: { mcp(conversationId: string): McpServer; tools(conversationId: string): readonly string[]; instructions?(conversationId: string): string | null } | null = null
+  setChannelTools(provider: { mcp(conversationId: string): McpServer; tools(conversationId: string): readonly string[]; instructions?(conversationId: string): string | null }): void {
     this.channelTools = provider
   }
 
@@ -1396,7 +1397,7 @@ export class ConversationService {
     const agentStage = this.agentStage(id, stage)
     const agentLaunch: AgentLaunch = locked ? {
       ...(stage.backend ? { backend: stage.backend } : {}),
-      instructions: channelPrompt(current.profile),
+      instructions: channelPrompt(current.profile, locked.instructions?.(id)),
       providerSessionId: stage.providerSessionId,
       resume,
       handoffPath: null,
@@ -1404,7 +1405,7 @@ export class ConversationService {
       preferred: { model: options.preferred?.model, effort: options.preferred?.effort },
       mcp: options.mcp,
       todos: false,
-      lockdown: { tools: locked.tools },
+      lockdown: { tools: locked.tools(id) },
       ...(provider ? { provider } : {}),
       ...(account?.env ? { account: { id: account.id, env: account.env } } : {})
     } : {
@@ -1570,7 +1571,7 @@ export class ConversationService {
       options: {
         ...(stage.backend ? { backend: stage.backend } : {}),
         ...(conversation.channel ? { lockdown: true } : {}),
-        instructions: conversation.channel ? channelPrompt(conversation.profile) : this.roleInstructions(conversation),
+        instructions: conversation.channel ? channelPrompt(conversation.profile, this.channelTools?.instructions?.(conversation.id)) : this.roleInstructions(conversation),
         cwd: conversation.workspacePath,
         ...(mcp ? { mcp: launch ? launch.mcp(mcp, this.agentStage(conversation.id, stage)) : mcp } : {}),
         extraDirs: conversation.projectPaths.slice(1),

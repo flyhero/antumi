@@ -38,7 +38,7 @@ describe('a channel conversation', () => {
     events = []
     mkdirSync(path.join(root, 'attachments'), { recursive: true })
     service = new ConversationService(store, daemon, path.join(root, 'sessions'), (event) => events.push(event), projects, new AttachmentStore(path.join(root, 'attachments')), () => ({ command: 'node', args: ['mcp.mjs', '--full'] }), path.join(root, 'worktrees'))
-    service.setChannelTools({ mcp: (id) => ({ command: 'node', args: ['mcp.mjs', '--conversation', id, '--tool-set', 'channel'] }), tools: ['project_list', 'project_read'] })
+    service.setChannelTools({ mcp: (id) => ({ command: 'node', args: ['mcp.mjs', '--conversation', id, '--tool-set', 'channel'] }), tools: () => ['project_list', 'project_read'] })
     service.setUserMcpProvider(() => [{ name: 'mine', type: 'stdio', command: 'user-mcp', args: [] }])
     service.setSkillsProvider(async () => ({ dir: '/skills/bundle' }))
     service.setKnowledgeBase({ path: '/vault', write: true })

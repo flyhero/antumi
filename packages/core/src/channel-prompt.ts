@@ -15,7 +15,8 @@ const RULES = [
 
 const BRIEF = '以上没有说明回答长短时：回答尽量简短，先给结论。'
 
-export function channelPrompt(profile: Pick<AgentProfile, 'name' | 'instructions'> | null | undefined): string {
+// platform: what its channel says of the platform's own tools it gives, after the fixed rules.
+export function channelPrompt(profile: Pick<AgentProfile, 'name' | 'instructions'> | null | undefined, platform?: string | null): string {
   const own = profile?.instructions.trim()
-  return [RULES, profile ? `你是「${profile.name}」。${own ? `\n${own}` : ''}` : '', BRIEF].filter(Boolean).join('\n\n')
+  return [RULES, platform ?? '', profile ? `你是「${profile.name}」。${own ? `\n${own}` : ''}` : '', BRIEF].filter(Boolean).join('\n\n')
 }

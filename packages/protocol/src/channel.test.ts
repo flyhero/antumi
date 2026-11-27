@@ -61,6 +61,15 @@ describe('chat platforms', () => {
     }
   })
 
+  it('offers the platform\'s own tools only where the bot can use them, none of them a user\'s', () => {
+    const tools = CHANNEL_PLATFORM_DESCRIPTORS.feishu.tools
+    expect(tools.mcp).toBe('https://mcp.feishu.cn/mcp')
+    expect(tools.catalog.map((tool) => tool.name)).toEqual(['fetch-doc', 'list-docs', 'get-comments', 'fetch-file', 'create-doc', 'update-doc', 'add-comments'])
+    expect(tools.catalog.filter((tool) => tool.write).map((tool) => tool.name)).toEqual(['create-doc', 'update-doc', 'add-comments'])
+    for (const platform of ['slack', 'lark', 'dingtalk'] as const) expect(channelPlatform(platform).tools, platform).toBeUndefined()
+    expect(ChannelFields.parse({ profileId: PROFILE, platform: 'feishu' }).platformTools).toBeUndefined()
+  })
+
   it('gives Slack a manifest asking for no more than it uses', () => {
     const manifest = JSON.parse(CHANNEL_PLATFORM_DESCRIPTORS.slack.manifest)
     expect(manifest.oauth_config.scopes.bot).toEqual(['app_mentions:read', 'chat:write', 'reactions:write', 'im:history', 'files:read'])
@@ -79,7 +88,7 @@ describe('chat platforms', () => {
 describe('channels over RPC', () => {
   it('are no phone\'s to set up, read or run tools for', () => {
     const methods = (Object.keys(rpcSchemas) as RpcMethod[]).filter((method) => method.startsWith('channels.') || method.startsWith('channelTools.'))
-    expect(methods).toEqual(['channels.list', 'channels.save', 'channels.remove', 'channels.requests', 'channels.toolCalls', 'channels.readiness', 'channels.taskReports', 'channels.taskFeedback', 'channels.continueTask', 'channelTools.call'])
+    expect(methods).toEqual(['channels.list', 'channels.save', 'channels.remove', 'channels.requests', 'channels.toolCalls', 'channels.readiness', 'channels.taskReports', 'channels.taskFeedback', 'channels.continueTask', 'channelTools.call', 'channelTools.list'])
     for (const method of methods) expect(mobileMayCall(method, 'operate'), method).toBe(false)
   })
 })

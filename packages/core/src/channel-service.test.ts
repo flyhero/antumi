@@ -101,7 +101,7 @@ describe('ChannelService', () => {
       if (change.type === 'deleted') channels.conversationEnded(change.id)
       if (change.type === 'chatItems') channels.conversationItems(change.conversationId, change.items)
     }, projects, attachments, null)
-    conversations.setChannelTools({ mcp: (id) => ({ command: 'node', args: ['mcp.mjs', '--conversation', id, '--tool-set', 'channel'] }), tools: CHANNEL_TOOL_NAMES })
+    conversations.setChannelTools({ mcp: (id) => ({ command: 'node', args: ['mcp.mjs', '--conversation', id, '--tool-set', 'channel'] }), tools: () => CHANNEL_TOOL_NAMES })
     daemon.deliver = (delivered) => {
       if (delivered.event === 'data') conversations.handleData(delivered)
       else if (delivered.event === 'exit') conversations.handleExit(delivered.sessionId, delivered.exitCode)
@@ -468,6 +468,53 @@ describe('ChannelService', () => {
     expect(delivered.map((each) => each.text).join('')).not.toMatch(/owner@example\.com|worktrees/)
     expect(reported.filter((id) => id === reportId)).toHaveLength(delivered.length)
     expect(await channels.postReport({ channelId: '66666666-6666-4666-8666-666666666666', reportId, place: 'C1', thread: null, text: 'x', mention: null, task })).toBe(false)
+  })
+
+  it('runs the platform tools a channel gives as the bot, puts a document where the channel says and lets the asker into it', async () => {
+    const feishu = await channels.save({ profileId: profile.id, platform: 'feishu', projectPaths: [repo], allowedUsers: ['ou_1'], allowedPlaces: ['oc_1'], credentials: { appId: 'cli_1', appSecret: 's' }, platformTools: ['fetch-doc', 'create-doc', 'made-up'], docLocation: { kind: 'wikiNode', value: 'wikcnA' } })
+    expect(feishu.platformTools).toEqual(['fetch-doc', 'create-doc'])
+    fromGateway({ type: 'state', channelId: feishu.id, state: 'connected', error: null, tenant: 'T1', tenantName: 'Acme', botUserId: 'ou_bot' })
+    daemon.reply = () => {}
+    await ask({ channelId: feishu.id, place: 'oc_1', user: 'ou_1', text: '写个方案' })
+    const [request] = channels.requests(feishu.id, null, 1).items
+    const conversationId = request!.conversationId!
+    expect(channels.toolNames(conversationId)).toEqual([...CHANNEL_TOOL_NAMES, 'lark_fetch_doc', 'lark_create_doc'])
+    expect(channels.instructions(conversationId)).toContain('lark_')
+    expect(channels.instructions(conversationId)).toContain('等提问人确认后再做')
+    const answer = (callId: string, ok: boolean, result?: unknown) => fromGateway({ type: 'platformAnswer', callId, ok, result, error: ok ? null : 'refused' })
+
+    // Listed as the platform describes them, only those given, and kept a while.
+    const listing = channels.toolSpecs(conversationId)
+    await settle()
+    const list = sent('mcp').at(-1)!
+    expect(list).toMatchObject({ channelId: feishu.id, method: 'tools/list', allowed: ['fetch-doc', 'create-doc'], tool: null })
+    answer(list.callId, true, { tools: [{ name: 'fetch-doc', description: '读', inputSchema: { type: 'object' } }, { name: 'update-doc', description: '改' }] })
+    expect((await listing).map((spec) => spec.name)).toEqual([...CHANNEL_TOOL_NAMES, 'lark_fetch_doc'])
+    const asked = sent('mcp').length
+    await channels.toolSpecs(conversationId)
+    expect(sent('mcp')).toHaveLength(asked)
+
+    const created = channels.callTool(conversationId, 'lark_create_doc', { title: '方案', markdown: '# 方案', folder_token: 'fldEvil' })
+    await settle()
+    const call = sent('mcp').at(-1)!
+    expect(call).toMatchObject({ method: 'tools/call', allowed: ['fetch-doc', 'create-doc'], tool: 'create-doc', arguments: { title: '方案', markdown: '# 方案', wiki_node: 'wikcnA' } })
+    expect(call.arguments).not.toHaveProperty('folder_token')
+    answer(call.callId, true, { content: [{ type: 'text', text: JSON.stringify({ doc_id: 'doxA', doc_url: 'https://acme.feishu.cn/docx/doxA' }) }] })
+    await settle()
+    const grant = sent('grant').at(-1)!
+    expect(grant).toMatchObject({ channelId: feishu.id, token: 'doxA', docType: 'docx', user: 'ou_1', perm: 'edit' })
+    answer(grant.callId, true)
+    const result = await created
+    expect(result.isError).toBe(false)
+    expect(result.text).toContain('https://acme.feishu.cn/docx/doxA')
+    expect(result.text).toContain('已给提问人开通这篇文档的编辑权限')
+    expect(channels.toolCalls(request!.id).at(-1)).toMatchObject({ tool: 'lark_create_doc', target: 'create-doc https://acme.feishu.cn/docx/doxA', write: true })
+
+    expect(await channels.callTool(conversationId, 'lark_update_doc', { doc_id: 'doxA' })).toEqual({ text: '主人没有开放这个工具。', isError: true })
+    expect(sent('mcp').filter((each) => each.tool === 'update-doc')).toEqual([])
+    await channels.save({ ...feishu, allowedUsers: ['ou_2'] })
+    expect(await channels.callTool(conversationId, 'lark_fetch_doc', { doc_id: 'doxA' })).toEqual({ text: '提问人或聊天已不在接入的授权范围内。', isError: true })
+    expect(channels.toolCalls(request!.id).at(-1)).toMatchObject({ tool: 'lark_fetch_doc', target: 'fetch-doc ✗' })
   })
 
   it('answers a click on a card once, however often the platform sends it', async () => {

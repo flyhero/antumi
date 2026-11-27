@@ -482,7 +482,9 @@ export const MIGRATIONS = [
    CREATE INDEX channel_actions_card ON channel_actions(card_id, action);
    CREATE TABLE channel_task_feedback (id TEXT PRIMARY KEY, task_id TEXT NOT NULL, channel_id TEXT NOT NULL, author TEXT NOT NULL,
      text TEXT NOT NULL, created_at INTEGER NOT NULL, used_at INTEGER);
-   CREATE INDEX channel_task_feedback_task ON channel_task_feedback(task_id, created_at);`
+   CREATE INDEX channel_task_feedback_task ON channel_task_feedback(task_id, created_at);`,
+  // A platform tool's call that may have changed something there (docs/CHANNEL-LOOP.md, 三).
+  `ALTER TABLE channel_tool_calls ADD COLUMN write INTEGER NOT NULL DEFAULT 0;`
 ]
 
 

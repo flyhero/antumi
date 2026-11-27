@@ -176,7 +176,7 @@ sequenceDiagram
 | 进展回到原话题（第一节） | `reportTasks` | 收需求 | 全部；钉钉没有话题，回成群里的一条新消息并 @ 提问人 | 进展只在 Antumi 里看 |
 | 卡片上开始执行（第二节） | `taskCards.start`、`ownerUsers` | 进展回报 | 飞书、Lark；Slack 以后 | 只在 Antumi 里开始 |
 | 卡片上验收和退回（第二节） | `taskCards.review`：只有主人，或主人和提问人 | 进展回报 | 同上 | 待验收是一条文字，验收在 Antumi 里 |
-| 飞书文档工具（第三节） | `platformTools` 逐个勾选；建文档时另有 `docLocation`、`docAccess` | —，答疑时也能用 | 飞书；Lark 联调后 | 只能读项目代码 |
+| 飞书文档工具（第三节） | `platformTools` 逐个勾选；建文档时另有 `docLocation`、`docAccess` | —，答疑时也能用 | 飞书、Lark（Lark 未实测） | 只能读项目代码 |
 | 话题里免 @（第四节） | `followUps` | — | 飞书、Lark | 每次都要 @ |
 
 - 卡片依赖进展回报：任务卡和验收卡本身就是在聊天里报进展，关了回报却开着卡片说不通，界面上回报关着时卡片那块不能开。
@@ -412,7 +412,7 @@ core：ChannelService ─ 入站、提问、发件队列（已有）
 - `X-Lark-MCP-Allowed-Tools`：逗号分隔的工具名。不给就一个工具都不列；`tools/call` 只接受名单里的工具。
 - `Content-Type: application/json`。
 
-Lark 的 `mcp.larksuite.com/mcp` 能连上，但没有文档，联调后再开。不用 `lark-openapi-mcp`：它仍是 beta、一年多没更新、不能编辑文档、没有知识库预设（见第五节）。
+Lark 用 `mcp.larksuite.com/mcp`：开放平台文档里没有，探测到的行为和飞书的一样，请求头也相同。2026-11-27 应 Lark 用户的反馈先开放，同一份工具目录，接入设置里注明还没用真实的 Lark 应用试过（平台描述的 `tools.untested`）。不用 `lark-openapi-mcp`：它仍是 beta、一年多没更新、不能编辑文档、没有知识库预设（见第五节）。
 
 | 工具 | 读 / 写 | 机器人能用 | 要开的权限 |
 |---|---|---|---|

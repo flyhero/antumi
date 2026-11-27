@@ -320,6 +320,7 @@ function ChannelDialog({ profileId, platform, channel, agent, hasProvider, onClo
     </div>}
     {toolCatalog && <div className="agent-channel-step">
       {heading(toolsStep, t('AgentChannels.tools'), t('AgentChannels.toolsHint'))}
+      {toolCatalog.untested && <p className="squad-block-hint agent-channel-warning">{t('AgentChannels.toolsUntested', { platform: descriptor.label })}</p>}
       {[false, true].map((write) => <div key={String(write)} className="agent-channel-projects">
         <p className="squad-block-hint muted">{t(write ? 'AgentChannels.toolsWrite' : 'AgentChannels.toolsRead')}</p>
         {toolCatalog.catalog.filter((tool) => tool.write === write).map((tool) => <label key={tool.name} className="agent-profile-check">

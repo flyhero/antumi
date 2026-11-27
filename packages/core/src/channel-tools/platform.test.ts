@@ -50,5 +50,7 @@ describe('platform tools', () => {
     expect(platformSpecs('feishu', ['fetch-doc'], listed)).toEqual([{ name: 'lark_fetch_doc', description: '飞书工具（以机器人身份）：读', inputSchema: { type: 'object', properties: { doc_id: { type: 'string' } } }, readOnly: true }])
     expect(platformSpecs('feishu', ['update-doc'], listed)[0]?.readOnly).toBe(false)
     expect(platformSpecs('feishu', ['fetch-doc'], { nope: 1 })).toEqual([])
+    expect(platformSpecs('lark', ['fetch-doc'], listed)[0]?.description).toBe('Lark 工具（以机器人身份）：读')
+    expect(givenTools('lark', ['fetch-doc', 'made-up'])).toEqual(['fetch-doc'])
   })
 })

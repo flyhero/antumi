@@ -433,7 +433,7 @@ claude -p --verbose --output-format stream-json --input-format stream-json --inc
 | 打包后的应用 | `channel-gateway.mjs` 能打出来，没有在安装包里跑过 |
 | 任务的进展回到原话题 | 对本地的假 Slack、假飞书、假钉钉验证过连接器的 @ 人和发送；没有在真实平台上联调 |
 | 卡片上开始和验收 | 卡片回调的帧和响应照飞书官方 Node SDK 1.74 写，对本地的假飞书验证过；没有在真实飞书上联调 |
-| 飞书工具 | 用真实应用调过托管 MCP 的 `tools/list` 和只读调用；新建、修改文档和开权限只对本地的假飞书验证过 |
+| 飞书工具 | 用真实的飞书应用调过托管 MCP 的 `tools/list` 和只读调用；新建、修改文档和开权限只对本地的假飞书验证过。Lark 已开放，没有用真实的 Lark 应用试过 |
 | 话题里免 @ | 只对本地的假飞书验证过；要开 `im:message.group_msg` 才能在真实飞书上试 |
 
-没做的：主人接手会话；进度更新；固定查询工具；除 Claude Code、Codex、Pi 外的 Agent；Slack 和钉钉的卡片、Lark 的飞书工具、Slack 话题里免 @（设计见 [CHANNEL-LOOP.md](CHANNEL-LOOP.md)）。
+没做的：主人接手会话；进度更新；固定查询工具；除 Claude Code、Codex、Pi 外的 Agent；Slack 和钉钉的卡片、Slack 话题里免 @（设计见 [CHANNEL-LOOP.md](CHANNEL-LOOP.md)）。

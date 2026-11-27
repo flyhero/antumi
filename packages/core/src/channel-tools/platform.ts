@@ -71,6 +71,12 @@ export function callTarget(name: string, args: Record<string, unknown>, text: st
   return (doc ? `${name} ${doc}` : name).slice(0, 300)
 }
 
+// "飞书工具", "Lark 工具": a Latin name is set apart from the Chinese by a space.
+function toolsOf(platform: ChannelPlatform): string {
+  const { label } = channelPlatform(platform)
+  return /^[A-Za-z]/.test(label) ? `${label} 工具` : `${label}工具`
+}
+
 const Listed = z.object({ tools: z.array(z.object({ name: z.string(), description: z.string().optional(), inputSchema: z.record(z.string(), z.unknown()).optional() }).loose()) }).loose()
 
 // The platform's tools as the agent's MCP server lists them: only those given, named for the agent,
@@ -80,7 +86,7 @@ export function platformSpecs(platform: ChannelPlatform, given: readonly string[
   if (!tools.success) return []
   return tools.data.tools.flatMap((tool) => (given.includes(tool.name) ? [{
     name: agentToolName(tool.name),
-    description: `飞书工具（以机器人身份）：${tool.description ?? tool.name}`,
+    description: `${toolsOf(platform)}（以机器人身份）：${tool.description ?? tool.name}`,
     inputSchema: tool.inputSchema ?? { type: 'object' },
     readOnly: !writesWith(platform, tool.name)
   }] : []))

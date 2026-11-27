@@ -30,9 +30,9 @@ const conversation: Conversation = { id: id(9), title: 'Build', titleLocked: tru
 const labels = { leader: 'Lead', leaderRole: 'Coordinate', developer: 'Build', developerRole: 'Implement', reviewer: 'Review', reviewerRole: 'Verify' }
 const members = (installed: Parameters<typeof defaultSquadMembers>[0]) => {
   let next = 0
-  return defaultSquadMembers(installed, labels, () => id(++next))
+  return defaultSquadMembers(installed, () => null, labels, () => id(++next))
 }
-const linkedRole = AgentProfile.parse({ id: id(10), name: 'Linked role', agent: 'gemini', model: 'flash', effort: 'high', capability: 'develop',
+const linkedRole = AgentProfile.parse({ id: id(10), name: 'Linked role', agent: 'gemini', model: 'flash', effort: 'high', modelProvider: 'gateway', capability: 'develop',
   archivedAt: null, createdAt: 0, updatedAt: 0 })
 
 beforeEach(() => useCore.setState(useCore.getInitialState(), true))
@@ -43,10 +43,12 @@ describe('squad member settings', () => {
     ])
     expect(members(['kimi']).map(({ agent }) => agent)).toEqual(['claude', 'kimi', 'claude'])
     expect(members([]).map(({ agent }) => agent)).toEqual(['claude', 'claude', 'claude'])
+    const remembered = defaultSquadMembers(['gemini', 'codex'], (agent) => agent === 'codex' ? 'gateway' : null, labels)
+    expect(remembered.map(({ agent, modelProvider }) => [agent, modelProvider])).toEqual([['codex', 'gateway'], ['gemini', null], ['codex', 'gateway']])
   })
 
   it('adds a read-only member when supported and a developer otherwise', () => {
-    const add = (installed: Parameters<typeof defaultAddedMember>[0]) => defaultAddedMember(installed, 'Extra', () => id(6))
+    const add = (installed: Parameters<typeof defaultAddedMember>[0]) => defaultAddedMember(installed, () => null, 'Extra', () => id(6))
     expect(add(['codebuddy', 'antigravity'])).toMatchObject({ id: id(6), name: 'Extra', agent: 'antigravity', capability: 'readOnly' })
     expect(add(['gemini', 'kimi'])).toMatchObject({ agent: 'gemini', capability: 'develop' })
     expect(add([])).toMatchObject({ agent: 'claude', capability: 'develop' })
@@ -55,7 +57,7 @@ describe('squad member settings', () => {
   it('overlays linked role runtime fields while preserving squad member names and capabilities', () => {
     const linked = members(['claude']).map((member) => ({ ...member, profileId: member.capability === 'readOnly' ? linkedRole.id : id(11) }))
     const resolved = resolveSquadMembers(linked, { [linkedRole.id]: linkedRole })
-    expect(resolved[0]).toMatchObject({ name: 'Lead', agent: linkedRole.agent, model: 'flash', effort: 'high', capability: 'readOnly' })
+    expect(resolved[0]).toMatchObject({ name: 'Lead', agent: linkedRole.agent, model: 'flash', effort: 'high', modelProvider: 'gateway', capability: 'readOnly' })
     expect(resolved[1]).toBe(linked[1])
     expect(resolved[2]).toMatchObject({ name: 'Review', agent: linkedRole.agent, model: 'flash', effort: 'high', capability: 'readOnly' })
   })

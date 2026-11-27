@@ -8,20 +8,26 @@ export type ModelChoice = { model?: string; effort?: string }
 
 // The models an agent offers, or a model provider offers it, asked of core once each while the caller
 // is shown: undefined while the answer is on its way, null when there is none.
-export function useAgentCatalog(agent: AgentKind | null, enabled: boolean, provider: ModelProvider | null = null): ChatCatalog | null | undefined {
+export function useAgentCatalog(agent: AgentKind | null, enabled: boolean, provider: ModelProvider | null = null, selected?: string | null): ChatCatalog | null | undefined {
   const rpc = useCore((s) => s.rpc)
   const [catalogs, setCatalogs] = useState<Record<string, ChatCatalog | null>>({})
-  const key = agent ? catalogKey(agent, provider) : null
+  const providerId = selected === undefined ? provider?.id : selected
+  const key = agent ? selected && !provider ? `${agent}|${selected}` : catalogKey(agent, provider) : null
   useEffect(() => {
     if (!agent || !key || !rpc || !enabled || key in catalogs) return
     let current = true
     const settle = (catalog: ChatCatalog | null) => {
       if (current) setCatalogs((known) => ({ ...known, [key]: catalog }))
     }
-    rpc.call('conversations.chatCatalog', { agent, ...(provider ? { modelProvider: provider.id } : {}) }).then(settle, () => settle(null))
+    rpc.call('conversations.chatCatalog', { agent, ...(providerId ? { modelProvider: providerId } : {}) }).then(settle, () => settle(null))
     return () => { current = false }
-  }, [agent, key, provider, rpc, enabled, catalogs])
+  }, [agent, key, provider, providerId, rpc, enabled, catalogs])
   return key ? catalogs[key] : null
+}
+
+export function useProviderCatalog(agent: AgentKind | null, selected: string | null | undefined, enabled = true) {
+  const provider = useCore((state) => state.modelProviders.find((each) => each.id === selected) ?? null)
+  return useAgentCatalog(agent, enabled, provider, selected ?? null)
 }
 
 export type ResolvedModel = {

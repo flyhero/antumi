@@ -42,7 +42,7 @@ export class SquadService {
       if (!this.profileFor) throw new Rejection('profile-unavailable')
       const profile = this.profileFor(member.profileId)
       if (member.capability === 'develop' && profile.capability !== 'develop') throw new Rejection('agent-call-forbidden', '只读智能体不能作为开发成员')
-      return { ...member, profile, agent: profile.agent, model: profile.model, effort: profile.effort }
+      return { ...member, profile, agent: profile.agent, model: profile.model, effort: profile.effort, modelProvider: profile.modelProvider }
     }) }
   }
   private readonly runPolicies: SquadRunPolicy[] = []
@@ -122,7 +122,7 @@ export class SquadService {
       for (const member of squad.members) await this.chats.validateStartOptions(member.agent, {
         model: member.model, effort: member.effort,
         permissionMode: member.capability === 'readOnly' ? agentDescriptor(member.agent).readOnlyMode : mode
-      }, member.profile?.modelProvider ?? undefined)
+      }, member.modelProvider ?? member.profile?.modelProvider ?? undefined)
       const leader = squad.members.find((member) => member.id === squad.leaderId)!
       if (!this.chats.capacityAvailable(leader.agent, task.conversationId)) throw new Rejection('agent-capacity')
       const transferred = plan && task.conversationId ? this.chats.planForTransfer(task.conversationId, plan.stageId, plan.requestId) : null
@@ -143,7 +143,7 @@ export class SquadService {
       created = this.store.saveRun({ id: randomUUID(), taskId: task.id, squad, leaderConversationId: task.conversationId,
         state: 'running', permissionMode: mode, allowBypass, summary: null, delivery: null, works: [], createdAt: at, updatedAt: at })
       this.announce(created)
-      const started = await this.tasks.start(task.id, allowBypass, undefined, { permissionMode: mode, model: leader.model, effort: leader.effort }, squadLeaderPrompt(squad) + this.runPolicies.map((policy) => policy.brief(task.id)).join('\n'), resume, leader.profile)
+      const started = await this.tasks.start(task.id, allowBypass, undefined, { permissionMode: mode, model: leader.model, effort: leader.effort, modelProvider: leader.modelProvider ?? leader.profile?.modelProvider ?? null }, squadLeaderPrompt(squad) + this.runPolicies.map((policy) => policy.brief(task.id)).join('\n'), resume, leader.profile)
       this.announce(this.store.patchRun(created.id, { leaderConversationId: started.conversationId }))
       this.tick()
       return started
@@ -168,14 +168,14 @@ export class SquadService {
       const mode = options.permissionMode ?? 'ask'
       if (!squadModes(squad, allowBypass).includes(mode)) throw new Rejection('chat-option-invalid', '团队开发成员不共同支持此权限模式')
       const leader = squad.members.find((member) => member.id === squad.leaderId)!
-      await this.chats.validateStartOptions(leader.agent, { model: leader.model, effort: leader.effort, permissionMode: 'plan' }, leader.profile?.modelProvider ?? undefined)
+      await this.chats.validateStartOptions(leader.agent, { model: leader.model, effort: leader.effort, permissionMode: 'plan' }, leader.modelProvider ?? leader.profile?.modelProvider ?? undefined)
       if (task.conversationId) {
         const conversation = this.chats.get(task.conversationId)
         if (conversation.chat?.turn === 'running' || conversation.chat?.turn === 'awaiting') throw new Rejection('chat-busy')
         await this.chats.stop(task.conversationId)
       }
       this.tasks.assignSquad(task.id, squad.id, leader.agent, { ...task.launch, permissionMode: mode })
-      return await this.tasks.planForSquad(task.id, { ...(leader.model ? { model: leader.model } : {}), ...(leader.effort ? { effort: leader.effort } : {}) }, squadPlanBrief(squad), leader.profile)
+      return await this.tasks.planForSquad(task.id, { modelProvider: leader.modelProvider ?? leader.profile?.modelProvider ?? null, ...(leader.model ? { model: leader.model } : {}), ...(leader.effort ? { effort: leader.effort } : {}) }, squadPlanBrief(squad), leader.profile)
     } finally { this.starting.delete(taskId) }
   }
 
@@ -419,7 +419,7 @@ export class SquadService {
         const task = this.tasks.get(run.taskId)
         const context = await this.tasks.squadContext(task.id)
         await this.chats.create(member.agent, task.repos.flatMap((repo) => repo.reference ? [] : [repo.worktreePath ?? repo.path]), run.allowBypass,
-          { permissionMode: work.capability === 'readOnly' ? agentDescriptor(member.agent).readOnlyMode : run.permissionMode, model: member.model ?? undefined, effort: member.effort ?? undefined, modelProvider: member.profile?.modelProvider ?? undefined, profile: member.profile, deferStart: true },
+          { permissionMode: work.capability === 'readOnly' ? agentDescriptor(member.agent).readOnlyMode : run.permissionMode, model: member.model ?? undefined, effort: member.effort ?? undefined, modelProvider: member.modelProvider ?? member.profile?.modelProvider ?? undefined, profile: member.profile, deferStart: true },
           null, conversationId, null, { runId: id, readOnly: work.capability === 'readOnly', referencePaths: task.repos.flatMap((repo) => repo.reference ? [repo.path] : []) })
         await this.chats.continue(conversationId, run.allowBypass, context.readable)
         await this.chats.send(conversationId, squadMemberPrompt(task, member, work, context.text), [], false, false, refOf(work))

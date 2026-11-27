@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { Brain, Cpu, ShieldCheck } from 'lucide-react-native'
-import { defaultStartMode, startModes, type AgentKind, type ChatCatalog, type ChatPermissionMode } from '@antumi/protocol'
+import { defaultStartMode, startModes, agentDescriptor, providerEndpoint, type AgentKind, type ChatCatalog, type ChatPermissionMode } from '@antumi/protocol'
 import { AgentMark } from './agent-mark'
 import { ChoiceList, Sheet } from './sheet'
 import { Button, ListGroup, ListRow, Muted, SectionLabel, tap } from './ui'
 import { t } from '../i18n'
 import { agentName, effortName, folderName, modeName } from '../labels'
-import { agentCatalog, readyAgents, recentProjects } from '../session'
+import { agentCatalog, readyAgents, recentProjects, useSession, rememberProvider } from '../session'
 import { radius, space, type, useTheme } from '../theme'
 
 // What a new conversation or task is made with: an agent the computer has ready, in one of its
@@ -87,6 +87,8 @@ export function ProjectsSheet({ projects, picked, onChange, onClose }: { project
   )
 }
 
+const EMPTY_PROVIDER_DEFAULTS: Record<string, string | null> = {}
+
 type StartPick = { model?: string; effort?: string; mode?: ChatPermissionMode }
 
 // What a new chat starts with, as on the computer: the agent's default model and mode unless one is
@@ -94,25 +96,33 @@ type StartPick = { model?: string; effort?: string; mode?: ChatPermissionMode }
 // switching back finds them; a mode or effort the picked model does not take falls back. A handoff
 // passes the chat's provider, and its mode, which an agent offering it takes over in unless picked.
 export function useStartOptions(agent: AgentKind | null, from: { modelProvider?: string | null; mode?: string | null } = {}) {
-  const [catalogs, setCatalogs] = useState<Partial<Record<AgentKind, ChatCatalog | null>>>({})
-  const [picks, setPicks] = useState<Partial<Record<AgentKind, StartPick>>>({})
+  const defaults = useSession((state) => state.settings.defaultProviders?.[state.current ?? ''] ?? EMPTY_PROVIDER_DEFAULTS)
+  const providers = useSession((state) => state.providers)
+  const [providerPicks, setProviderPicks] = useState<Partial<Record<AgentKind, string | null>>>({})
+  const providerId = agent ? providerPicks[agent] !== undefined ? providerPicks[agent] : from.modelProvider !== undefined ? from.modelProvider : defaults[agent] ?? null : null
+  const selected = providers.find((provider) => provider.id === providerId)
+  const key = `${agent}|${providerId ?? ''}|${selected?.revision ?? ''}`
+  const [catalogs, setCatalogs] = useState<Record<string, ChatCatalog | null>>({})
+  const [picks, setPicks] = useState<Record<string, StartPick>>({})
   useEffect(() => {
-    if (!agent || agent in catalogs) return
+    if (!agent || key in catalogs) return
     let live = true
-    void agentCatalog(agent, from.modelProvider).then((catalog) => {
-      if (live) setCatalogs((current) => ({ ...current, [agent]: catalog }))
+    void agentCatalog(agent, providerId).then((catalog) => {
+      if (live) setCatalogs((current) => ({ ...current, [key]: catalog }))
     })
     return () => { live = false }
-  }, [agent, catalogs, from.modelProvider])
+  }, [agent, catalogs, providerId, key])
   if (!agent) return null
-  const pick = picks[agent] ?? {}
-  const models = catalogs[agent]?.models ?? []
+  const pick = picks[key] ?? {}
+  const models = catalogs[key]?.models ?? []
   const model = models.find((each) => each.id === pick.model) ?? models.find((each) => each.isDefault) ?? models[0] ?? null
   const modes = startModes(agent, model ?? undefined)
   const efforts = model?.efforts ?? []
-  const set = (next: StartPick) => setPicks((current) => ({ ...current, [agent]: { ...current[agent], ...next } }))
+  const set = (next: StartPick) => setPicks((current) => ({ ...current, [key]: { ...current[key], ...next } }))
   return {
-    loading: !(agent in catalogs),
+    modelProvider: providerId ?? null,
+    pickProvider: (value: string | null) => { setProviderPicks((current) => ({ ...current, [agent]: value })); void rememberProvider(agent, value) },
+    loading: !(key in catalogs),
     models,
     model,
     modes,
@@ -120,11 +130,28 @@ export function useStartOptions(agent: AgentKind | null, from: { modelProvider?:
     efforts,
     effort: pick.effort && efforts.includes(pick.effort) ? pick.effort : null,
     // Sent only when picked: left out, the computer starts the agent's own.
-    picked: { model: pick.model && model?.id === pick.model ? pick.model : undefined, effort: pick.effort && efforts.includes(pick.effort) ? pick.effort : undefined },
+    picked: { modelProvider: providerId ?? null, model: pick.model && model?.id === pick.model ? pick.model : undefined, effort: pick.effort && efforts.includes(pick.effort) ? pick.effort : undefined },
     pickModel: (id: string) => set({ model: id }),
     pickEffort: (effort: string) => set({ effort }),
     pickMode: (mode: ChatPermissionMode) => set({ mode })
   }
+}
+
+export function ProviderChoice({ agent, value, onChange, disabled = false }: { agent: AgentKind; value: string | null; onChange(value: string | null): void; disabled?: boolean }) {
+  const [open, setOpen] = useState(false)
+  const providers = useSession((state) => state.providers)
+  const supported = useSession((state) => state.welcome?.features.includes('provider-selection-v2') ?? false)
+  if (!supported || !agentDescriptor(agent).capabilities.modelProviders.length) return null
+  const choices = providers.filter((provider) => provider.hasKey && providerEndpoint(provider, agent))
+  const name = value ? choices.find((provider) => provider.id === value)?.name ?? t('providerUnavailable') : t('ownConfiguration')
+  return <>
+    <ListGroup><ListRow title={t('provider')} subtitle={name} {...(!disabled ? { onPress: () => setOpen(true) } : {})} /></ListGroup>
+    {open && <Sheet title={t('provider')} onClose={() => setOpen(false)}>
+      <ChoiceList choices={[{ value: '', label: t('ownConfiguration') }, ...choices.map((provider) => ({ value: provider.id, label: provider.name }))]} current={value ?? ''}
+        onPick={(picked) => { onChange(picked || null); setOpen(false) }} />
+      <Muted>{t('configureProvidersOnComputer')}</Muted>
+    </Sheet>}
+  </>
 }
 
 type StartOptions = NonNullable<ReturnType<typeof useStartOptions>>
@@ -136,6 +163,7 @@ export function StartOptionsGroup({ agent, options }: { agent: AgentKind; option
   const value = (label: string) => <Text style={[type.secondary, styles.value, { color: theme.textMuted }]} numberOfLines={1}>{label}</Text>
   return (
     <>
+      <ProviderChoice agent={agent} value={options.modelProvider} onChange={options.pickProvider} />
       <ListGroup title={t('options')}>
         <ListRow leading={<ShieldCheck size={20} color={theme.textMuted} strokeWidth={1.8} />} title={t('permissionMode')} trailing={value(modeName(agent, options.mode))} onPress={() => setPicking('mode')} />
         {options.loading || options.models.length > 0 ? (

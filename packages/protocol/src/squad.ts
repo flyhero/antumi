@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { ModelProviderId } from './model-provider-id'
 import { AgentProfile } from './agent-profile'
 import { AgentKind } from './agent'
 import { agentDescriptor } from './agents'
@@ -12,6 +13,7 @@ export const SquadMember = z.object({
   id: z.string().uuid(),
   name: z.string().trim().min(1).max(60),
   agent: AgentKind,
+  modelProvider: ModelProviderId.nullable().optional(),
   model: z.string().trim().min(1).max(200).nullable().default(null),
   effort: z.string().trim().min(1).max(200).nullable().default(null),
   role: z.string().trim().max(2000).default(''),

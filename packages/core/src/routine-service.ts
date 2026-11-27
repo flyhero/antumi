@@ -226,7 +226,7 @@ export class RoutineService {
     if (target.agent !== 'auto') checkUnattended(target.agent)
     if (!target.text && !target.images?.length) throw new Rejection('routine-no-prompt', 'a routine needs an instruction or images')
     // The agent picked at start chooses its own model.
-    const cleaned = target.agent === 'auto' ? { ...target, model: undefined, effort: undefined } : target
+    const cleaned = target.agent === 'auto' ? { ...target, model: undefined, effort: undefined, modelProvider: undefined } : target
     return { title, schedule: fields.schedule, target: cleaned }
   }
 

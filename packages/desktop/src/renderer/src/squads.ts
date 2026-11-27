@@ -5,12 +5,12 @@ import { replaySummaryChanges } from './attention-summaries'
 import { t } from './i18n'
 import { agentLabel } from './labels'
 
-// Mirrors SquadService.resolve: linked roles supply the engine and model while each squad slot keeps its name and capability.
+// Mirrors SquadService.resolve: linked roles supply the engine, provider and model while each squad slot keeps its name and capability.
 export function resolveSquadMembers(members: readonly SquadMember[], profiles: Readonly<Record<string, AgentProfile>>): SquadMember[] {
   return members.map((member) => {
     const profile = member.profileId ? profiles[member.profileId] : undefined
     if (!profile) return member
-    return { ...member, agent: profile.agent, model: profile.model, effort: profile.effort }
+    return { ...member, agent: profile.agent, model: profile.model, effort: profile.effort, modelProvider: profile.modelProvider }
   })
 }
 
@@ -18,20 +18,22 @@ export function resolveSquadRoster(squad: Pick<Squad, 'members' | 'leaderId'>, p
   return resolveSquadMembers(squad.members, profiles)
 }
 
-export function defaultSquadMembers(installed: readonly AgentKind[], labels: {
+export function defaultSquadMembers(installed: readonly AgentKind[], providerFor: (agent: AgentKind) => string | null, labels: {
   leader: string; leaderRole: string; developer: string; developerRole: string; reviewer: string; reviewerRole: string
 }, createId: () => string = () => crypto.randomUUID()): SquadMember[] {
   const [leader = 'claude', reviewer = leader] = installed.filter(agentSupportsReadOnly)
+  const developer = installed[0] ?? 'claude'
   return [
-    { id: createId(), name: labels.leader, agent: leader, model: null, effort: null, role: labels.leaderRole, capability: 'readOnly' },
-    { id: createId(), name: labels.developer, agent: installed[0] ?? 'claude', model: null, effort: null, role: labels.developerRole, capability: 'develop' },
-    { id: createId(), name: labels.reviewer, agent: reviewer, model: null, effort: null, role: labels.reviewerRole, capability: 'readOnly' }
+    { id: createId(), name: labels.leader, agent: leader, modelProvider: providerFor(leader), model: null, effort: null, role: labels.leaderRole, capability: 'readOnly' },
+    { id: createId(), name: labels.developer, agent: developer, modelProvider: providerFor(developer), model: null, effort: null, role: labels.developerRole, capability: 'develop' },
+    { id: createId(), name: labels.reviewer, agent: reviewer, modelProvider: providerFor(reviewer), model: null, effort: null, role: labels.reviewerRole, capability: 'readOnly' }
   ]
 }
 
-export function defaultAddedMember(installed: readonly AgentKind[], name: string, createId: () => string = () => crypto.randomUUID()): SquadMember {
+export function defaultAddedMember(installed: readonly AgentKind[], providerFor: (agent: AgentKind) => string | null, name: string, createId: () => string = () => crypto.randomUUID()): SquadMember {
   const reader = installed.find(agentSupportsReadOnly)
-  return { id: createId(), name, agent: reader ?? installed[0] ?? 'claude', model: null, effort: null, role: '', capability: reader ? 'readOnly' : 'develop' }
+  const agent = reader ?? installed[0] ?? 'claude'
+  return { id: createId(), name, agent, modelProvider: providerFor(agent), model: null, effort: null, role: '', capability: reader ? 'readOnly' : 'develop' }
 }
 
 export function squadReadOnlyIssueText(issue: SquadReadOnlyIssue): string {

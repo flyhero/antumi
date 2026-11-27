@@ -38,6 +38,14 @@ it('remembers the release already introduced after restarting', async () => {
   expect(usePreferences.getState().releaseNotesVersion).toBe('0.22.0-beta.3')
 })
 
+it('remembers a provider per agent, including native configuration and unavailable provider IDs', async () => {
+  storage.set('antumi.preferences', JSON.stringify({ defaultProviders: { claude: 'gateway-123', codex: null } }))
+  const { usePreferences, setPreference } = await import('./preferences')
+  expect(usePreferences.getState().defaultProviders).toEqual({ claude: 'gateway-123', codex: null })
+  setPreference('defaultProviders', { claude: 'another-gateway', codex: null })
+  expect(JSON.parse(storage.get('antumi.preferences') ?? '{}').defaultProviders).toEqual({ claude: 'another-gateway', codex: null })
+})
+
 describe('project color preferences', () => {
   it('persists color choices and loads them after a restart', async () => {
     const { setPreference } = await import('./preferences')

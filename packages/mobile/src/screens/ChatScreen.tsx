@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { ActivityIndicator, FlatList, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Alert, ActivityIndicator, FlatList, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import { useKeyboardState, useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller'
 import Animated, { useAnimatedStyle } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -13,6 +13,8 @@ import {
 import { ChoiceList, Sheet } from '../components/sheet'
 import { EmptyState, IconButton, Muted, Screen, confirmTap, tap } from '../components/ui'
 import { t } from '../i18n'
+import { ProviderChoice, useStartOptions } from '../components/pickers'
+import { switchProvider } from '../session'
 import { agentName, effortName, modeName, where } from '../labels'
 import { pop, push, useNavigation } from '../navigation'
 import { canHandOff, canOperate, cancelQueued, EMPTY_DRAFT, interrupt, loadOlder, releaseQueued, restoreDelivery, submitDraft, setDraft, setOption, unwatch, uploadImage, useSession, viewsOnly, watch } from '../session'
@@ -157,7 +159,11 @@ function QueuedMessages({ conversation, state }: { conversation: Conversation; s
 // offers follows, once it has said.
 function OptionsSheet({ conversation, state, handoff, onClose }: { conversation: Conversation; state: StateItem | null; handoff: boolean; onClose: () => void }) {
   const { id, agent } = conversation
-  const model = state?.models.find((each) => each.id === state.model)
+  const pendingOptions = useStartOptions(conversation.providerChangePending ? agent : null, { modelProvider: conversation.modelProvider ?? null })
+  const models = conversation.providerChangePending ? pendingOptions?.models ?? [] : state?.models ?? []
+  const modelId = conversation.providerChangePending ? conversation.chatOptions?.model ?? null : state?.model
+  const effort = conversation.providerChangePending ? conversation.chatOptions?.effort ?? null : state?.effort
+  const model = models.find((each) => each.id === modelId)
   const pick = (option: ChatOption) => (value: string) => void setOption(id, option, value)
   return (
     <Sheet title={t('options')} onClose={onClose}>
@@ -165,11 +171,14 @@ function OptionsSheet({ conversation, state, handoff, onClose }: { conversation:
         <ChoiceList title={t('agent')} choices={[{ value: agent, label: agentName(agent), detail: t('handOffAction') }]} current={null}
           onPick={() => { onClose(); push({ name: 'handoff', id }) }} />
       ) : null}
+      <ProviderChoice agent={agent} value={conversation.modelProvider ?? null}
+        disabled={Boolean(conversation.profile || conversation.helperOf || conversation.squadRunId || conversation.parentConversationId || conversation.discussionId || conversation.starting || conversation.archivedAt) || Boolean(conversation.sessionId && conversation.chat?.turn !== 'idle')}
+        onChange={(provider) => Alert.alert(t('provider'), t('providerSwitchConfirm'), [{ text: t('back'), style: 'cancel' }, { text: t('switchProvider'), onPress: () => void switchProvider(id, provider) }])} />
       {state ? (
         <>
           <ChoiceList title={t('permissionMode')} choices={state.permissionModes.map((mode) => ({ value: mode, label: modeName(agent, mode) }))} current={state.permissionMode} onPick={pick('permissionMode')} />
-          <ChoiceList title={t('model')} choices={state.models.map((each) => ({ value: each.id, label: each.label, detail: each.description }))} current={state.model} onPick={pick('model')} />
-          <ChoiceList title={t('effort')} choices={(model?.efforts ?? []).map((effort) => ({ value: effort, label: effortName(effort) }))} current={state.effort} onPick={pick('effort')} />
+          <ChoiceList title={t('model')} choices={models.map((each) => ({ value: each.id, label: each.label, detail: each.description }))} current={modelId ?? null} onPick={pick('model')} />
+          <ChoiceList title={t('effort')} choices={(model?.efforts ?? []).map((effort) => ({ value: effort, label: effortName(effort) }))} current={effort ?? null} onPick={pick('effort')} />
         </>
       ) : null}
     </Sheet>

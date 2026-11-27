@@ -1,9 +1,12 @@
+import { useState } from 'react'
 import { getLocale, localized, t } from '../i18n'
 import { agentDescriptor, agentModeText, helperAllowsMode, isHelper, startModes, type AgentKind, type ChatItem, type ChatModel, type ChatOption, type ChatPermissionMode, type Conversation } from '@antumi/protocol'
 import { perform, setConversationAccount, useCore } from '../core-store'
 import { useAgentCatalog } from '../agent-models'
 import { providerFor } from '../model-provider-choice'
 import { beginPermissionSwitch, endPermissionSwitch, usePermissionSwitching } from '../permission-switching'
+import { ProviderPicker } from './ProviderPicker'
+import { askConfirm } from '../confirm-dialog'
 import { AccountPicker } from './AccountPicker'
 import { ChatModelPicker, ChatPicker, modelMeta, type PickerOption } from './ChatPicker'
 import { ContextUsage } from './ContextUsage'
@@ -78,10 +81,12 @@ export function ChatOptionsBar({ conversation, state, compact = false }: { conve
   const managed = Boolean(conversation.squadRunId || conversation.parentConversationId || conversation.workspaceReadOnly)
   const running = conversation.sessionId !== null
   const switchingPermission = usePermissionSwitching(id) !== null
+  const switchingSupported = useCore((s) => s.rpc?.features.includes('provider-selection-v2') ?? false)
+  const [switchingProvider, setSwitchingProvider] = useState(false)
   const providers = useCore((s) => s.modelProviders)
   const activeBackend = useAgentBackend(agent)
-  const catalog = useAgentCatalog(agent, !running && !state?.models.length, providerFor(providers, conversation.modelProvider, agent))
-  const availableModels = state?.models.length ? state.models : running ? [] : catalog?.models ?? []
+  const catalog = useAgentCatalog(agent, !running && (!state?.models.length || Boolean(conversation.providerChangePending)), providerFor(providers, conversation.modelProvider, agent), conversation.modelProvider)
+  const availableModels = conversation.providerChangePending ? catalog?.models ?? [] : state?.models.length ? state.models : running ? [] : catalog?.models ?? []
   // An older core takes options only from a running agent.
   if (!running && !next) return null
   // Work the agent left in the background runs on between turns, which take a new model as well.
@@ -96,9 +101,9 @@ export function ChatOptionsBar({ conversation, state, compact = false }: { conve
       .finally(() => endPermissionSwitch(id))
   }
   const permissionMode = (running ? state?.permissionMode : next?.permissionMode ?? state?.permissionMode) ?? null
-  const modelId = (running ? state?.model : next?.model ?? state?.model) ?? null
+  const modelId = (conversation.providerChangePending ? next?.model : running ? state?.model : next?.model ?? state?.model) ?? null
   // A model picked since takes its own default effort unless one was picked for it too.
-  const effort = (running ? state?.effort : next?.effort ?? (next?.model && next.model !== state?.model ? null : state?.effort)) ?? null
+  const effort = (conversation.providerChangePending ? next?.effort : running ? state?.effort : next?.effort ?? (next?.model && next.model !== state?.model ? null : state?.effort)) ?? null
   // Running stages offer exactly what the runtime reported; stopped ones follow the active backend.
   const offered = (running
     ? (state?.permissionModes ?? [])
@@ -127,11 +132,19 @@ export function ChatOptionsBar({ conversation, state, compact = false }: { conve
       {switchingPermission && (
         <span className="chat-suggestion-hint" role="status">{t('ChatOptionsBar.switchingPermission')}</span>
       )}
+      {switchingSupported && <ProviderPicker agent={agent} value={conversation.modelProvider ?? null} remember={false}
+        disabled={managed || Boolean(conversation.profile || conversation.discussionId) || isHelper(conversation) || switchingProvider || switchingPermission || !idle || Boolean(conversation.starting)}
+        onChange={(modelProvider) => { void (async () => {
+          if (!await askConfirm({ message: t('ProviderPicker.switchConfirm'), confirm: t('ProviderPicker.switch') })) return
+          setSwitchingProvider(true)
+          try { await perform((rpc) => rpc.call('conversations.setModelProvider', { id, modelProvider })) }
+          finally { setSwitchingProvider(false) }
+        })() }} />}
       {!conversation.modelProvider && !isHelper(conversation) && (
         <AccountPicker
           agent={agent}
           value={next?.account ?? null}
-          disabled={managed || switchingPermission || !idle}
+          disabled={managed || switchingProvider || switchingPermission || !idle}
           title={managed ? t(conversation.profile ? 'AgentProfiles.fixedConfig' : 'ChatOptionsBar.useThisSquadSConfiguration') : idle ? (running ? t('AccountPicker.restarts') : undefined) : t('AccountPicker.afterTurn')}
           onChange={(account) => void setConversationAccount(id, account)}
         />
@@ -142,7 +155,7 @@ export function ChatOptionsBar({ conversation, state, compact = false }: { conve
           models={models.map((each) => ({ value: each.id, label: each.label, description: each.description, suffix: modelMeta(each), efforts: each.efforts.map((one) => ({ value: one, label: effortLabel(one) })) }))}
           model={modelId}
           effort={effort}
-          disabled={managed || switchingPermission || !idle}
+          disabled={managed || switchingProvider || switchingPermission || !idle}
           title={managed ? t(conversation.profile ? 'AgentProfiles.fixedConfig' : 'ChatOptionsBar.useThisSquadSConfiguration') : later ?? (idle ? undefined : t('ChatOptionsBar.changeModelAndReasoningEffortAfterThisTurn'))}
           onModel={(value) => set('model', value)}
           onEffort={(value) => set('effort', value)}

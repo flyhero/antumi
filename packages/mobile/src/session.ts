@@ -25,10 +25,13 @@ import {
   type RpcMethod,
   type RpcParams,
   type RpcResult,
-  type Task
+  type Task,
+  type ModelProvider,
+  AGENT_KINDS, agentReadiness
 } from '@antumi/protocol'
 import { connectMobile, MobileConnectError, type MobileConnection, type MobileWelcome, type NoiseKeyPair } from '@antumi/protocol/mobile'
 import { t } from './i18n'
+import { requestModelCatalog } from './model-catalog'
 import { reconcileDeliveries, type ChatDelivery } from './chat-deliveries'
 import { requestFailure as failure } from './request-failure'
 import { dropCache, loadComputers, loadSettings, phoneKey, readCache, saveComputers, saveSettings, writeCache, type Computer, type Settings } from './storage'
@@ -55,6 +58,7 @@ type State = {
   tasks: Record<string, Task>
   chats: Record<string, ChatView>
   // Each agent's usage limits on this computer; null until it says, or when it cannot.
+  providers: ModelProvider[]
   usage: AgentUsage[] | null
   // What the user wrote in a chat and has not sent, by conversation, while the app runs.
   drafts: Record<string, Draft>
@@ -74,6 +78,7 @@ export const useSession = create<State>()(() => ({
   conversations: {},
   tasks: {},
   chats: {},
+  providers: [],
   usage: null,
   drafts: {},
   deliveries: {},
@@ -199,7 +204,7 @@ export async function connect(computerKey: string): Promise<void> {
   if (!computer || !key) return
   const switching = useSession.getState().current !== computerKey
   disconnect()
-  useSession.setState({ current: computerKey, status: 'connecting', ...(switching ? { welcome: null, conversations: {}, tasks: {}, chats: {}, usage: null, drafts: {}, deliveries: {} } : {}) })
+  useSession.setState({ current: computerKey, status: 'connecting', ...(switching ? { welcome: null, conversations: {}, tasks: {}, chats: {}, providers: [], usage: null, drafts: {}, deliveries: {} } : {}) })
   if (switching) {
     watched.clear()
     await showCached(computerKey)
@@ -224,7 +229,7 @@ export async function connect(computerKey: string): Promise<void> {
 
 function revoked(computerKey: string): void {
   dropCache(computerKey)
-  useSession.setState({ status: 'revoked', conversations: {}, tasks: {}, chats: {}, usage: null, drafts: {}, deliveries: {} })
+  useSession.setState({ status: 'revoked', conversations: {}, tasks: {}, chats: {}, providers: [], usage: null, drafts: {}, deliveries: {} })
 }
 
 async function connected(link: MobileConnection, computer: Computer): Promise<void> {
@@ -268,6 +273,7 @@ async function connected(link: MobileConnection, computer: Computer): Promise<vo
   link.on('usage.changed', ({ usage }) => useSession.setState((state) => ({
     usage: [...(state.usage ?? []).filter((each) => each.agent !== usage.agent || each.account !== usage.account), usage]
   })))
+  link.on('modelProviders.changed', ({ providers }) => useSession.setState({ providers }))
   link.on('tasks.changed', ({ task }) => useSession.setState((state) => ({ tasks: { ...state.tasks, [task.id]: task } })))
   link.on('tasks.deleted', ({ id }) => useSession.setState((state) => {
     const { [id]: _gone, ...tasks } = state.tasks
@@ -292,6 +298,10 @@ export async function refresh(): Promise<void> {
   const link = connection
   if (!link) return
   try {
+    if (useSession.getState().welcome?.features.includes('provider-selection-v2')) {
+      const providers = await link.call('modelProviders.list', {})
+      if (connection === link) useSession.setState({ providers })
+    }
     // Delegated members too: one waiting on the user is answered here, as on the computer.
     const list = await link.call('conversations.list', { includeTasks: true, includeDelegates: true })
     useSession.setState({ conversations: Object.fromEntries(list.map((conversation) => [conversation.id, conversation])) })
@@ -459,6 +469,20 @@ export async function continueChat(id: string): Promise<void> {
   await call('conversations.continue', { id })
 }
 
+export async function switchProvider(id: string, modelProvider: string | null): Promise<void> {
+  const changed = await call('conversations.setModelProvider', { id, modelProvider })
+  if (changed) useSession.setState((state) => ({ conversations: { ...state.conversations, [id]: changed } }))
+}
+
+export async function rememberProvider(agent: AgentKind, modelProvider: string | null): Promise<void> {
+  const state = useSession.getState()
+  const computer = state.current ?? ''
+  const defaults = state.settings.defaultProviders ?? {}
+  const settings = { ...state.settings, defaultProviders: { ...defaults, [computer]: { ...defaults[computer], [agent]: modelProvider } } }
+  useSession.setState({ settings })
+  await saveSettings(settings)
+}
+
 export async function setOption(id: string, option: ChatOption, value: string): Promise<void> {
   await call('conversations.setOption', { id, option, value })
 }
@@ -472,8 +496,8 @@ function keepTask(task: Task): void {
 }
 
 // A task in recent projects, the first its primary, for the computer's agent to plan or carry out once started.
-export async function createTask(options: { title: string; details: string; repos: readonly string[]; agent: AgentKind }): Promise<Task | null> {
-  const task = await call('tasks.create', { title: options.title, ...(options.details ? { details: options.details } : {}), repos: [...options.repos], agent: options.agent })
+export async function createTask(options: { title: string; details: string; repos: readonly string[]; agent: AgentKind; modelProvider?: string | null; model?: string; effort?: string }): Promise<Task | null> {
+  const task = await call('tasks.create', { title: options.title, ...(options.details ? { details: options.details } : {}), repos: [...options.repos], agent: options.agent, launch: { modelProvider: options.modelProvider ?? null, model: options.model ?? null, effort: options.effort ?? null } })
   if (task) keepTask(task)
   return task
 }
@@ -509,10 +533,11 @@ export async function isGitProject(path: string): Promise<boolean | null> {
 
 export async function readyAgents(): Promise<AgentKind[] | null> {
   const environment = await call('system.environment', {})
-  return environment?.checks.flatMap((check) => {
-    const agent = AgentKind.safeParse(check.tool)
-    return check.status === 'ok' && agent.success ? [agent.data] : []
-  }) ?? null
+  if (!environment) return null
+  return AGENT_KINDS.filter((agent) => {
+    const readiness = agentReadiness(agent, environment, [], useSession.getState().providers)
+    return ['ready', 'unknown-auth', 'authorize-on-use'].includes(readiness.state)
+  })
 }
 
 // The way the desktop opens one: made without starting, started, then the first message.
@@ -521,12 +546,7 @@ export async function readyAgents(): Promise<AgentKind[] | null> {
 // With a provider, the models it serves the agent; one that does not serve it leaves the agent on
 // its own account, as core routes a handoff.
 export async function agentCatalog(agent: AgentKind, modelProvider?: string | null): Promise<ChatCatalog | null> {
-  try {
-    const served = modelProvider ? await connection?.call('conversations.chatCatalog', { agent, modelProvider }) : null
-    return served ?? (await connection?.call('conversations.chatCatalog', { agent })) ?? null
-  } catch {
-    return null
-  }
+  return requestModelCatalog((params) => connection?.call('conversations.chatCatalog', params) ?? Promise.resolve(null), agent, modelProvider)
 }
 
 // Whether the computer takes a handoff from a phone.
@@ -538,11 +558,11 @@ export function canHandOff(): boolean {
 // is stopped for it only with stopRunning; allowBypass as from the computer. A model or effort left
 // out goes back to the agent's default, as shown, not to what it last ran here.
 export async function handOff(id: string, options: {
-  agent: AgentKind; note: string; stopRunning: boolean; permissionMode: ChatPermissionMode; model?: string; effort?: string
+  agent: AgentKind; note: string; stopRunning: boolean; permissionMode: ChatPermissionMode; model?: string; effort?: string; modelProvider?: string | null
 }): Promise<boolean> {
   const done = await call('conversations.handoff', {
     id, agent: options.agent, note: options.note, stopRunning: options.stopRunning, allowBypass: true,
-    permissionMode: options.permissionMode, model: options.model ?? null, effort: options.effort ?? null
+    permissionMode: options.permissionMode, model: options.model ?? null, effort: options.effort ?? null, ...(options.modelProvider !== undefined ? { modelProvider: options.modelProvider } : {})
   })
   if (done) useSession.setState((state) => ({ conversations: { ...state.conversations, [done.id]: done } }))
   return done !== null
@@ -552,10 +572,11 @@ export async function handOff(id: string, options: {
 // still refuses bypass where its settings have it off.
 export async function startConversation(options: {
   agent: Conversation['agent']; projectPaths: readonly string[]; worktree: boolean; text: string; images: readonly string[]
-  permissionMode: ChatPermissionMode; model?: string; effort?: string
+  permissionMode: ChatPermissionMode; model?: string; effort?: string; modelProvider?: string | null
 }): Promise<string | null> {
   const created = await call('conversations.create', {
     agent: options.agent, projectPaths: [...options.projectPaths], deferStart: true, allowBypass: true, permissionMode: options.permissionMode,
+    ...(options.modelProvider ? { modelProvider: options.modelProvider } : {}),
     ...(options.model ? { model: options.model } : {}), ...(options.effort ? { effort: options.effort } : {}), ...(options.worktree ? { worktree: true } : {})
   })
   if (!created) return null
@@ -634,7 +655,7 @@ export async function pair(text: string, onCode: (code: string) => void): Promis
     }
     await updateComputers((computers) => [computer, ...computers.filter((each) => each.key !== code.key)])
     watched.clear()
-    useSession.setState({ current: code.key, status: 'connecting', conversations: {}, tasks: {}, chats: {}, usage: null, drafts: {}, deliveries: {} })
+    useSession.setState({ current: code.key, status: 'connecting', conversations: {}, tasks: {}, chats: {}, providers: [], usage: null, drafts: {}, deliveries: {} })
     await connected(link, computer)
     return null
   } catch (error) {
@@ -646,7 +667,7 @@ export async function pair(text: string, onCode: (code: string) => void): Promis
 export async function forget(computerKey: string): Promise<void> {
   if (useSession.getState().current === computerKey) {
     disconnect()
-    useSession.setState({ current: null, status: 'idle', welcome: null, conversations: {}, tasks: {}, chats: {}, usage: null, drafts: {}, deliveries: {} })
+    useSession.setState({ current: null, status: 'idle', welcome: null, conversations: {}, tasks: {}, chats: {}, providers: [], usage: null, drafts: {}, deliveries: {} })
   }
   dropCache(computerKey)
   await updateComputers((computers) => computers.filter((each) => each.key !== computerKey))

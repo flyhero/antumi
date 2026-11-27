@@ -99,7 +99,7 @@ export type TaskChatLaunch = TaskLaunchOptions & {
 // What a stage's start takes beyond the agent: see TaskChatLaunch; moved says the agent works
 // somewhere else than its last stage did.
 // brief: a file written for the first stage to read before anything else, sent as a handoff is.
-type StageLaunch = { skipProjectSetup?: boolean; ref?: string; fresh?: boolean; moved?: boolean; rerouted?: boolean; planOnly?: boolean; backend?: string | null; account?: string | null; readable?: readonly string[]; fork?: ForkPoint; opening?: string; brief?: string; references?: ChatReference[]; images?: readonly ChatImage[] }
+type StageLaunch = { providerSwitch?: boolean; skipProjectSetup?: boolean; ref?: string; fresh?: boolean; moved?: boolean; rerouted?: boolean; planOnly?: boolean; backend?: string | null; account?: string | null; readable?: readonly string[]; fork?: ForkPoint; opening?: string; brief?: string; references?: ChatReference[]; images?: readonly ChatImage[] }
 // The provider session another conversation's stage ran, taken over through the turn `at` names;
 // neither null means a session the agent can fork, else the fork starts afresh.
 // latest: the point is the last the agent's session holds, so the session forked whole is the same.
@@ -207,6 +207,7 @@ export class ConversationService {
   // The stage folder each running agent's launch wrote to, by its daemon session (stage-launch.ts),
   // and the stages whose launch is under way, before the daemon names a session for them.
   private readonly launches = new Map<string, StageRef & { at: number }>()
+  private readonly providerSwitches = new Set<string>()
   private readonly preparing = new Set<string>()
   // Stage folders no session here accounts for, kept until it is shown no process uses them: by
   // folder, since when it may go (where the platform cannot see who uses one).
@@ -352,7 +353,11 @@ export class ConversationService {
   private routeFor(conversation: Pick<Conversation, 'id' | 'modelProvider'>, agent: AgentKind, rerouted = false): RouteDecision {
     const chosen = conversation.modelProvider ?? null
     const resolved = chosen === null ? null : this.providers?.resolve(chosen) ?? null
-    return decideRoute(chosen, agent, rerouted ? null : this.store.latestStage(conversation.id, agent), resolved)
+    const explicit = this.store.chatOptions(conversation.id).providerExplicit
+    const previous = this.store.latestStage(conversation.id, agent)
+    const changed = explicit && (previous?.route?.providerId ?? null) !== chosen
+    const decision = decideRoute(chosen, agent, rerouted || changed ? null : previous, resolved)
+    return explicit && chosen && decision.kind === 'own' ? { kind: 'unavailable', message: '所选服务商不服务这个 Agent，请选择其他服务商' } : decision
   }
 
   // The provider whose models an agent picks from here, where it runs on one.
@@ -790,6 +795,7 @@ export class ConversationService {
     const referencePaths = await Promise.all((launch.referenceDirs ?? []).map((dir) => realpath(dir)))
     const images = await this.chatImages(launch.images ?? [])
     const existing = this.store.byTask(task.id)
+    if (existing && this.providerSwitches.has(existing.id)) throw new Rejection('chat-busy')
     // The provider is settled with the conversation: a later start may only name the same one,
     // unless it hands the task to another agent, who may run on another.
     if (existing && launch.modelProvider !== undefined && launch.modelProvider !== (existing.modelProvider ?? null)) {
@@ -993,6 +999,7 @@ export class ConversationService {
   async handoff(id: string, agent: AgentKind, note: string, stopRunning: boolean, allowBypass?: boolean, choice: HandoffChoice = {}): Promise<Conversation> {
     this.writable(id)
     const current = this.own(id)
+    if (this.providerSwitches.has(id)) throw new Rejection('chat-busy')
     // Configured identities keep their agent; another would speak in their place.
     if (current.profile) throw new Rejection('profile-managed', '智能体会话沿用指定的 Agent，不能移交')
     if (isHelper(current)) throw new Rejection('invalid-params', '小助手不能移交')
@@ -1260,6 +1267,8 @@ export class ConversationService {
     if (!plan) return
     const current = this.get(id)
     const options = this.store.chatOptions(id)
+    const decision = this.routeFor(current, agent)
+    if (decision.kind === 'unavailable') throw new Rejection('model-provider-unavailable', decision.message)
     await this.validateStartOptions(agent, { ...options[agent], permissionMode: options.permissionMode }, this.catalogProvider(current, agent))
     const { projects } = await resolveProjects(plan.projects)
     const setups = plan.worktree && !skipSetup && this.worktreeSetup ? await this.worktreeSetup.requireTrusted(projects) : []
@@ -1300,6 +1309,7 @@ export class ConversationService {
 
   private async start(id: string, agent: AgentKind, note: string, handoff: boolean, launch: StageLaunch = {}): Promise<Conversation> {
     this.squadGuard?.(this.get(id))
+    if (this.providerSwitches.has(id) && !launch.providerSwitch) throw new Rejection('chat-busy')
     if (this.launching.has(id) || this.retiring.has(id)) throw new Rejection('conversation-running')
     // Its agent waits for the issue, which only beginInvestigation hands over.
     if (!launch.brief && this.preparingOf(this.store.get(id)!)) throw new Rejection('conversation-preparing', 'the issue is still being fetched')
@@ -1676,6 +1686,7 @@ export class ConversationService {
   // a permission mode when the stage reports it (see rememberMode). With no agent running, only
   // remembered, from what the last chat stage offered.
   async setOption(id: string, option: ChatOption, value: string): Promise<void> {
+    if (this.providerSwitches.has(id)) throw new Rejection('chat-busy')
     const conversation = this.get(id)
     if (conversation.squadRunId || conversation.parentConversationId || conversation.workspaceReadOnly) throw new Rejection(conversation.profile ? 'profile-managed' : 'squad-managed', conversation.profile ? '本次运行沿用智能体配置' : '本次运行沿用团队配置')
     if (isHelper(conversation) && option === 'permissionMode' && !helperAllowsMode(value)) throw new Rejection('chat-option-invalid', '小助手不能只做规划')
@@ -1816,6 +1827,7 @@ export class ConversationService {
   // An idle agent on another account is restarted on this one, resuming its session there; a task's
   // is only stopped, for the task to go on. One at work is left to finish first.
   async setAccount(id: string, account: string | null): Promise<Conversation> {
+    if (this.providerSwitches.has(id)) throw new Rejection('chat-busy')
     const conversation = this.get(id)
     if (conversation.squadRunId || conversation.parentConversationId) throw new Rejection('squad-managed', '本次运行沿用团队配置')
     const { agent } = conversation
@@ -1833,6 +1845,35 @@ export class ConversationService {
     }
     this.changed(this.get(id))
     return this.get(id)
+  }
+
+  async setModelProvider(id: string, modelProvider: string | null): Promise<Conversation> {
+    const current = this.writable(id)
+    if (current.profile || current.squadRunId || current.parentConversationId || current.discussionId || isHelper(current)) throw new Rejection('profile-managed', '本次会话沿用上级配置')
+    if ((current.modelProvider ?? null) === modelProvider) return current
+    const busy = () => {
+      const latest = this.writable(id)
+      return this.providerSwitches.has(id) || this.launching.has(id) || this.retiring.has(id) || Boolean(latest.sessionId && !this.chats.idle(id))
+    }
+    if (busy()) throw new Rejection('chat-busy', '请在回合和后台任务结束后切换服务商')
+    this.pickedProvider(current.agent, modelProvider)
+    await this.validateStartOptions(current.agent, {}, modelProvider ?? undefined)
+    if (busy()) throw new Rejection('chat-busy')
+    this.pickedProvider(current.agent, modelProvider)
+    this.providerSwitches.add(id)
+    this.changed(this.get(id))
+    try {
+      if (this.get(id).sessionId) await this.stop(id)
+      const { model: _model, effort: _effort, account: _account, ...rest } = this.store.chatOptions(id)[current.agent] ?? {}
+      this.store.setChatOptions(id, { [current.agent]: rest, providerExplicit: true })
+      this.store.setModelProvider(id, modelProvider)
+      this.changed(this.get(id))
+      return await this.start(id, current.agent, '', true, { rerouted: true, providerSwitch: true })
+    } finally {
+      this.providerSwitches.delete(id)
+      const latest = this.store.get(id)
+      if (latest) this.changed(this.get(id))
+    }
   }
 
   invalidateCli(agent: AgentKind): void { this.catalogs.delete(agent); this.freshCatalogs.add(agent) }
@@ -1952,6 +1993,7 @@ export class ConversationService {
   // A retry may resume in a new stage; its ref still names the original message.
   async send(id: string, text: string, imageIds: readonly string[] = [], queue = false, steer = false, ref?: string, references?: ChatReference[]): Promise<void> {
     const conversation = this.writable(id)
+    if (this.providerSwitches.has(id)) throw new Rejection('chat-busy')
     if (this.preparingOf(conversation)) throw new Rejection('conversation-preparing', 'the issue is still being fetched')
     this.squadGuard?.(conversation)
     if (adapterOf(conversation.agent).turns?.serialized) {
@@ -2753,7 +2795,8 @@ export class ConversationService {
     const providerId = conversation.modelProvider ?? null
     const route = providerId === null ? null : conversationRoute(providerId, this.routeFor(conversation, conversation.agent), this.providers?.get(providerId)?.name ?? this.store.latestStage(conversation.id, conversation.agent)?.route?.name ?? null)
     const preparing = this.preparingOf(conversation)
-    return { ...conversation, ...(this.delegationStatus ? { delegation: this.delegationStatus(conversation.id) } : {}), ...(preparing ? { preparing } : {}), starting: this.launching.has(conversation.id), chat: turn ? { turn, ...(suggestion ? { suggestion } : {}), ...(request ? { request } : {}), ...(doing ? { doing } : {}), ...(betweenTurns ? { betweenTurns } : {}) } : null, chatOptions, route }
+    const providerChangePending = Boolean(chosen.providerExplicit && (this.store.latestStage(conversation.id, conversation.agent)?.route?.providerId ?? null) !== providerId)
+    return { ...conversation, providerChangePending, ...(this.delegationStatus ? { delegation: this.delegationStatus(conversation.id) } : {}), ...(preparing ? { preparing } : {}), starting: this.launching.has(conversation.id) || this.providerSwitches.has(conversation.id), chat: turn ? { turn, ...(suggestion ? { suggestion } : {}), ...(request ? { request } : {}), ...(doing ? { doing } : {}), ...(betweenTurns ? { betweenTurns } : {}) } : null, chatOptions, route }
   }
 
   private changed(value: Conversation): Conversation {

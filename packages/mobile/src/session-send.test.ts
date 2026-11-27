@@ -4,9 +4,9 @@ vi.mock('react-native', () => ({ AppState: {}, Platform: { OS: 'android' } }))
 vi.mock('expo-application', () => ({}))
 vi.mock('expo-device', () => ({}))
 vi.mock('expo-crypto', () => ({ randomUUID: () => crypto.randomUUID() }))
-vi.mock('./storage', () => ({}))
+vi.mock('./storage', () => ({ saveSettings: vi.fn() }))
 
-import { setDraft, submitDraft, restoreDelivery, useSession } from './session'
+import { setDraft, submitDraft, restoreDelivery, useSession, rememberProvider } from './session'
 
 beforeEach(() => useSession.setState({ drafts: {}, deliveries: {}, chats: {}, conversations: {} }))
 
@@ -37,5 +37,17 @@ describe('submitting a phone draft', () => {
     submitDraft('chat')
     submitDraft('chat')
     expect(useSession.getState().deliveries.chat).toHaveLength(1)
+  })
+})
+
+describe('phone provider preferences', () => {
+  it('keeps defaults separate per computer and retains explicit native configuration', async () => {
+    useSession.setState({ current: 'computer-a', settings: { lock: false } })
+    await rememberProvider('claude', 'gateway-a')
+    useSession.setState({ current: 'computer-b' })
+    await rememberProvider('claude', null)
+    expect(useSession.getState().settings.defaultProviders).toEqual({
+      'computer-a': { claude: 'gateway-a' }, 'computer-b': { claude: null }
+    })
   })
 })

@@ -175,7 +175,7 @@ export class TaskService {
     return this.named(this.changed(task))
   }
 
-  create({ title, details, repos, dependsOn, agent, squadId }: RpcParsedParams<'tasks.create'>): Task {
+  create({ title, details, repos, dependsOn, agent, squadId, launch }: RpcParsedParams<'tasks.create'>): Task {
     // Validate before the row exists, so a bad repo path or id leaves nothing behind.
     const repoPaths = repos && [...new Set(repos.map(normalizeRepoPath))]
     // Nothing depends on a task that does not exist yet, so no loop is possible.
@@ -188,6 +188,7 @@ export class TaskService {
     const patch: TaskPatch = {
       details,
       squadId,
+      launch: squadId ? undefined : launch,
       agent: squadAgent ?? agent,
       repos: repoPaths && withKnownWorktrees([], repoPaths),
       dependsOn: dependencyIds
@@ -529,7 +530,7 @@ export class TaskService {
     }
     if (!chats.capacityAvailable(agent, task.conversationId)) throw new Rejection('agent-capacity')
     return this.launchChat(task, async () => {
-      const launch = { ...task.launch, ...options, ...(profile?.modelProvider ? { modelProvider: profile.modelProvider } : {}) }
+      const launch = { ...task.launch, ...options, ...(task.conversationId ? { modelProvider: chats.get(task.conversationId).modelProvider ?? null } : {}), ...(profile?.modelProvider ? { modelProvider: profile.modelProvider } : {}) }
       // Unattended: the agent's own mode for how far the run may go, as its model takes it.
       const permissionMode = unattended ? await chats.unattendedStartMode(agent, unattended, launch.model, this.providerOf(task, launch)) : launch.permissionMode ?? 'plan'
       const modeBlocker = checkStartMode(dependencies, permissionMode)
@@ -755,6 +756,10 @@ export class TaskService {
     if (!task) {
       return
     }
+    const provider = conversation.modelProvider ?? null
+    if ((task.launch.modelProvider ?? null) !== provider) {
+      this.changed(this.store.update(task.id, { launch: { ...task.launch, modelProvider: provider, model: null, effort: null } }))
+    }
     const turn = conversation.chat?.turn ?? null
     const waiting = this.settingUp.has(task.id) || this.delegationBusy?.(conversation.id) ? false : task.squadId && task.status !== 'pending' ? (this.squads?.awaiting(task.id) ?? false) : task.status === 'running' ? turn !== 'running' : task.status === 'pending' && (turn === 'idle' || turn === 'awaiting')
     if (task.awaitingInput !== waiting) {
@@ -778,7 +783,7 @@ export class TaskService {
 
   // A squad's leader plans the task with the user first, read-only, on its own model; the plan it
   // settles on is carried out when the squad starts (SquadService.start), by the same leader.
-  async planForSquad(id: string, choice: ModelChoice, brief: PlanBrief, profile?: AgentProfile): Promise<Task> {
+  async planForSquad(id: string, choice: ModelChoice & Pick<TaskLaunchOptions, 'modelProvider'>, brief: PlanBrief, profile?: AgentProfile): Promise<Task> {
     const chats = this.requireChats()
     const task = this.get(id)
     if (task.status !== 'pending') throw new Rejection('not-pending')

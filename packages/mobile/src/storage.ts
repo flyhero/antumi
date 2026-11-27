@@ -25,7 +25,7 @@ export const Computer = z.object({
 })
 export type Computer = z.infer<typeof Computer>
 
-const Settings = z.object({ lock: z.boolean().catch(false) })
+const Settings = z.object({ lock: z.boolean().catch(false), defaultProviders: z.record(z.string(), z.record(z.string(), z.string().nullable())).optional() })
 export type Settings = z.infer<typeof Settings>
 
 // When the app last asked GitHub for a newer version, what it found, and the one the user waved away.

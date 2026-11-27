@@ -160,7 +160,7 @@ async function quotaAllows(taskId: string): Promise<boolean> {
 
 function onProvider(task: Task): boolean {
   const conversation = task.conversationId ? useCore.getState().conversations[task.conversationId] : undefined
-  return conversation ? conversation.route?.reason === 'served' : Boolean(task.launch.modelProvider)
+  return conversation ? Boolean(conversation.modelProvider) : Boolean(task.launch.modelProvider)
 }
 
 // Both the toolbar and context menu open the same launch configuration.

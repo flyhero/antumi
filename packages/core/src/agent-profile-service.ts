@@ -299,7 +299,7 @@ export class AgentProfileService {
     if (capability === 'readOnly' && !agentSupportsReadOnly(target.agent)) throw new Rejection('invalid-params', `${label} 不能只读工作，需要修改文件时请指定 capability: develop`)
     const at = Date.now()
     return AgentProfile.parse({ id: randomUUID(), name: label, agent: target.agent, model: target.model ?? null, effort: target.effort ?? null,
-      modelProvider: ready.modelProvider, capability, archivedAt: null, createdAt: at, updatedAt: at })
+      modelProvider: target.modelProvider !== undefined ? target.modelProvider : ready.modelProvider, capability, archivedAt: null, createdAt: at, updatedAt: at })
   }
   guard(conversation: Conversation): void {
     if (this.closed) throw new Rejection('core-stopping')

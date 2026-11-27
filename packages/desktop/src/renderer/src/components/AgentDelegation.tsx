@@ -15,6 +15,9 @@ import { ChatCopyRegion } from './ChatCopyRegion'
 import { ChatMarkdown } from './ChatMarkdown'
 import { ChatPicker } from './ChatPicker'
 import { useChatSurface } from './chat-surface'
+import { ProviderPicker } from './ProviderPicker'
+import { AgentModelPicker } from './AgentModelPicker'
+import { useProviderCatalog, type ModelChoice } from '../agent-models'
 import { useConversationPane } from './conversation-pane'
 import { AgentIcon, ChevronRightIcon, CloseIcon, SquadIcon } from './icons'
 import './agent-calls.css'
@@ -26,6 +29,8 @@ export function DelegationDialog({ conversation, onClose, onHistory, initial }: 
   const dialog = useRef<HTMLDialogElement>(null)
   const titleId = useId()
   const rpc = useCore((state) => state.rpc)
+  const [providerPick, setProviderPick] = useState<string | null | undefined>()
+  const [modelChoice, setModelChoice] = useState<ModelChoice>({})
   const profiles = useCore((state) => state.agentProfiles)
   const [targets, setTargets] = useState<DelegationTarget[]>([])
   const disabledAgents = usePreferences((state) => state.disabledAgents)
@@ -60,8 +65,10 @@ export function DelegationDialog({ conversation, onClose, onHistory, initial }: 
   const offered = targets.filter((item) => !disabledAgents.includes(item.agent))
   // A profile by its id, an agent called as it is by `agent:<kind>`.
   const valueOf = (item: DelegationTarget) => item.profileId ?? `agent:${item.agent}`
-  const selected = offered.find((item) => valueOf(item) === profileId && item.quota.state !== 'exhausted')
+  const selected = offered.find((item) => valueOf(item) === profileId && (!item.profileId || item.quota.state !== 'exhausted'))
   const direct = selected?.profileId === null ? selected : null
+  const modelProvider = direct ? providerPick !== undefined ? providerPick : direct.modelProvider ?? null : selected?.profileId ? profiles[selected.profileId]?.modelProvider ?? null : null
+  const catalog = useProviderCatalog(selected?.agent ?? null, modelProvider)
   const edits = direct ? develop || !direct.readOnly : selected?.capability === 'develop'
   // A member that edits may work in a worktree of its own, where core lays them out and the
   // conversation has one writable project to branch from. Core checks the rest (committed, git).
@@ -74,7 +81,7 @@ export function DelegationDialog({ conversation, onClose, onHistory, initial }: 
     setBusy(true)
     setError(null)
     try {
-      const target = selected.profileId ? { profileId: selected.profileId } : { agent: selected.agent, capability: edits ? 'develop' as const : 'readOnly' as const }
+      const target = selected.profileId ? { profileId: selected.profileId } : { agent: selected.agent, modelProvider, ...modelChoice, capability: edits ? 'develop' as const : 'readOnly' as const }
       const workspace = worktreeOffered && inWorktree ? { workspace: 'worktree' as const } : {}
       // The project's setup, asked about and tried again, as a start in a worktree is.
       await withProjectTrust(rpc, (connection) => connection.call('agentCalls.dispatch', { id: conversation.id, ...target, ...workspace, instruction: [goal.trim(), context.trim()].filter(Boolean).join('\n\n'), ref: requestRef.current }))
@@ -89,9 +96,13 @@ export function DelegationDialog({ conversation, onClose, onHistory, initial }: 
     <form className="modal-body" onSubmit={(event) => { event.preventDefault(); void dispatch() }}>
       <header className="modal-header"><h2 id={titleId}>{t('AgentProfiles.delegate')}</h2><button type="button" className="icon-button modal-close" aria-label={t('BackdropPicker.close')} disabled={busy} onClick={onClose}><CloseIcon /></button></header>
       <p className="delegation-hint muted">{t('AgentProfiles.dispatchHint')}</p>
-      <div className="delegation-field"><span>{t('AgentProfiles.role')}</span><ChatPicker label={t('AgentProfiles.role')} value={profileId} placeholder={t('AgentProfiles.chooseRole')} size="field" placement="below" disabled={busy || loading} options={offered.map((item) => ({ value: valueOf(item), label: item.name, disabled: item.quota.state === 'exhausted', icon: <AgentIcon agent={item.agent} />,
-        description: [item.profileId ? item.description || agentLabel(item.agent) : t('AgentProfiles.engine'), delegationQuotaText(item.quota, display, now)].filter(Boolean).join(' · ') }))}
-        onChange={(value) => { setProfileId(value); requestRef.current = crypto.randomUUID() }} /></div>
+      <div className="delegation-field"><span>{t('AgentProfiles.role')}</span><ChatPicker label={t('AgentProfiles.role')} value={profileId} placeholder={t('AgentProfiles.chooseRole')} size="field" placement="below" disabled={busy || loading} options={offered.map((item) => ({ value: valueOf(item), label: item.name, disabled: Boolean(item.profileId && item.quota.state === 'exhausted'), icon: <AgentIcon agent={item.agent} />,
+        description: [item.profileId ? item.description || agentLabel(item.agent) : t('AgentProfiles.engine'), item === direct && modelProvider ? t('ProviderPicker.provider') : delegationQuotaText(item.quota, display, now)].filter(Boolean).join(' · ') }))}
+        onChange={(value) => { setProfileId(value); setProviderPick(undefined); setModelChoice({}); requestRef.current = crypto.randomUUID() }} /></div>
+      {selected && rpc?.features.includes('provider-selection-v2') && <div className="delegation-field">
+        <ProviderPicker agent={selected.agent} value={modelProvider} disabled={busy || Boolean(selected.profileId)} size="field" placement="below" onChange={(value) => { setProviderPick(value); setModelChoice({}); requestRef.current = crypto.randomUUID() }} />
+        <AgentModelPicker catalog={catalog} choice={direct ? modelChoice : { model: selected.profileId ? profiles[selected.profileId]?.model ?? undefined : undefined, effort: selected.profileId ? profiles[selected.profileId]?.effort ?? undefined : undefined }} disabled={busy || Boolean(selected.profileId)} size="field" onChange={(value) => { setModelChoice(value); requestRef.current = crypto.randomUUID() }} />
+      </div>}
       {!loading && !offered.length && <p className="muted">{t('AgentProfiles.noAvailable')}</p>}
       {direct && <label className="delegation-check"><input type="checkbox" checked={edits} disabled={busy || !direct.readOnly} onChange={(event) => { setDevelop(event.target.checked); requestRef.current = crypto.randomUUID() }} />{t('AgentProfiles.allowEdits')}</label>}
       {worktreeOffered && <div className="delegation-check-group"><label className="delegation-check"><input type="checkbox" checked={inWorktree} disabled={busy} onChange={(event) => { setInWorktree(event.target.checked); requestRef.current = crypto.randomUUID() }} />{t('AgentProfiles.inWorktree')}</label><p className="delegation-check-hint muted">{t('AgentProfiles.inWorktreeHint')}</p></div>}

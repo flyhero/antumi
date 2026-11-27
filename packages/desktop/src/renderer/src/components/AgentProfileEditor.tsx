@@ -6,7 +6,6 @@ import { agentProfileTemplateModel, type AgentProfileTemplate } from '../agent-p
 import { perform, useCore, useProfileDelegationModeSupported } from '../core-store'
 import { useInstalledAgents } from '../installed-agents'
 import { agentLabel } from '../labels'
-import { servingProviders } from '../model-provider-choice'
 import { t } from '../i18n'
 import { usePreferences } from '../preferences'
 import { useAgentProfileDraft } from '../agent-profile-drafts'
@@ -54,11 +53,11 @@ export function AgentProfileEditor({ profile, seed, template, onSaved }: { profi
   const repos = useCore((state) => state.skillRepos)
   const servers = useCore((state) => state.mcpServers)
   const provider = useCore((state) => state.modelProviders.find((item) => item.id === fields.modelProvider) ?? null)
-  const hasProviders = useCore((state) => servingProviders(state.modelProviders, fields.agent).length > 0)
+  const hasProviders = agentDescriptor(fields.agent).capabilities.modelProviders.length > 0
   const modeSupported = useProfileDelegationModeSupported()
   const channels = useChannels()
   const readOnlyUnsupported = !forChannels(fields) && fields.capability !== 'develop' && !agentSupportsReadOnly(fields.agent)
-  const catalog = useAgentCatalog(readOnlyUnsupported ? null : fields.agent, true, provider)
+  const catalog = useAgentCatalog(readOnlyUnsupported ? null : fields.agent, true, provider, fields.modelProvider)
   const quickPreference = usePreferences((state) => state.quickModels[fields.agent])
   const [modelPending, setModelPending] = useState(Boolean(template))
   useEffect(() => {
@@ -139,8 +138,8 @@ export function AgentProfileEditor({ profile, seed, template, onSaved }: { profi
       </section>
       <section className="profile-editor-section"><header className="agent-card-head"><span className="agent-card-icon"><SlidersIcon /></span><div><h3>{t('AgentProfiles.sectionRuntime')}</h3><p>{t('AgentProfiles.sectionRuntimeHint')}</p></div></header>
       <div className="agent-profile-options"><div className="squad-field">{t('AgentProfiles.engine')}<ChatPicker label={t('AgentProfiles.engine')} value={fields.agent} placeholder="" size="field" placement="below" options={(channelsEnabled ? agents.filter((agent) => lockable.includes(agent)) : agents).map((agent) => ({ value: agent, label: agentLabel(agent), icon: <AgentIcon agent={agent} /> }))} onChange={(value) => { const agent = agents.find((item) => item === value); if (agent) { setFields({ ...fields, agent, model: null, effort: null, modelProvider: null, delegationMode: fields.delegationMode && delegationModes(agent).includes(fields.delegationMode) ? fields.delegationMode : null }); setModelPending(Boolean(template)) } }} /></div>
-        <div className="squad-field">{t('AgentModelPicker.model')}<AgentModelPicker catalog={catalog} choice={{ model: fields.model ?? undefined, effort: fields.effort ?? undefined }} size="field" onChange={(choice) => { setModelPending(false); setFields({ ...fields, model: choice.model ?? null, effort: choice.effort ?? null }) }} /></div>
         {hasProviders && <div className="squad-field">{t('ProviderPicker.provider')}<ProviderPicker agent={fields.agent} value={fields.modelProvider ?? null} size="field" placement="below" onChange={(modelProvider) => { setFields({ ...fields, modelProvider, model: null, effort: null }); setModelPending(Boolean(template)) }} /></div>}
+        <div className="squad-field">{t('AgentModelPicker.model')}<AgentModelPicker catalog={catalog} choice={{ model: fields.model ?? undefined, effort: fields.effort ?? undefined }} size="field" onChange={(choice) => { setModelPending(false); setFields({ ...fields, model: choice.model ?? null, effort: choice.effort ?? null }) }} /></div>
         {!toChannels && <div className="squad-field">{t('Squads.capability_1905')}<ChatPicker label={t('Squads.capability_1905')} value={fields.capability ?? 'readOnly'} placeholder="" size="field" placement="below" options={[{ value: 'readOnly', label: t('Squads.readOnlyAnalysis') }, { value: 'develop', label: t('Squads.developmentTesting') }]} onChange={(value) => setFields({ ...fields, ...(value === 'develop' ? { capability: 'develop' } : { capability: 'readOnly', delegationMode: null }) })} /></div>}
         {modeSupported && !toChannels && fields.capability === 'develop' && <div className="squad-field">{t('AgentProfiles.delegationMode')}<ChatPicker label={t('AgentProfiles.delegationMode')} value={fields.delegationMode ?? CALLER_MODE} placeholder="" size="field" placement="below"
           options={[{ value: CALLER_MODE, label: t('AgentProfiles.delegationModeCaller') }, ...modeOptions(fields.agent, delegationModes(fields.agent))]}

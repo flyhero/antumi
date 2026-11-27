@@ -1,3 +1,5 @@
+import { ProviderPicker } from './ProviderPicker'
+import { usePreferences } from '../preferences'
 import { t, tr } from '../i18n'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { create } from 'zustand'
@@ -35,6 +37,9 @@ export function TaskQuickAdd({ onCreated }: { onCreated: (id: string) => void })
   const submitKey = useShortcutLabel('quick-add-submit')
   const expandKey = useShortcutLabel('quick-add-expand')
   const { open, title, repos, agent, squadId } = useQuickAdd()
+  const providersSupported = useCore((state) => state.rpc?.features.includes('provider-selection-v2') ?? false)
+  const defaults = usePreferences((state) => state.defaultProviders)
+  const providerId = agent ? defaults[agent] ?? null : null
   const connected = useCore((s) => s.connection === 'connected')
   const editor = useRef<HTMLDivElement>(null)
   const input = useRef<HTMLTextAreaElement>(null)
@@ -73,7 +78,7 @@ export function TaskQuickAdd({ onCreated }: { onCreated: (id: string) => void })
   const createTask = async () => {
     if (!draft.title || busy || !connected) return
     setBusy(true)
-    const task = await perform((rpc) => rpc.call('tasks.create', { title: draft.title, repos: [...draft.repos], agent: draft.agent, ...(draft.squadId ? { squadId: draft.squadId } : {}) }))
+    const task = await perform((rpc) => rpc.call('tasks.create', { title: draft.title, repos: [...draft.repos], agent: draft.agent, ...(draft.squadId ? { squadId: draft.squadId } : providersSupported ? { launch: { modelProvider: providerId } } : {}) }))
     setBusy(false)
     if (!task) return
     useQuickAdd.setState({ title: '' })
@@ -110,6 +115,7 @@ export function TaskQuickAdd({ onCreated }: { onCreated: (id: string) => void })
       <div className="task-quick-add-picks">
         <ProjectPick repos={draft.repos} />
         <ExecutorPick agent={draft.agent} squadId={squadId} />
+        {providersSupported && agent && !squadId && <ProviderPicker agent={agent} value={providerId} onChange={() => {}} placement="below" />}
       </div>
       <div className="task-quick-add-hint">
         {submitKey && <span>{tr('TaskQuickAdd.create', { value1: <kbd>{submitKey}</kbd> })}</span>}

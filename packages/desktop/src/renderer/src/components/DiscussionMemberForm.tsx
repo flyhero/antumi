@@ -32,7 +32,7 @@ function MemberForm({ discussion, onDone }: { discussion: Discussion; onDone: ()
   const providersSupported = useDiscussionModelProvidersSupported()
   const providers = useCore((state) => state.modelProviders)
   const provider = providersSupported ? providerFor(providers, modelProvider, agent) : null
-  const catalog = useAgentCatalog(agent, true, provider)
+  const catalog = useAgentCatalog(agent, true, provider, modelProvider)
   const resolved = resolveModel(catalog, { model, effort })
   const names = discussion.members.map((member) => member.name)
   const shownName = name ?? freeName(defaultMemberName(agent, model ?? null), names)

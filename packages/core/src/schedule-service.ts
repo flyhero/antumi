@@ -639,9 +639,9 @@ export class ScheduleService {
     const { target } = routine
     const existing = this.conversation(run.id)
     if (!existing) {
-      const permissionMode = await this.deps.conversations.unattendedStartMode(run.agent, mode, target.model)
+      const permissionMode = await this.deps.conversations.unattendedStartMode(run.agent, mode, target.model, target.modelProvider ?? undefined)
       await this.deps.conversations.create(run.agent, target.projectPaths, bypass,
-        { permissionMode, model: target.model, effort: target.effort }, { id: routine.id, title: routineRunTitle(routine.title, this.now()) }, run.id)
+        { permissionMode, model: target.model, effort: target.effort, modelProvider: target.modelProvider ?? undefined }, { id: routine.id, title: routineRunTitle(routine.title, this.now()) }, run.id)
     }
     if (run.conversationId !== run.id) this.settle(run, { conversation_id: run.id })
     const ready = () => this.deps.conversations.continue(run.id, bypass)
@@ -736,8 +736,9 @@ export class ScheduleService {
     const { target } = run
     const task = target.kind === 'task' ? this.deps.tasks.get(target.taskId) : null
     const conversationId = target.kind === 'task' ? task?.conversationId : target.kind === 'routine' ? run.conversationId : target.conversationId
-    if (conversationId) return this.conversation(conversationId)?.route?.reason === 'served'
-    return Boolean(task?.launch.modelProvider)
+    const conversation = conversationId ? this.conversation(conversationId) : null
+    if (conversation) return Boolean(conversation.modelProvider)
+    return Boolean(task?.launch.modelProvider || (target.kind === 'routine' && this.deps.routines.get(target.routineId)?.target.modelProvider))
   }
 
   private exhausted(agent: AgentKind): { resetsAt: number | null } | null {

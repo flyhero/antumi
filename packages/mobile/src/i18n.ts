@@ -1,6 +1,13 @@
 // The app's words, in Chinese or English by the phone's language.
 
 const zh = {
+  switchProvider: '更换服务商',
+  provider: '服务商',
+  ownConfiguration: '沿用本机配置',
+  providerUnavailable: '服务商不可用，请检查电脑端设置',
+  providerSwitchConfirm: '更换服务商将重新启动 Agent 并接续聊天记录，是否继续？',
+  configureProvidersOnComputer: '可在电脑端的「设置 → 服务商」中添加或管理服务商。',
+
   appName: 'Antumi',
   steps: '{count} 个步骤',
   waitingShort: '等你',
@@ -263,6 +270,13 @@ const zh = {
 type Strings = typeof zh
 
 const en: Strings = {
+  switchProvider: 'Switch provider',
+  provider: 'Provider',
+  ownConfiguration: 'Use local configuration',
+  providerUnavailable: 'Provider unavailable; check desktop settings',
+  providerSwitchConfirm: 'Switch providers and restart the agent with this conversation’s history?',
+  configureProvidersOnComputer: 'Add or manage providers in Settings on your computer.',
+
   appName: 'Antumi',
   steps: '{count} steps',
   waitingShort: 'Waiting',

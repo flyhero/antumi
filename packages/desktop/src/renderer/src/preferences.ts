@@ -1,4 +1,4 @@
-import { AgentKind, ChatPermissionMode, LanguagePreference, TranslateLanguage } from '@antumi/protocol'
+import { ModelProviderId, AgentKind, ChatPermissionMode, LanguagePreference, TranslateLanguage } from '@antumi/protocol'
 import { z } from 'zod'
 import { create } from 'zustand'
 import { BACKDROPS, BACKDROP_MODES, BACKDROP_SCOPES, BACKDROP_FITS } from './backdrops'
@@ -95,6 +95,7 @@ const Preferences = z.object({
   // The mode each agent looks into an issue in, as last picked; until then, the one it only reads in.
   investigationModes: z.partialRecord(AgentKind, ChatPermissionMode).catch({}),
   // What each agent last started with on the new conversation page, on its own account.
+  defaultProviders: z.partialRecord(AgentKind, ModelProviderId.nullable()).catch({}),
   draftChoices: z.partialRecord(AgentKind, z.object({
     mode: ChatPermissionMode.optional().catch(undefined),
     model: z.string().max(200).optional().catch(undefined),

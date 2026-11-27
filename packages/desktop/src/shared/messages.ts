@@ -1,5 +1,10 @@
 // Application-owned text. Values and external content are passed separately.
 export const MESSAGES = {
+  "ProviderPicker.switch": { "zh": "更换服务商", "en": "Switch provider" },
+  "ProviderPicker.unavailable": { "zh": "服务商不可用，请重新选择或检查设置", "en": "Provider unavailable; choose another or check settings" },
+  "ProviderPicker.switchConfirm": { "zh": "更换服务商将重新启动 Agent 并接续聊天记录，是否继续？", "en": "Switch providers and restart the agent with this conversation’s history?" },
+  "ProviderPicker.inherited": { "zh": "沿用上级配置", "en": "Inherited configuration" },
+
   "ProjectTrustDialog.skipOnce": { "zh": "本次不运行，继续", "en": "Skip this time and continue" },
   "Backdrop.title": {"zh":"自定义背景","en":"Custom background"},
   "Backdrop.mode": {"zh":"背景模式","en":"Background mode"},

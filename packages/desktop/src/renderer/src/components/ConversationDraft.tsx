@@ -84,7 +84,7 @@ export function ConversationDraft() {
     [initial.agent]: { model: initial.model ?? undefined, effort: initial.effort ?? undefined }
   } : profile ? { [profile.agent]: { model: profile.model ?? undefined, effort: profile.effort ?? undefined } } : carry?.agent && carry.model ? { [carry.agent]: { model: carry.model } } : {})
   // The model provider picked, for whichever agent it serves; null is the agent's own account.
-  const [providerId, setProviderId] = useState<string | null>(() => profile?.modelProvider ?? initial?.modelProvider ?? carry?.modelProvider ?? null)
+  const [providerId, setProviderId] = useState<string | null>(() => profile ? profile.modelProvider ?? null : initial ? initial.modelProvider ?? null : carry?.modelProvider ?? (agent ? usePreferences.getState().defaultProviders[agent] : null) ?? null)
   const providers = useCore((s) => s.modelProviders)
   const providerOf = (kind: AgentKind | null) => providerFor(providers, providerId, kind)
   // The account picked for each agent, kept for the conversation; unpicked follows the active one.
@@ -125,20 +125,20 @@ export function ConversationDraft() {
   const commandEntries = useMemo(() => antumiEntries(chatCommands, projectPaths), [chatCommands, projectPaths, getLocale()])
 
   const provider = providerOf(agent)
-  const key = agent ? catalogKey(agent, provider) : null
+  const key = agent ? providerId ? `${agent}|${providerId}|${provider?.revision ?? 'missing'}` : agent : null
   useEffect(() => {
     if (!agent || !key || !rpc || !optionsSupported || key in catalogs) return
     let current = true
     const settle = (catalog: ChatCatalog | null) => current && setCatalogs((known) => ({ ...known, [key]: catalog }))
     // Not through perform: an older core without the method just offers no models.
-    rpc.call('conversations.chatCatalog', { agent, ...(provider ? { modelProvider: provider.id } : {}) }).then(settle, () => settle(null))
+    rpc.call('conversations.chatCatalog', { agent, ...(providerId ? { modelProvider: providerId } : {}) }).then(settle, () => settle(null))
     return () => { current = false }
-  }, [agent, key, provider, rpc, optionsSupported, catalogs])
+  }, [agent, key, provider, providerId, rpc, optionsSupported, catalogs])
 
   const catalog = key ? catalogs[key] : null
   // A page starts where the agent was last started from it; a provider's models are its own.
   const draftChoices = usePreferences((s) => s.draftChoices)
-  const remembered = agent && !provider && !profile ? draftChoices[agent] : undefined
+  const remembered = agent && !providerId && !profile ? draftChoices[agent] : undefined
   const pick = (agent ? picks[agent] : undefined) ?? rememberedPick(remembered, catalog?.models)
   const modelId = pick.model ?? catalog?.models.find((each) => each.isDefault)?.id ?? null
   const model = catalog?.models.find((each) => each.id === modelId)
@@ -172,7 +172,7 @@ export function ConversationDraft() {
     return modelText(models.find((each) => each.id === id))
   }
   const remember = (choice: DraftChoice) => {
-    if (agent && !provider && !profile) setPreference('draftChoices', { ...draftChoices, [agent]: { ...draftChoices[agent], ...choice } })
+    if (agent && !providerId && !profile) setPreference('draftChoices', { ...draftChoices, [agent]: { ...draftChoices[agent], ...choice } })
   }
   const choose = (next: { model?: string; effort?: string }) => {
     if (!agent) return
@@ -183,19 +183,19 @@ export function ConversationDraft() {
   const discussionProvidersSupported = useDiscussionModelProvidersSupported()
   const toGroup = () => ({
     text, projects: projectPaths, agent,
-    ...(provider && discussionProvidersSupported ? { modelProvider: provider.id } : {}),
+    ...(providerId && discussionProvidersSupported ? { modelProvider: providerId } : {}),
     model: provider && !discussionProvidersSupported ? null : pick.model ?? null
   })
   const groupBlocked = issue ? t('DraftModeSwitch.issueBlocks') : profile ? t('DraftModeSwitch.profileBlocks') : null
 
   const chosen = {
     ...(optionsSupported ? { permissionMode: mode ?? undefined, ...(pick.model ? { model: pick.model } : {}), ...(effort ? { effort } : {}) } : {}),
-    ...(provider ? { modelProvider: provider.id } : {}),
-    ...(!provider && agent && accountPicks[agent] ? { account: accountPicks[agent] } : {}),
+    ...(providerId ? { modelProvider: providerId } : {}),
+    ...(!providerId && agent && accountPicks[agent] ? { account: accountPicks[agent] } : {}),
     ...(profile ? { profileId: profile.id } : {})
   }
   // A start on a provider spends its plan, not the agent's own quota.
-  const quotaAllows = async (kind: AgentKind) => providerOf(kind) !== null || confirmQuota(kind, modelFor(kind))
+  const quotaAllows = async (kind: AgentKind) => Boolean(providerId) || confirmQuota(kind, modelFor(kind))
   const where = { projectPaths, ...(inWorktree ? { worktree: true } : {}), ...(startBranch ? { branch: startBranch } : {}) }
   // The page is how a chat start begins, as settings choose; a terminal start has its dialog.
   const create = async () => {
@@ -287,7 +287,7 @@ export function ConversationDraft() {
                     aria-checked={agent === kind}
                     className="chat-draft-agent"
                     disabled={busy}
-                    onClick={() => setAgent(kind)}
+                    onClick={() => { setAgent(kind); setProviderId(usePreferences.getState().defaultProviders[kind] ?? null); setPicks({}) }}
                   >
                     <AgentIcon agent={kind} />
                     <span>{agentLabel(kind)}</span>
@@ -372,7 +372,7 @@ export function ConversationDraft() {
                     setPicks({})
                   }} />
                 )}
-                {agent && !provider && (
+                {agent && !providerId && (
                   <AccountPicker agent={agent} value={accountPicks[agent] ?? null} disabled={busy} onChange={(next) => {
                     const { [agent]: _previous, ...rest } = accountPicks
                     setAccountPicks(next ? { ...rest, [agent]: next } : rest)

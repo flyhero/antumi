@@ -45,6 +45,11 @@ describe('SetupGuide', () => {
     const html = renderToStaticMarkup(createElement(ProviderPicker, { agent: 'codex', value: null, onChange: () => {} }))
     expect(html).toContain('沿用本机配置')
   })
+  it('shows a missing selected provider rather than relabeling it as local configuration', () => {
+    const html = renderToStaticMarkup(createElement(ProviderPicker, { agent: 'codex', value: '00000000-0000-4000-8000-000000000123', onChange: () => {} }))
+    expect(html).toContain('服务商不可用')
+  })
+
   it('lets a native relay proceed without an official login or adding another provider', () => {
     const environment = env(true)
     environment.checks = environment.checks.map((check) => ({ ...check, authSource: 'native-provider' }))

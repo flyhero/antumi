@@ -1,4 +1,6 @@
 import { z } from 'zod'
+import { AgentKind } from './agent'
+import { TaskLaunchOptions } from './chat'
 import { MAX_TASK_REPOS } from './task-limits'
 
 // An agent on a chat platform (docs/CHANNELS.md): colleagues ask it questions there, and it answers
@@ -15,6 +17,16 @@ export type ChannelState = z.infer<typeof ChannelState>
 const PlatformId = z.string().trim().min(1).max(200)
 
 export const CHANNEL_DEFAULTS = { dailyPerUser: 20, dailyTotal: 200, maxConcurrent: 2, turnTimeoutSec: 300 } as const
+
+// Its tasks on the platform's cards (docs/CHANNEL-LOOP.md): start, the owner starts one there with
+// this agent and model (null: started in Antumi only); review, who may accept it or send it back
+// there (null: accepted in Antumi only). Running it as the owner always takes the owner's click.
+export const TaskCardStart = TaskLaunchOptions.pick({ model: true, effort: true, modelProvider: true }).extend({ agent: AgentKind })
+export type TaskCardStart = z.infer<typeof TaskCardStart>
+export const TaskCardReview = z.enum(['owner', 'ownerOrAsker'])
+export type TaskCardReview = z.infer<typeof TaskCardReview>
+export const TaskCards = z.object({ start: TaskCardStart.nullable(), review: TaskCardReview.nullable() })
+export type TaskCards = z.infer<typeof TaskCards>
 // Pictures taken from one question; the rest are left out and the answer says so.
 export const MAX_CHANNEL_IMAGES = 4
 // However long the agent's instructions let an answer run, no more than this is posted.
@@ -37,6 +49,10 @@ export const ChannelFields = z.object({
   // A task collected here is followed back in the thread it came from: started, handed in, done.
   // Absent is off, so a channel saved before this keeps posting what it did.
   reportTasks: z.boolean().optional(),
+  // The owner on the platform: whose click on a card counts as the owner's (and their stand-ins').
+  ownerUsers: z.array(PlatformId).max(20).optional(),
+  // Absent or null: no cards, progress as plain posts.
+  taskCards: TaskCards.nullable().optional(),
   dailyPerUser: z.number().int().min(1).max(500).default(CHANNEL_DEFAULTS.dailyPerUser),
   dailyTotal: z.number().int().min(1).max(10_000).default(CHANNEL_DEFAULTS.dailyTotal),
   maxConcurrent: z.number().int().min(1).max(5).default(CHANNEL_DEFAULTS.maxConcurrent),
@@ -134,9 +150,10 @@ export const TaskChannelSource = z.object({
 export type TaskChannelSource = z.infer<typeof TaskChannelSource>
 
 // A task from a chat platform, followed back in its thread (docs/CHANNEL-LOOP.md): one post per
-// move. start: it began · rework: it went on after review · review: handed in, with its summary ·
-// done: accepted · closed: done without running · abandoned: cancelled.
-export const ChannelTaskStage = z.enum(['start', 'rework', 'review', 'done', 'closed', 'abandoned'])
+// move. created: collected, its card posted (cards only) · start: it began · rework: it went on
+// after review · review: handed in, with its summary · done: accepted · closed: done without
+// running · abandoned: cancelled.
+export const ChannelTaskStage = z.enum(['created', 'start', 'rework', 'review', 'done', 'closed', 'abandoned'])
 export type ChannelTaskStage = z.infer<typeof ChannelTaskStage>
 // pending: not yet worked out · queued: in the outbox · sent · skipped: not posted, reason says why ·
 // failed: the platform would not take it.
@@ -153,3 +170,17 @@ export const ChannelTaskReport = z.object({
   updatedAt: z.number()
 })
 export type ChannelTaskReport = z.infer<typeof ChannelTaskReport>
+
+// Why the asker sent a task back on its card, waiting for the owner to go on with it. used: when it
+// was handed to the task's agent, null while it waits.
+export const MAX_TASK_FEEDBACK = 500
+export const ChannelTaskFeedback = z.object({
+  id: z.string().uuid(),
+  taskId: z.string(),
+  channelId: z.string().uuid(),
+  author: z.string(),
+  text: z.string().max(MAX_TASK_FEEDBACK),
+  createdAt: z.number(),
+  usedAt: z.number().nullable()
+})
+export type ChannelTaskFeedback = z.infer<typeof ChannelTaskFeedback>

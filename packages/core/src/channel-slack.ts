@@ -219,6 +219,7 @@ export function slackConnector(channel: GatewayChannel, emit: ConnectorEmit, opt
       if (waiting && waiting.socket.readyState === WebSocket.OPEN) waiting.socket.send(JSON.stringify({ envelope_id: waiting.envelopeId }))
     },
     async deliver(job: ChannelDelivery): Promise<Delivered> {
+      if (job.op === 'card' || job.op === 'update') return { ok: false, platformId: null, retryAfterMs: null, error: 'unsupported' }
       try {
         const { reply, retryAfterMs } = job.op === 'react'
           ? await call('reactions.add', botToken, { channel: job.place, timestamp: job.target, name: job.emoji }, Posted)

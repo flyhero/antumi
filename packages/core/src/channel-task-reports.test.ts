@@ -75,8 +75,8 @@ describe('channel task reports', () => {
       lastReply: () => reply,
       condense: async () => condensed,
       pullRequests: () => pullRequests,
+      ready: () => accepting,
       post: async (post) => {
-        if (!accepting) return false
         posts.push(post)
         return true
       },
@@ -162,7 +162,7 @@ describe('channel task reports', () => {
     expect(posts).toEqual([])
   })
 
-  it('waits while there is nowhere to hand a report to, then posts it', async () => {
+  it('waits while there is no channel service to hand a report to, then posts it', async () => {
     const task = tasks.create('加导出', { channelSource: source() })
     move(task, 'running')
     accepting = false

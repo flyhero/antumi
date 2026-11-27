@@ -470,7 +470,19 @@ export const MIGRATIONS = [
      state TEXT NOT NULL, reason TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
    CREATE INDEX channel_task_reports_task ON channel_task_reports(task_id, created_at);
    CREATE INDEX channel_task_reports_state ON channel_task_reports(state, created_at);
-   ALTER TABLE channel_outbox ADD COLUMN report_id TEXT;`
+   ALTER TABLE channel_outbox ADD COLUMN report_id TEXT;`,
+  // A chat platform task's cards (docs/CHANNEL-LOOP.md): each card posted, the one-use tokens its
+  // buttons carry, and why the asker sent the task back.
+  `CREATE TABLE channel_task_cards (id TEXT PRIMARY KEY, task_id TEXT NOT NULL, channel_id TEXT NOT NULL, kind TEXT NOT NULL,
+     place TEXT NOT NULL, thread TEXT, recipient TEXT, feedback_id TEXT, summary TEXT NOT NULL DEFAULT '[]', notice TEXT,
+     message_id TEXT, rendered TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
+   CREATE INDEX channel_task_cards_task ON channel_task_cards(task_id, created_at);
+   CREATE TABLE channel_actions (token TEXT PRIMARY KEY, channel_id TEXT NOT NULL, card_id TEXT NOT NULL, task_id TEXT NOT NULL,
+     action TEXT NOT NULL, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, used_at INTEGER, used_by TEXT);
+   CREATE INDEX channel_actions_card ON channel_actions(card_id, action);
+   CREATE TABLE channel_task_feedback (id TEXT PRIMARY KEY, task_id TEXT NOT NULL, channel_id TEXT NOT NULL, author TEXT NOT NULL,
+     text TEXT NOT NULL, created_at INTEGER NOT NULL, used_at INTEGER);
+   CREATE INDEX channel_task_feedback_task ON channel_task_feedback(task_id, created_at);`
 ]
 
 

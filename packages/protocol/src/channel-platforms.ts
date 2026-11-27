@@ -13,7 +13,8 @@ export type ChannelPlatformDescriptor = {
   // One message's longest text, and the least time between two posts in one place.
   textLimit: number
   minGapMs: number
-  features: { reactions: boolean }
+  // cards: buttons on a message, their clicks reported back (docs/CHANNEL-LOOP.md).
+  features: { reactions: boolean; cards: boolean }
 }
 
 const SLACK_MANIFEST = JSON.stringify({
@@ -52,7 +53,8 @@ export const CHANNEL_PLATFORM_DESCRIPTORS = {
     manifest: SLACK_MANIFEST,
     textLimit: 3500,
     minGapMs: 1100,
-    features: { reactions: true }
+    // Block Kit buttons are not wired yet.
+    features: { reactions: true, cards: false }
   },
   feishu: {
     label: '飞书',
@@ -66,7 +68,7 @@ export const CHANNEL_PLATFORM_DESCRIPTORS = {
     textLimit: 4000,
     // Five messages a second to one chat, shared by every bot in it.
     minGapMs: 250,
-    features: { reactions: true }
+    features: { reactions: true, cards: true }
   },
   // Feishu outside China: the same platform, apps and limits, on its own domain.
   lark: {
@@ -79,7 +81,7 @@ export const CHANNEL_PLATFORM_DESCRIPTORS = {
     manifest: FEISHU_SCOPES,
     textLimit: 4000,
     minGapMs: 250,
-    features: { reactions: true }
+    features: { reactions: true, cards: true }
   },
   dingtalk: {
     label: '钉钉',
@@ -93,8 +95,8 @@ export const CHANNEL_PLATFORM_DESCRIPTORS = {
     textLimit: 3500,
     // Twenty messages a minute from a robot to one chat.
     minGapMs: 3100,
-    // A robot has no way to react to a message.
-    features: { reactions: false }
+    // A robot has no way to react to a message; interactive cards are not wired yet.
+    features: { reactions: false, cards: false }
   }
 } satisfies Record<ChannelPlatform, ChannelPlatformDescriptor>
 

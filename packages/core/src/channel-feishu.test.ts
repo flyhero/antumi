@@ -110,8 +110,24 @@ describe('the Feishu connector', () => {
   let feishu: ReturnType<typeof fakeFeishu>
   let emitted: ChannelGatewayToCore[]
   let connector: ChannelConnector
-  const open = (appSecret = 'good') => { connector = feishuConnector({ id: CHANNEL, platform: 'feishu', credentials: { appId: 'cli_1', appSecret } }, (message) => emitted.push(message), { api: feishu.api(), retryMs: [30] }) }
+  const open = (appSecret = 'good') => { connector = feishuConnector({ id: CHANNEL, platform: 'feishu', credentials: { appId: 'cli_1', appSecret } }, (message) => emitted.push(message), { api: feishu.api(), retryMs: [30], clickAnswerMs: 300 }) }
   const events = () => emitted.flatMap((message) => (message.type === 'event' ? [message] : []))
+  const actions = () => emitted.flatMap((message) => (message.type === 'action' ? [message] : []))
+  const answerOf = (frame: { payload?: Uint8Array } | undefined) => {
+    const body = JSON.parse(Buffer.from(frame?.payload ?? []).toString())
+    return { code: body.code, data: body.data ? JSON.parse(Buffer.from(body.data, 'base64').toString()) : undefined }
+  }
+  // A click on a card's button as Feishu sends it over the long connection (card.action.trigger, schema 2.0).
+  const click = (event: Record<string, unknown> = {}) => ({
+    schema: '2.0',
+    header: { event_id: 'evc1', event_type: 'card.action.trigger', tenant_key: 'tk1', app_id: 'cli_1' },
+    event: {
+      operator: { open_id: 'ou_owner', tenant_key: 'tk1' }, token: 'c-update', host: 'im_message',
+      action: { tag: 'button', value: { t: 'tok1' }, form_value: { reason: '颜色不对', count: 3 } },
+      context: { open_message_id: 'om_card', open_chat_id: 'oc_1' },
+      ...event
+    }
+  })
   const states = () => emitted.flatMap((message) => (message.type === 'state' ? [message] : []))
   const when = (holds: () => boolean, timeoutMs = 3000) => until(() => (holds() ? true : undefined), timeoutMs)
 
@@ -202,6 +218,41 @@ describe('the Feishu connector', () => {
   it('puts a user core names in a paragraph of its own before the text', async () => {
     expect(await connector.deliver(delivery({ thread: 'om_1', text: '已完成', mention: 'ou_asker' }))).toMatchObject({ ok: true })
     expect(feishu.sentMessages().at(-1)?.body).toMatchObject({ content: JSON.stringify({ zh_cn: { content: [[{ tag: 'at', user_id: 'ou_asker' }], [{ tag: 'md', text: '已完成' }]] } }) })
+  })
+
+  it('hands core a click on a card and answers it in the acknowledgement once core has', async () => {
+    const [frame] = feishu.send(click())
+    await when(() => actions().length === 1)
+    expect(actions()[0]).toEqual({ type: 'action', channelId: CHANNEL, eventKey: 'card:evc1', tenant: 'tk1', user: 'ou_owner', place: 'oc_1', messageId: 'om_card', token: 'tok1', form: { reason: '颜色不对' } })
+    expect(events()).toEqual([])
+    expect(feishu.acks()).toEqual([])
+    connector.reply?.('card:evc1', { kind: 'success', text: '已开始执行。' })
+    await when(() => feishu.acks().length === 1)
+    expect(feishu.acks()[0]?.seqId).toBe(frame?.seqId)
+    expect(answerOf(feishu.acks()[0])).toEqual({ code: 200, data: { toast: { type: 'success', content: '已开始执行。' } } })
+  })
+
+  it('answers a click for core when core has said nothing in time, and leaves a click with no token alone', async () => {
+    feishu.send(click())
+    await when(() => feishu.acks().length === 1, 2000)
+    expect(answerOf(feishu.acks()[0])).toEqual({ code: 200, data: { toast: { type: 'info', content: '已收到，正在处理。' } } })
+    connector.reply?.('card:evc1', { kind: 'success', text: 'late' })
+    feishu.send(click({ action: { tag: 'button', value: {} } }))
+    await when(() => feishu.acks().length === 2)
+    expect(answerOf(feishu.acks()[1])).toEqual({ code: 200, data: undefined })
+    expect(actions()).toHaveLength(1)
+  })
+
+  it('posts a card under a message or to someone directly, and draws it again where it is', async () => {
+    const card = { schema: '2.0', config: { update_multi: true } }
+    expect(await connector.deliver(delivery({ op: 'card', thread: 'om_1', text: null, card }))).toMatchObject({ ok: true })
+    expect(await connector.deliver(delivery({ op: 'card', place: 'user:ou_owner', recipient: 'ou_owner', text: null, card }))).toMatchObject({ ok: true })
+    expect(await connector.deliver(delivery({ op: 'update', target: 'om_card', text: null, card: { ...card, header: {} } }))).toMatchObject({ ok: true })
+    expect(feishu.sentMessages().map(({ method, path, body }) => ({ method, path, body }))).toEqual([
+      { method: 'POST', path: '/open-apis/im/v1/messages/om_1/reply', body: { msg_type: 'interactive', content: JSON.stringify(card), reply_in_thread: true, uuid: '33333333-3333-4333-8333-333333333333' } },
+      { method: 'POST', path: '/open-apis/im/v1/messages?receive_id_type=open_id', body: { receive_id: 'ou_owner', msg_type: 'interactive', content: JSON.stringify(card), uuid: '33333333-3333-4333-8333-333333333333' } },
+      { method: 'PATCH', path: '/open-apis/im/v1/messages/om_card', body: { content: JSON.stringify({ ...card, header: {} }) } }
+    ])
   })
 
   it('waits as long as Feishu says when told to slow down', async () => {

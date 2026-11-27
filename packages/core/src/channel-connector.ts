@@ -1,4 +1,4 @@
-import type { ChannelDelivery, ChannelGatewayToCore, GatewayChannel } from './channel-gateway-ipc'
+import type { ChannelDelivery, ChannelGatewayToCore, CoreToChannelGateway, GatewayChannel } from './channel-gateway-ipc'
 
 export type Delivered = { ok: boolean; platformId: string | null; retryAfterMs: number | null; error: string | null }
 
@@ -11,6 +11,8 @@ export interface ChannelConnector {
   deliver(job: ChannelDelivery): Promise<Delivered>
   // Fetches the pictures of a question core let through, and emits each in pieces.
   fetch(requestId: string, refs: readonly string[]): Promise<void>
+  // Core's answer to a click it was handed: told to the clicker, where the platform has cards.
+  reply?(eventKey: string, toast: Extract<CoreToChannelGateway, { type: 'actionReply' }>['toast']): void
   stop(): void
 }
 

@@ -19,13 +19,16 @@ import {
   type ChannelReadiness,
   type ChannelRequest,
   type ChannelState,
+  type ChannelTaskFeedback,
   type ChannelTaskReport,
   type ChannelToolCall,
-  type ChatItem
+  type ChatItem,
+  type Task
 } from '@antumi/protocol'
-import { ChannelGatewayToCore, type ChannelEvent, type CoreToChannelGateway } from './channel-gateway-ipc'
-import { channelMessages, channelNotice, redact } from './channel-output'
-import type { ChannelStore, ChannelThread, OutboxPayload, StoredChannel, StoredRequest } from './channel-store'
+import { ChannelGatewayToCore, type ChannelAction, type ChannelEvent, type CoreToChannelGateway } from './channel-gateway-ipc'
+import { channelMessages, channelNotice, redact, withoutMachinePaths } from './channel-output'
+import type { ChannelStore, ChannelThread, OutboxOp, OutboxPayload, StoredChannel, StoredRequest } from './channel-store'
+import type { CardOut, ChannelTaskCards } from './channel-task-cards'
 import type { ChannelTaskReports, ReportPost } from './channel-task-reports'
 import { ChannelToolError, runChannelTool } from './channel-tools'
 import type { TaskService } from './task-service'
@@ -101,8 +104,11 @@ export type ChannelServiceOptions = {
   // Keeps a picture's bytes, refusing what is not one; its id is what a message is sent with.
   keepImage: (bytes: Uint8Array) => Promise<{ id: string }>
   tasks?: Pick<TaskService, 'createChannelTask'>
-  // What follows its tasks back to their threads: told when the posts of a report are done with.
-  reports?: Pick<ChannelTaskReports, 'posted' | 'list'>
+  // What follows its tasks back to their threads: told when a question that may have collected
+  // tasks is answered, and when the posts of a report are done with.
+  reports?: Pick<ChannelTaskReports, 'posted' | 'list' | 'answered'>
+  // What answers a click on a task's card, and keeps why a task was sent back.
+  cards?: Pick<ChannelTaskCards, 'click' | 'feedback' | 'continueTask'>
   changed: (channels: Channel[]) => void
   // The account an agent runs on, by its email: never to be said in an answer.
   identity?: (agent: AgentKind) => Promise<string | null>
@@ -258,6 +264,34 @@ export class ChannelService {
 
   taskReports(taskId: string): ChannelTaskReport[] {
     return this.options.reports?.list(taskId) ?? []
+  }
+
+  taskFeedback(taskId: string): ChannelTaskFeedback[] {
+    return this.options.cards?.feedback(taskId) ?? []
+  }
+
+  continueTask(taskId: string): Promise<ChannelTaskFeedback[]> {
+    const cards = this.options.cards
+    if (!cards) throw new Rejection('channel-not-found', 'no task cards here')
+    return cards.continueTask(taskId)
+  }
+
+  // Someone else's words about a task, fit to show on its channel: no secret, no folder of this
+  // machine, not yet in the platform's format (a card formats its own).
+  async cleanText(channelId: string, task: Pick<Task, 'agent' | 'repos'>, text: string): Promise<string> {
+    const channel = this.store.channel(channelId)
+    const agent = task.agent ?? (channel ? this.options.profile(channel.profileId)?.agent : undefined) ?? 'claude'
+    const email = await this.options.identity?.(agent).catch(() => null) ?? null
+    const roots = task.repos.flatMap((repo) => [repo.worktreePath, repo.path]).flatMap((root) => (root ? [{ name: basename(root), root }] : []))
+    return redact(withoutMachinePaths(text, this.home, roots), email ? [email] : []).text
+  }
+
+  // A card of a task, posted or drawn again where it was, after whatever else waits for its place.
+  sendCard(out: CardOut): void {
+    const channel = this.store.channel(out.channelId)
+    if (!channel) return
+    const { card } = out
+    this.enqueue(channel, null, out.op, { place: card.place, thread: card.thread, target: null, text: null, emoji: null, card: out.content, cardId: card.id, recipient: card.recipient }, out.reportId)
   }
 
   // A task's progress, posted in its thread as an answer is: nothing secret, no folder of this
@@ -421,6 +455,10 @@ export class ChannelService {
         return void this.imagePart(message.requestId, message.ref, message.data, message.done, message.error)
       case 'delivered':
         return this.delivered(message.outboxId, message.ok, message.platformId, message.retryAfterMs)
+      case 'action': {
+        const { type: _type, ...click } = message
+        return void this.click(click)
+      }
     }
   }
 
@@ -485,6 +523,18 @@ export class ChannelService {
       this.link?.send({ type: 'fetch', requestId: request.id, channelId, images: images.map((image) => image.ref) })
     }
     this.tick()
+  }
+
+  // A click on a card: taken once, however often the platform sends it, then answered with what
+  // came of it. The platform only waits a few seconds; the gateway says something for core if not.
+  private async click(event: ChannelAction): Promise<void> {
+    const fresh = this.store.claimEvent(event.channelId, event.eventKey, this.now())
+    const reply = (toast: { kind: 'info' | 'success' | 'warning' | 'error'; text: string }) => this.link?.send({ type: 'actionReply', channelId: event.channelId, eventKey: event.eventKey, toast })
+    if (!fresh) return reply({ kind: 'info', text: '已经处理过了。' })
+    this.store.eventOutcome(event.channelId, event.eventKey, 'action')
+    const cards = this.options.cards
+    if (!cards) return reply({ kind: 'error', text: '请在 Antumi 里处理。' })
+    reply(await cards.click(event).catch(() => ({ kind: 'error' as const, text: '没能处理，请在 Antumi 里查看。' })))
   }
 
   private async imagePart(requestId: string, ref: string, data: string, done: boolean, error: string | null): Promise<void> {
@@ -588,6 +638,8 @@ export class ChannelService {
     const { messages, redacted } = channelMessages(channel.platform, [text, ...current.notes].join('\n\n'), { home: this.home, roots, hide: email ? [email] : [] })
     this.store.updateRequest(request.id, { state: 'answered', endedAt: this.now(), totalTokens, redacted })
     for (const message of redacted ? [...messages, SAY.redactedNote] : messages) this.enqueue(channel, request.id, 'post', { place: thread.replyPlace, thread: thread.replyThread, target: null, text: message, emoji: null })
+    // A task it collected gets its card now, after the answer in the same place.
+    this.options.reports?.answered(request.id)
     this.tick()
   }
 
@@ -601,6 +653,7 @@ export class ChannelService {
     const channel = this.store.channel(request.channelId)
     const thread = this.store.threadById(request.threadId)
     if (channel && thread) this.post(channel, request.id, { place: thread.replyPlace, thread: thread.replyThread }, say)
+    this.options.reports?.answered(request.id)
     this.tick()
   }
 
@@ -621,7 +674,7 @@ export class ChannelService {
     this.enqueue(channel, requestId, 'post', { place: reply.place, thread: reply.thread, target: null, text: channelNotice(channel.platform, text), emoji: null })
   }
 
-  private enqueue(channel: StoredChannel, requestId: string | null, op: 'react' | 'post', payload: OutboxPayload, reportId: string | null = null): void {
+  private enqueue(channel: StoredChannel, requestId: string | null, op: OutboxOp, payload: OutboxPayload, reportId: string | null = null): void {
     this.store.addOutbox({ id: randomUUID(), channelId: channel.id, requestId, reportId, op, payload }, this.now())
     this.pump()
   }
@@ -656,8 +709,20 @@ export class ChannelService {
       held.add(where)
       if (this.posting.has(where) || this.states.get(row.channelId)?.state !== 'connected' || row.nextAt > now) continue
       if (now - (this.posted.get(where) ?? 0) < channelPlatform(channel.platform).minGapMs) continue
+      // A card is drawn again on the message it was posted as, known once that post went.
+      let target = row.payload.target
+      if (row.op === 'update') {
+        const card = row.payload.cardId ? this.store.card(row.payload.cardId) : null
+        if (!card?.messageId) {
+          this.store.outboxRetry(row.id, null)
+          if (row.reportId) this.options.reports?.posted(row.reportId)
+          continue
+        }
+        target = card.messageId
+      }
       this.posting.set(where, row.id)
-      this.link.send({ type: 'deliver', outboxId: row.id, channelId: row.channelId, op: row.op, ...row.payload, mention: row.payload.mention ?? null })
+      const { cardId: _cardId, ...payload } = row.payload
+      this.link.send({ type: 'deliver', outboxId: row.id, channelId: row.channelId, op: row.op, ...payload, target, mention: payload.mention ?? null, recipient: payload.recipient ?? null })
     }
   }
 
@@ -665,11 +730,12 @@ export class ChannelService {
     const row = this.store.pendingOutbox().find((each) => each.id === outboxId)
     for (const [where, id] of this.posting) if (id === outboxId) {
       this.posting.delete(where)
-      // A mark on a message is not a message: only a post makes the next one wait.
-      if (row?.op === 'post') this.posted.set(where, this.now())
+      // A mark on a message is not a message: only a post (or a card) makes the next one wait.
+      if (row && row.op !== 'react') this.posted.set(where, this.now())
     }
     if (!row) return
     if (ok) this.store.outboxSent(outboxId, platformId)
+    if (ok && row.op === 'card' && row.payload.cardId) this.store.updateCard(row.payload.cardId, { messageId: platformId }, this.now())
     // A mark on the question is not worth trying again; an answer is, a few times, further apart each time.
     else if (row.op === 'react' || row.attempts + 1 >= OUTBOX_ATTEMPTS) this.store.outboxRetry(outboxId, null)
     else this.store.outboxRetry(outboxId, this.now() + (retryAfterMs ?? Math.min(60_000, 1000 * 2 ** (row.attempts + 1))))

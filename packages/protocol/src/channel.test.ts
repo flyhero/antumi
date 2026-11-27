@@ -79,7 +79,7 @@ describe('chat platforms', () => {
 describe('channels over RPC', () => {
   it('are no phone\'s to set up, read or run tools for', () => {
     const methods = (Object.keys(rpcSchemas) as RpcMethod[]).filter((method) => method.startsWith('channels.') || method.startsWith('channelTools.'))
-    expect(methods).toEqual(['channels.list', 'channels.save', 'channels.remove', 'channels.requests', 'channels.toolCalls', 'channels.readiness', 'channels.taskReports', 'channelTools.call'])
+    expect(methods).toEqual(['channels.list', 'channels.save', 'channels.remove', 'channels.requests', 'channels.toolCalls', 'channels.readiness', 'channels.taskReports', 'channels.taskFeedback', 'channels.continueTask', 'channelTools.call'])
     for (const method of methods) expect(mobileMayCall(method, 'operate'), method).toBe(false)
   })
 })

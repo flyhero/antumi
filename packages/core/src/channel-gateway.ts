@@ -27,6 +27,8 @@ export class ChannelGateway {
         for (const ref of message.images) this.emit({ type: 'image', requestId: message.requestId, ref, data: '', done: true, error: 'not connected' })
         return
       }
+      case 'actionReply':
+        return this.live.get(message.channelId)?.connector.reply?.(message.eventKey, message.toast)
       case 'deliver': {
         const { type: _type, ...job } = message
         const connector = this.live.get(job.channelId)?.connector

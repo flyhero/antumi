@@ -16,6 +16,7 @@ import { SourceWriteback } from './source-writeback'
 import { redact, withoutMachinePaths } from './channel-output'
 import { channelReportInstruction, reportInstruction } from './source-report-prompt'
 import { ChannelTaskReports } from './channel-task-reports'
+import { ChannelTaskCards, reworkMessage } from './channel-task-cards'
 import { AgentProfileStore } from './agent-profile-store'
 import { AgentProfileService, readyAgents } from './agent-profile-service'
 import { AgentCliMaintenance } from './agent-cli-maintenance'
@@ -400,10 +401,34 @@ const writeback = new SourceWriteback(new SourceWritebackStore(paths.database), 
   changed: (view) => server?.broadcast('sources.writebackChanged', { writeback: view })
 })
 sourceUpdates.setOwnComments((source) => writeback.ownComments(source))
+// A chat platform task on the platform's cards (docs/CHANNEL-LOOP.md): each click does what the
+// same button in Antumi would, the owner's run unattended as an automatic one is.
+const channelCards = new ChannelTaskCards(channelStore, {
+  task: (id) => service.list().find((each) => each.id === id) ?? null,
+  start: async (task, launch) => {
+    // An agent the owner already picked for it stays.
+    if (!task.agent) service.update({ id: task.id, agent: launch.agent, launch: { model: launch.model ?? null, effort: launch.effort ?? null, modelProvider: launch.modelProvider ?? null } })
+    const mode = chatSettings.current().unattendedMode
+    await service.start(task.id, mode === 'bypass', mode, service.get(task.id).launch)
+  },
+  cancel: async (taskId) => { await service.cancel(taskId, '在聊天平台的卡片上选择不做') },
+  accept: async (taskId) => { service.move(taskId, 'done') },
+  rework: async (taskId, reason) => {
+    await service.resumeChat(taskId)
+    const { conversationId } = service.get(taskId)
+    if (conversationId) await conversations.send(conversationId, reworkMessage(reason), [], true)
+  },
+  send: (out) => channels?.sendCard(out),
+  clean: (channel, task, text) => channels?.cleanText(channel.id, task, text) ?? Promise.resolve(redact(text).text),
+  feedbackChanged: (taskId, feedback) => server?.broadcast('channels.taskFeedbackChanged', { taskId, feedback })
+})
 // A task collected from a chat platform, followed back in its thread (docs/CHANNEL-LOOP.md). Its
 // posts go through the channel service, made once its profiles are; until then they wait.
 const channelReports = new ChannelTaskReports(channelStore, {
   task: (id) => service.list().find((each) => each.id === id) ?? null,
+  tasksOf: (requestId) => service.list().filter((each) => each.channelSource?.requestId === requestId),
+  ready: () => channels !== undefined,
+  cards: channelCards,
   draft: (taskId) => writeback.draft({ kind: 'task', id: taskId }),
   lastReply: (conversationId) => conversations.messages(conversationId).findLast((message) => message.role === 'assistant' && message.complete)?.text ?? null,
   condense: (conversationId, platform, reply) => writeback.condenseFor(conversationId, platform, reply, '', 'chat'),
@@ -643,6 +668,7 @@ channels = new ChannelService(channelStore, {
   conversations,
   tasks: service,
   reports: channelReports,
+  cards: channelCards,
   profile: (id) => profiles.list().find((profile) => profile.id === id) ?? null,
   credentials,
   recentProjects: () => projects.recent(),

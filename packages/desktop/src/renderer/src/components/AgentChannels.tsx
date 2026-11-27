@@ -1,10 +1,10 @@
 import { SupportActions } from './ContactAuthor'
 import { useEffect, useId, useRef, useState } from 'react'
 import {
-  CHANNEL_DEFAULTS, CHANNEL_PLATFORMS, ChannelInput, agentDescriptor, channelPlatform,
-  type AgentKind, type Channel, type ChannelCredentialKey, type ChannelPlatform, type ChannelRequest
+  AGENT_KINDS, CHANNEL_DEFAULTS, CHANNEL_PLATFORMS, ChannelInput, agentDescriptor, channelPlatform,
+  type AgentKind, type Channel, type ChannelCredentialKey, type ChannelPlatform, type ChannelRequest, type TaskCardReview
 } from '@antumi/protocol'
-import { setChannels, useChannelReadiness, useChannels, useChannelsSupported, useChannelTaskReportsSupported, useChannelTasksSupported } from '../channels'
+import { setChannels, useChannelReadiness, useChannels, useChannelsSupported, useChannelTaskCardsSupported, useChannelTaskReportsSupported, useChannelTasksSupported } from '../channels'
 import { askConfirm } from '../confirm-dialog'
 import { timeAgo } from '../conversation-state'
 import { perform, useCore } from '../core-store'
@@ -90,7 +90,8 @@ function ChannelRow({ channel, requestsOpen, onToggle, onRequests, onEdit, onRem
     t('AgentChannels.scopeAskers', { count: channel.allowedUsers.length }),
     t('AgentChannels.scopeDaily', { count: channel.dailyPerUser }),
     ...(channel.allowTaskCreation ? [t('AgentChannels.allowTaskCreation')] : []),
-    ...(channel.allowTaskCreation && channel.reportTasks ? [t('AgentChannels.reportTasksChip')] : [])
+    ...(channel.allowTaskCreation && channel.reportTasks ? [t('AgentChannels.reportTasksChip')] : []),
+    ...(channel.reportTasks && channel.taskCards ? [t('AgentChannels.cardsChip')] : [])
   ]
   return <div className="agent-channel-row">
     <span className="agent-channel-logo" aria-hidden="true"><ChannelPlatformIcon platform={channel.platform} /></span>
@@ -113,6 +114,7 @@ type Draft = {
   projectPaths: string[]; users: string; places: string; allowDirect: boolean; allowTaskCreation: boolean
   // undefined until chosen: turning task creation on then ticks it.
   reportTasks: boolean | undefined
+  cards: boolean; owners: string; cardStart: boolean; cardAgent: AgentKind; cardReview: TaskCardReview | 'none'
   dailyPerUser: string; dailyTotal: string; maxConcurrent: string; turnTimeoutSec: string
 }
 
@@ -132,12 +134,16 @@ function ChannelDialog({ profileId, platform, channel, agent, hasProvider, onClo
   const [projects, setProjects] = useState<string[]>([])
   const taskCreationSupported = useChannelTasksSupported()
   const reportsSupported = useChannelTaskReportsSupported()
+  const cardsSupported = useChannelTaskCardsSupported() && descriptor.features.cards
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [draft, setDraft] = useState<Draft>(() => ({
     credentials: {},
     projectPaths: channel?.projectPaths ?? [], users: (channel?.allowedUsers ?? []).join('\n'), places: (channel?.allowedPlaces ?? []).join('\n'), allowDirect: channel?.allowDirect ?? false, allowTaskCreation: channel?.allowTaskCreation ?? false,
     reportTasks: channel?.reportTasks,
+    cards: !!channel?.taskCards, owners: (channel?.ownerUsers ?? []).join('\n'),
+    cardStart: channel?.taskCards ? channel.taskCards.start !== null : true, cardAgent: channel?.taskCards?.start?.agent ?? agent,
+    cardReview: channel?.taskCards ? channel.taskCards.review ?? 'none' : 'ownerOrAsker',
     dailyPerUser: String(channel?.dailyPerUser ?? CHANNEL_DEFAULTS.dailyPerUser), dailyTotal: String(channel?.dailyTotal ?? CHANNEL_DEFAULTS.dailyTotal),
     maxConcurrent: String(channel?.maxConcurrent ?? CHANNEL_DEFAULTS.maxConcurrent), turnTimeoutSec: String(channel?.turnTimeoutSec ?? CHANNEL_DEFAULTS.turnTimeoutSec)
   }))
@@ -156,6 +162,10 @@ function ChannelDialog({ profileId, platform, channel, agent, hasProvider, onClo
       ...(channel ? { id: channel.id } : {}), profileId, platform, enabled: channel?.enabled ?? true, credentials,
       projectPaths: draft.projectPaths, allowedUsers: lines(draft.users), allowedPlaces: lines(draft.places), allowDirect: draft.allowDirect, allowTaskCreation: draft.allowTaskCreation,
       ...(reportsSupported && draft.reportTasks !== undefined ? { reportTasks: draft.reportTasks } : {}),
+      ...(cardsSupported ? {
+        ownerUsers: lines(draft.owners),
+        taskCards: draft.cards ? { start: draft.cardStart ? { agent: draft.cardAgent } : null, review: draft.cardReview === 'none' ? null : draft.cardReview } : null
+      } : {}),
       dailyPerUser: Number(draft.dailyPerUser), dailyTotal: Number(draft.dailyTotal), maxConcurrent: Number(draft.maxConcurrent), turnTimeoutSec: Number(draft.turnTimeoutSec)
     })
     if (!parsed.success) { setError(t('AgentChannels.invalid', { field: parsed.error.issues[0]?.path.join('.') ?? '' })); return }
@@ -218,6 +228,28 @@ function ChannelDialog({ profileId, platform, channel, agent, hasProvider, onClo
         {reportsSupported && (draft.allowTaskCreation || draft.reportTasks) && <>
           <label className="agent-profile-check"><input type="checkbox" checked={draft.reportTasks ?? false} onChange={(event) => setDraft({ ...draft, reportTasks: event.target.checked })} />{t('AgentChannels.reportTasks')}</label>
           <p className="squad-block-hint muted">{t('AgentChannels.reportTasksHint')}</p>
+        </>}
+        {/* Cards are a kind of report: with reports off there is nothing to put on them. */}
+        {cardsSupported && draft.reportTasks && <>
+          <label className="agent-profile-check"><input type="checkbox" checked={draft.cards} onChange={(event) => setDraft({ ...draft, cards: event.target.checked })} />{t('AgentChannels.cards')}</label>
+          <p className="squad-block-hint muted">{t('AgentChannels.cardsHint')}</p>
+          {draft.cards && <div className="agent-channel-grid">
+            <div className="squad-field"><label htmlFor={`${formId}-owners`}>{t('AgentChannels.owners')}</label><textarea id={`${formId}-owners`} className="input" rows={2} spellCheck={false} value={draft.owners} onChange={(event) => setDraft({ ...draft, owners: event.target.value })} /></div>
+            <div className="squad-field">
+              <label className="agent-profile-check"><input type="checkbox" checked={draft.cardStart} onChange={(event) => setDraft({ ...draft, cardStart: event.target.checked })} />{t('AgentChannels.cardStart')}</label>
+              {draft.cardStart && <select className="input" aria-label={t('AgentChannels.cardAgent')} value={draft.cardAgent} onChange={(event) => setDraft({ ...draft, cardAgent: AGENT_KINDS.find((each) => each === event.target.value) ?? draft.cardAgent })}>
+                {AGENT_KINDS.map((each) => <option key={each} value={each}>{agentLabel(each)}</option>)}
+              </select>}
+              <label htmlFor={`${formId}-review`}>{t('AgentChannels.cardReview')}</label>
+              <select id={`${formId}-review`} className="input" value={draft.cardReview} onChange={(event) => setDraft({ ...draft, cardReview: event.target.value === 'owner' || event.target.value === 'ownerOrAsker' ? event.target.value : 'none' })}>
+                <option value="ownerOrAsker">{t('AgentChannels.cardReviewOwnerOrAsker')}</option>
+                <option value="owner">{t('AgentChannels.cardReviewOwner')}</option>
+                <option value="none">{t('AgentChannels.cardReviewNone')}</option>
+              </select>
+            </div>
+          </div>}
+          {draft.cards && <p className="squad-block-hint muted">{t('AgentChannels.cardsSetup')}</p>}
+          {draft.cards && lines(draft.owners).length === 0 && <p className="squad-block-hint muted">{t('AgentChannels.ownersMissing')}</p>}
         </>}
       </>}
     </div>

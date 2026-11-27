@@ -15,17 +15,24 @@ export type GatewayChannel = z.infer<typeof GatewayChannel>
 export const ChannelDelivery = z.object({
   outboxId: z.string().uuid(),
   channelId: z.string().uuid(),
-  // react: an emoji on target · post: text in place, under thread where there is one
-  op: z.enum(['react', 'post']),
+  // react: an emoji on target · post: text in place, under thread where there is one · card: a card
+  // there · update: the card target is, drawn again
+  op: z.enum(['react', 'post', 'card', 'update']),
   place: Ref,
   thread: Ref.nullable(),
   target: Ref.nullable(),
   text: z.string().nullable(),
   emoji: z.string().nullable(),
   // A user to notify with the post, named by core: the asker a task's progress is for.
-  mention: Ref.nullable().optional()
+  mention: Ref.nullable().optional(),
+  // The platform's own card, drawn by core.
+  card: z.unknown().optional(),
+  // A user whose direct chat with the bot it goes to, in place of the chat at place.
+  recipient: Ref.nullable().optional()
 })
 export type ChannelDelivery = z.infer<typeof ChannelDelivery>
+
+const CardToastShape = z.object({ kind: z.enum(['info', 'success', 'warning', 'error']), text: z.string().max(300) })
 
 export const CoreToChannelGateway = z.discriminatedUnion('type', [
   // Every channel to hold a connection for, whole each time: the gateway opens, replaces and closes to match.
@@ -34,9 +41,25 @@ export const CoreToChannelGateway = z.discriminatedUnion('type', [
   z.object({ type: z.literal('accepted'), channelId: z.string().uuid(), eventKey: Ref }),
   // Pictures of a question that passed every check; none is fetched before.
   z.object({ type: z.literal('fetch'), requestId: z.string().uuid(), channelId: z.string().uuid(), images: z.array(Ref).max(16) }),
-  z.object({ type: z.literal('deliver') }).extend(ChannelDelivery.shape)
+  z.object({ type: z.literal('deliver') }).extend(ChannelDelivery.shape),
+  // What to tell whoever clicked a card's button, which the platform waits a few seconds for.
+  z.object({ type: z.literal('actionReply'), channelId: z.string().uuid(), eventKey: Ref, toast: CardToastShape })
 ])
 export type CoreToChannelGateway = z.infer<typeof CoreToChannelGateway>
+
+// A click on a button of a card core posted, as the platform reported it: who, where, the token
+// the button carried and what its form held. Nothing in it but the clicker is believed.
+export const ChannelAction = z.object({
+  channelId: z.string().uuid(),
+  eventKey: Ref,
+  tenant: Ref,
+  user: Ref,
+  place: Ref,
+  messageId: Ref,
+  token: z.string().min(1).max(200),
+  form: z.record(z.string().max(100), z.string().max(2000))
+})
+export type ChannelAction = z.infer<typeof ChannelAction>
 
 export const ChannelEventImage = z.object({ ref: Ref, name: z.string().max(300), mime: z.string().max(100), bytes: z.number().int().nonnegative() })
 export type ChannelEventImage = z.infer<typeof ChannelEventImage>
@@ -67,6 +90,7 @@ export const ChannelGatewayToCore = z.discriminatedUnion('type', [
   z.object({ type: z.literal('event') }).extend(ChannelEvent.shape),
   // A fetched picture in pieces, in order; done on the last, error instead where it could not be had.
   z.object({ type: z.literal('image'), requestId: z.string().uuid(), ref: Ref, data: z.string(), done: z.boolean(), error: z.string().nullable() }),
-  z.object({ type: z.literal('delivered'), outboxId: z.string().uuid(), ok: z.boolean(), platformId: z.string().nullable(), retryAfterMs: z.number().int().nonnegative().nullable(), error: z.string().nullable() })
+  z.object({ type: z.literal('delivered'), outboxId: z.string().uuid(), ok: z.boolean(), platformId: z.string().nullable(), retryAfterMs: z.number().int().nonnegative().nullable(), error: z.string().nullable() }),
+  z.object({ type: z.literal('action') }).extend(ChannelAction.shape)
 ])
 export type ChannelGatewayToCore = z.infer<typeof ChannelGatewayToCore>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { create } from 'zustand'
-import type { Channel, ChannelReadiness, ChannelTaskReport } from '@antumi/protocol'
+import type { Channel, ChannelReadiness, ChannelTaskFeedback, ChannelTaskReport } from '@antumi/protocol'
 import { perform, useCore } from './core-store'
 
 // Agents' channels on chat platforms (docs/CHANNELS.md), as core holds them: read once per
@@ -17,6 +17,28 @@ export function useChannelTasksSupported(): boolean {
 
 export function useChannelTaskReportsSupported(): boolean {
   return useCore((state) => state.rpc?.features.includes('channel-task-reports') ?? false)
+}
+
+export function useChannelTaskCardsSupported(): boolean {
+  return useCore((state) => state.rpc?.features.includes('channel-task-cards') ?? false)
+}
+
+// Why a task from a chat platform was sent back on its card, kept current by core's word.
+export function useChannelTaskFeedback(taskId: string, fromChat: boolean): ChannelTaskFeedback[] {
+  const rpc = useCore((state) => state.rpc)
+  const supported = useChannelTaskCardsSupported()
+  const [feedback, setFeedback] = useState<ChannelTaskFeedback[]>([])
+  useEffect(() => {
+    if (!rpc || !supported || !fromChat) return setFeedback([])
+    let live = true
+    const off = rpc.on('channels.taskFeedbackChanged', (changed) => { if (live && changed.taskId === taskId) setFeedback(changed.feedback) })
+    void rpc.call('channels.taskFeedback', { taskId }).then((next) => { if (live) setFeedback(next) }, () => {})
+    return () => {
+      live = false
+      off()
+    }
+  }, [rpc, supported, fromChat, taskId])
+  return feedback
 }
 
 export function setChannels(channels: Channel[]): void {

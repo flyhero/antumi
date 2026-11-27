@@ -1,6 +1,6 @@
 # 聊天平台上的需求闭环（技术方案）
 
-> 状态：第一节（结果回到原话题）已实现，其余是设计（2026-11-27）。需求来自飞书上的产品团队。本文汇总并取代 CHANNELS.md 原「主人在聊天平台上同意」「结果回到原话题」两节和 LARK.md 原 B 节，接入、锁死会话、网关这些已有部分仍以 [CHANNELS.md](CHANNELS.md) 为准。
+> 状态：第一节（结果回到原话题）和第二节（卡片）已实现，只对本地的假平台验证过；其余是设计（2026-11-27）。需求来自飞书上的产品团队。本文汇总并取代 CHANNELS.md 原「主人在聊天平台上同意」「结果回到原话题」两节和 LARK.md 原 B 节，接入、锁死会话、网关这些已有部分仍以 [CHANNELS.md](CHANNELS.md) 为准。
 
 同事在飞书群里 @ 机器人讨论需求，机器人读代码、读写飞书文档，把明确的需求收成任务；主人在飞书卡片上点「开始执行」，主人的 Agent 在本机实施；进展和总结回到提出需求的那条消息下，提问人在卡片上验收或退回，退回后由主人点「继续执行」返工。
 
@@ -312,6 +312,8 @@ core：ChannelService ─ 入站、提问、发件队列（已有）
 
 ## 二、卡片：主人开始、提问人验收、主人返工
 
+> 状态：已实现（2026-11-27），只对本地的假飞书验证过，没有在真实飞书上联调（见「待验证」3、6）。实现在 `core/src/channel-task-cards.ts`（`ChannelTaskCards`：投哪、画成什么样、每个按钮做什么）、`channel-cards.ts`（与平台无关的卡片和飞书卡片 JSON 2.0）、`channel-feishu.ts`（回调和发卡）。
+
 前提：接入开了 `taskCards` 并填了 `ownerUsers`，进展回报开着，平台描述的 `features.cards` 为真（飞书、Lark），core 有 `channel-task-cards`，开放平台订阅了卡片回调。不满足时只有第一节的文字回报，开始、验收都在 Antumi 里。
 
 `taskCards` 有两个独立的部分：`start`（卡片上开始执行，带执行用的 Agent 和模型）和 `review`（卡片上验收和退回，谁能点）。两个都为空时，任务卡只显示状态，没有按钮。
@@ -350,18 +352,19 @@ core：ChannelService ─ 入站、提问、发件队列（已有）
 ### 回调怎么走
 
 ```
-飞书 card.action.trigger（长连接）
- → 连接器：取 event_id、operator.open_id、tenant_key、action.value.t、form_value、context.open_message_id / open_chat_id
- → IPC action { channelId, eventKey, tenant, user, place, messageId, token, form }
- → core ChannelActions：去重（channel_events）→ 接入启用、tenant 相符 → 令牌在、没用过、没过期、属于这张卡
-     → 这个人能点 → 任务状态对得上 → BEGIN IMMEDIATE 标记已用 → 开始执行动作（异步）
- → IPC actionReply { channelId, eventKey, toast, card }    // 提示 + 更新后的卡片
- → 连接器在 3 秒内把它作为回调的响应发回
+飞书 card.action.trigger（长连接上是 type: event 的数据帧，event_type 为 card.action.trigger）
+ → 连接器：取 header.event_id、operator.open_id、tenant_key、action.value.t、form_value（只要文字）、context.open_message_id / open_chat_id
+ → IPC action { channelId, eventKey: 'card:<event_id>', tenant, user, place, messageId, token, form }
+ → ChannelService：去重（channel_events）→ ChannelTaskCards.click：接入启用、tenant 相符 → 令牌在、属于这个接入、没用过、没过期
+     → 卡片开着 → 这个人能点 → 任务状态对得上 → 原子地标记已用 → 做（开始的最多等 2 秒）
+ → IPC actionReply { channelId, eventKey, toast }
+ → 连接器把提示作为 ACK 帧的载荷发回：{"code":200,"data":"<base64 的 {toast:{type,content}}>"}
 ```
 
-- 飞书要求 3 秒内响应。连接器最多等 core 2.5 秒；没等到就回「已收到，正在处理」，之后 core 用 outbox 的 `update` 改卡片。
-- 同一次点击重投：`channel_events` 去重，令牌已用，第二次只回当前卡片。
-- 现有连接器只处理 `type: event` 的数据帧；卡片回调在长连接上的帧类型和响应放法照官方 Node SDK 的 `WSClient` 核对（见「待验证」）。
+- 帧和响应的放法照官方 Node SDK 1.74 的 `WSClient`：它只处理 `type: event` 的数据帧，卡片回调和消息事件一样交给分发器，处理函数的返回值 base64 后放进 ACK 的 `data`。
+- 飞书要求 3 秒内响应。连接器最多等 core 2.5 秒；没等到就回「已收到，正在处理」。回调里不带卡片：卡片一律由 core 经 outbox 的 `update` 改。
+- 同一次点击重投：`channel_events` 去重，第二次回「已经处理过了」。
+- 做不成的（开始失败、状态变了）把令牌还回去，可以再点；给点击人的话只来自固定的几句和原因代码的翻译，不带 core 的英文诊断。
 
 ### 开始执行
 
@@ -543,13 +546,15 @@ ChannelGatewayToCore +=
 CREATE TABLE channel_task_reports (id TEXT PRIMARY KEY, task_id TEXT NOT NULL, channel_id TEXT NOT NULL, stage TEXT NOT NULL,
   state TEXT NOT NULL, reason TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
 ALTER TABLE channel_outbox ADD COLUMN report_id TEXT;
--- 之后几期
+-- 第二期，已实现。summary：验收卡的总结（已打码）；notice：开始失败的原因；rendered：上次画成的样子，没变就不改
 CREATE TABLE channel_task_cards (id TEXT PRIMARY KEY, task_id TEXT NOT NULL, channel_id TEXT NOT NULL, kind TEXT NOT NULL,
-  outbox_id TEXT NOT NULL, message_id TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
+  place TEXT NOT NULL, thread TEXT, recipient TEXT, feedback_id TEXT, summary TEXT NOT NULL DEFAULT '[]', notice TEXT,
+  message_id TEXT, rendered TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
 CREATE TABLE channel_actions (token TEXT PRIMARY KEY, channel_id TEXT NOT NULL, card_id TEXT NOT NULL, task_id TEXT NOT NULL,
   action TEXT NOT NULL, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, used_at INTEGER, used_by TEXT);
 CREATE TABLE channel_task_feedback (id TEXT PRIMARY KEY, task_id TEXT NOT NULL, channel_id TEXT NOT NULL, author TEXT NOT NULL,
   text TEXT NOT NULL, created_at INTEGER NOT NULL, used_at INTEGER);
+-- 之后几期
 ALTER TABLE channel_threads ADD COLUMN bystanders INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE channel_tool_calls ADD COLUMN write INTEGER NOT NULL DEFAULT 0;
 ```
@@ -577,7 +582,7 @@ ALTER TABLE channel_tool_calls ADD COLUMN write INTEGER NOT NULL DEFAULT 0;
 | 期 | 内容 | 主要改动 | 前置 |
 |---|---|---|---|
 | 1 | 结果回到原话题（文字），**已实现** | protocol：`thread`/`direct`、`reportTasks`、`channel-task-reports`；core：`channel-task-reports.ts`、日志组合、`source_report` 对聊天任务开放、`mention`；desktop：开关和回报记录 | 无 |
-| 2 | 卡片：开始、验收、返工 | protocol：`ownerUsers`、`taskCards`、`cards`；core：`channel-cards.ts`、`channel-actions.ts`、outbox 的 `card` / `update`、飞书连接器的卡片回调；desktop：主人 ID、卡片的两个开关和执行设置、退回意见 | 待验证 3、6 |
+| 2 | 卡片：开始、验收、返工，**已实现** | protocol：`ownerUsers`、`taskCards`、`cards`、`created` 阶段、`ChannelTaskFeedback`；core：`channel-cards.ts`、`channel-task-cards.ts`、outbox 的 `card` / `update`、飞书连接器的卡片回调；desktop：主人 ID、卡片的开关和执行设置、退回意见和「按意见继续」 | 待验证 3、6（实测） |
 | 3 | 飞书工具 | protocol：`platformTools`、`docLocation`、`docAccess`、平台描述 `tools`；core：`channel-tools/platform.ts`、按会话的工具名单、`channelTools.list`、`channel-feishu-tools.ts`；desktop：「飞书工具」 | 待验证 1、2、4 |
 | 4 | 话题里免 @ | protocol：`followUps`；core：`followUp` 事件、`bystanders`；desktop：开关和说明 | 待验证 5 |
 
@@ -618,7 +623,7 @@ CHANGELOG 草稿：
 
 1. 托管 MCP：用应用 token 调 `tools/list`，带和不带 `X-Lark-MCP-Allowed-Tools`；记下 `create-doc` 指定知识库节点的参数名和返回里文档链接、token 的字段，`update-doc` 各模式的参数，没权限时的错误形式。
 2. Lark 的 `mcp.larksuite.com/mcp` 是否认 `X-Lark-MCP-TAT`、工具是否相同。
-3. 卡片回调走长连接时：数据帧的 `type` 头（`event` 还是 `card`）、响应（提示和卡片）放在 ACK 帧的哪里，照官方 Node SDK 的 `WSClient` 核对；JSON 2.0 表单里输入框和提交按钮的 `form_value`。
+3. 卡片回调走长连接时：确认是 `type: event` 的数据帧、ACK 帧 `data` 里的提示能显示（已照 SDK 1.74 实现）；JSON 2.0 表单里带 `behaviors` 回调的提交按钮是否同时带回 `action.value` 和 `form_value`；卡片 Markdown 里的 `<at id=…></at>` 是否通知被 @ 的人；`PATCH` 改卡片要不要 `im:message:update`。
 4. 应用身份给同组织用户开 `edit` 权限；对方不在可用范围时的错误。
 5. 开了 `im:message.group_msg` 后，话题里的消息是否带 `thread_id` / `root_id`，机器人自己的回复是否也推来。
 6. 富文本里的 `at` 节点在 `reply_in_thread` 的回复里是否通知被 @ 的人；按 `open_id` 给主人私聊发卡片需要主人在应用的可用范围内。

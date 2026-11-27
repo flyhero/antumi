@@ -5,7 +5,7 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentProfile, MAX_CHANNEL_ANSWER_CHARS, type Channel } from '@antumi/protocol'
 import { AttachmentStore } from './attachment-store'
-import type { ChannelEvent, ChannelGatewayToCore, CoreToChannelGateway } from './channel-gateway-ipc'
+import type { ChannelAction, ChannelEvent, ChannelGatewayToCore, CoreToChannelGateway } from './channel-gateway-ipc'
 import { ChannelService, type ChannelServiceOptions } from './channel-service'
 import { ChannelStore } from './channel-store'
 import { ConversationService } from './conversation-service'
@@ -44,6 +44,8 @@ describe('ChannelService', () => {
   let keepImage: ChannelServiceOptions['keepImage']
   // Reports whose posts the outbox finished with, as the reporter is told.
   let reported: string[]
+  // Clicks on cards handed to what answers them.
+  let clicked: ChannelAction[]
 
   const profile = AgentProfile.parse({ id: '11111111-1111-4111-8111-111111111111', name: '答疑', instructions: '简短回答。', agent: 'claude', audience: 'channels', archivedAt: null, createdAt: 1, updatedAt: 1 })
   const settle = async () => { for (let i = 0; i < 20; i++) await new Promise((resolve) => setTimeout(resolve, 0)) }
@@ -113,8 +115,10 @@ describe('ChannelService', () => {
     announced = []
     keepImage = (bytes) => attachments.put(bytes)
     reported = []
+    clicked = []
     channels = new ChannelService(store, {
-      reports: { posted: (id) => reported.push(id), list: () => [] },
+      reports: { posted: (id) => reported.push(id), list: () => [], answered: () => {} },
+      cards: { click: async (event) => { clicked.push(event); return { kind: 'success', text: '已开始执行。' } }, feedback: () => [], continueTask: async () => [] },
       conversations, credentials,
       tasks: new TaskService(tasks, projects, path.join(root, 'worktrees'), () => {}, attachments, conversations),
       profile: (id) => profiles.find((each) => each.id === id) ?? null,
@@ -464,6 +468,38 @@ describe('ChannelService', () => {
     expect(delivered.map((each) => each.text).join('')).not.toMatch(/owner@example\.com|worktrees/)
     expect(reported.filter((id) => id === reportId)).toHaveLength(delivered.length)
     expect(await channels.postReport({ channelId: '66666666-6666-4666-8666-666666666666', reportId, place: 'C1', thread: null, text: 'x', mention: null, task })).toBe(false)
+  })
+
+  it('answers a click on a card once, however often the platform sends it', async () => {
+    const click = { type: 'action' as const, channelId: channel.id, eventKey: 'card:ev1', tenant: 'T1', user: 'U9', place: 'C1', messageId: 'm-card', token: 'tok', form: {} }
+    fromGateway(click)
+    await settle()
+    fromGateway(click)
+    await settle()
+    expect(clicked).toHaveLength(1)
+    expect(clicked[0]).toMatchObject({ user: 'U9', token: 'tok' })
+    expect(sent('actionReply').map((reply) => reply.toast)).toEqual([{ kind: 'success', text: '已开始执行。' }, { kind: 'info', text: '已经处理过了。' }])
+  })
+
+  it('posts a card, and draws it again on the message it became; one whose post was lost is not drawn', async () => {
+    const at = now
+    const card = { id: '77777777-7777-4777-8777-777777777777', taskId: 't1', channelId: channel.id, kind: 'task' as const, place: 'C1', thread: '1.1', recipient: null, feedbackId: null, summary: [], notice: null, messageId: null, rendered: null, createdAt: at, updatedAt: at }
+    store.addCard(card)
+    channels.sendCard({ op: 'card', channelId: channel.id, reportId: null, card, content: { drawn: 1 } })
+    await deliverAll()
+    expect(sent('deliver').at(-1)).toMatchObject({ op: 'card', place: 'C1', thread: '1.1', card: { drawn: 1 }, recipient: null })
+    expect(sent('deliver').at(-1)).not.toHaveProperty('cardId')
+    const messageId = store.card(card.id)?.messageId
+    expect(messageId).toMatch(/^p-/)
+    channels.sendCard({ op: 'update', channelId: channel.id, reportId: null, card, content: { drawn: 2 } })
+    await deliverAll()
+    expect(sent('deliver').at(-1)).toMatchObject({ op: 'update', target: messageId, card: { drawn: 2 } })
+
+    const lost = { ...card, id: '88888888-8888-4888-8888-888888888888' }
+    store.addCard(lost)
+    channels.sendCard({ op: 'update', channelId: channel.id, reportId: null, card: lost, content: { drawn: 3 } })
+    await deliverAll()
+    expect(sent('deliver').filter((each) => each.op === 'update')).toHaveLength(1)
   })
 
   it('collects one pending task per message with a trusted origin and no extra agent run', async () => {

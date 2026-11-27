@@ -1,6 +1,6 @@
 import { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
-import { ChannelFields, ChannelPlatform, ChannelRequest, ChannelRequestState, ChannelTaskReport, type ChannelTaskReportState, type ChannelToolCall } from '@antumi/protocol'
+import { ChannelFields, ChannelPlatform, ChannelRequest, ChannelRequestState, ChannelTaskFeedback, ChannelTaskReport, type ChannelTaskReportState, type ChannelToolCall } from '@antumi/protocol'
 import type { TaskWriteLink } from './task-store'
 
 // Agents on chat platforms: who may ask, each question and what came of it, and what is still to
@@ -25,10 +25,46 @@ export type StoredRequest = {
   createdAt: number; startedAt: number | null; endedAt: number | null; totalTokens: number | null
 }
 
+// react: an emoji on a message · post: text · card: a card posted · update: a card posted before, redrawn.
+export const OutboxOp = z.enum(['react', 'post', 'card', 'update'])
+export type OutboxOp = z.infer<typeof OutboxOp>
 // reportId: the task report it carries, if it is one (channel_task_reports).
-export type OutboxRow = { id: string; channelId: string; requestId: string | null; reportId: string | null; op: 'react' | 'post'; payload: OutboxPayload; attempts: number; nextAt: number }
+export type OutboxRow = { id: string; channelId: string; requestId: string | null; reportId: string | null; op: OutboxOp; payload: OutboxPayload; attempts: number; nextAt: number }
 // mention: a platform user core names to be notified, never anything from an agent's words.
-const OutboxPayload = z.object({ place: z.string(), thread: z.string().nullable(), target: z.string().nullable(), text: z.string().nullable(), emoji: z.string().nullable(), mention: z.string().nullable().optional() })
+// card: the platform's own card, core-drawn; cardId: the card row it posts or redraws.
+// recipient: a user whose direct chat with the bot it goes to, in place of a chat.
+const OutboxPayload = z.object({
+  place: z.string(), thread: z.string().nullable(), target: z.string().nullable(), text: z.string().nullable(), emoji: z.string().nullable(),
+  mention: z.string().nullable().optional(), card: z.unknown().optional(), cardId: z.string().nullable().optional(), recipient: z.string().nullable().optional()
+})
+
+export type CardKind = 'task' | 'review' | 'rework'
+// A card of a task as posted: where, what it held that is not the task's own (a review's summary,
+// a rework's reason), what went wrong starting it, and what it was last drawn as.
+export type StoredCard = {
+  id: string; taskId: string; channelId: string; kind: CardKind; place: string; thread: string | null; recipient: string | null
+  feedbackId: string | null; summary: string[]; notice: string | null; messageId: string | null; rendered: string | null; createdAt: number; updatedAt: number
+}
+export type CardAction = 'start' | 'decline' | 'accept' | 'reject' | 'continue'
+export type StoredAction = { token: string; channelId: string; cardId: string; taskId: string; action: CardAction; createdAt: number; expiresAt: number; usedAt: number | null; usedBy: string | null }
+
+function card(row: Record<string, unknown>): StoredCard {
+  return {
+    id: String(row.id), taskId: String(row.task_id), channelId: String(row.channel_id), kind: row.kind === 'review' || row.kind === 'rework' ? row.kind : 'task',
+    place: String(row.place), thread: row.thread == null ? null : String(row.thread), recipient: row.recipient == null ? null : String(row.recipient),
+    feedbackId: row.feedback_id == null ? null : String(row.feedback_id), summary: strings(row.summary), notice: row.notice == null ? null : String(row.notice),
+    messageId: row.message_id == null ? null : String(row.message_id), rendered: row.rendered == null ? null : String(row.rendered), createdAt: Number(row.created_at), updatedAt: Number(row.updated_at)
+  }
+}
+
+const CARD_ACTIONS: readonly CardAction[] = ['start', 'decline', 'accept', 'reject', 'continue']
+function action(row: Record<string, unknown>): StoredAction | null {
+  const kind = CARD_ACTIONS.find((each) => each === row.action)
+  return kind ? {
+    token: String(row.token), channelId: String(row.channel_id), cardId: String(row.card_id), taskId: String(row.task_id), action: kind,
+    createdAt: Number(row.created_at), expiresAt: Number(row.expires_at), usedAt: row.used_at == null ? null : Number(row.used_at), usedBy: row.used_by == null ? null : String(row.used_by)
+  } : null
+}
 export type OutboxPayload = z.infer<typeof OutboxPayload>
 
 const strings = (raw: unknown): string[] => {
@@ -98,8 +134,10 @@ export class ChannelStore {
     try {
       this.db.prepare('DELETE FROM channel_tool_calls WHERE request_id IN (SELECT id FROM channel_requests WHERE channel_id = ?)').run(id)
       for (const table of ['channel_requests', 'channel_threads', 'channel_events', 'channel_outbox']) this.db.prepare(`DELETE FROM ${table} WHERE channel_id = ?`).run(id)
-      // The tasks it collected stay, with what was posted for them; what was still to go never will.
+      // The tasks it collected stay, with what was posted for them; what was still to go never will,
+      // and its cards can no longer be redrawn or clicked.
       this.db.prepare("UPDATE channel_task_reports SET state = 'skipped', reason = 'channel-removed' WHERE channel_id = ? AND state IN ('pending', 'queued')").run(id)
+      for (const table of ['channel_task_cards', 'channel_actions']) this.db.prepare(`DELETE FROM ${table} WHERE channel_id = ?`).run(id)
       this.db.prepare('DELETE FROM channels WHERE id = ?').run(id)
       this.db.exec('COMMIT')
     } catch (error) {
@@ -208,7 +246,7 @@ export class ChannelStore {
       .map((row) => ({ tool: String(row.tool), target: String(row.target), bytes: Number(row.bytes), at: Number(row.at) }))
   }
 
-  addOutbox(row: { id: string; channelId: string; requestId: string | null; reportId?: string | null; op: 'react' | 'post'; payload: OutboxPayload }, now: number): void {
+  addOutbox(row: { id: string; channelId: string; requestId: string | null; reportId?: string | null; op: OutboxOp; payload: OutboxPayload }, now: number): void {
     this.db.prepare('INSERT INTO channel_outbox (id, channel_id, request_id, report_id, op, payload, state, attempts, next_at, created_at) VALUES (?, ?, ?, ?, ?, ?, \'pending\', 0, ?, ?)')
       .run(row.id, row.channelId, row.requestId, row.reportId ?? null, row.op, JSON.stringify(row.payload), now, now)
   }
@@ -218,7 +256,9 @@ export class ChannelStore {
     return this.db.prepare('SELECT * FROM channel_outbox WHERE state = \'pending\' ORDER BY created_at, rowid').all().flatMap((row) => {
       let payload: OutboxPayload
       try { payload = OutboxPayload.parse(JSON.parse(String(row.payload))) } catch { return [] }
-      return [{ id: String(row.id), channelId: String(row.channel_id), requestId: row.request_id == null ? null : String(row.request_id), reportId: row.report_id == null ? null : String(row.report_id), op: row.op === 'react' ? 'react' as const : 'post' as const, payload, attempts: Number(row.attempts), nextAt: Number(row.next_at) }]
+      const op = OutboxOp.safeParse(row.op)
+      if (!op.success) return []
+      return [{ id: String(row.id), channelId: String(row.channel_id), requestId: row.request_id == null ? null : String(row.request_id), reportId: row.report_id == null ? null : String(row.report_id), op: op.data, payload, attempts: Number(row.attempts), nextAt: Number(row.next_at) }]
     })
   }
 
@@ -247,9 +287,85 @@ export class ChannelStore {
     this.db.prepare('DELETE FROM channel_requests WHERE created_at < ?').run(requestsBefore)
     const emptied = old.filter((id) => !this.db.prepare('SELECT 1 FROM channel_requests WHERE conversation_id = ? LIMIT 1').get(id))
     for (const id of emptied) this.db.prepare('DELETE FROM channel_threads WHERE conversation_id = ?').run(id)
-    // A task's reports go with the task, not with the channel's records.
-    this.db.prepare('DELETE FROM channel_task_reports WHERE task_id NOT IN (SELECT id FROM tasks)').run()
+    // A task's reports, cards and feedback go with the task, not with the channel's records.
+    for (const table of ['channel_task_reports', 'channel_task_cards', 'channel_actions', 'channel_task_feedback']) this.db.prepare(`DELETE FROM ${table} WHERE task_id NOT IN (SELECT id FROM tasks)`).run()
+    this.db.prepare('DELETE FROM channel_actions WHERE expires_at < ?').run(requestsBefore)
     return emptied
+  }
+
+  addCard(next: StoredCard): void {
+    this.db.prepare(`INSERT INTO channel_task_cards (id, task_id, channel_id, kind, place, thread, recipient, feedback_id, summary, notice, message_id, rendered, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(next.id, next.taskId, next.channelId, next.kind, next.place, next.thread, next.recipient, next.feedbackId,
+      JSON.stringify(next.summary), next.notice, next.messageId, next.rendered, next.createdAt, next.updatedAt)
+  }
+
+  card(id: string): StoredCard | null {
+    const row = this.db.prepare('SELECT * FROM channel_task_cards WHERE id = ?').get(id)
+    return row ? card(row) : null
+  }
+
+  // Oldest first.
+  cards(taskId: string): StoredCard[] {
+    return this.db.prepare('SELECT * FROM channel_task_cards WHERE task_id = ? ORDER BY created_at, rowid').all(taskId).map(card)
+  }
+
+  updateCard(id: string, patch: Partial<Pick<StoredCard, 'messageId' | 'rendered' | 'notice'>>, now: number): void {
+    const columns: Record<string, string> = { messageId: 'message_id', rendered: 'rendered', notice: 'notice' }
+    const entries = Object.entries(patch).filter(([, value]) => value !== undefined)
+    if (entries.length === 0) return
+    this.db.prepare(`UPDATE channel_task_cards SET ${entries.map(([key]) => `${columns[key]} = ?`).join(', ')}, updated_at = ? WHERE id = ?`).run(...entries.map(([, value]) => value ?? null), now, id)
+  }
+
+  // Whether the post that made a card was given up on, so nothing can redraw it.
+  cardLost(id: string): boolean {
+    return !!this.db.prepare('SELECT 1 FROM channel_outbox WHERE op = \'card\' AND state = \'failed\' AND json_extract(payload, \'$.cardId\') = ?').get(id)
+  }
+
+  addAction(next: StoredAction): void {
+    this.db.prepare('INSERT INTO channel_actions (token, channel_id, card_id, task_id, action, created_at, expires_at, used_at, used_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(next.token, next.channelId, next.cardId, next.taskId, next.action, next.createdAt, next.expiresAt, next.usedAt, next.usedBy)
+  }
+
+  action(token: string): StoredAction | null {
+    const row = this.db.prepare('SELECT * FROM channel_actions WHERE token = ?').get(token)
+    return row ? action(row) : null
+  }
+
+  // A button of a card still to be clicked, to draw it again with the same token.
+  openAction(cardId: string, kind: CardAction, now: number): StoredAction | null {
+    const row = this.db.prepare('SELECT * FROM channel_actions WHERE card_id = ? AND action = ? AND used_at IS NULL AND expires_at > ? ORDER BY created_at DESC LIMIT 1').get(cardId, kind, now)
+    return row ? action(row) : null
+  }
+
+  // Takes a token once: two clicks at once cannot both have it.
+  useAction(token: string, by: string, now: number): boolean {
+    return this.db.prepare('UPDATE channel_actions SET used_at = ?, used_by = ? WHERE token = ? AND used_at IS NULL').run(now, by, token).changes > 0
+  }
+
+  // Gives a token back, when what it asked for could not be done and may be tried again.
+  releaseAction(token: string): void {
+    this.db.prepare('UPDATE channel_actions SET used_at = NULL, used_by = NULL WHERE token = ?').run(token)
+  }
+
+  // Who last did this to a task from a card, if anyone did.
+  usedAction(taskId: string, kind: CardAction): StoredAction | null {
+    const row = this.db.prepare('SELECT * FROM channel_actions WHERE task_id = ? AND action = ? AND used_at IS NOT NULL ORDER BY used_at DESC LIMIT 1').get(taskId, kind)
+    return row ? action(row) : null
+  }
+
+  addFeedback(next: ChannelTaskFeedback): void {
+    this.db.prepare('INSERT INTO channel_task_feedback (id, task_id, channel_id, author, text, created_at, used_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(next.id, next.taskId, next.channelId, next.author, next.text, next.createdAt, next.usedAt)
+  }
+
+  // Oldest first.
+  feedback(taskId: string): ChannelTaskFeedback[] {
+    return this.db.prepare('SELECT id, task_id AS taskId, channel_id AS channelId, author, text, created_at AS createdAt, used_at AS usedAt FROM channel_task_feedback WHERE task_id = ? ORDER BY created_at, rowid')
+      .all(taskId).map((row) => ChannelTaskFeedback.parse(row))
+  }
+
+  useFeedback(id: string, now: number): boolean {
+    return this.db.prepare('UPDATE channel_task_feedback SET used_at = ? WHERE id = ? AND used_at IS NULL').run(now, id).changes > 0
   }
 
   // A task report for TaskStore to save with the status move it is about.

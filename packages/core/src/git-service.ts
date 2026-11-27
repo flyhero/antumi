@@ -124,9 +124,9 @@ export class GitService {
   }
 
   // Holds the repositories' lock for run, and refuses while an agent works in one of those checkouts.
-  async withRepositories<T>(dirs: readonly string[], run: () => Promise<T>): Promise<T> {
+  async withRepositories<T>(dirs: readonly string[], run: () => Promise<T>, exceptConversationId?: string): Promise<T> {
     return this.locking(dirs, async () => {
-      for (const dir of dirs) if (await this.busy(dir)) throw new Rejection('chat-busy')
+      for (const dir of dirs) if (await this.busy(dir, exceptConversationId)) throw new Rejection('chat-busy')
       return run()
     })
   }
@@ -149,13 +149,14 @@ export class GitService {
 
   // Whether an agent works, waits or starts in dir's checkout. One in another worktree of the same
   // repository is on a branch of its own, so it is no reason to hold git here.
-  private async busy(dir: string): Promise<boolean> {
+  private async busy(dir: string, exceptConversationId?: string): Promise<boolean> {
     const checkout = await checkoutKey(dir)
     if (!checkout) return false
     for (const task of this.tasks.list()) {
       if (this.tasks.isLaunching(task.id)) for (const repo of task.repos) if (await checkoutKey(repo.worktreePath ?? repo.path) === checkout) return true
     }
     for (const conversation of this.conversations.listAll()) {
+      if (conversation.id === exceptConversationId) continue
       if (!conversation.starting && !this.conversations.isGitPending(conversation.id) && (!conversation.sessionId || conversation.chat?.turn === 'idle')) continue
       for (const project of conversation.projectPaths) if (await checkoutKey(project) === checkout) return true
     }

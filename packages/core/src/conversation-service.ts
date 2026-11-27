@@ -173,8 +173,8 @@ export class ConversationService {
   // Conversations whose last start took its opening into the handoff it began from.
   private readonly openedInHandoff = new Set<string>()
   private readonly gitSending = new Map<string, number>()
-  private gitPreparation: (<T>(dirs: readonly string[], run: () => Promise<T>, requireIdle: boolean) => Promise<T>) | null = null
-  setGitPreparation(prepare: <T>(dirs: readonly string[], run: () => Promise<T>, requireIdle: boolean) => Promise<T>): void { this.gitPreparation = prepare }
+  private gitPreparation: (<T>(dirs: readonly string[], run: () => Promise<T>, requireIdle: boolean, exceptConversationId?: string) => Promise<T>) | null = null
+  setGitPreparation(prepare: <T>(dirs: readonly string[], run: () => Promise<T>, requireIdle: boolean, exceptConversationId?: string) => Promise<T>): void { this.gitPreparation = prepare }
   private gitGuard: ((dirs: readonly string[]) => Promise<void>) | null = null
 
   isGitPending(id: string): boolean { return this.launching.has(id) || this.gitSending.has(id) }
@@ -1306,7 +1306,7 @@ export class ConversationService {
       if (!primary) throw new Rejection('missing-repo')
       const branch = plan.branch
       const prepare = () => switchProjectBranch(primary, branch)
-      await (this.gitPreparation ? this.gitPreparation(projects, prepare, true) : prepare())
+      await (this.gitPreparation ? this.gitPreparation(projects, prepare, true, id) : prepare())
     }
     const workspace = paths[0] ?? path.join(this.sessionsRoot, id, 'workspace')
     if (!paths.length) await mkdir(workspace, { recursive: true, mode: 0o700 })

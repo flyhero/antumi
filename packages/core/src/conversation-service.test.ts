@@ -898,7 +898,7 @@ describe('ConversationService', () => {
     git('branch', 'feature')
     const favorites = new GitFavoriteStore(path.join(root, 'antumi.db'))
     const management = new GitService({ get: () => { throw new Error('no tasks') }, list: () => [], isLaunching: () => false }, service, favorites)
-    service.setGitPreparation((dirs, run, requireIdle) => requireIdle ? management.withRepositories(dirs, run) : management.withRepositoryLock(dirs, run))
+    service.setGitPreparation((dirs, run, requireIdle, exceptConversationId) => requireIdle ? management.withRepositories(dirs, run, exceptConversationId) : management.withRepositoryLock(dirs, run))
     try {
       const source = await service.create('claude', [app])
       daemon.reply = () => {}
@@ -913,9 +913,18 @@ describe('ConversationService', () => {
       expect(git('branch', '--show-current')).toBe('main')
       expect(readFileSync(path.join(app, 'draft.md'), 'utf8')).toBe('unfinished\n')
       await expect(service.create('claude', [app], undefined, { branch: 'refs/heads/feature' })).rejects.toMatchObject({ reason: 'chat-busy' })
+      const pending = await service.create('claude', [app], undefined, { branch: 'refs/heads/feature', deferStart: true, deferWorkspace: true })
+      await expect(service.continue(pending.id)).rejects.toMatchObject({ reason: 'chat-busy' })
+      expect(git('branch', '--show-current')).toBe('main')
       await management.withRepositoryLock([app], async () => {
         await expect(service.create('claude', [app], undefined, { worktree: true })).rejects.toMatchObject({ reason: 'git-busy' })
       })
+      await service.stop(source.id)
+      const opened = await service.continue(pending.id)
+      expect(git('branch', '--show-current')).toBe('feature')
+      expect(store.workspacePreparation(pending.id)).toBeNull()
+      await service.send(opened.id, 'first message')
+      expect(daemon.written(opened.sessionId!).at(-1)).toMatchObject({ type: 'user', message: { content: 'first message' } })
     } finally { favorites.close() }
   })
 

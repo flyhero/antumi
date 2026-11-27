@@ -361,6 +361,7 @@ export function createRpcHandlers(
     'agentProfiles.available': ({ id }) => profileService().available(id),
     'agentCalls.list': ({ id, read }) => read ? profileService().read(id) : profileService().calls(id),
     'agentCalls.targets': ({ id }) => profileService().targets(id),
+    'conversations.mentionTargets': (options) => ({ agents: profileService().draftTargets(options.profileId), squads: teamCalls().draftTargets(options) }),
     'agentCalls.dispatch': ({ id, profileId, agent, model, effort, capability, instruction, ref, workspace }) => {
       const target = profileId && !agent ? profileId : agent && !profileId ? { agent, model, effort, capability } : null
       if (!target) throw new Rejection('invalid-params', '请指定 profileId 或 agent 之一')

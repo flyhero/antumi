@@ -46,14 +46,21 @@ export class SquadCallService {
   targets(id: string): SquadCallTarget[] {
     const parent = this.chats.get(id)
     if (!this.eligible(parent)) return []
+    return this.targetsFor(parent, this.chats.allowsBypass(id))
+  }
+  draftTargets({ profileId, permissionMode, allowBypass = false }: { profileId?: string; permissionMode?: ChatPermissionMode; allowBypass?: boolean }): SquadCallTarget[] {
+    const profile = profileId ? this.profiles.get(profileId) : null
+    return this.targetsFor({ profile, workspaceReadOnly: profile?.capability === 'readOnly', chatOptions: { permissionMode: permissionMode ?? null, model: null, effort: null } }, allowBypass)
+  }
+  private targetsFor(parent: Pick<Conversation, 'profile' | 'workspaceReadOnly' | 'planOnly' | 'chatOptions'>, allowBypass: boolean): SquadCallTarget[] {
     return this.squads.list().filter((squad) => squad.archivedAt === null && (!parent.profile || parent.profile.callableSquads.includes(squad.id))).map((saved) => {
       let squad = saved
       let reason: string | null = null
       try { squad = this.squads.resolve(saved) } catch (error) { reason = error instanceof Error ? error.message : String(error) }
       if (callerReadOnly(parent)) reason = '当前会话只能规划或读取，不能启动开发团队'
       if (squad.members.some((member) => this.options.disabled().includes(member.agent))) reason = '团队成员使用的外部智能体已停用'
-      const modes = squadModes(squad, this.chats.allowsBypass(id))
-      const mode = ChatPermissionMode.parse(delegatedMode(parent.chatOptions?.permissionMode, this.chats.allowsBypass(id), modes))
+      const modes = squadModes(squad, allowBypass)
+      const mode = ChatPermissionMode.parse(delegatedMode(parent.chatOptions?.permissionMode, allowBypass, modes))
       if (!modes.includes(mode)) reason = '团队成员不支持当前授权范围内的权限模式'
       const quotas = squad.members.map((member) => ({ memberId: member.id, quota: this.options.quota(member) }))
       if (quotas.find((entry) => entry.memberId === squad.leaderId)?.quota.state === 'exhausted') reason = '队长的额度已用完'

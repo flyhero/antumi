@@ -8,7 +8,7 @@ import { ContextMenu, type MenuPoint } from './ContextMenu'
 import { CheckIcon, ChevronDownIcon, ChevronRightIcon } from './icons'
 import { ProjectIcon } from './ProjectIcon'
 import { parentDir, projectName, useProjectLocation } from './ProjectPicker'
-import { availableProjects, plainProject, recentProjectChoices, useProjectDescriptions } from '../project-choices'
+import { availableProjects, plainProject, useRecentProjectChoices, useProjectDescriptions } from '../project-choices'
 import { ProjectChoiceLabel, projectChoiceTitle } from './ProjectChoiceLabel'
 
 // Why the additional projects cannot change right now, as the menu says it.
@@ -31,7 +31,7 @@ export function ChatProjects({ conversation }: { conversation: Conversation }) {
   const location = useProjectLocation()
   const button = useRef<HTMLButtonElement>(null)
   const [at, setAt] = useState<MenuPoint | null>(null)
-  const [recent, setRecent] = useState<readonly ProjectChoice[]>([])
+  const recent = useRecentProjectChoices(at !== null)
   const [copiesOpen, setCopiesOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [ticked, setTicked] = useState<readonly string[]>([])
@@ -69,16 +69,12 @@ export function ChatProjects({ conversation }: { conversation: Conversation }) {
     const next = dismiss()
     if (next) void apply(next)
   }
-  const open = async () => {
+  const open = () => {
     const box = button.current?.getBoundingClientRect()
     if (!box) return
     tick(extras)
     setCopiesOpen(false)
-    setRecent([])
     setAt({ x: box.left, y: box.top })
-    if (note) return
-    const found = await perform(recentProjectChoices)
-    setRecent(found ?? [])
   }
   // The dialog takes the focus, which closes the menu anyway; its pick joins the ticks in one apply.
   const browse = async () => {
@@ -112,7 +108,7 @@ export function ChatProjects({ conversation }: { conversation: Conversation }) {
         aria-label={t('ChatProjects.conversationProjects', { value1: conversation.projectPaths.map(projectName).join('、') })}
         title={[t('ChatProjects.primaryProject', { primary: primary }), ...extras].join('\n')}
         disabled={busy}
-        onClick={() => (at ? close() : void open())}
+        onClick={() => (at ? close() : open())}
       >
         <ProjectIcon path={primary} />
         <span className="chat-projects-name">{projectName(primary)}</span>

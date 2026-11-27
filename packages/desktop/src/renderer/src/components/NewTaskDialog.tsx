@@ -45,7 +45,7 @@ export function NewTaskDialog() {
   const installed = useInstalledAgents()
   const recommended = useRecommendation(installed)?.agent ?? null
   const squads = useCore((state) => state.squads)
-  const [squadId, setSquadId] = useState<string | null>(null)
+  const [squadId, setSquadId] = useState<string | null>(draft?.squadId ?? null)
   const [dependsOn, setDependsOn] = useState<string[]>([])
   const [details, setDetails] = useState('')
   // The details editor holds its own text; a new key starts it empty for the next task.

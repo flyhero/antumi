@@ -6,7 +6,7 @@ vi.hoisted(() => {
   vi.stubGlobal('navigator', { userAgent: 'Mac', platform: 'MacIntel' })
 })
 
-const { availableProjects, plainProject, recentProjectChoices, sourceProjects } = await import('./project-choices')
+const { availableProjects, plainProject, recentProjectChoices, sourceProject, sourceProjects } = await import('./project-choices')
 
 describe('source project suggestions', () => {
   it('offers the source of an already selected copy, and a copy of an already selected source', () => {
@@ -95,5 +95,39 @@ describe('progressive project choices', () => {
     expect(await loading).toEqual([plainProject('/source')])
     expect(publish).toHaveBeenCalledWith([plainProject('/source')])
     expect(sent).toHaveLength(1)
+  })
+})
+
+describe('a project group starting a conversation', () => {
+  const copy = { path: '/worktrees/one/app', source: '/code/app', worktree: true, branch: 'one' }
+
+  it('starts in the source of a copy core already knows, without asking Git', async () => {
+    const { rpc, sent, reply } = connection()
+    const source = sourceProject(rpc, copy.path)
+    reply(0, { paths: [copy.path], choices: [copy] })
+    expect(await source).toBe('/code/app')
+    expect(sent).toHaveLength(1)
+  })
+
+  it('asks for an unknown path, and keeps a copy whose source is gone or a plain project', async () => {
+    const { rpc, sent, reply } = connection()
+    const resolved = sourceProject(rpc, copy.path)
+    reply(0, { paths: [], choices: [] })
+    await vi.waitFor(() => expect(sent).toHaveLength(2))
+    expect(sent[1]).toMatchObject({ method: 'projects.describe', params: { paths: [copy.path] } })
+    reply(1, [copy])
+    expect(await resolved).toBe('/code/app')
+    const orphan = sourceProject(rpc, copy.path)
+    reply(2, { paths: [copy.path], choices: [{ ...copy, source: null }] })
+    expect(await orphan).toBe(copy.path)
+    const plain = sourceProject(rpc, '/code/app')
+    reply(3, { paths: ['/code/app'], choices: [plainProject('/code/app')] })
+    expect(await plain).toBe('/code/app')
+  })
+
+  it('keeps the path on older cores', async () => {
+    const { rpc, sent } = connection([])
+    expect(await sourceProject(rpc, copy.path)).toBe(copy.path)
+    expect(sent).toHaveLength(0)
   })
 })

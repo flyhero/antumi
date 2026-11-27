@@ -20,7 +20,7 @@ import { hasPrimaryModifier } from '../shortcut-keys'
 import { conversationGlyph, conversationState, timeAgo } from '../conversation-state'
 import { agentLabel } from '../labels'
 import { CONVERSATION_DENSITIES, CONVERSATION_GROUPS, CONVERSATION_KINDS, CONVERSATION_SORTS, MAX_PROJECT_NAME, setPreference, usePreferences, type Preferences } from '../preferences'
-import { beginHandoff, ConversationContextMenu, newConversation, renameConversation } from './ConversationActions'
+import { beginHandoff, ConversationContextMenu, newConversation, newConversationInProject, renameConversation } from './ConversationActions'
 import { ConversationMark } from './ConversationStatus'
 import { ConversationGroupActivity } from './ConversationGroupActivity'
 import { ConversationPeek, DiscussionPeek, useConversationPeek } from './ConversationPeek'
@@ -540,7 +540,7 @@ export function ConversationList() {
                   className="icon-button conversation-group-new sidebar-add"
                   aria-label={t('ConversationList.newConversationIn', { value1: group.label })}
                   title={t('ConversationList.newConversationIn', { value1: group.label })}
-                  onClick={() => group.project && newConversation([group.project])}
+                  onClick={() => group.project && void newConversationInProject(group.project)}
                 >
                   <PlusIcon />
                 </button>

@@ -26,6 +26,19 @@ export function availableProjects(choices: readonly ProjectChoice[], selected: r
   }
 }
 
+// The project a worktree copy came from, or the path itself. Known identities skip the Git lookup.
+export async function sourceProject(rpc: RpcConnection, path: string): Promise<string> {
+  if (!rpc.features.includes('project-choices')) return path
+  try {
+    const cached = rpc.features.includes('project-suggestions')
+      ? (await rpc.call('projects.suggestions', {})).choices.find((choice) => choice.path === path) : undefined
+    const choice = cached ?? (await rpc.call('projects.describe', { paths: [path] }))[0]
+    return choice?.worktree && choice.source ? choice.source : path
+  } catch {
+    return path
+  }
+}
+
 const recentChoices = new WeakMap<RpcConnection, readonly ProjectChoice[]>()
 const refreshing = new WeakMap<RpcConnection, { key: string; request: Promise<ProjectChoice[]> }>()
 

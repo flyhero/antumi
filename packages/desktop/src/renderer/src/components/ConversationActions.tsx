@@ -18,6 +18,7 @@ import { cleanAway, worktreesToOffer } from '../conversation-worktrees'
 import { refreshWorktrees } from '../worktree-store'
 import { usePreferences } from '../preferences'
 import { pinAgent } from '../pinned-agents'
+import { sourceProject } from '../project-choices'
 
 // Every way into a handoff ends in the conversation's composer, with the agent picked there (by
 // default the other one here), to be sent from it with whatever the user adds.
@@ -39,6 +40,12 @@ export function beginHandoff(conversation: Conversation, agent?: AgentKind): voi
 // A new conversation opens as a page its first message starts.
 export function newConversation(projects?: readonly string[]): void {
   openConversationDraft(projects)
+}
+
+// A project's group may lead with a chat in one of its worktrees; its ＋ starts in the project itself.
+export async function newConversationInProject(project: string): Promise<void> {
+  const { rpc } = useCore.getState()
+  newConversation([rpc ? await sourceProject(rpc, project) : project])
 }
 
 export function useReuseConversationSupported(): boolean {

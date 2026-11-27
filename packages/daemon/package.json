@@ -1,6 +1,6 @@
 {
   "name": "@antumi/daemon",
-  "version": "0.22.1-beta.3",
+  "version": "0.22.1",
   "private": true,
   "type": "module",
   "scripts": {

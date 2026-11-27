@@ -22,7 +22,7 @@ import { ChatAddMenu, ChatImageStrip, useComposerImages } from './ChatImages'
 import { useChatCommandMenu } from './ChatCommandMenu'
 import { useChatMentionMenu } from './ChatMentionMenu'
 import { MentionField, useMentionedText } from './ChatMentionField'
-import { ChatOptionsBar } from './ChatOptionsBar'
+import { ChatOptionsBar, switchesProvider } from './ChatOptionsBar'
 import { RouteBadge } from './RouteBadge'
 import { HandoffAgentPicker, HandoffModePicker, HandoffModelPicker, HandoffProviderPicker, useComposerHandoff } from './ChatHandoff'
 import { ArrowUpIcon, ArrowDownIcon, ChevronDownIcon, ClockIcon, CloseIcon, EnterIcon, PencilIcon, StopIcon } from './icons'
@@ -294,6 +294,7 @@ export function ChatComposer({ conversation, state, compact = false }: { convers
   const imagesSupported = useChatImagesSupported()
   const deliveryRefsSupported = useCore((state) => !state.rpc || state.rpc.features.includes('deferred-conversation-start'))
   const optionsSupported = useChatOptionsSupported()
+  const providerSwitchable = useCore((s) => switchesProvider(conversation, s.rpc?.features ?? []))
   const schedulesSupported = useSchedulesSupported()
   const scheduleImagesSupported = useScheduleImagesSupported()
   const mentionsSupported = useFileMentionsSupported()
@@ -352,6 +353,8 @@ export function ChatComposer({ conversation, state, compact = false }: { convers
   // Another agent picked in the agent switch: the next send hands the chat to it instead.
   const handoff = useComposerHandoff(conversation, attached.images)
   const handingOff = handoff.target?.agent ?? null
+  // The toolbar shows for a running agent's state, or for the next start's saved choices.
+  const optionsBar = optionsSupported && (conversation.sessionId !== null ? Boolean(state) : Boolean(conversation.chatOptions))
   const suggestion = !handingOff && offered && offered !== dismissed && text === '' && attached.images.length === 0 && quotes.length === 0 && !surface.sendBlocker ? offered : null
   const canSteer = !handingOff && queueable && steerable && canSend
   // Not held by this conversation's turn: the new one runs beside it.
@@ -581,7 +584,7 @@ export function ChatComposer({ conversation, state, compact = false }: { convers
       <div className="chat-options">
         {(imagesSupported || files.picksFiles) && <ChatAddMenu disabled={inputReadOnly} onAdd={attached.add} onFiles={files.picksFiles ? files.addPicked : undefined} />}
         {!compact && handoff.targets.length > 0 && <HandoffAgentPicker conversationId={id} handoff={handoff} disabled={busy || starting || switchingPermission} />}
-        {!compact && !handoff.target && <RouteBadge conversation={conversation} locked={Boolean(conversation.profile || conversation.helperOf || conversation.squadRunId || conversation.discussionId)} />}
+        {!compact && !handoff.target && !(optionsBar && providerSwitchable) && <RouteBadge conversation={conversation} locked={Boolean(conversation.profile || conversation.helperOf || conversation.squadRunId || conversation.discussionId)} />}
         {handingOff ? (
           <>
             <HandoffModePicker conversationId={id} handoff={handoff} />
@@ -589,7 +592,7 @@ export function ChatComposer({ conversation, state, compact = false }: { convers
             <span className="chat-dock-spacer" />
             <HandoffModelPicker conversationId={id} agent={handingOff} />
           </>
-        ) : optionsSupported && (state || (!conversation.sessionId && conversation.chatOptions)) ? <ChatOptionsBar compact={compact} conversation={conversation} state={state} /> : compact ? <HelperStartOptions conversation={conversation} /> : null}
+        ) : optionsBar ? <ChatOptionsBar compact={compact} conversation={conversation} state={state} /> : compact ? <HelperStartOptions conversation={conversation} /> : null}
         {suggestion && suggestionKey && (
           <span className="chat-suggestion-hint" aria-hidden="true">{tr('ChatComposer.useSuggestion', { value1: <kbd>{suggestionKey}</kbd> })}</span>
         )}

@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ChatItem, Conversation } from '@antumi/protocol'
 import { useAgentCatalog } from '../agent-models'
 import { useCore } from '../core-store'
-import { ChatOptionsBar } from './ChatOptionsBar'
+import { ChatOptionsBar, switchesProvider } from './ChatOptionsBar'
 
 vi.mock('../agent-models', () => ({ useAgentCatalog: vi.fn() }))
 
@@ -62,5 +62,22 @@ describe('models before an imported session resumes', () => {
     const html = renderToStaticMarkup(createElement(ChatOptionsBar, { conversation: { ...conversation, sessionId: 'running' }, state }))
     expect(html).not.toContain('GLM Flash')
     expect(useAgentCatalog).toHaveBeenCalledWith('zcode', false, null, undefined)
+  })
+})
+
+describe('switchesProvider', () => {
+  const features = ['provider-selection-v2']
+  const own = { ...conversation, agent: 'claude' as const }
+
+  it('offers switching in an ordinary conversation of an agent that takes providers', () => {
+    expect(switchesProvider(own, features)).toBe(true)
+  })
+
+  it('leaves the route badge where the provider is inherited, unsupported or the core is older', () => {
+    expect(switchesProvider({ ...own, squadRunId: 'run' }, features)).toBe(false)
+    expect(switchesProvider({ ...own, helperOf: 'parent' }, features)).toBe(false)
+    expect(switchesProvider({ ...own, discussionId: 'talk' }, features)).toBe(false)
+    expect(switchesProvider({ ...own, agent: 'cursor' }, features)).toBe(false)
+    expect(switchesProvider(own, [])).toBe(false)
   })
 })

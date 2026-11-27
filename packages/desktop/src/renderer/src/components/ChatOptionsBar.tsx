@@ -71,6 +71,13 @@ function withCurrent(values: readonly string[], current: string | null): string[
   return current && !values.includes(current) ? [current, ...values] : [...values]
 }
 
+// Whether the toolbar lets the provider be switched. A conversation that inherits it from a profile,
+// squad, discussion or parent shows the composer's route badge instead.
+export function switchesProvider(conversation: Pick<Conversation, 'agent' | 'squadRunId' | 'parentConversationId' | 'workspaceReadOnly' | 'profile' | 'discussionId' | 'helperOf'>, features: readonly string[]): boolean {
+  const inherits = Boolean(conversation.squadRunId || conversation.parentConversationId || conversation.workspaceReadOnly || conversation.profile || conversation.discussionId) || isHelper(conversation)
+  return features.includes('provider-selection-v2') && agentDescriptor(conversation.agent).capabilities.modelProviders.length > 0 && !inherits
+}
+
 // The composer's toolbar, inside its box after the ＋: how freely the agent may act on the left; on
 // the right, the model and effort it runs beside how full its context is. A click switches each;
 // the model and effort change between turns, the mode at any time. With no agent running, the
@@ -81,7 +88,7 @@ export function ChatOptionsBar({ conversation, state, compact = false }: { conve
   const managed = Boolean(conversation.squadRunId || conversation.parentConversationId || conversation.workspaceReadOnly)
   const running = conversation.sessionId !== null
   const switchingPermission = usePermissionSwitching(id) !== null
-  const switchingSupported = useCore((s) => s.rpc?.features.includes('provider-selection-v2') ?? false)
+  const providerSwitchable = useCore((s) => switchesProvider(conversation, s.rpc?.features ?? []))
   const [switchingProvider, setSwitchingProvider] = useState(false)
   const providers = useCore((s) => s.modelProviders)
   const activeBackend = useAgentBackend(agent)
@@ -132,8 +139,8 @@ export function ChatOptionsBar({ conversation, state, compact = false }: { conve
       {switchingPermission && (
         <span className="chat-suggestion-hint" role="status">{t('ChatOptionsBar.switchingPermission')}</span>
       )}
-      {switchingSupported && <ProviderPicker agent={agent} value={conversation.modelProvider ?? null} remember={false}
-        disabled={managed || Boolean(conversation.profile || conversation.discussionId) || isHelper(conversation) || switchingProvider || switchingPermission || !idle || Boolean(conversation.starting)}
+      {providerSwitchable && <ProviderPicker agent={agent} value={conversation.modelProvider ?? null} remember={false}
+        disabled={switchingProvider || switchingPermission || !idle || Boolean(conversation.starting)}
         onChange={(modelProvider) => { void (async () => {
           if (!await askConfirm({ message: t('ProviderPicker.switchConfirm'), confirm: t('ProviderPicker.switch') })) return
           setSwitchingProvider(true)

@@ -6281,8 +6281,6 @@ div.inspector-empty > p { margin: 0 0 8px; }
 }
 
 .auto-investigation-settings { border-top: 1px solid var(--border); padding-top: 20px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-.auto-investigation-options { display: flex; flex-wrap: wrap; gap: 8px; }
-.auto-investigation-options > * { flex: 1 1 160px; min-width: 0; }
 .auto-investigation-summary { display: flex; flex-direction: column; gap: 4px; color: var(--text-muted); font-size: 12px; overflow-wrap: anywhere; }
 .source-settings { display: flex; flex-direction: column; gap: 24px; min-width: 0; container-type: inline-size; }
 .source-settings .input { min-height: 36px; font-size: 14px; }
@@ -6314,21 +6312,20 @@ div.inspector-empty > p { margin: 0 0 8px; }
 .source-automation-controls .settings-row + .settings-row { border-top: 0; }
 .source-automation-controls .settings-row-text { min-width: 0; }
 .source-automation-controls .settings-row-description { max-width: 48ch; margin-top: 4px; font-size: 12px; line-height: 1.6; }
-.source-automation-controls .settings-row-control:has(.chat-picker) { width: 224px; max-width: 45%; }
+.source-automation-controls .settings-row-control:has(> .source-coordinator-summary) { max-width: 55%; }
+.source-coordinator-summary { display: flex; align-items: center; gap: 12px; color: var(--text-muted); font-size: 12px; }
+.source-coordinator-summary > span { overflow-wrap: anywhere; text-align: right; }
+.source-coordinator-summary > .button { flex-shrink: 0; }
+.source-coordinator-dialog .modal-body { max-height: calc(100dvh - 34px); overflow-y: auto; }
+.source-coordinator-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr)); gap: 16px; }
+.source-coordinator-fields > .modal-field { min-width: 0; }
+.source-coordinator-fields .chat-picker { min-height: 36px; }
+.source-coordinator-dialog .modal-footer { justify-content: flex-end; }
 .source-automation-limits { display: flex; flex-wrap: wrap; align-items: center; gap: 16px 32px; margin-top: 8px; padding: 16px 0 20px; }
 .source-automation-limit { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .source-automation-limit > .settings-field-label { font-size: 12px; white-space: nowrap; }
 .source-automation-number { display: flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: 12px; }
 .source-automation-number .input { width: 56px; min-width: 0; min-height: 32px; height: 32px; padding-inline: 8px; text-align: center; font-variant-numeric: tabular-nums; }
-.source-automation-advanced { border-top: 1px solid var(--border); }
-.source-automation-advanced > summary { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 16px 0; list-style: none; cursor: pointer; }
-.source-automation-advanced > summary::-webkit-details-marker { display: none; }
-.source-automation-advanced > summary > svg { width: 16px; height: 16px; flex-shrink: 0; color: var(--text-muted); }
-.source-automation-advanced[open] > summary > svg { transform: rotate(90deg); }
-.source-automation-advanced-hint { color: var(--text-muted); font-size: 12px; }
-.source-automation-advanced-fields { display: flex; flex-direction: column; gap: 16px; padding: 0 0 20px; }
-.source-automation-advanced-fields .settings-field { gap: 8px; }
-.source-automation-advanced-fields .settings-textarea { font-size: 14px; }
 .source-automation-prompt-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .source-automation-settings > .settings-field + .settings-field { margin-top: 20px; }
 .source-automation-settings .input { font-size: 14px; }
@@ -6340,7 +6337,9 @@ div.inspector-empty > p { margin: 0 0 8px; }
   .source-automation-header { flex-wrap: wrap; }
   .source-automation-actions { margin-left: auto; }
   .source-automation-controls .settings-row { flex-wrap: wrap; gap: 8px 16px; }
-  .source-automation-controls .settings-row-control:has(.chat-picker) { width: 100%; max-width: none; }
+  .source-automation-controls .settings-row-control:has(> .source-coordinator-summary) { width: 100%; max-width: none; }
+  .source-coordinator-summary { justify-content: space-between; }
+  .source-coordinator-summary > span { text-align: left; }
   .source-automation-flow, .source-automation-flow li { column-gap: 8px; }
   .source-automation-limits { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
   .source-automation-limit { justify-content: space-between; }

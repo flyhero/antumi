@@ -772,6 +772,8 @@ Claude Code、Codex 和 CodeBuddy 可以用多个账号（描述符的 `capabili
 - `setup`：复制完成后，在新建的 worktree 里运行。只在这次启动新建 worktree 时运行一次，复用已有 worktree 不再运行。任务的 Agent 等 setup 结束后才收到第一条消息；setup 失败不阻止启动，失败输出的末尾会附在第一条消息里。在 worktree 里开始的会话同样会先运行 setup。
 - `check`：用户提交验收时，在每个 worktree 里运行。全部通过后任务才进入待验收；任何一个失败，任务保持执行中，输出末尾发给 Agent 修复。团队任务暂不运行 check。
 
+桌面端新建普通和 worktree 会话使用 `deferStart + deferWorkspace`（core 声明 `deferred-workspace`）：先保存会话并进入聊天页、显示首条消息，再由 `conversations.continue` 校验模型、解析项目路径并读取 Git 起点；需要时切换项目分支，或创建 worktree、确认配置并运行初始化，最后启动 Agent 和发送消息。准备计划保存在 `conversations.workspace_preparation`，重启或重试仍使用同一工作区；准备与 Agent 启动共用启动锁，不能在源项目中提前启动。配置确认可以选「本次不运行，继续」，这次跳过复制与 setup，不记为已信任，也不影响其他会话或后续验收检查。
+
 配置始终从项目本身的 checkout 读取，不读 worktree，所以 Agent 改 worktree 里那份不会改变要运行的命令。命令由用户的登录 shell 执行，cwd 是 worktree 根目录，另有环境变量 `ANTUMI_ROOT_PATH`（项目）和 `ANTUMI_WORKTREE_PATH`。命令显示在终端面板的独立标签里（`Terminal.purpose`），Agent 也能用 `terminal_read` 读取；用户可以在面板里停止。
 
 命令来自仓库，不一定是用户写的，所以第一次运行前要用户确认：core 在 `~/.antumi/project-trust.json` 里按仓库记下 setup 和 check 的哈希，哈希对不上时拒绝启动或提交（`project-config-untrusted`）。桌面端随后显示这些命令，用户允许后再试一次。只改 `copy` 不需要重新确认。文件格式有误时同样拒绝（`project-config-invalid`），不会悄悄跳过 setup。

@@ -200,7 +200,7 @@ export function ConversationDraft() {
   // The page is how a chat start begins, as settings choose; a terminal start has its dialog.
   const create = async () => {
     if (!agent || !await quotaAllows(agent)) return null
-    return perform((rpc) => rpc.call('conversations.create', { agent, ...where, ...(deferStart ? { deferStart: true } : {}), ...startOptions(), ...chosen }))
+    return perform((rpc) => rpc.call('conversations.create', { agent, ...where, ...(deferStart ? { deferStart: true, ...(rpc.features.includes('deferred-workspace') ? { deferWorkspace: true } : {}) } : {}), ...startOptions(), ...chosen }))
   }
   // A current core answers at once and fetches the issue behind the open conversation; an older
   // one fetches it and starts the agent before answering, so the page waits.

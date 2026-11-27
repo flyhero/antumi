@@ -586,13 +586,13 @@ export function createRpcHandlers(
     'conversations.get': ({ id }) => conversations.get(id),
     'conversations.configuration': ({ id }) => conversations.configuration(id),
     'conversations.helper': ({ id }) => conversations.helper(id),
-    'conversations.create': ({ agent, projectPaths, worktree, branch, allowBypass, permissionMode, model, effort, deferStart, helperOf, modelProvider, profileId, account }, connection) => {
+    'conversations.create': ({ agent, projectPaths, worktree, branch, allowBypass, permissionMode, model, effort, deferStart, deferWorkspace, helperOf, modelProvider, profileId, account }, connection) => {
       if (connection.mobile && (helperOf || profileId)) throw new Rejection('mobile-project-not-recent', 'pick a recent project')
       requireRecentForPhone(connection, projectPaths)
       const profile = profileId ? profileService().get(profileId) : undefined
       if (profile && (profile.agent !== agent || helperOf)) throw new Rejection('invalid-params', '智能体配置与会话不匹配')
       return conversations.create(agent, projectPaths, allowBypass, { permissionMode: profile?.capability === 'readOnly' ? agentDescriptor(agent).readOnlyMode : permissionMode,
-        model: model ?? profile?.model ?? undefined, effort: effort ?? profile?.effort ?? undefined, worktree, branch, deferStart, helperOf,
+        model: model ?? profile?.model ?? undefined, effort: effort ?? profile?.effort ?? undefined, worktree, branch, deferStart, deferWorkspace, helperOf,
         modelProvider: profile?.modelProvider ?? modelProvider, profile, ...(account ? { account } : {}) })
     },
     'conversations.chatCatalog': ({ agent, modelProvider, refresh }, connection) => conversations.chatCatalog(agent, modelProvider, !connection.mobile && refresh),
@@ -611,7 +611,7 @@ export function createRpcHandlers(
     'todos.edit': ({ id, groupId, itemId, text }) => todosOf(id).edit(id, groupId, itemId, text),
     'todos.remove': ({ id, groupId, itemId }) => todosOf(id).remove(id, groupId, itemId),
     'conversations.setArchived': ({ id, archived }) => { notChannel(id); return conversations.setArchived(id, archived) },
-    'conversations.continue': ({ id, allowBypass }) => { notChannel(id); return userActed(id, () => { profiles?.guardUser(id, true); squads?.guardUser(id, true); return conversations.continue(id, allowBypass) }) },
+    'conversations.continue': ({ id, allowBypass, skipProjectSetup }) => { notChannel(id); return userActed(id, () => { profiles?.guardUser(id, true); squads?.guardUser(id, true); return conversations.continue(id, allowBypass, undefined, skipProjectSetup) }) },
     'conversations.handoff': ({ id, agent, note, stopRunning, allowBypass, permissionMode, model, effort, references, images, modelProvider }) => { sources.automatic?.takeover(id); return conversations.handoff(id, agent, note, stopRunning, allowBypass, { permissionMode, model, effort, references, images, modelProvider }) },
     'conversations.fork': ({ id, stageId, itemId }) => conversations.fork(id, stageId, itemId),
     // A mode the user picks is theirs to answer for: a run nobody watched stops answering for them.

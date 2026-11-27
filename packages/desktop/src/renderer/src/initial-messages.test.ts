@@ -1,3 +1,4 @@
+import { useProjectTrust } from './project-trust'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createRpcClient, RpcRequest, type ChatImage, type ChatReference, type Conversation, type RpcConnection } from '@antumi/protocol'
 import { acknowledgeInitialMessage, keepInitialMessage, restoredInitialMessages, sendInitialMessage, useInitialMessages } from './initial-messages'
@@ -19,6 +20,31 @@ function connection(features: RpcConnection['features'] = ['deferred-conversatio
 beforeEach(() => useInitialMessages.setState({}, true))
 
 describe('initial message delivery', () => {
+  it('offers skipping setup on the open chat and sends its first message after readiness', async () => {
+    const { rpc, sent, reply } = connection(['deferred-workspace'])
+    keepInitialMessage(id, 'start here', [])
+    const delivery = sendInitialMessage(id, rpc)
+    rpc.receive(JSON.stringify({ jsonrpc: '2.0', id: sent[0]?.id, error: {
+      code: -32000, message: '/repo', data: { reason: 'project-config-untrusted' }
+    } }))
+    await settle()
+    expect(sent[1]).toMatchObject({ method: 'projects.config', params: { path: '/repo' } })
+    reply(1, { path: '/repo', hash: 'h', trusted: false, config: { setup: 'install' } })
+    await settle()
+    expect(useProjectTrust.getState().asking?.canSkip).toBe(true)
+    expect(useInitialMessages.getState()[id]?.phase).toBe('starting')
+    useProjectTrust.getState().asking?.answer('skip')
+    await settle()
+    expect(sent[2]).toMatchObject({ method: 'conversations.continue', params: { id, skipProjectSetup: true } })
+    expect(sent.some((request) => request.method === 'projects.trustConfig')).toBe(false)
+    reply(2, conversation)
+    await settle()
+    expect(sent[3]).toMatchObject({ method: 'conversations.send', params: { text: 'start here' } })
+    reply(3, { ok: true })
+    await delivery
+    expect(useInitialMessages.getState()[id]).toBeUndefined()
+  })
+
   it('restores reference targets after a reload and delivers them separately from the native prompt', async () => {
     const { rpc, sent, reply } = connection(['deferred-conversation-start', 'chat-references'])
     const references: ChatReference[] = [{ start: 0, end: 6, target: { kind: 'file', path: '/workspace/src/a.ts', relative: 'src/a.ts' } }]

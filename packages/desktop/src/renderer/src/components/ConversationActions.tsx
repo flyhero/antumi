@@ -92,7 +92,7 @@ export async function sendToNewConversation(conversation: Conversation, text: st
   const created = await perform((rpc) => rpc.call('conversations.create', {
     agent,
     projectPaths,
-    ...(deferred ? { deferStart: true } : {}),
+    ...(deferred ? { deferStart: true, ...(rpc.features.includes('deferred-workspace') ? { deferWorkspace: true } : {}) } : {}),
     ...startOptions(),
     ...(options ? { ...(mode.success ? { permissionMode: mode.data } : {}), ...(model ? { model } : {}), ...(effort ? { effort } : {}) } : {}),
     ...(modelProvider ? { modelProvider } : {})

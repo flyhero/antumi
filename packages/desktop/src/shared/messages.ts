@@ -1,5 +1,6 @@
 // Application-owned text. Values and external content are passed separately.
 export const MESSAGES = {
+  "ProjectTrustDialog.skipOnce": { "zh": "本次不运行，继续", "en": "Skip this time and continue" },
   "Backdrop.title": {"zh":"自定义背景","en":"Custom background"},
   "Backdrop.mode": {"zh":"背景模式","en":"Background mode"},
   "Backdrop.modeDescription": {"zh":"关闭背景、选用渐变预设或上传本地图片。","en":"Turn the background off, choose a gradient, or upload a local image."},

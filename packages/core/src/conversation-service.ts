@@ -99,7 +99,7 @@ export type TaskChatLaunch = TaskLaunchOptions & {
 // What a stage's start takes beyond the agent: see TaskChatLaunch; moved says the agent works
 // somewhere else than its last stage did.
 // brief: a file written for the first stage to read before anything else, sent as a handoff is.
-type StageLaunch = { ref?: string; fresh?: boolean; moved?: boolean; rerouted?: boolean; planOnly?: boolean; backend?: string | null; account?: string | null; readable?: readonly string[]; fork?: ForkPoint; opening?: string; brief?: string; references?: ChatReference[]; images?: readonly ChatImage[] }
+type StageLaunch = { skipProjectSetup?: boolean; ref?: string; fresh?: boolean; moved?: boolean; rerouted?: boolean; planOnly?: boolean; backend?: string | null; account?: string | null; readable?: readonly string[]; fork?: ForkPoint; opening?: string; brief?: string; references?: ChatReference[]; images?: readonly ChatImage[] }
 // The provider session another conversation's stage ran, taken over through the turn `at` names;
 // neither null means a session the agent can fork, else the fork starts afresh.
 // latest: the point is the last the agent's session holds, so the session forked whole is the same.
@@ -608,7 +608,7 @@ export class ConversationService {
     agent: AgentKind,
     projectPaths: readonly string[],
     allowBypass?: boolean,
-    start: { permissionMode?: string; model?: string; effort?: string; worktree?: boolean; branch?: string; deferStart?: boolean; helperOf?: string; modelProvider?: string; profile?: AgentProfile; parentId?: string; callId?: string; readOnly?: boolean; referencePaths?: readonly string[]; unlisted?: boolean; investigation?: { source: TaskSource; title: string; automaticId?: string } ; channel?: ConversationChannel; title?: string; account?: string } = {},
+    start: { permissionMode?: string; model?: string; effort?: string; worktree?: boolean; branch?: string; deferStart?: boolean; deferWorkspace?: boolean; helperOf?: string; modelProvider?: string; profile?: AgentProfile; parentId?: string; callId?: string; readOnly?: boolean; referencePaths?: readonly string[]; unlisted?: boolean; investigation?: { source: TaskSource; title: string; automaticId?: string } ; channel?: ConversationChannel; title?: string; account?: string } = {},
     routine: { id: string; title: string } | null = null,
     id: string = randomUUID(),
     discussion: { id: string; title: string } | null = null,
@@ -645,14 +645,17 @@ export class ConversationService {
     if (worktree && (!worktreesRoot || projectPaths.length === 0)) throw new Rejection('missing-repo', 'a worktree needs a project to lay out')
     if (!start.deferStart && !this.capacityAvailable(agent)) throw new Rejection('agent-capacity')
     if (start.modelProvider) this.requireProvider(start.modelProvider, agent)
-    await this.validateStartOptions(agent, { permissionMode, model, effort }, start.modelProvider)
+    const deferredWorkspace = Boolean(start.deferStart && start.deferWorkspace)
+    if (!deferredWorkspace) await this.validateStartOptions(agent, { permissionMode, model, effort }, start.modelProvider)
     if (start.account) this.requireAccount(agent, start.account, start.modelProvider ?? null)
-    const resolved = await resolveProjects(projectPaths)
+    const resolved = deferredWorkspace
+      ? { projects: projectPaths.map(normalizeRepoPath), picked: projectPaths.map(normalizeRepoPath) }
+      : await resolveProjects(projectPaths)
     const { picked } = resolved
     const primary = resolved.projects[0]
     if (branch && !primary) throw new Rejection('missing-repo', 'a branch needs a project')
     // Asked before anything is laid out, so a refusal leaves nothing behind.
-    const setups = worktreesRoot && this.worktreeSetup ? await this.worktreeSetup.requireTrusted(resolved.projects) : []
+    const setups = !deferredWorkspace && worktreesRoot && this.worktreeSetup ? await this.worktreeSetup.requireTrusted(resolved.projects) : []
     let made: NewWorktree[] = []
     // The primary's branch: in a worktree, where its branch starts (a remote one fetched first);
     // in the project itself, switched to before anything else, so a refusal makes nothing.
@@ -664,21 +667,24 @@ export class ConversationService {
       made = worktrees.flatMap(({ dir, topLevel, created }) => (created ? [{ dir, topLevel }] : []))
       return await Promise.all(worktrees.map(({ dir }) => realpath(dir)))
     }
-    const projects = this.gitPreparation && (branch || worktree)
+    const projects = deferredWorkspace ? resolved.projects : this.gitPreparation && (branch || worktree)
       ? await this.gitPreparation(resolved.projects, prepare, !worktree) : await prepare()
     let workspace: string
     if (projects.length === 0) {
       workspace = path.join(this.sessionsRoot, id, 'workspace')
-      await mkdir(workspace, { recursive: true, mode: 0o700 })
+      if (!deferredWorkspace) await mkdir(workspace, { recursive: true, mode: 0o700 })
     } else {
       workspace = projects[0]!
     }
     const starts: Record<string, string> = {}
-    for (const project of projects) {
-      const head = await folderHead(project)
-      if (head) starts[project] = head
+    if (!deferredWorkspace) {
+      for (const project of projects) {
+        const head = await folderHead(project)
+        if (head) starts[project] = head
+      }
     }
     const created = this.store.create(agent, workspace, projects, id, starts, null, routine, discussion, null, start.investigation ?? null)
+    if (deferredWorkspace) this.store.setWorkspacePreparation(id, { projects: resolved.projects, worktree, ...(branch ? { branch } : {}) })
     if (start.modelProvider) this.store.setModelProvider(id, start.modelProvider)
     if (start.profile) this.store.setProfile(id, start.profile, start.parentId ?? null, start.callId ?? null)
     if (start.readOnly || start.profile?.capability === 'readOnly' || start.channel) this.store.setWorkspaceReadOnly(id, true)
@@ -947,14 +953,14 @@ export class ConversationService {
   }
 
   // Readies the agent for a message: one already up stays as it is.
-  async continue(id: string, allowBypass?: boolean, readable?: readonly string[]): Promise<Conversation> {
+  async continue(id: string, allowBypass?: boolean, readable?: readonly string[], skipProjectSetup = false): Promise<Conversation> {
     this.writable(id)
     const current = this.free(id)
     if (this.launching.has(id)) throw new Rejection('conversation-running')
     if (current.sessionId && this.chats.activity(id) !== null) return current
     if (allowBypass !== undefined) this.store.setChatOptions(id, { allowBypass })
     if (current.sessionId) await this.stop(id)
-    return this.start(id, current.agent, '', false, { readable })
+    return this.start(id, current.agent, '', false, { readable, skipProjectSetup })
   }
 
   async resumeDelegation(id: string): Promise<Conversation> {
@@ -1238,6 +1244,50 @@ export class ConversationService {
     return this.changed(this.get(id))
   }
 
+  // Kept in the store so a restart or a declined trust prompt can retry the same workspace.
+  private async prepareWorkspace(id: string, agent: AgentKind, skipSetup: boolean): Promise<void> {
+    let plan = this.store.workspacePreparation(id)
+    if (!plan) return
+    const current = this.get(id)
+    const options = this.store.chatOptions(id)
+    await this.validateStartOptions(agent, { ...options[agent], permissionMode: options.permissionMode }, this.catalogProvider(current, agent))
+    const { projects } = await resolveProjects(plan.projects)
+    const setups = plan.worktree && !skipSetup && this.worktreeSetup ? await this.worktreeSetup.requireTrusted(projects) : []
+    let paths = projects
+    if (plan.worktree) {
+      if (!plan.worktrees) {
+        const { branch } = plan
+        const prepare = async () => {
+          const primary = projects[0]
+          const commit = branch && primary ? (await resolveStart(primary, branch, null, Date.now())).commit : undefined
+          if (!this.worktreesRoot) throw new Rejection('missing-repo')
+          return prepareConversationWorktrees(id, projects, this.worktreesRoot, commit)
+        }
+        const worktrees = await (this.gitPreparation ? this.gitPreparation(projects, prepare, false) : prepare())
+        plan = { ...plan, worktrees: worktrees.map(({ topLevel, dir }) => ({ topLevel, dir })) }
+        this.store.setWorkspacePreparation(id, plan)
+      }
+      paths = await Promise.all((plan.worktrees ?? []).map(({ dir }) => realpath(dir)))
+      if (!paths.length) throw new Rejection('missing-repo')
+    } else if (plan.branch) {
+      const primary = projects[0]
+      if (!primary) throw new Rejection('missing-repo')
+      const branch = plan.branch
+      const prepare = () => switchProjectBranch(primary, branch)
+      await (this.gitPreparation ? this.gitPreparation(projects, prepare, true) : prepare())
+    }
+    const workspace = paths[0] ?? path.join(this.sessionsRoot, id, 'workspace')
+    if (!paths.length) await mkdir(workspace, { recursive: true, mode: 0o700 })
+    this.store.moveWorkspace(id, workspace, paths)
+    for (const project of paths) {
+      const head = await folderHead(project)
+      if (head) this.store.setProjectStart(id, project, head)
+    }
+    this.changed(this.get(id))
+    if (setups.length && this.worktreeSetup) await this.worktreeSetup.setUp(id, plan.worktrees ?? [], setups)
+    this.store.setWorkspacePreparation(id, null)
+  }
+
   private async start(id: string, agent: AgentKind, note: string, handoff: boolean, launch: StageLaunch = {}): Promise<Conversation> {
     this.squadGuard?.(this.get(id))
     if (this.launching.has(id) || this.retiring.has(id)) throw new Rejection('conversation-running')
@@ -1248,6 +1298,8 @@ export class ConversationService {
     const finished = new Promise<void>((resolve) => { finish = resolve })
     this.launching.set(id, { agent, opening: null, finished })
     try {
+      this.changed(this.get(id))
+      await this.prepareWorkspace(id, agent, launch.skipProjectSetup ?? false)
       const current = this.get(id)
       await this.gitGuard?.(current.projectPaths)
       this.changed(current)

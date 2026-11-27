@@ -1,3 +1,4 @@
+import { DECLINED, withProjectTrust } from './core-store'
 import { t } from './i18n'
 import { create } from 'zustand'
 import { z } from 'zod'
@@ -63,14 +64,14 @@ export function sendInitialMessage(id: string, rpc: RpcConnection): Promise<void
   useInitialMessages.setState({ [id]: { ...message, phase: 'starting', error: null } })
   const delivery = (async () => {
     try {
-      await rpc.call('conversations.continue', { id })
+      await withProjectTrust(rpc, () => rpc.call('conversations.continue', { id }), rpc.features.includes('deferred-workspace') ? () => rpc.call('conversations.continue', { id, skipProjectSetup: true }) : undefined)
       if (!useInitialMessages.getState()[id]) return
       useInitialMessages.setState({ [id]: { ...message, phase: 'sending', error: null } })
       await rpc.call('conversations.send', { id, text: message.text, images: message.images.map((image) => image.id), ref: message.ref, ...(rpc.features.includes('chat-references') ? { references: message.references } : {}) })
       discard(id)
     } catch (error) {
       if (!useInitialMessages.getState()[id]) return
-      const detail = error instanceof RpcError && error.reason ? reasonText(error.reason, error.message) : error instanceof Error ? error.message : String(error)
+      const detail = error === DECLINED ? t('initialMessages.sendIsUnfinishedTryAgain') : error instanceof RpcError && error.reason ? reasonText(error.reason, error.message) : error instanceof Error ? error.message : String(error)
       useInitialMessages.setState({ [id]: { ...message, phase: 'failed', error: detail } })
     }
   })().finally(() => deliveries.delete(id))

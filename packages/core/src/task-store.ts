@@ -463,7 +463,8 @@ export const MIGRATIONS = [
    CREATE INDEX source_intents_due ON source_intents(next_at);`,
   `CREATE TABLE source_fixes (id TEXT PRIMARY KEY, task_id TEXT UNIQUE, data TEXT NOT NULL);`,
   `CREATE TABLE project_choices (path TEXT PRIMARY KEY, data TEXT NOT NULL);`,
-  `ALTER TABLE conversation_stages ADD COLUMN backend TEXT;`
+  `ALTER TABLE conversation_stages ADD COLUMN backend TEXT;`,
+  `ALTER TABLE conversations ADD COLUMN workspace_preparation TEXT;`,
 ]
 
 

@@ -36,7 +36,7 @@ function TrustForm() {
         </div>
       ) : null}
       <p className="project-trust-note">{t('ProjectTrustDialog.commandsRunInYourLoginShellInsideThe')}</p>
-      <footer className="modal-footer"><button type="button" className="button ghost" onClick={() => answer(false)}>{t('ChatCommandSettings.cancel')}</button><button type="submit" className="button primary">{t('ProjectTrustDialog.allowAndContinue')}</button></footer>
+      <footer className="modal-footer"><button type="button" className="button ghost" onClick={() => answer(false)}>{t('ChatCommandSettings.cancel')}</button>{asking.canSkip && <button type="button" className="button" onClick={() => answer('skip')}>{t('ProjectTrustDialog.skipOnce')}</button>}<button type="submit" className="button primary">{t('ProjectTrustDialog.allowAndContinue')}</button></footer>
     </form>
   </dialog>
 }

@@ -5,6 +5,12 @@ import { AgentKind, AgentProfile, ChatContextUse, Conversation, ConversationChan
 
 const lastEnded = (column: string) => `(SELECT ${column} FROM conversation_stages
   WHERE conversation_id = conversations.id AND ended_at IS NOT NULL ORDER BY started_at DESC, rowid DESC LIMIT 1)`
+const WorkspacePreparation = z.object({
+  projects: z.array(z.string()), branch: z.string().optional(), worktree: z.boolean().default(true),
+  worktrees: z.array(z.object({ topLevel: z.string(), dir: z.string() })).optional()
+})
+export type WorkspacePreparation = z.infer<typeof WorkspacePreparation>
+
 const SELECT = `SELECT id, title, title_locked AS titleLocked, agent, workspace_path AS workspacePath,
   project_paths AS projectPaths, reference_paths AS referencePaths,
   managed_workspace AS managedWorkspace, session_id AS sessionId, created_at AS createdAt,
@@ -189,6 +195,15 @@ export class ConversationStore {
   // Folders the agent may read but never edit (Conversation.referencePaths).
   setReferencePaths(id: string, referencePaths: readonly string[]): void {
     this.db.prepare('UPDATE conversations SET reference_paths = ? WHERE id = ?').run(JSON.stringify(referencePaths), id)
+  }
+
+  workspacePreparation(id: string): WorkspacePreparation | null {
+    const row = this.db.prepare('SELECT workspace_preparation AS value FROM conversations WHERE id = ?').get(id)
+    return row?.value ? WorkspacePreparation.parse(JSON.parse(String(row.value))) : null
+  }
+
+  setWorkspacePreparation(id: string, plan: WorkspacePreparation | null): void {
+    this.db.prepare('UPDATE conversations SET workspace_preparation = ? WHERE id = ?').run(plan ? JSON.stringify(plan) : null, id)
   }
 
   // Empty for a conversation created before these were recorded.

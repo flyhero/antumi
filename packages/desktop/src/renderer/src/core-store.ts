@@ -1570,7 +1570,7 @@ export const DECLINED = Symbol('declined')
 
 // A start or submit refused until the user allows a project's setup and check is asked about and
 // tried again; each project is asked at most once. Declining ends it without an error (DECLINED).
-export async function withProjectTrust<T>(rpc: RpcConnection, action: (rpc: RpcConnection) => Promise<T>): Promise<T> {
+export async function withProjectTrust<T>(rpc: RpcConnection, action: (rpc: RpcConnection) => Promise<T>, skip?: () => Promise<T>): Promise<T> {
   const asked = new Set<string>()
   for (;;) {
     try {
@@ -1581,7 +1581,9 @@ export async function withProjectTrust<T>(rpc: RpcConnection, action: (rpc: RpcC
       const info = await rpc.call('projects.config', { path: error.message })
       if (!info) throw error
       if (!info.trusted) {
-        if (!(await askProjectTrust(info))) throw DECLINED
+        const answer = await askProjectTrust(info, Boolean(skip))
+        if (answer === 'skip' && skip) return skip()
+        if (answer !== true) throw DECLINED
         await rpc.call('projects.trustConfig', { path: info.path, hash: info.hash })
       }
     }

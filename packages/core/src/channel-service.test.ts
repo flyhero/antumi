@@ -118,6 +118,8 @@ describe('ChannelService', () => {
     clicked = []
     channels = new ChannelService(store, {
       reports: { posted: (id) => reported.push(id), list: () => [], answered: () => {} },
+      // As core's main picks it: the agent the owner last set to work.
+      taskAgent: () => 'codex',
       cards: { click: async (event) => { clicked.push(event); return { kind: 'success', text: '已开始执行。' } }, feedback: () => [], continueTask: async () => [] },
       conversations, credentials,
       tasks: new TaskService(tasks, projects, path.join(root, 'worktrees'), () => {}, attachments, conversations),
@@ -520,10 +522,10 @@ describe('ChannelService', () => {
   it('keeps every switch it is saved with, and what a client from before leaves out', async () => {
     const feishu = await channels.save({
       profileId: profile.id, platform: 'feishu', projectPaths: [repo], allowedUsers: ['ou_1'], allowedPlaces: ['oc_1'], credentials: { appId: 'cli_1', appSecret: 's' },
-      allowTaskCreation: true, reportTasks: true, ownerUsers: ['ou_owner', 'ou_owner'], taskCards: { start: { agent: 'codex', model: null, effort: null, modelProvider: null }, review: 'owner' },
+      allowTaskCreation: true, reportTasks: true, ownerUsers: ['ou_owner', 'ou_owner'], taskCards: { start: true, review: 'owner' },
       platformTools: ['fetch-doc'], docLocation: { kind: 'folder', value: 'fldcnA' }, docAccess: 'view', followUps: true
     })
-    const saved = { allowTaskCreation: true, reportTasks: true, ownerUsers: ['ou_owner'], taskCards: { start: { agent: 'codex' }, review: 'owner' }, platformTools: ['fetch-doc'], docLocation: { kind: 'folder', value: 'fldcnA' }, docAccess: 'view', followUps: true }
+    const saved = { allowTaskCreation: true, reportTasks: true, ownerUsers: ['ou_owner'], taskCards: { start: true, review: 'owner' }, platformTools: ['fetch-doc'], docLocation: { kind: 'folder', value: 'fldcnA' }, docAccess: 'view', followUps: true }
     expect(feishu).toMatchObject(saved)
     expect(channels.list().find((each) => each.id === feishu.id)).toMatchObject(saved)
     // A client from before these switches saves without them: they stay.
@@ -606,7 +608,7 @@ describe('ChannelService', () => {
     expect(retry).toEqual(first)
     expect(tasks.list()).toHaveLength(1)
     expect(tasks.list()[0]).toMatchObject({
-      title: input.title, details: input.details, status: 'pending', autoRun: false, agent: null, conversationId: null,
+      title: input.title, details: input.details, status: 'pending', autoRun: false, agent: 'codex', conversationId: null,
       repos: [{ path: repo, worktreePath: null, branch: null }],
       channelSource: { channelId: channel.id, requestId: request!.id, conversationId: request!.conversationId, platform: 'slack', asker: 'U1', place: 'C1', messageId: asked.messageId, thread: asked.messageId, direct: false, text: asked.text }
     })

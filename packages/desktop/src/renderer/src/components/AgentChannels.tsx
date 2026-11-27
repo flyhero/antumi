@@ -1,13 +1,11 @@
 import { SupportActions } from './ContactAuthor'
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import {
-  AGENT_KINDS, CHANNEL_DEFAULTS, CHANNEL_PLATFORMS, ChannelInput, agentDescriptor, channelPlatform, translatedText,
+  CHANNEL_DEFAULTS, CHANNEL_PLATFORMS, ChannelInput, agentDescriptor, channelPlatform, translatedText,
   type AgentKind, type Channel, type ChannelCredentialKey, type ChannelPlatform, type ChannelRequest, type DocAccess, type DocLocation, type TaskCardReview
 } from '@antumi/protocol'
 import { setChannels, useChannelFollowUpsSupported, useChannelPlatformToolsSupported, useChannelReadiness, useChannels, useChannelsSupported, useChannelTaskCardsSupported, useChannelTaskReportsSupported, useChannelTasksSupported } from '../channels'
 import { askConfirm } from '../confirm-dialog'
-import { defaultAgent } from '../default-agent'
-import { useInstalledAgents } from '../installed-agents'
 import { timeAgo } from '../conversation-state'
 import { perform, useCore } from '../core-store'
 import { t, useLocale } from '../i18n'
@@ -16,7 +14,7 @@ import { useOccludesBrowser } from '../browser-occlusion'
 import { CopyButton } from './CopyButton'
 import { ChannelRequestDetail } from './ChannelRequestDetail'
 import { ChatPicker } from './ChatPicker'
-import { AgentIcon, ChannelPlatformIcon, ChatIcon, CloseIcon, InfoIcon, PlusIcon } from './icons'
+import { ChannelPlatformIcon, ChatIcon, CloseIcon, InfoIcon, PlusIcon } from './icons'
 import { Toggle } from './SettingsControls'
 import './agent-channels.css'
 
@@ -151,7 +149,7 @@ type Draft = {
   projectPaths: string[]; users: string; places: string; allowDirect: boolean; allowTaskCreation: boolean
   // undefined until chosen: turning task creation on then ticks it.
   reportTasks: boolean | undefined
-  cards: boolean; owners: string; cardStart: boolean; cardAgent: AgentKind; cardReview: TaskCardReview | 'none'
+  cards: boolean; owners: string; cardStart: boolean; cardReview: TaskCardReview | 'none'
   tools: string[]; docKind: DocLocation['kind']; docValue: string; docAccess: DocAccess
   followUps: boolean
   dailyPerUser: string; dailyTotal: string; maxConcurrent: string; turnTimeoutSec: string
@@ -174,7 +172,6 @@ function ChannelDialog({ profileId, platform, channel, agent, hasProvider, onClo
   const taskCreationSupported = useChannelTasksSupported()
   const reportsSupported = useChannelTaskReportsSupported()
   const cardsSupported = useChannelTaskCardsSupported() && descriptor.features.cards
-  const installed = useInstalledAgents()
   const toolCatalog = useChannelPlatformToolsSupported() ? descriptor.tools : undefined
   const followUpsSupported = useChannelFollowUpsSupported() && descriptor.features.followUps
   const locale = useLocale((state) => state.locale)
@@ -185,8 +182,7 @@ function ChannelDialog({ profileId, platform, channel, agent, hasProvider, onClo
     projectPaths: channel?.projectPaths ?? [], users: (channel?.allowedUsers ?? []).join('\n'), places: (channel?.allowedPlaces ?? []).join('\n'), allowDirect: channel?.allowDirect ?? false, allowTaskCreation: channel?.allowTaskCreation ?? false,
     reportTasks: channel?.reportTasks,
     cards: !!channel?.taskCards, owners: (channel?.ownerUsers ?? []).join('\n'),
-    // The agent the owner last set to work, as a new task takes, not the one answering in the chat.
-    cardStart: channel?.taskCards ? channel.taskCards.start !== null : true, cardAgent: channel?.taskCards?.start?.agent ?? defaultAgent(useCore.getState().tasks, useCore.getState().conversations) ?? agent,
+    cardStart: channel?.taskCards?.start ?? true,
     cardReview: channel?.taskCards ? channel.taskCards.review ?? 'none' : 'ownerOrAsker',
     followUps: channel?.followUps ?? false,
     tools: channel?.platformTools ?? [], docKind: channel?.docLocation?.kind ?? 'wikiNode', docValue: channel?.docLocation?.value ?? '', docAccess: channel?.docAccess ?? 'edit',
@@ -216,7 +212,7 @@ function ChannelDialog({ profileId, platform, channel, agent, hasProvider, onClo
       } : {}),
       ...(cardsSupported ? {
         ownerUsers: lines(draft.owners),
-        taskCards: draft.cards ? { start: draft.cardStart ? { agent: draft.cardAgent } : null, review: draft.cardReview === 'none' ? null : draft.cardReview } : null
+        taskCards: draft.cards ? { start: draft.cardStart, review: draft.cardReview === 'none' ? null : draft.cardReview } : null
       } : {}),
       dailyPerUser: Number(draft.dailyPerUser), dailyTotal: Number(draft.dailyTotal), maxConcurrent: Number(draft.maxConcurrent), turnTimeoutSec: Number(draft.turnTimeoutSec)
     })
@@ -307,12 +303,6 @@ function ChannelDialog({ profileId, platform, channel, agent, hasProvider, onClo
         </div>
         <div className="squad-field">
           <Option checked={draft.cardStart} onChange={(cardStart) => setDraft({ ...draft, cardStart })} label={t('AgentChannels.cardStart')} info={t('AgentChannels.cardStartHint')} />
-          {draft.cardStart && <>
-            <span className="agent-channel-option"><span>{t('AgentChannels.cardAgent')}</span><Info text={t('AgentChannels.cardAgentHint')} /></span>
-            <ChatPicker label={t('AgentChannels.cardAgent')} value={draft.cardAgent} placeholder="" size="field" placement="below"
-              options={AGENT_KINDS.filter((each) => installed.includes(each) || each === draft.cardAgent).map((each) => ({ value: each, label: agentLabel(each), icon: <AgentIcon agent={each} /> }))}
-              onChange={(value) => setDraft({ ...draft, cardAgent: AGENT_KINDS.find((each) => each === value) ?? draft.cardAgent })} />
-          </>}
           <span>{t('AgentChannels.cardReview')}</span>
           <ChatPicker label={t('AgentChannels.cardReview')} value={draft.cardReview} placeholder="" size="field" placement="below"
             options={[

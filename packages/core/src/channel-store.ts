@@ -1,12 +1,14 @@
 import { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
-import { ChannelFields, ChannelPlatform, ChannelRequest, ChannelRequestState, ChannelTaskFeedback, ChannelTaskReport, type ChannelTaskReportState, type ChannelToolCall } from '@antumi/protocol'
+import { ChannelFields, ChannelPlatform, ChannelRequest, ChannelRequestState, ChannelTaskFeedback, ChannelTaskReport, TaskCards, type ChannelTaskReportState, type ChannelToolCall } from '@antumi/protocol'
 import type { TaskWriteLink } from './task-store'
 
 // Agents on chat platforms: who may ask, each question and what came of it, and what is still to
 // be posted. The tables are TaskStore's migrations'. Credentials are not here (CredentialStore).
 
 const StoredData = ChannelFields.omit({ profileId: true, platform: true }).extend({
+  // A card setting saved in a shape since changed is no cards, rather than no channel.
+  taskCards: TaskCards.nullable().optional().catch(null),
   tenant: z.string().nullable().catch(null),
   tenantName: z.string().nullable().catch(null),
   botUserId: z.string().nullable().catch(null)

@@ -197,11 +197,12 @@ export class TaskService {
   }
 
   // Synchronous and atomic: retries of a platform message keep the first task, even after restart.
-  createChannelTask({ title, details, repos, source }: { title: string; details: string; repos: string[]; source: TaskChannelSource }): Task {
+  // agent: the one new work takes here, so the task can be started from its card as it can in Antumi.
+  createChannelTask({ title, details, repos, source, agent = null }: { title: string; details: string; repos: string[]; source: TaskChannelSource; agent?: AgentKind | null }): Task {
     const existing = this.store.channelTask(source)
     if (existing) return existing
     const paths = [...new Set(repos.map(normalizeRepoPath))]
-    const task = this.store.create(title, { details, repos: withKnownWorktrees([], paths), channelSource: source })
+    const task = this.store.create(title, { details, repos: withKnownWorktrees([], paths), channelSource: source, agent })
     this.projects.remember(paths)
     return this.named(this.changed(task))
   }

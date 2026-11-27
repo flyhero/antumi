@@ -24,7 +24,7 @@ import { randomBytes } from 'node:crypto'
 import { mkdir, realpath, rm, stat } from 'node:fs/promises'
 import path from 'node:path'
 import os from 'node:os'
-import { channelPlatform, coreUrl, untrustedSource, SOURCE_REPORT_LIMIT, isStartRef, AGENT_KINDS, agentReadiness, backendChoice, agentDescriptor, providerEndpoint, PROTOCOL_VERSION, quotaVerdict, usageAccount, usageReadable, type AgentAuthentication, type AgentKind, type AgentUsage, type ChatItem, type ChatSettings, type Task, type SourceTaskProposal } from '@antumi/protocol'
+import { channelPlatform, latestStartedAgent, coreUrl, untrustedSource, SOURCE_REPORT_LIMIT, isStartRef, AGENT_KINDS, agentReadiness, backendChoice, agentDescriptor, providerEndpoint, PROTOCOL_VERSION, quotaVerdict, usageAccount, usageReadable, type AgentAuthentication, type AgentKind, type AgentUsage, type ChatItem, type ChatSettings, type Task, type SourceTaskProposal } from '@antumi/protocol'
 import packageJson from '../package.json' with { type: 'json' }
 import { removeCoreEndpoint, antumiPaths, writeCoreEndpoint } from '@antumi/protocol/node'
 import { adapterOf } from './agents'
@@ -401,13 +401,22 @@ const writeback = new SourceWriteback(new SourceWritebackStore(paths.database), 
   changed: (view) => server?.broadcast('sources.writebackChanged', { writeback: view })
 })
 sourceUpdates.setOwnComments((source) => writeback.ownComments(source))
+// The agent new work takes, as the desktop picks it for a new task: the latest the user started,
+// when it is here. Null leaves the choice to the owner.
+const taskAgent = (): AgentKind | null => {
+  const agent = latestStartedAgent(service.list(), conversations.list())
+  const check = agent ? environment.current()?.checks.find((entry) => entry.tool === agent) : undefined
+  return agent && (!check || check.status !== 'missing') ? agent : null
+}
 // A chat platform task on the platform's cards (docs/CHANNEL-LOOP.md): each click does what the
-// same button in Antumi would, the owner's run unattended as an automatic one is.
+// same button in Antumi would, with the task's own agent, model and provider, the owner's run
+// unattended as an automatic one is.
 const channelCards = new ChannelTaskCards(channelStore, {
   task: (id) => service.list().find((each) => each.id === id) ?? null,
-  start: async (task, launch) => {
-    // An agent the owner already picked for it stays.
-    if (!task.agent) service.update({ id: task.id, agent: launch.agent, launch: { model: launch.model ?? null, effort: launch.effort ?? null, modelProvider: launch.modelProvider ?? null } })
+  start: async (task) => {
+    const agent = task.agent ?? taskAgent()
+    if (!agent) throw new Rejection('invalid-task')
+    if (!task.agent) service.update({ id: task.id, agent })
     const mode = chatSettings.current().unattendedMode
     await service.start(task.id, mode === 'bypass', mode, service.get(task.id).launch)
   },
@@ -667,6 +676,7 @@ const accounts = new AgentAccountStore(paths.agentAccounts, paths.agentAccountHo
 channels = new ChannelService(channelStore, {
   conversations,
   tasks: service,
+  taskAgent,
   reports: channelReports,
   cards: channelCards,
   profile: (id) => profiles.list().find((profile) => profile.id === id) ?? null,

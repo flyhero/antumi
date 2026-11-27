@@ -49,7 +49,7 @@ describe('task cards', () => {
 
   const channel = (over: Partial<StoredChannel> = {}): StoredChannel => ({
     ...ChannelFields.parse({ profileId: PROFILE, platform: 'feishu', allowTaskCreation: true, reportTasks: true, allowedUsers: ['ou_asker', 'ou_owner'], allowedPlaces: ['oc_1'], allowDirect: true }),
-    ownerUsers: ['ou_owner'], taskCards: { start: { agent: 'claude' }, review: 'ownerOrAsker' },
+    ownerUsers: ['ou_owner'], taskCards: { start: true, review: 'ownerOrAsker' },
     id: CHANNEL, profileId: PROFILE, platform: 'feishu', tenant: 'T1', tenantName: 'Acme', botUserId: 'ou_bot', createdAt: 1, updatedAt: 1, ...over
   })
   const source = (over: Partial<TaskChannelSource> = {}): TaskChannelSource => ({
@@ -103,8 +103,8 @@ describe('task cards', () => {
     clicks = 0
     cards = new ChannelTaskCards(store, {
       task: (id) => tasks.get(id),
-      start: async (task, launch) => {
-        calls.push(`start:${launch.agent}`)
+      start: async (task) => {
+        calls.push('start')
         if (startFails) throw startFails
         move(task.id, 'running')
       },
@@ -160,7 +160,7 @@ describe('task cards', () => {
     expect(await press('task', '开始执行', 'ou_asker')).toEqual({ kind: 'warning', text: '只有主人能开始执行。' })
     expect(calls).toEqual([])
     expect(await press('task', '开始执行', 'ou_owner')).toEqual({ kind: 'success', text: '已开始执行。' })
-    expect(calls).toEqual(['start:claude'])
+    expect(calls).toEqual(['start'])
     expect(tasks.get(task.id)?.status).toBe('running')
     // The asker sees it start on the card: no plain post repeats it.
     expect(sends.at(-1)).toMatchObject({ op: 'update', card: { kind: 'task' } })
@@ -243,7 +243,7 @@ describe('task cards', () => {
   })
 
   it('lets only the owner review where the channel says so', async () => {
-    store.saveChannel(channel({ taskCards: { start: { agent: 'claude' }, review: 'owner' } }))
+    store.saveChannel(channel({ taskCards: { start: true, review: 'owner' } }))
     const task = await collected()
     await handIn(task)
     expect(JSON.stringify(latest('review')?.content)).toContain('<at id=ou_owner></at> 请验收')
@@ -252,7 +252,7 @@ describe('task cards', () => {
   })
 
   it('posts plain progress and no review card where reviews are not on cards', async () => {
-    store.saveChannel(channel({ taskCards: { start: null, review: null } }))
+    store.saveChannel(channel({ taskCards: { start: false, review: null } }))
     const task = await collected()
     expect([...buttons(sends[0]?.content).keys()]).toEqual(['不做'])
     expect(JSON.stringify(sends[0]?.content)).toContain('请主人在 Antumi 里开始。')

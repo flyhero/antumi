@@ -1,6 +1,4 @@
 import { z } from 'zod'
-import { AgentKind } from './agent'
-import { TaskLaunchOptions } from './chat'
 import { MAX_TASK_REPOS } from './task-limits'
 
 // An agent on a chat platform (docs/CHANNELS.md): colleagues ask it questions there, and it answers
@@ -18,14 +16,12 @@ const PlatformId = z.string().trim().min(1).max(200)
 
 export const CHANNEL_DEFAULTS = { dailyPerUser: 20, dailyTotal: 200, maxConcurrent: 2, turnTimeoutSec: 300 } as const
 
-// Its tasks on the platform's cards (docs/CHANNEL-LOOP.md): start, the owner starts one there with
-// this agent and model (null: started in Antumi only); review, who may accept it or send it back
-// there (null: accepted in Antumi only). Running it as the owner always takes the owner's click.
-export const TaskCardStart = TaskLaunchOptions.pick({ model: true, effort: true, modelProvider: true }).extend({ agent: AgentKind })
-export type TaskCardStart = z.infer<typeof TaskCardStart>
+// Its tasks on the platform's cards (docs/CHANNEL-LOOP.md): start, whether the owner may start one
+// there, as the task is set to run in Antumi (false: in Antumi only); review, who may accept it or
+// send it back there (null: accepted in Antumi only). Running it as the owner always takes the owner's click.
 export const TaskCardReview = z.enum(['owner', 'ownerOrAsker'])
 export type TaskCardReview = z.infer<typeof TaskCardReview>
-export const TaskCards = z.object({ start: TaskCardStart.nullable(), review: TaskCardReview.nullable() })
+export const TaskCards = z.object({ start: z.boolean(), review: TaskCardReview.nullable() })
 export type TaskCards = z.infer<typeof TaskCards>
 
 // Where a document the bot creates goes (docs/CHANNEL-LOOP.md): under a wiki node (its link or

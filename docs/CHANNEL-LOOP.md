@@ -28,7 +28,7 @@ flowchart TD
   H --> I[回答之后发任务卡<br/>「开始执行」「不做」]
   I --> J{主人同意？<br/>卡片上或 Antumi 里点}
   J -- 不做 --> K([任务取消，回到话题告知])
-  J -- 开始执行 --> S[按接入的执行设置开始，无人值守<br/>卡片更新「已开始」]
+  J -- 开始执行 --> S[按任务的执行设置开始，无人值守<br/>卡片更新「已开始」]
   S --> L[主人的 Agent 实施<br/>改代码、测试、提交、开 PR<br/>读 PRD 用主人的 lark-cli]
   L --> M[source_report 写总结<br/>提交验收]
   M --> N[回到话题：总结 + PR<br/>发验收卡 @ 提问人]
@@ -105,7 +105,7 @@ sequenceDiagram
     F->>A: card.action.trigger
     A->>A: 核对令牌、主人身份、任务状态
     A-->>F: 3 秒内回提示，卡片「已开始」
-    A->>D: 按接入的执行设置开始（无人值守）
+    A->>D: 按任务的执行设置开始（无人值守）
   else 主人点「不做」
     O->>F: 点击
     F->>A: card.action.trigger
@@ -174,7 +174,7 @@ sequenceDiagram
 | 答疑：读项目代码回答（已有） | 接入本身 | — | 全部 | — |
 | 收需求成任务（已有） | `allowTaskCreation` | — | 全部 | 只答疑 |
 | 进展回到原话题（第一节） | `reportTasks` | 收需求 | 全部；钉钉没有话题，回成群里的一条新消息并 @ 提问人 | 进展只在 Antumi 里看 |
-| 卡片上开始执行（第二节） | `taskCards.start`（用哪个 Agent 和模型）、`ownerUsers` | 进展回报 | 飞书、Lark；Slack 以后 | 只在 Antumi 里开始 |
+| 卡片上开始执行（第二节） | `taskCards.start`、`ownerUsers` | 进展回报 | 飞书、Lark；Slack 以后 | 只在 Antumi 里开始 |
 | 卡片上验收和退回（第二节） | `taskCards.review`：只有主人，或主人和提问人 | 进展回报 | 同上 | 待验收是一条文字，验收在 Antumi 里 |
 | 飞书文档工具（第三节） | `platformTools` 逐个勾选；建文档时另有 `docLocation`、`docAccess` | —，答疑时也能用 | 飞书；Lark 联调后 | 只能读项目代码 |
 | 话题里免 @（第四节） | `followUps` | — | 飞书、Lark | 每次都要 @ |
@@ -207,7 +207,7 @@ sequenceDiagram
 
 提需求的产品团队那一套，不需要专门的代码：
 
-- 开关：收需求、进展回报、卡片（开始用 Claude Code，验收是主人和提问人），飞书工具勾 `fetch-doc`、`create-doc`、`update-doc`，文档建在他们的需求知识库节点下、给提问人开编辑权限，话题里免 @。
+- 开关：收需求、进展回报、卡片（主人在卡片上开始，验收是主人和提问人），飞书工具勾 `fetch-doc`、`create-doc`、`update-doc`，文档建在他们的需求知识库节点下、给提问人开编辑权限，话题里免 @。
 - 智能体的工作指令（主人自己写，管「什么时候做什么」），例如：
 
   > 讨论需求时，先读相关代码和对方贴的飞书文档。需求讨论清楚后，把需求和技术方案写成一篇飞书文档，发链接请对方确认；对方确认后再用 task_create 建任务，说明里附文档链接和验收标准。普通咨询直接回答。
@@ -329,7 +329,7 @@ core：ChannelService ─ 入站、提问、发件队列（已有）
 - 任务卡随状态更新（已开始 · 由谁 / 在 Antumi 里 → 待验收 → 已完成 / 已取消），用过的按钮去掉。更新卡片不会通知人，所以要人看的（待验收、退回）都是新发一张并 @ 人。
 - 任务卡排在回答后面：`task_create` 只记下这次提问建了哪个任务，`ChannelService.answer` / `fail` 把回答放进 outbox 之后再放卡片，同一处的发件按顺序走，卡片不会抢在回答前面。
 - 主人不在那个群里就看不到任务卡，仍可在 Antumi 里开始；群里的需求另给主人发私信放在以后（第五节）。
-- `taskCards.start` 为空时任务卡没有「开始执行」，写「请主人在 Antumi 里开始」；`taskCards.review` 为空时不发验收卡，待验收是第一节的一条文字。
+- `taskCards.start` 为假时任务卡没有「开始执行」，写「请主人在 Antumi 里开始」；`taskCards.review` 为空时不发验收卡，待验收是第一节的一条文字。
 - 卡片由 core 渲染：与平台无关的 `ChannelCard`（标题、几段 Markdown、字段、按钮 `{ label, style, token, confirm? }`、可选的输入框）经 `CARD_FORMATTERS`（`satisfies Partial<Record<ChannelPlatform, …>>`）转成平台 JSON。飞书用卡片 JSON 2.0，`config.update_multi: true`（之后要更新，发之前就要设）。说明摘要和总结来自 Agent，照答案一样打码，并让 `<at …>` 失效。
 - outbox 的 `op` 加 `card`（发一张）和 `update`（按平台消息 ID 改一张），payload 加 `card`。卡片记在 `channel_task_cards`，平台消息 ID 在 outbox 发出后回填。
 
@@ -339,7 +339,7 @@ core：ChannelService ─ 入站、提问、发件队列（已有）
 
 | 按钮 | 谁能点 | 做什么 |
 |---|---|---|
-| 开始执行 | `ownerUsers`（开了 `taskCards.start` 才有） | 按 `taskCards.start` 开始任务 |
+| 开始执行 | `ownerUsers`（开了 `taskCards.start` 才有） | 按任务在 Antumi 里的执行设置开始 |
 | 不做 | `ownerUsers`（带二次确认） | 取消任务，原因「在飞书里选择不做」 |
 | 通过 | `ownerUsers`；`taskCards.review` 是 `ownerOrAsker` 时还有任务的提问人，且他仍在白名单里 | `review → done`，和在 Antumi 里验收一样 |
 | 退回 | 同上，原因必填（500 字内） | 主人点：直接返工；提问人点：存原因、发返工卡 |
@@ -368,8 +368,10 @@ core：ChannelService ─ 入站、提问、发件队列（已有）
 
 ### 开始执行
 
-- `taskCards.start` 是 `{ agent, model?, effort?, modelProvider? }`：从卡片开始时用哪个 Agent 和模型。权限模式不在这里设：和排查中枢自动开的任务一样，按本机的「无人值守」设置（`conversations.unattendedStartMode`，见 `main.ts` 的 `validateSourceTaskProposal`）。主人不在电脑前，Agent 若要审批就会等着，所以界面上说明这一点。不像自动开的任务那样要求项目配好交付检查：主人点了开始，和在 Antumi 里点一样。
-- 动作：任务还没有 `agent` 时先 `update` 写上 `taskCards.start` 的 Agent 和 `launch`，再 `TaskService.start`。开不了（Agent 没装、依赖没完成、项目不在了）：卡片上写「没能开始：<本地化的原因>，请在 Antumi 里处理」，只给原因代码，不给本机诊断。
+- 执行设置就是任务自己的：Agent、模型、推理强度、服务商都在 Antumi 的任务详情里，卡片上的「开始执行」按任务当时的设置开跑，和在 Antumi 里点开始一样。接入里不另设：只能选 Agent 的设置既不完整，又和任务的重复。
+- 从消息建的任务，`createChannelTask` 时就填上 Agent：取 `latestStartedAgent`（你最近一次开工用的 Agent，和桌面端新建任务的默认值同一条规则，只认本机检测到的），主人可以先在任务详情里改。不让聊天里的智能体选：它被同事的话驱动，用哪个 Agent、花谁的额度是主人的事。
+- 权限模式按本机的「无人值守」设置（`conversations.unattendedStartMode`，见 `main.ts` 的 `validateSourceTaskProposal`）。主人不在电脑前，Agent 若要审批就会等着，所以界面上说明这一点。不像自动开的任务那样要求项目配好交付检查：主人点了开始，和在 Antumi 里点一样。
+- 动作：任务没有 Agent 时（旧任务）先补上默认的，再 `TaskService.start`。开不了（Agent 没装、依赖没完成、项目不在了）：卡片上写「没能开始：<本地化的原因>，请在 Antumi 里处理」，只给原因代码，不给本机诊断。
 - Antumi 里的「开始执行」不变。哪边先开始都行，另一边的按钮随任务状态失效。
 
 ### 通过
@@ -515,7 +517,7 @@ lark_create_doc → channelTools.call → ChannelService.callTool → platform.t
 reportTasks: z.boolean().optional()                                   // 没有 = 关
 ownerUsers: z.array(PlatformId).max(20).optional()
 taskCards: z.object({
-  start: z.object({ agent: AgentKind, model, effort, modelProvider }).nullable(),   // 后三个取 TaskLaunchOptions 的定义；null：没有「开始执行」
+  start: z.boolean(),                                                  // false：没有「开始执行」
   review: z.enum(['owner', 'ownerOrAsker']).nullable()                               // null：不发验收卡
 }).nullable().optional()                                              // 没有或 null = 不发卡片
 platformTools: z.array(z.string().max(100)).max(50).optional()
@@ -621,7 +623,7 @@ CHANGELOG 草稿：
 
 - `protocol/src/channel.test.ts`：新字段旧客户端不带时保留；只有飞书、Lark 的描述有 `cards`、`followUps`、`tools`。
 - `core/src/channel-task-reports.test.ts`：每种状态变化回什么；和状态同一事务（模拟在中间退出）；接入关了、停用、换了组织时跳过并记原因；草稿优先、没有草稿压缩、压缩失败只发 PR；打码；`thread` 缺失的旧任务按原消息回复；outbox 放弃后记 `failed`。
-- `core/src/channel-actions.test.ts`：每个按钮的有权人；不是主人、令牌过期、用过、属于别的卡片、组织不同、任务已变；重投只处理一次；开始用 `taskCards.start` 和无人值守模式；只开 `start` 或只开 `review` 时各自的卡片和按钮；`review` 是 `owner` 时提问人点不了；关了卡片后旧按钮的回答；通过走 `review → done`；提问人退回只存意见、发返工卡；主人退回直接返工；继续执行带上意见并把它标为已用。
+- `core/src/channel-actions.test.ts`：每个按钮的有权人；不是主人、令牌过期、用过、属于别的卡片、组织不同、任务已变；重投只处理一次；开始用任务的执行设置和无人值守模式；只开 `start` 或只开 `review` 时各自的卡片和按钮；`review` 是 `owner` 时提问人点不了；关了卡片后旧按钮的回答；通过走 `review → done`；提问人退回只存意见、发返工卡；主人退回直接返工；继续执行带上意见并把它标为已用。
 - `core/src/channel-cards.test.ts`：飞书卡片 JSON 2.0、`update_multi`、按钮里只有令牌、摘要打码、`<at>` 失效、超过 14 天不更新。
 - `core/src/channel-tools/platform.test.ts`：名字映射；按会话列出；复查（没勾、提问已结束、提问人被移出白名单）；`docLocation` 覆盖参数；建好后开权限、开不了时的说明；截断；写失败不重试；记录目标和「写」。
 - `core/src/channel-feishu.test.ts`：假飞书加卡片回调帧和 3 秒内的响应、等不到 core 时的「正在处理」、`PATCH` 卡片、私聊发卡、富文本 `at`；假托管 MCP（头、工具名单、token 过期换一次、超大响应、`isError`）；假开权限接口；`followUps` 开关下话题内外的消息。

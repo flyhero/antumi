@@ -6,8 +6,7 @@ import {
   shortTaskId,
   type ChannelTaskFeedback,
   type ChannelTaskReport,
-  type Task,
-  type TaskCardStart
+  type Task
 } from '@antumi/protocol'
 import { cardMention, cardText, platformCard, type CardButton, type ChannelCard } from './channel-cards'
 import type { CardAction, CardKind, ChannelStore, StoredCard, StoredChannel } from './channel-store'
@@ -35,8 +34,8 @@ export type CardDelivery = { replaced: boolean; sent: number }
 
 type Hooks = {
   task(id: string): Task | null
-  // Starts a pending task as the card says, unattended; rejects with why it cannot.
-  start(task: Task, launch: TaskCardStart): Promise<void>
+  // Starts a pending task as it is set to run in Antumi, unattended; rejects with why it cannot.
+  start(task: Task): Promise<void>
   cancel(taskId: string): Promise<void>
   accept(taskId: string): Promise<void>
   // The task goes on after review, with why it was sent back as material for its agent.
@@ -120,11 +119,10 @@ export class ChannelTaskCards {
     switch (action.action) {
       case 'start': {
         if (!owner) return toast('warning', '只有主人能开始执行。')
-        const launch = channel.taskCards?.start
-        if (!launch) return toast('info', '请主人在 Antumi 里开始。')
+        if (!channel.taskCards?.start) return toast('info', '请主人在 Antumi 里开始。')
         if (task.status !== 'pending') return this.stale(task, channel)
         if (!this.store.useAction(action.token, event.user, this.now())) return toast('info', '已经处理过了。')
-        return this.start(task, channel, launch, action.token, card)
+        return this.start(task, channel, action.token, card)
       }
       case 'decline': {
         if (!owner) return toast('warning', '只有主人能决定不做。')
@@ -222,8 +220,8 @@ export class ChannelTaskCards {
     return sent
   }
 
-  private async start(task: Task, channel: StoredChannel, launch: TaskCardStart, token: string, card: StoredCard | null): Promise<CardToast> {
-    const started = this.hooks.start(task, launch).then(() => null, (error: unknown) => error ?? new Error('failed'))
+  private async start(task: Task, channel: StoredChannel, token: string, card: StoredCard | null): Promise<CardToast> {
+    const started = this.hooks.start(task).then(() => null, (error: unknown) => error ?? new Error('failed'))
     const outcome = await Promise.race([started, new Promise<'slow'>((resolve) => setTimeout(() => resolve('slow'), START_WAIT_MS).unref())])
     const failed = (error: unknown) => {
       this.store.releaseAction(token)
@@ -317,7 +315,7 @@ export class ChannelTaskCards {
             title: 'Antumi 任务，待开始', tone: 'blue',
             sections: [...lines, ...(card.notice ? [card.notice] : [])],
             buttons: [...(start ? [this.button(card, 'start', '开始执行', 'primary')] : []), this.button(card, 'decline', '不做', 'danger', '确定不做这个任务？它会被取消。')],
-            note: start ? '只有主人能开始执行，也可以在 Antumi 里开始。' : '请主人在 Antumi 里开始。'
+            note: start ? '只有主人能开始执行，按任务在 Antumi 里的执行设置运行，也可以在 Antumi 里开始。' : '请主人在 Antumi 里开始。'
           }
         }
         case 'running': {

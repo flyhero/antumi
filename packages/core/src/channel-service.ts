@@ -116,6 +116,8 @@ export type ChannelServiceOptions = {
   // Keeps a picture's bytes, refusing what is not one; its id is what a message is sent with.
   keepImage: (bytes: Uint8Array) => Promise<{ id: string }>
   tasks?: Pick<TaskService, 'createChannelTask'>
+  // The agent a new task takes, as one made in Antumi does; null leaves it for the owner to pick.
+  taskAgent?: () => AgentKind | null
   // What follows its tasks back to their threads: told when a question that may have collected
   // tasks is answered, and when the posts of a report are done with.
   reports?: Pick<ChannelTaskReports, 'posted' | 'list' | 'answered'>
@@ -464,7 +466,7 @@ export class ChannelService {
           const allowed = projectsOf({ roots: current.projectPaths })
           const repos = projects.map((name) => allowed.find((project) => project.name === name)?.root)
           if (repos.some((repo) => repo === undefined)) throw new ChannelToolError('只能为当前授权项目创建任务。')
-          const task = tasks.createChannelTask({ title, details, repos: repos.filter((repo) => repo !== undefined), source: {
+          const task = tasks.createChannelTask({ title, details, repos: repos.filter((repo) => repo !== undefined), agent: this.options.taskAgent?.() ?? null, source: {
             channelId: channel.id, requestId: request.id, conversationId, platform: channel.platform,
             tenant: request.tenant, asker: request.asker, place: request.place, messageId: request.messageId,
             thread: this.store.threadById(request.threadId)?.replyThread ?? null, direct: request.direct, text: request.text, createdAt: request.createdAt

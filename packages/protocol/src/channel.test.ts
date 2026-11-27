@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { CHANNEL_PLATFORMS, Channel, ChannelFields, ChannelInput } from './channel'
+import { CHANNEL_PLATFORMS, Channel, ChannelFields, ChannelInput, TaskChannelSource } from './channel'
 import { CHANNEL_PLATFORM_DESCRIPTORS, channelPlatform } from './channel-platforms'
 import { mobileMayCall } from './mobile-access'
 import { rpcSchemas, type RpcMethod } from './rpc'
@@ -12,6 +12,11 @@ describe('a channel', () => {
     expect(fields).toMatchObject({ enabled: true, projectPaths: [], allowedUsers: [], allowedPlaces: [], allowDirect: false, dailyPerUser: 20 })
     expect(fields.allowTaskCreation).toBeUndefined()
     expect(ChannelInput.parse({ profileId: PROFILE, platform: 'slack', allowTaskCreation: true }).allowTaskCreation).toBe(true)
+  })
+
+  it('keeps its tasks\' progress to itself until told otherwise, and a save without the switch leaves it', () => {
+    expect(ChannelFields.parse({ profileId: PROFILE, platform: 'feishu' }).reportTasks).toBeUndefined()
+    expect(ChannelInput.parse({ profileId: PROFILE, platform: 'feishu', reportTasks: true }).reportTasks).toBe(true)
   })
 
   it('never carries a credential to a client, only which are stored', () => {
@@ -29,6 +34,21 @@ describe('a channel', () => {
     for (const bad of [{ dailyPerUser: 0 }, { maxConcurrent: 6 }, { turnTimeoutSec: 5 }]) {
       expect(ChannelFields.safeParse({ profileId: PROFILE, platform: 'slack', ...bad }).success, JSON.stringify(bad)).toBe(false)
     }
+  })
+})
+
+describe('a task from a chat platform', () => {
+  const source = { channelId: '22222222-2222-4222-8222-222222222222', requestId: '33333333-3333-4333-8333-333333333333', conversationId: '44444444-4444-4444-8444-444444444444', platform: 'feishu', tenant: 'T', asker: 'ou_1', place: 'oc_1', messageId: 'om_1', text: '加个导出', createdAt: 1 }
+
+  it('reads one saved before it knew its thread', () => {
+    const parsed = TaskChannelSource.parse(source)
+    expect(parsed.thread).toBeUndefined()
+    expect(parsed.direct).toBeUndefined()
+  })
+
+  it('keeps the thread its answer went to, a direct chat\'s none', () => {
+    expect(TaskChannelSource.parse({ ...source, thread: 'om_1', direct: false })).toMatchObject({ thread: 'om_1', direct: false })
+    expect(TaskChannelSource.parse({ ...source, thread: null, direct: true })).toMatchObject({ thread: null, direct: true })
   })
 })
 
@@ -59,7 +79,7 @@ describe('chat platforms', () => {
 describe('channels over RPC', () => {
   it('are no phone\'s to set up, read or run tools for', () => {
     const methods = (Object.keys(rpcSchemas) as RpcMethod[]).filter((method) => method.startsWith('channels.') || method.startsWith('channelTools.'))
-    expect(methods).toEqual(['channels.list', 'channels.save', 'channels.remove', 'channels.requests', 'channels.toolCalls', 'channels.readiness', 'channelTools.call'])
+    expect(methods).toEqual(['channels.list', 'channels.save', 'channels.remove', 'channels.requests', 'channels.toolCalls', 'channels.readiness', 'channels.taskReports', 'channelTools.call'])
     for (const method of methods) expect(mobileMayCall(method, 'operate'), method).toBe(false)
   })
 })

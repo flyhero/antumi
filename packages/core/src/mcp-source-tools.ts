@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { AGENT_KINDS, agentDescriptor, AgentKind, MAX_SOURCE_REPORT, SourceTaskProposal, SOURCE_OUTCOMES, SOURCE_REPORT_LIMIT, SOURCE_REPORT_TOOL, SOURCE_TASK_CREATE_TOOL, SOURCE_TASK_READ_TOOLS, type RpcConnection } from '@antumi/protocol'
-import { reportRules, RESULT_FIELDS } from './source-report-prompt'
+import { reportRules, RESULT_FIELDS, type ReportAudience } from './source-report-prompt'
 
 type WithCore = <T>(action: (rpc: RpcConnection) => Promise<T>) => Promise<T>
 type Result = { content: { type: 'text'; text: string }[]; isError: boolean }
@@ -11,15 +11,18 @@ const ReportInput = z.object({ summary: z.string().trim().min(1).max(MAX_SOURCE_
 const text = (value: string, isError = false): Result => ({ content: [{ type: 'text', text: value }], isError })
 
 // The summary tool for the agent of a task or investigation from an issue that can be written back
-// to (docs/SOURCE-WRITEBACK.md). It drafts; Antumi posts, by the user's rules or hand. tasks: an
-// automatic investigation, which may open the issue's task where its source allows (core decides).
-export function sourceToolsOverCore(withCore: WithCore, conversationId: string, { tasks = true }: { tasks?: boolean } = {}) {
+// to (docs/SOURCE-WRITEBACK.md), or of a task from a chat platform reported in its thread
+// (audience chat, docs/CHANNEL-LOOP.md). It drafts; Antumi posts, by the user's rules or hand.
+// tasks: an automatic investigation, which may open the issue's task where its source allows (core decides).
+export function sourceToolsOverCore(withCore: WithCore, conversationId: string, { tasks = true, audience = 'issue' }: { tasks?: boolean; audience?: ReportAudience } = {}) {
+  const posting = audience === 'chat'
+    ? '它不会直接发出去：Antumi 在提交验收时把它发回提出需求的聊天话题。'
+    : '它不会直接发出去：用户设置了规则时，Antumi 在提交验收或验收通过时把它作为评论发到事项上，否则由用户决定。你不能用它改事项状态。'
   const tools = [
     {
       spec: {
         name: SOURCE_REPORT_TOOL,
-        description: `给这个任务来源的事项（Jira、GitHub 等）写一条完成总结，存为草稿。做完工作、交给用户验收前调用；之后又改了就再调用一次覆盖。超过 ${SOURCE_REPORT_LIMIT} 字会被退回。\n${reportRules()}\n${RESULT_FIELDS}\n` +
-          '它不会直接发出去：用户设置了规则时，Antumi 在提交验收或验收通过时把它作为评论发到事项上，否则由用户决定。你不能用它改事项状态。',
+        description: `${audience === 'chat' ? '给提出这个任务的同事' : '给这个任务来源的事项（Jira、GitHub 等）'}写一条完成总结，存为草稿。做完工作、交给用户验收前调用；之后又改了就再调用一次覆盖。超过 ${SOURCE_REPORT_LIMIT} 字会被退回。\n${reportRules('', audience)}\n${RESULT_FIELDS}\n` + posting,
         inputSchema: {
           type: 'object',
           properties: {

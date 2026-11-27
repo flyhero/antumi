@@ -347,7 +347,8 @@ export function feishuConnector(channel: GatewayChannel, emit: ConnectorEmit, op
     async deliver(job: ChannelDelivery): Promise<Delivered> {
       try {
         // The outbox row's id: Feishu posts one message per uuid however often it is sent.
-        const content = JSON.stringify({ zh_cn: { content: [[{ tag: 'md', text: job.text ?? '' }]] } })
+        // An md node is a paragraph of its own, so a mention goes in the one before it.
+        const content = JSON.stringify({ zh_cn: { content: [...(job.mention ? [[{ tag: 'at', user_id: job.mention }]] : []), [{ tag: 'md', text: job.text ?? '' }]] } })
         const answer = job.op === 'react'
           ? await call('POST', `/open-apis/im/v1/messages/${encodeURIComponent(job.target ?? '')}/reactions`, { reaction_type: { emoji_type: EMOJI[job.emoji ?? ''] ?? job.emoji ?? '' } }, Sent)
           : job.thread

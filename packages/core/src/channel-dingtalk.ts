@@ -255,23 +255,26 @@ export function dingtalkConnector(channel: GatewayChannel, emit: ConnectorEmit, 
     let host: string
     try { host = new URL(origin.webhook).host } catch { return null }
     if (!webhookHosts.includes(host)) return null
-    const mention = origin.group && job.thread !== null && !mentioned.has(job.thread)
-    const body = { msgtype: 'markdown', markdown: { title, text: mention ? `${text}\n\n@${origin.staffId}` : text }, ...(mention ? { at: { atUserIds: [origin.staffId], isAtAll: false } } : {}) }
+    // In a group: whom core names, or else the asker on an answer's first piece. A direct chat needs none.
+    const mention = !origin.group ? null : job.mention ?? (job.thread !== null && !mentioned.has(job.thread) ? origin.staffId : null)
+    const body = { msgtype: 'markdown', markdown: { title, text: mention ? `${text}\n\n@${mention}` : text }, ...(mention ? { at: { atUserIds: [mention], isAtAll: false } } : {}) }
     const { reply, retryAfterMs } = await post(origin.webhook, body, WebhookReply)
     if (retryAfterMs !== null || (reply && WEBHOOK_LIMITED.has(reply.errcode))) return { ok: false, platformId: null, retryAfterMs: retryAfterMs ?? 3000, error: 'ratelimited' }
     if (reply?.errcode !== 0) return null
-    if (mention && job.thread) remember(mentioned, job.thread, true)
+    if (mention && !job.mention && job.thread) remember(mentioned, job.thread, true)
     return { ok: true, platformId: null, retryAfterMs: null, error: null }
   }
 
   async function throughApi(job: ChannelDelivery, origin: Origin | undefined, title: string, text: string): Promise<Delivered> {
     const group = origin?.group ?? job.thread !== null
-    if (!group && !origin) return { ok: false, platformId: null, retryAfterMs: null, error: 'asker no longer known' }
+    // A direct chat's asker, once the message that said who it was is forgotten, is the one core names.
+    const staffId = origin?.staffId ?? job.mention ?? null
+    if (!group && !staffId) return { ok: false, platformId: null, retryAfterMs: null, error: 'asker no longer known' }
     const robotCode = origin?.robotCode ?? appId
     const msgParam = JSON.stringify({ title, text })
     const body = group
       ? { robotCode, openConversationId: job.place, msgKey: 'sampleMarkdown', msgParam }
-      : { robotCode, userIds: [origin?.staffId ?? ''], msgKey: 'sampleMarkdown', msgParam }
+      : { robotCode, userIds: [staffId ?? ''], msgKey: 'sampleMarkdown', msgParam }
     const { status, reply, retryAfterMs } = await post(`${api}/v1.0/robot/${group ? 'groupMessages/send' : 'oToMessages/batchSend'}`, body, ApiReply, { 'x-acs-dingtalk-access-token': await accessToken() })
     if (retryAfterMs !== null) return { ok: false, platformId: null, retryAfterMs, error: 'ratelimited' }
     if (status === 200 && reply?.processQueryKey) return { ok: true, platformId: reply.processQueryKey, retryAfterMs: null, error: null }

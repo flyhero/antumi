@@ -14,7 +14,8 @@ import { SourceUpdateStore } from './source-update-store'
 import { SourceWritebackStore } from './source-writeback-store'
 import { SourceWriteback } from './source-writeback'
 import { redact, withoutMachinePaths } from './channel-output'
-import { reportInstruction } from './source-report-prompt'
+import { channelReportInstruction, reportInstruction } from './source-report-prompt'
+import { ChannelTaskReports } from './channel-task-reports'
 import { AgentProfileStore } from './agent-profile-store'
 import { AgentProfileService, readyAgents } from './agent-profile-service'
 import { AgentCliMaintenance } from './agent-cli-maintenance'
@@ -22,7 +23,7 @@ import { randomBytes } from 'node:crypto'
 import { mkdir, realpath, rm, stat } from 'node:fs/promises'
 import path from 'node:path'
 import os from 'node:os'
-import { coreUrl, untrustedSource, SOURCE_REPORT_LIMIT, isStartRef, AGENT_KINDS, agentReadiness, backendChoice, agentDescriptor, providerEndpoint, PROTOCOL_VERSION, quotaVerdict, usageAccount, usageReadable, type AgentAuthentication, type AgentKind, type AgentUsage, type ChatItem, type ChatSettings, type Task, type SourceTaskProposal } from '@antumi/protocol'
+import { channelPlatform, coreUrl, untrustedSource, SOURCE_REPORT_LIMIT, isStartRef, AGENT_KINDS, agentReadiness, backendChoice, agentDescriptor, providerEndpoint, PROTOCOL_VERSION, quotaVerdict, usageAccount, usageReadable, type AgentAuthentication, type AgentKind, type AgentUsage, type ChatItem, type ChatSettings, type Task, type SourceTaskProposal } from '@antumi/protocol'
 import packageJson from '../package.json' with { type: 'json' }
 import { removeCoreEndpoint, antumiPaths, writeCoreEndpoint } from '@antumi/protocol/node'
 import { adapterOf } from './agents'
@@ -51,7 +52,7 @@ import { startRpcServer, type RpcServer } from './rpc-server'
 import { TaskService } from './task-service'
 import { ProjectRegistry } from './project-registry'
 import { GitFavoriteStore } from './git-favorite-store'
-import { TaskStore } from './task-store'
+import { joinLinks, TaskStore } from './task-store'
 import { UsageLimitResumes } from './usage-limit-resume'
 import { ScheduleService } from './schedule-service'
 import { RoutineService } from './routine-service'
@@ -384,6 +385,10 @@ const writeback = new SourceWriteback(new SourceWritebackStore(paths.database), 
     return conversation?.source && !conversation.taskId ? { target, source: conversation.source, conversationId: conversation.id } : null
   },
   defer: (target, trigger) => target.kind === 'task' && trigger !== 'start' && !!sourceFixes?.deferred(target.id),
+  reportable: (target) => {
+    const task = target.kind === 'task' ? service.list().find((each) => each.id === target.id) : undefined
+    return !!task && !task.source && channelReports.reporting(task)
+  },
   lastReply: (conversationId) => conversations.messages(conversationId).findLast((message) => message.role === 'assistant' && message.complete)?.text ?? null,
   // What an agent wrote goes to a tracker others read: no secret, and no folder of this machine.
   sanitize: (owner, text) => {
@@ -395,13 +400,30 @@ const writeback = new SourceWriteback(new SourceWritebackStore(paths.database), 
   changed: (view) => server?.broadcast('sources.writebackChanged', { writeback: view })
 })
 sourceUpdates.setOwnComments((source) => writeback.ownComments(source))
-service.setStatusJournal((before, status) => writeback.journal(before, status))
-service.setStatusListener(() => writeback.taskMoved())
+// A task collected from a chat platform, followed back in its thread (docs/CHANNEL-LOOP.md). Its
+// posts go through the channel service, made once its profiles are; until then they wait.
+const channelReports = new ChannelTaskReports(channelStore, {
+  task: (id) => service.list().find((each) => each.id === id) ?? null,
+  draft: (taskId) => writeback.draft({ kind: 'task', id: taskId }),
+  lastReply: (conversationId) => conversations.messages(conversationId).findLast((message) => message.role === 'assistant' && message.complete)?.text ?? null,
+  condense: (conversationId, platform, reply) => writeback.condenseFor(conversationId, platform, reply, '', 'chat'),
+  pullRequests: (taskId) => pullRequestStore.list(taskId),
+  post: (report) => channels?.postReport(report) ?? Promise.resolve(false),
+  changed: (taskId, reports) => server?.broadcast('channels.taskReportsChanged', { taskId, reports })
+})
+service.setStatusJournal((before, status) => joinLinks(writeback.journal(before, status), channelReports.journal(before, status)))
+service.setStatusListener(() => {
+  writeback.taskMoved()
+  channelReports.taskMoved()
+})
 service.setSourcePrompt(async (task, conversationId, original) => {
   const snapshot = task.sourceSnapshot
   // An agent whose task can be written back to drafts the issue's summary for Antumi to post;
-  // where the tracker takes no comments there is nothing to post it as.
-  const prompt = task.source && sources.writer(task.source)?.comments ? `${original}\n\n${reportInstruction(task.source.name, sources.writebackRules(task.source.provider, task.source.instance))}` : original
+  // where the tracker takes no comments there is nothing to post it as. One from a chat platform
+  // drafts it for the thread it came from.
+  const prompt = task.source && sources.writer(task.source)?.comments ? `${original}\n\n${reportInstruction(task.source.name, sources.writebackRules(task.source.provider, task.source.instance))}`
+    : task.channelSource && channelReports.reporting(task) ? `${original}\n\n${channelReportInstruction(channelPlatform(task.channelSource.platform).label)}`
+    : original
   const repairId = sourceFixes?.taskRun(task.id)
   if (!task.source || !snapshot?.commentState) return { text: prompt, ...(repairId ? { ref: `source-fix:${repairId}` } : {}) }
   const comments = snapshot.commentState.comments.map((comment) => `### ${comment.author || '未知作者'} · ${new Date(comment.createdAt).toISOString()}
@@ -620,6 +642,7 @@ const accounts = new AgentAccountStore(paths.agentAccounts, paths.agentAccountHo
 channels = new ChannelService(channelStore, {
   conversations,
   tasks: service,
+  reports: channelReports,
   profile: (id) => profiles.list().find((profile) => profile.id === id) ?? null,
   credentials,
   recentProjects: () => projects.recent(),
@@ -1002,6 +1025,7 @@ await writeCoreEndpoint({ port: server.port, token, pid: process.pid, protocolVe
 mobile.seed(conversations.list(true, true, true))
 await mobile.start(coreUrl({ port: server.port, token }))
 channels.start()
+void channelReports.drain()
 daemon.start()
 await awake.start()
 refreshAwake()
@@ -1071,6 +1095,7 @@ async function shutdown(): Promise<void> {
   await sourceInvestigations?.stop()
   await removeCoreEndpoint(process.pid)
   writeback.close()
+  channelReports.close()
   await sourceUpdates?.close()
   sourceUpdateStore.close()
   store.close()

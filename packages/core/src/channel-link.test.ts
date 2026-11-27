@@ -186,6 +186,13 @@ describe('a question from Slack to an agent and back', () => {
     expect(channels.requests(channel.id, null, 5).items[0]).toMatchObject({ asker: 'U1', text: 'where is this (https://example.com) & that?', state: 'answered' })
   })
 
+  it('names the asker a task\'s progress is for at the start of the post', async () => {
+    const task = tasks.create('加导出')
+    expect(await channels.postReport({ channelId: channel.id, reportId: '55555555-5555-4555-8555-555555555555', place: 'C1', thread: '100.1', text: '已完成：#1 加导出', mention: 'U1', task })).toBe(true)
+    await when(() => slack.posts().length === 1)
+    expect(slack.posts()[0]).toMatchObject({ channel: 'C1', thread_ts: '100.1', text: '<@U1> 已完成：#1 加导出' })
+  })
+
   it('acknowledges a redelivered event and answers it once', async () => {
     const event = { type: 'app_mention', user: 'U1', text: '<@UBOT> hi', ts: '100.1', channel: 'C1' }
     const first = slack.send(event, 'EvSame')

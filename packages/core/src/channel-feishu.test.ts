@@ -199,6 +199,11 @@ describe('the Feishu connector', () => {
     ])
   })
 
+  it('puts a user core names in a paragraph of its own before the text', async () => {
+    expect(await connector.deliver(delivery({ thread: 'om_1', text: '已完成', mention: 'ou_asker' }))).toMatchObject({ ok: true })
+    expect(feishu.sentMessages().at(-1)?.body).toMatchObject({ content: JSON.stringify({ zh_cn: { content: [[{ tag: 'at', user_id: 'ou_asker' }], [{ tag: 'md', text: '已完成' }]] } }) })
+  })
+
   it('waits as long as Feishu says when told to slow down', async () => {
     feishu.state.limited = 1
     expect(await connector.deliver(delivery({}))).toEqual({ ok: false, platformId: null, retryAfterMs: 2000, error: 'ratelimited' })

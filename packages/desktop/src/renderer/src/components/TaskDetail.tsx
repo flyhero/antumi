@@ -159,7 +159,7 @@ function TaskDetailBody({ task }: { task: Task }) {
 
         <div className="task-detail-main">
           <SourceSnapshotCard task={task} />
-          <TaskChannelSourceCard source={task.channelSource} />
+          <TaskChannelSourceCard taskId={task.id} source={task.channelSource} />
           {task.source && <SourceUpdatesPanel target={{ kind: 'task', id: task.id }} />}
           {task.source && <SourceWritebackPanel target={{ kind: 'task', id: task.id }} />}
           <TaskPlanCard task={task} />

@@ -463,7 +463,14 @@ export const MIGRATIONS = [
    CREATE INDEX source_intents_due ON source_intents(next_at);`,
   `CREATE TABLE source_fixes (id TEXT PRIMARY KEY, task_id TEXT UNIQUE, data TEXT NOT NULL);`,
   `CREATE TABLE project_choices (path TEXT PRIMARY KEY, data TEXT NOT NULL);`,
-  `ALTER TABLE conversation_stages ADD COLUMN backend TEXT;`
+  `ALTER TABLE conversation_stages ADD COLUMN backend TEXT;`,
+  // A chat platform task's progress posted back in its thread (docs/CHANNEL-LOOP.md): one row per
+  // status move, saved in the move's transaction; the outbox rows that carry it name it.
+  `CREATE TABLE channel_task_reports (id TEXT PRIMARY KEY, task_id TEXT NOT NULL, channel_id TEXT NOT NULL, stage TEXT NOT NULL,
+     state TEXT NOT NULL, reason TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
+   CREATE INDEX channel_task_reports_task ON channel_task_reports(task_id, created_at);
+   CREATE INDEX channel_task_reports_state ON channel_task_reports(state, created_at);
+   ALTER TABLE channel_outbox ADD COLUMN report_id TEXT;`
 ]
 
 
@@ -591,6 +598,12 @@ function groupBy<T extends { taskId: string }>(rows: T[]): Map<string, T[]> {
 // are saved together or not at all.
 export type TaskWriteLink = { write(db: DatabaseSync): void }
 export type TaskCreationLink = TaskWriteLink & { id: string }
+
+// Several stores' parts of one transaction as one, or null when none has anything to write.
+export function joinLinks(...links: readonly (TaskWriteLink | null)[]): TaskWriteLink | null {
+  const present = links.filter((link) => link !== null)
+  return present.length ? { write: (db) => { for (const link of present) link.write(db) } } : null
+}
 
 export class TaskStore {
   private readonly db: DatabaseSync

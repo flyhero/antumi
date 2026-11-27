@@ -222,7 +222,7 @@ export function slackConnector(channel: GatewayChannel, emit: ConnectorEmit, opt
       try {
         const { reply, retryAfterMs } = job.op === 'react'
           ? await call('reactions.add', botToken, { channel: job.place, timestamp: job.target, name: job.emoji }, Posted)
-          : await call('chat.postMessage', botToken, { channel: job.place, text: job.text ?? '', ...(job.thread ? { thread_ts: job.thread } : {}), mrkdwn: true, unfurl_links: false, unfurl_media: false }, Posted)
+          : await call('chat.postMessage', botToken, { channel: job.place, text: `${job.mention ? `<@${job.mention}> ` : ''}${job.text ?? ''}`, ...(job.thread ? { thread_ts: job.thread } : {}), mrkdwn: true, unfurl_links: false, unfurl_media: false }, Posted)
         if (retryAfterMs !== null) return { ok: false, platformId: null, retryAfterMs, error: 'ratelimited' }
         if (reply?.ok || reply?.error === 'already_reacted') return { ok: true, platformId: reply.ts ?? null, retryAfterMs: null, error: null }
         return { ok: false, platformId: null, retryAfterMs: null, error: reply?.error ?? 'bad reply' }

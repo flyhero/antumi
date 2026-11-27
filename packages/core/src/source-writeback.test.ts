@@ -566,3 +566,36 @@ describe('source writeback', () => {
   })
 
 })
+
+describe('a summary for a task from a chat platform', () => {
+  let root: string
+  let tasks: TaskStore
+  let store: SourceWritebackStore
+
+  beforeEach(() => {
+    root = mkdtempSync(path.join(os.tmpdir(), 'antumi-writeback-chat-'))
+    tasks = new TaskStore(path.join(root, 'antumi.db'))
+    store = new SourceWritebackStore(path.join(root, 'antumi.db'))
+  })
+
+  afterEach(() => {
+    store.close()
+    tasks.close()
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  it('is drafted and kept though there is no issue, and only where it is reported', () => {
+    const chatTask: SourceUpdateTarget = { kind: 'task', id: 'chat-task' }
+    const writeback = new SourceWriteback(store, { writer: () => null, writebackFor: () => { throw new Error('no issue') }, writebackWanted: () => false }, {
+      owner: () => null,
+      reportable: (ref) => ref.kind === 'task' && ref.id === 'chat-task',
+      lastReply: () => null,
+      changed: () => {}
+    })
+    const view = writeback.saveReport(chatTask, '导出按钮已经加上。', { outcome: 'delivered' })
+    expect(view).toMatchObject({ supported: false, reportable: true, report: { text: '导出按钮已经加上。', outcome: 'delivered' } })
+    expect(writeback.draft(chatTask)?.text).toBe('导出按钮已经加上。')
+    expect(() => writeback.saveReport({ kind: 'task', id: 'other' }, 'x')).toThrow(Rejection)
+    expect(writeback.view({ kind: 'task', id: 'other' }).reportable).toBeUndefined()
+  })
+})

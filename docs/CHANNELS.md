@@ -354,7 +354,7 @@ claude -p --verbose --output-format stream-json --input-format stream-json --inc
 
 ## 主人在聊天平台上同意、结果回到原话题
 
-> 状态：设计，未实现。完整方案见 [CHANNEL-LOOP.md](CHANNEL-LOOP.md)。
+> 状态：结果回到原话题已实现（接入的「任务的进展回到原话题」，默认关），卡片是设计。完整方案见 [CHANNEL-LOOP.md](CHANNEL-LOOP.md)。
 
 从消息建的任务，进展（开始、待验收的总结和 PR、完成、取消）回到提出需求的那条消息下；飞书和 Lark 上，主人可以在卡片上点「开始执行」，提问人可以在卡片上验收或退回，退回后由主人点「继续执行」返工。按钮只信平台推来的操作人，按钮里只放一次性令牌。
 
@@ -431,5 +431,6 @@ claude -p --verbose --output-format stream-json --input-format stream-json --inc
 | 从 Lark 提问到回答 | 只对本地的假飞书验证过，接口和帧与飞书相同，只换了域名。**真实的 Lark 应用没有联调过** |
 | 从飞书提问到回答 | 用真实的飞书应用联调通过（2026-11-15）：应用建在飞书个人账号自己的组织里，从桌面端填凭据、连上长连接，到在飞书里提问收到回答。帧格式照官方 Node SDK 1.76.0 写的 |
 | 打包后的应用 | `channel-gateway.mjs` 能打出来，没有在安装包里跑过 |
+| 任务的进展回到原话题 | 对本地的假 Slack、假飞书、假钉钉验证过连接器的 @ 人和发送；没有在真实平台上联调 |
 
-没做的：主人接手会话；进度更新；固定查询工具；除 Claude Code、Codex、Pi 外的 Agent；结果回到原话题、卡片上开始和验收、飞书工具、话题里免 @（设计见 [CHANNEL-LOOP.md](CHANNEL-LOOP.md)）。
+没做的：主人接手会话；进度更新；固定查询工具；除 Claude Code、Codex、Pi 外的 Agent；卡片上开始和验收、飞书工具、话题里免 @（设计见 [CHANNEL-LOOP.md](CHANNEL-LOOP.md)）。

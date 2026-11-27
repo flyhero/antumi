@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { create } from 'zustand'
-import type { Channel, ChannelReadiness } from '@antumi/protocol'
+import type { Channel, ChannelReadiness, ChannelTaskReport } from '@antumi/protocol'
 import { perform, useCore } from './core-store'
 
 // Agents' channels on chat platforms (docs/CHANNELS.md), as core holds them: read once per
@@ -13,6 +13,10 @@ export function useChannelsSupported(): boolean {
 
 export function useChannelTasksSupported(): boolean {
   return useCore((state) => state.rpc?.features.includes('channel-tasks') ?? false)
+}
+
+export function useChannelTaskReportsSupported(): boolean {
+  return useCore((state) => state.rpc?.features.includes('channel-task-reports') ?? false)
 }
 
 export function setChannels(channels: Channel[]): void {
@@ -34,6 +38,25 @@ export function useChannels(): Channel[] {
     }
   }, [rpc, supported])
   return useChannelStore((state) => state.channels)
+}
+
+// What was posted back in the thread a task came from, kept current by core's word of each change.
+// Asked only of a task from a chat platform.
+export function useChannelTaskReports(taskId: string, fromChat: boolean): ChannelTaskReport[] {
+  const rpc = useCore((state) => state.rpc)
+  const supported = useChannelTaskReportsSupported()
+  const [reports, setReports] = useState<ChannelTaskReport[]>([])
+  useEffect(() => {
+    if (!rpc || !supported || !fromChat) return setReports([])
+    let live = true
+    const off = rpc.on('channels.taskReportsChanged', (changed) => { if (live && changed.taskId === taskId) setReports(changed.reports) })
+    void rpc.call('channels.taskReports', { taskId }).then((next) => { if (live) setReports(next) }, () => {})
+    return () => {
+      live = false
+      off()
+    }
+  }, [rpc, supported, fromChat, taskId])
+  return reports
 }
 
 // Whether this computer can answer from a chat platform: asked again whenever the channels change

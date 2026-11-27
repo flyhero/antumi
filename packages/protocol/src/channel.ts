@@ -34,6 +34,9 @@ export const ChannelFields = z.object({
   allowDirect: z.boolean().default(false),
   // Only collecting work; never permission to start it.
   allowTaskCreation: z.boolean().optional(),
+  // A task collected here is followed back in the thread it came from: started, handed in, done.
+  // Absent is off, so a channel saved before this keeps posting what it did.
+  reportTasks: z.boolean().optional(),
   dailyPerUser: z.number().int().min(1).max(500).default(CHANNEL_DEFAULTS.dailyPerUser),
   dailyTotal: z.number().int().min(1).max(10_000).default(CHANNEL_DEFAULTS.dailyTotal),
   maxConcurrent: z.number().int().min(1).max(5).default(CHANNEL_DEFAULTS.maxConcurrent),
@@ -121,7 +124,32 @@ export const TaskChannelSource = z.object({
   asker: z.string(),
   place: z.string(),
   messageId: z.string(),
+  // Where the answer to it went, which the task's progress goes under too: the thread, and whether
+  // the chat was a direct one. Tasks from before have neither, and go under the message itself.
+  thread: z.string().nullable().optional(),
+  direct: z.boolean().optional(),
   text: z.string(),
   createdAt: z.number()
 })
 export type TaskChannelSource = z.infer<typeof TaskChannelSource>
+
+// A task from a chat platform, followed back in its thread (docs/CHANNEL-LOOP.md): one post per
+// move. start: it began · rework: it went on after review · review: handed in, with its summary ·
+// done: accepted · closed: done without running · abandoned: cancelled.
+export const ChannelTaskStage = z.enum(['start', 'rework', 'review', 'done', 'closed', 'abandoned'])
+export type ChannelTaskStage = z.infer<typeof ChannelTaskStage>
+// pending: not yet worked out · queued: in the outbox · sent · skipped: not posted, reason says why ·
+// failed: the platform would not take it.
+export const ChannelTaskReportState = z.enum(['pending', 'queued', 'sent', 'skipped', 'failed'])
+export type ChannelTaskReportState = z.infer<typeof ChannelTaskReportState>
+export const ChannelTaskReport = z.object({
+  id: z.string().uuid(),
+  taskId: z.string(),
+  channelId: z.string().uuid(),
+  stage: ChannelTaskStage,
+  state: ChannelTaskReportState,
+  reason: z.string().nullable(),
+  createdAt: z.number(),
+  updatedAt: z.number()
+})
+export type ChannelTaskReport = z.infer<typeof ChannelTaskReport>

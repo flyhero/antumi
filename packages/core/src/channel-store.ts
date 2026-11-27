@@ -1,6 +1,7 @@
 import { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
-import { ChannelFields, ChannelPlatform, ChannelRequest, ChannelRequestState, type ChannelToolCall } from '@antumi/protocol'
+import { ChannelFields, ChannelPlatform, ChannelRequest, ChannelRequestState, ChannelTaskReport, type ChannelTaskReportState, type ChannelToolCall } from '@antumi/protocol'
+import type { TaskWriteLink } from './task-store'
 
 // Agents on chat platforms: who may ask, each question and what came of it, and what is still to
 // be posted. The tables are TaskStore's migrations'. Credentials are not here (CredentialStore).
@@ -24,8 +25,10 @@ export type StoredRequest = {
   createdAt: number; startedAt: number | null; endedAt: number | null; totalTokens: number | null
 }
 
-export type OutboxRow = { id: string; channelId: string; requestId: string | null; op: 'react' | 'post'; payload: OutboxPayload; attempts: number; nextAt: number }
-const OutboxPayload = z.object({ place: z.string(), thread: z.string().nullable(), target: z.string().nullable(), text: z.string().nullable(), emoji: z.string().nullable() })
+// reportId: the task report it carries, if it is one (channel_task_reports).
+export type OutboxRow = { id: string; channelId: string; requestId: string | null; reportId: string | null; op: 'react' | 'post'; payload: OutboxPayload; attempts: number; nextAt: number }
+// mention: a platform user core names to be notified, never anything from an agent's words.
+const OutboxPayload = z.object({ place: z.string(), thread: z.string().nullable(), target: z.string().nullable(), text: z.string().nullable(), emoji: z.string().nullable(), mention: z.string().nullable().optional() })
 export type OutboxPayload = z.infer<typeof OutboxPayload>
 
 const strings = (raw: unknown): string[] => {
@@ -95,6 +98,8 @@ export class ChannelStore {
     try {
       this.db.prepare('DELETE FROM channel_tool_calls WHERE request_id IN (SELECT id FROM channel_requests WHERE channel_id = ?)').run(id)
       for (const table of ['channel_requests', 'channel_threads', 'channel_events', 'channel_outbox']) this.db.prepare(`DELETE FROM ${table} WHERE channel_id = ?`).run(id)
+      // The tasks it collected stay, with what was posted for them; what was still to go never will.
+      this.db.prepare("UPDATE channel_task_reports SET state = 'skipped', reason = 'channel-removed' WHERE channel_id = ? AND state IN ('pending', 'queued')").run(id)
       this.db.prepare('DELETE FROM channels WHERE id = ?').run(id)
       this.db.exec('COMMIT')
     } catch (error) {
@@ -203,9 +208,9 @@ export class ChannelStore {
       .map((row) => ({ tool: String(row.tool), target: String(row.target), bytes: Number(row.bytes), at: Number(row.at) }))
   }
 
-  addOutbox(row: { id: string; channelId: string; requestId: string | null; op: 'react' | 'post'; payload: OutboxPayload }, now: number): void {
-    this.db.prepare('INSERT INTO channel_outbox (id, channel_id, request_id, op, payload, state, attempts, next_at, created_at) VALUES (?, ?, ?, ?, ?, \'pending\', 0, ?, ?)')
-      .run(row.id, row.channelId, row.requestId, row.op, JSON.stringify(row.payload), now, now)
+  addOutbox(row: { id: string; channelId: string; requestId: string | null; reportId?: string | null; op: 'react' | 'post'; payload: OutboxPayload }, now: number): void {
+    this.db.prepare('INSERT INTO channel_outbox (id, channel_id, request_id, report_id, op, payload, state, attempts, next_at, created_at) VALUES (?, ?, ?, ?, ?, ?, \'pending\', 0, ?, ?)')
+      .run(row.id, row.channelId, row.requestId, row.reportId ?? null, row.op, JSON.stringify(row.payload), now, now)
   }
 
   // What is still to be posted, oldest first, whether or not its time has come: the order holds.
@@ -213,7 +218,7 @@ export class ChannelStore {
     return this.db.prepare('SELECT * FROM channel_outbox WHERE state = \'pending\' ORDER BY created_at, rowid').all().flatMap((row) => {
       let payload: OutboxPayload
       try { payload = OutboxPayload.parse(JSON.parse(String(row.payload))) } catch { return [] }
-      return [{ id: String(row.id), channelId: String(row.channel_id), requestId: row.request_id == null ? null : String(row.request_id), op: row.op === 'react' ? 'react' as const : 'post' as const, payload, attempts: Number(row.attempts), nextAt: Number(row.next_at) }]
+      return [{ id: String(row.id), channelId: String(row.channel_id), requestId: row.request_id == null ? null : String(row.request_id), reportId: row.report_id == null ? null : String(row.report_id), op: row.op === 'react' ? 'react' as const : 'post' as const, payload, attempts: Number(row.attempts), nextAt: Number(row.next_at) }]
     })
   }
 
@@ -242,6 +247,47 @@ export class ChannelStore {
     this.db.prepare('DELETE FROM channel_requests WHERE created_at < ?').run(requestsBefore)
     const emptied = old.filter((id) => !this.db.prepare('SELECT 1 FROM channel_requests WHERE conversation_id = ? LIMIT 1').get(id))
     for (const id of emptied) this.db.prepare('DELETE FROM channel_threads WHERE conversation_id = ?').run(id)
+    // A task's reports go with the task, not with the channel's records.
+    this.db.prepare('DELETE FROM channel_task_reports WHERE task_id NOT IN (SELECT id FROM tasks)').run()
     return emptied
   }
+
+  // A task report for TaskStore to save with the status move it is about.
+  reportLink(report: ChannelTaskReport): TaskWriteLink {
+    return { write: (db) => { insertReport(db, report) } }
+  }
+
+  addReport(report: ChannelTaskReport): void {
+    insertReport(this.db, report)
+  }
+
+  report(id: string): ChannelTaskReport | null {
+    const row = this.db.prepare(`${REPORT_SELECT} WHERE id = ?`).get(id)
+    return row ? ChannelTaskReport.parse(row) : null
+  }
+
+  // Oldest first, as the task went through them.
+  reports(taskId: string): ChannelTaskReport[] {
+    return this.db.prepare(`${REPORT_SELECT} WHERE task_id = ? ORDER BY created_at, rowid`).all(taskId).map((row) => ChannelTaskReport.parse(row))
+  }
+
+  reportsIn(state: ChannelTaskReportState): ChannelTaskReport[] {
+    return this.db.prepare(`${REPORT_SELECT} WHERE state = ? ORDER BY created_at, rowid`).all(state).map((row) => ChannelTaskReport.parse(row))
+  }
+
+  settleReport(id: string, state: ChannelTaskReportState, reason: string | null, now: number): void {
+    this.db.prepare('UPDATE channel_task_reports SET state = ?, reason = ?, updated_at = ? WHERE id = ?').run(state, reason, now, id)
+  }
+
+  // How the posts carrying a report stand: posted, given up on, or still to go.
+  reportPosts(reportId: string): string[] {
+    return this.db.prepare('SELECT state FROM channel_outbox WHERE report_id = ? ORDER BY created_at, rowid').all(reportId).map((row) => String(row.state))
+  }
+}
+
+const REPORT_SELECT = 'SELECT id, task_id AS taskId, channel_id AS channelId, stage, state, reason, created_at AS createdAt, updated_at AS updatedAt FROM channel_task_reports'
+
+function insertReport(db: DatabaseSync, report: ChannelTaskReport): void {
+  db.prepare('INSERT INTO channel_task_reports (id, task_id, channel_id, stage, state, reason, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+    .run(report.id, report.taskId, report.channelId, report.stage, report.state, report.reason, report.createdAt, report.updatedAt)
 }

@@ -1,6 +1,6 @@
 # 聊天平台上的需求闭环（技术方案）
 
-> 状态：设计，未实现（2026-11-27）。需求来自飞书上的产品团队。本文汇总并取代 CHANNELS.md 原「主人在聊天平台上同意」「结果回到原话题」两节和 LARK.md 原 B 节，接入、锁死会话、网关这些已有部分仍以 [CHANNELS.md](CHANNELS.md) 为准。
+> 状态：第一节（结果回到原话题）已实现，其余是设计（2026-11-27）。需求来自飞书上的产品团队。本文汇总并取代 CHANNELS.md 原「主人在聊天平台上同意」「结果回到原话题」两节和 LARK.md 原 B 节，接入、锁死会话、网关这些已有部分仍以 [CHANNELS.md](CHANNELS.md) 为准。
 
 同事在飞书群里 @ 机器人讨论需求，机器人读代码、读写飞书文档，把明确的需求收成任务；主人在飞书卡片上点「开始执行」，主人的 Agent 在本机实施；进展和总结回到提出需求的那条消息下，提问人在卡片上验收或退回，退回后由主人点「继续执行」返工。
 
@@ -260,16 +260,22 @@ core：ChannelService ─ 入站、提问、发件队列（已有）
 
 从消息建的任务（`task.channelSource` 不为空），进展回到提出需求的那条消息下，提问人不用来 Antumi 看。
 
+> 状态：已实现（2026-11-27），只用本地的假平台验证过。实现在 `core/src/channel-task-reports.ts`（`ChannelTaskReports`）和 `ChannelService.postReport`。
+
 ### 什么时候回什么
 
-| 任务状态变化 | 回什么 | @ 谁 |
-|---|---|---|
-| `pending → running` | 「已开始执行 #编号」；有卡片时只更新卡片 | — |
-| `review → running` | 「已开始返工」；有卡片时只更新卡片 | — |
-| `running → review` | 总结 + 验证说明 + PR 链接；有卡片时发验收卡 | 提问人 |
-| `review → done` | 「已完成」；在卡片上验收的只更新卡片 | 提问人 |
-| `pending → done` | 「主人已关闭这个任务」 | — |
-| `→ abandoned` | 「主人取消了这个任务」；卡片上选「不做」的写明 | 提问人 |
+阶段名是 `ChannelTaskStage`（`stageOf` 从状态变化算出）。
+
+| 任务状态变化 | 阶段 | 回什么 | 群里 @ 谁 |
+|---|---|---|---|
+| `pending → running` | `start` | 「已开始执行：#编号 标题」；有卡片时只更新卡片（第二期） | — |
+| `review → running` | `rework` | 「已开始返工：#编号 标题」 | — |
+| `running → review` | `review` | 「已提交验收：#编号 标题」+ 总结 + 验证说明 + PR 链接；有卡片时发验收卡（第二期） | 提问人 |
+| `review → done`、`running → done` | `done` | 「已完成：#编号 标题」 | 提问人 |
+| `pending → done` | `closed` | 「主人已关闭这个任务：#编号 标题」 | — |
+| `→ abandoned` | `abandoned` | 「主人取消了这个任务：#编号 标题」 | 提问人 |
+
+私聊里来的任务每一条都带上提问人（那本来就是他的私聊，钉钉还要靠它找到发给谁）。
 
 - 取消原因不发：在 Antumi 里写的原因是写给主人自己的。
 - Antumi 的任务没有「失败」状态，执行出错时任务停在执行中等主人处理，不回报，免得刷屏。
@@ -280,22 +286,23 @@ core：ChannelService ─ 入站、提问、发件队列（已有）
 和来源回写同一套（SOURCE-WRITEBACK.md「总结评论从哪来」），读者是提问人和群里的同事：
 
 - 任务提示：`setSourcePrompt` 对开了回报的聊天平台任务追加一段说明（新函数 `channelReportInstruction`，和 `reportInstruction` 共用 `reportRules()`），把「用事项原文的语言」换成「用提问人原话的语言」。
-- 工具：`source_report` 对这类任务也出现。`mcp-server.ts` 的 scope 多一个条件：会话属于有 `channelSource` 的任务，且 core 有 `channel-task-reports`。`SourceWriteback.saveReport` 的守卫从「有来源」放宽为「有来源或是聊天平台任务」（hooks 加 `reportable(target)`），草稿照存 `source_reports`。
-- 没有草稿时用 `Condense` 压缩最后一条回复；`condensePrompt` 加一个参数说清写到哪（「飞书话题」而不是「事项」）。失败或太长就只发「已提交验收，请在 Antumi 或 PR 里查看」加 PR 链接。
-- PR 链接取自 `PullRequestService` 记录的这个任务的 PR。`verification` 单独一段附在后面。
+- 工具：`source_report` 对这类任务也出现。`SourceWriteback` 的 hooks 加 `reportable(target)`（任务没有来源、有 `channelSource`、接入开着回报），`sources.writeback` 的结果多一个可选的 `reportable`；`mcp-server.ts` 看到 `reportable` 就给这个工具，说明改成「给提出这个任务的同事写」（`sourceToolsOverCore` 的 `audience: 'chat'`）。`saveReport` 的守卫从「有来源」放宽为「有来源或 `reportable`」，草稿照存 `source_reports`。
+- 没有草稿时用 `Condense` 压缩最后一条回复（`SourceWriteback.condenseFor`）；`condensePrompt` 加 `audience` 参数说清写到哪（「聊天话题」而不是「事项」）。压缩失败或太长，就只发标题行和 PR 链接。
+- PR 链接取自 `PullRequestStore` 记录的这个任务的 PR。`verification` 单独一段附在后面。
 - 发出前过 `redact`、`withoutMachinePaths`（任务的仓库和工作树）和这个 Agent 账号邮箱的打码，再按平台格式化（`channelMessages`）。
 
 ### 发到哪里
 
 - `TaskChannelSource` 加可选的 `thread` 和 `direct`，`createChannelTask` 时从提问取：`thread` 就是那次回答发去的话题（`ChannelThread.replyThread`），所以回报和回答在同一个话题里。旧任务没有 `thread`：按原消息 `messageId` 回复（飞书 `reply_in_thread`，Slack 的 `thread_ts` 也是它）。
 - 发送走现有的 `channel_outbox`：同一处一次一条、限速、重试、重启后接着发。
-- @ 人由 core 加，不来自 Agent 的文字：`ChannelDelivery` 加 `mention: string | null`（平台用户 ID），连接器各自渲染（飞书富文本的 `at` 节点；Slack 以后用 `<@U…>`）。Agent 文字里的 `<at …>` 照旧被 `toFeishu` 弄失效。
+- @ 人由 core 加，不来自 Agent 的文字：outbox 的 payload 和 `ChannelDelivery` 加 `mention`（平台用户 ID），分段时只放在第一段，连接器各自渲染：飞书富文本里 `md` 节点前单独一段 `at` 节点；Slack 在文字前加 `<@U…>`；钉钉群里经 webhook 的 `at.atUserIds`，私聊在已经不记得提问人时（网关重启过）用它当 `oToMessages` 的收件人。Agent 文字里的 `<at …>` 照旧被 `toFeishu` 弄失效。
 
 ### 持久和失败
 
 - `TaskService` 的状态日志和监听现在各只有一个槽，给来源回写用。改成在 `main.ts` 里组合：`setStatusJournal((before, status) => joinLinks(writeback.journal(before, status), channelReports.journal(before, status)))`，监听同理。`joinLinks` 放在 `task-store.ts`，把几个 `TaskWriteLink` 合成一个。
 - `ChannelTaskReports.journal` 只为有 `channelSource` 的任务写一行 `channel_task_reports`（阶段、状态 `pending`），和任务状态在同一事务里：core 在两者之间退出也不会漏，也不会给历史任务补发。
-- `drain()` 按任务、按创建顺序逐条处理：发之前再查一次接入（在、启用、`reportTasks` 没关、`tenant` 和任务记下的一致），不满足就记 `skipped` 和原因；满足就组好内容写进 outbox（`channel_outbox` 加 `task_id` 列），状态 `queued`。outbox 发出或放弃后回填 `sent` / `failed`。
+- `drain()` 按任务、按创建顺序逐条处理：发之前再查一次接入（在、启用、`reportTasks` 没关、`tenant` 和任务记下的一致），不满足就记 `skipped` 和原因；满足就交给 `ChannelService.postReport` 写进 outbox（`channel_outbox` 加 `report_id` 列），状态 `queued`。每条 outbox 发出或放弃后告诉 `ChannelTaskReports.posted`：都发出了记 `sent`，有一条放弃了记 `failed`。还没有 `ChannelService`（core 启动早期）时留在 `pending`，`channels.start()` 之后再处理一遍。
+- 原因是代码，桌面端翻译：`channel-removed`、`channel-off`、`reports-off`、`tenant-changed`、`task-gone`、`platform-refused`、`compose-failed`。删接入时它还没发完的回报一起记 `channel-removed`。
 - 机器人被移出群、接入删了：飞书回错误码，outbox 5 次后放弃，记 `failed`，任务本身不受影响。
 - 记录给主人看：任务详情的来源卡片（`TaskChannelSourceCard`）下列出每一条回报和结果；新 RPC `channels.taskReports({ taskId })`，通知 `channels.taskReportsChanged`。
 
@@ -532,9 +539,11 @@ ChannelGatewayToCore +=
 ## 存储（`task-store.ts` 的 `MIGRATIONS` 末尾，`ChannelStore` 读写）
 
 ```sql
-ALTER TABLE channel_outbox ADD COLUMN task_id TEXT;
+-- 第一期，已实现
 CREATE TABLE channel_task_reports (id TEXT PRIMARY KEY, task_id TEXT NOT NULL, channel_id TEXT NOT NULL, stage TEXT NOT NULL,
-  state TEXT NOT NULL, reason TEXT, outbox_id TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
+  state TEXT NOT NULL, reason TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
+ALTER TABLE channel_outbox ADD COLUMN report_id TEXT;
+-- 之后几期
 CREATE TABLE channel_task_cards (id TEXT PRIMARY KEY, task_id TEXT NOT NULL, channel_id TEXT NOT NULL, kind TEXT NOT NULL,
   outbox_id TEXT NOT NULL, message_id TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
 CREATE TABLE channel_actions (token TEXT PRIMARY KEY, channel_id TEXT NOT NULL, card_id TEXT NOT NULL, task_id TEXT NOT NULL,
@@ -545,7 +554,7 @@ ALTER TABLE channel_threads ADD COLUMN bystanders INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE channel_tool_calls ADD COLUMN write INTEGER NOT NULL DEFAULT 0;
 ```
 
-- 回报、卡片、退回意见跟着任务，删任务时一起删；不受接入记录 90 天清理的影响，接入移除后记录留着，之后的回报记 `skipped`。
+- 回报、卡片、退回意见跟着任务：任务删了，每天的清理把它的回报一起删掉；不受接入记录 90 天清理的影响，接入移除后记录留着，之后的回报记 `skipped`。
 - 过期的令牌每天清一次（和现有清理同时）。
 
 ## 安全
@@ -567,7 +576,7 @@ ALTER TABLE channel_tool_calls ADD COLUMN write INTEGER NOT NULL DEFAULT 0;
 
 | 期 | 内容 | 主要改动 | 前置 |
 |---|---|---|---|
-| 1 | 结果回到原话题（文字） | protocol：`thread`/`direct`、`reportTasks`、`channel-task-reports`；core：`channel-task-reports.ts`、日志组合、`source_report` 对聊天任务开放、`mention`；desktop：开关和回报记录 | 无 |
+| 1 | 结果回到原话题（文字），**已实现** | protocol：`thread`/`direct`、`reportTasks`、`channel-task-reports`；core：`channel-task-reports.ts`、日志组合、`source_report` 对聊天任务开放、`mention`；desktop：开关和回报记录 | 无 |
 | 2 | 卡片：开始、验收、返工 | protocol：`ownerUsers`、`taskCards`、`cards`；core：`channel-cards.ts`、`channel-actions.ts`、outbox 的 `card` / `update`、飞书连接器的卡片回调；desktop：主人 ID、卡片的两个开关和执行设置、退回意见 | 待验证 3、6 |
 | 3 | 飞书工具 | protocol：`platformTools`、`docLocation`、`docAccess`、平台描述 `tools`；core：`channel-tools/platform.ts`、按会话的工具名单、`channelTools.list`、`channel-feishu-tools.ts`；desktop：「飞书工具」 | 待验证 1、2、4 |
 | 4 | 话题里免 @ | protocol：`followUps`；core：`followUp` 事件、`bystanders`；desktop：开关和说明 | 待验证 5 |

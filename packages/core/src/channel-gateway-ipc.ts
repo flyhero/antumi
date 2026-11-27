@@ -21,7 +21,9 @@ export const ChannelDelivery = z.object({
   thread: Ref.nullable(),
   target: Ref.nullable(),
   text: z.string().nullable(),
-  emoji: z.string().nullable()
+  emoji: z.string().nullable(),
+  // A user to notify with the post, named by core: the asker a task's progress is for.
+  mention: Ref.nullable().optional()
 })
 export type ChannelDelivery = z.infer<typeof ChannelDelivery>
 

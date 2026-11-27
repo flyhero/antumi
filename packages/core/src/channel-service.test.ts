@@ -42,6 +42,8 @@ describe('ChannelService', () => {
   let channel: Channel
   let seq: number
   let keepImage: ChannelServiceOptions['keepImage']
+  // Reports whose posts the outbox finished with, as the reporter is told.
+  let reported: string[]
 
   const profile = AgentProfile.parse({ id: '11111111-1111-4111-8111-111111111111', name: '答疑', instructions: '简短回答。', agent: 'claude', audience: 'channels', archivedAt: null, createdAt: 1, updatedAt: 1 })
   const settle = async () => { for (let i = 0; i < 20; i++) await new Promise((resolve) => setTimeout(resolve, 0)) }
@@ -110,7 +112,9 @@ describe('ChannelService', () => {
     profiles = [profile]
     announced = []
     keepImage = (bytes) => attachments.put(bytes)
+    reported = []
     channels = new ChannelService(store, {
+      reports: { posted: (id) => reported.push(id), list: () => [] },
       conversations, credentials,
       tasks: new TaskService(tasks, projects, path.join(root, 'worktrees'), () => {}, attachments, conversations),
       profile: (id) => profiles.find((each) => each.id === id) ?? null,
@@ -446,6 +450,22 @@ describe('ChannelService', () => {
     await expect(channels.callTool(own.id, 'project_read', { path: 'app/src/auth.ts' })).rejects.toMatchObject({ reason: 'channel-not-found' })
   })
 
+  it('posts a task report as it does an answer, naming the asker on its first piece, and says when its posts are done', async () => {
+    const task = tasks.create('加导出', { repos: [{ path: repo, worktreePath: path.join(root, 'worktrees', 'app'), branch: 'antumi/x', startRef: null, start: null }] })
+    const reportId = '55555555-5555-4555-8555-555555555555'
+    const text = `已提交验收：#1 加导出\n\n改在 ${path.join(root, 'worktrees', 'app', 'src', 'export.ts')}，有问题找 owner@example.com。\n\n${'长'.repeat(4000)}`
+    expect(await channels.postReport({ channelId: channel.id, reportId, place: 'C1', thread: '1.2', text, mention: 'U1', task })).toBe(true)
+    await deliverAll()
+    const delivered = sent('deliver')
+    expect(delivered.length).toBeGreaterThan(1)
+    expect(delivered.map((each) => each.mention)).toEqual(['U1', ...delivered.slice(1).map(() => null)])
+    expect(delivered.every((each) => each.place === 'C1' && each.thread === '1.2')).toBe(true)
+    expect(delivered[0]?.text).toContain('app/src/export.ts')
+    expect(delivered.map((each) => each.text).join('')).not.toMatch(/owner@example\.com|worktrees/)
+    expect(reported.filter((id) => id === reportId)).toHaveLength(delivered.length)
+    expect(await channels.postReport({ channelId: '66666666-6666-4666-8666-666666666666', reportId, place: 'C1', thread: null, text: 'x', mention: null, task })).toBe(false)
+  })
+
   it('collects one pending task per message with a trusted origin and no extra agent run', async () => {
     channel = await channels.save({ ...channel, allowTaskCreation: true })
     daemon.reply = () => {}
@@ -463,7 +483,7 @@ describe('ChannelService', () => {
     expect(tasks.list()[0]).toMatchObject({
       title: input.title, details: input.details, status: 'pending', autoRun: false, agent: null, conversationId: null,
       repos: [{ path: repo, worktreePath: null, branch: null }],
-      channelSource: { channelId: channel.id, requestId: request!.id, conversationId: request!.conversationId, platform: 'slack', asker: 'U1', place: 'C1', messageId: asked.messageId, text: asked.text }
+      channelSource: { channelId: channel.id, requestId: request!.id, conversationId: request!.conversationId, platform: 'slack', asker: 'U1', place: 'C1', messageId: asked.messageId, thread: asked.messageId, direct: false, text: asked.text }
     })
     expect(daemon.spawns).toHaveLength(before)
     expect(channels.toolCalls(request!.id).filter((call) => call.tool === 'task_create')).toHaveLength(2)

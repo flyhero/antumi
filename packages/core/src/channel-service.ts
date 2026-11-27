@@ -1,6 +1,7 @@
 import { fork, type ChildProcess } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
+import { basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   ATTACHMENT_CHUNK_BYTES,
@@ -18,12 +19,14 @@ import {
   type ChannelReadiness,
   type ChannelRequest,
   type ChannelState,
+  type ChannelTaskReport,
   type ChannelToolCall,
   type ChatItem
 } from '@antumi/protocol'
 import { ChannelGatewayToCore, type ChannelEvent, type CoreToChannelGateway } from './channel-gateway-ipc'
 import { channelMessages, channelNotice, redact } from './channel-output'
-import type { ChannelStore, ChannelThread, StoredChannel, StoredRequest } from './channel-store'
+import type { ChannelStore, ChannelThread, OutboxPayload, StoredChannel, StoredRequest } from './channel-store'
+import type { ChannelTaskReports, ReportPost } from './channel-task-reports'
 import { ChannelToolError, runChannelTool } from './channel-tools'
 import type { TaskService } from './task-service'
 import { projectsOf } from './channel-tools/project'
@@ -98,6 +101,8 @@ export type ChannelServiceOptions = {
   // Keeps a picture's bytes, refusing what is not one; its id is what a message is sent with.
   keepImage: (bytes: Uint8Array) => Promise<{ id: string }>
   tasks?: Pick<TaskService, 'createChannelTask'>
+  // What follows its tasks back to their threads: told when the posts of a report are done with.
+  reports?: Pick<ChannelTaskReports, 'posted' | 'list'>
   changed: (channels: Channel[]) => void
   // The account an agent runs on, by its email: never to be said in an answer.
   identity?: (agent: AgentKind) => Promise<string | null>
@@ -213,6 +218,8 @@ export class ChannelService {
     const next: StoredChannel = {
       enabled: fields.enabled ?? true, projectPaths, allowedUsers: [...new Set(fields.allowedUsers ?? [])], allowedPlaces: [...new Set(fields.allowedPlaces ?? [])],
       allowDirect: fields.allowDirect ?? false, allowTaskCreation: fields.allowTaskCreation ?? existing?.allowTaskCreation ?? false,
+      // A client from before it leaves it out: what was chosen stays.
+      reportTasks: fields.reportTasks ?? existing?.reportTasks,
       dailyPerUser: fields.dailyPerUser ?? 20, dailyTotal: fields.dailyTotal ?? 200, maxConcurrent: fields.maxConcurrent ?? 2,
       turnTimeoutSec: fields.turnTimeoutSec ?? 300,
       tenant: reconnects ? null : existing.tenant, tenantName: reconnects ? null : existing.tenantName, botUserId: reconnects ? null : existing.botUserId,
@@ -249,6 +256,23 @@ export class ChannelService {
     return this.store.toolCalls(requestId)
   }
 
+  taskReports(taskId: string): ChannelTaskReport[] {
+    return this.options.reports?.list(taskId) ?? []
+  }
+
+  // A task's progress, posted in its thread as an answer is: nothing secret, no folder of this
+  // machine, in the platform's own format. False where the channel is gone.
+  async postReport(post: ReportPost): Promise<boolean> {
+    const channel = this.store.channel(post.channelId)
+    if (!channel) return false
+    const agent = post.task.agent ?? this.options.profile(channel.profileId)?.agent ?? 'claude'
+    const email = await this.options.identity?.(agent).catch(() => null) ?? null
+    const roots = post.task.repos.flatMap((repo) => [repo.worktreePath, repo.path]).flatMap((root) => (root ? [{ name: basename(root), root }] : []))
+    const { messages } = channelMessages(channel.platform, post.text, { home: this.home, roots, hide: email ? [email] : [] })
+    messages.forEach((text, index) => this.enqueue(channel, null, 'post', { place: post.place, thread: post.thread, target: null, text, emoji: null, mention: index === 0 ? post.mention : null }, post.reportId))
+    return true
+  }
+
   // A tool called by the agent of a conversation opened for an asker: run over the projects its
   // channel has now, and written down against the question it is answering.
   async callTool(conversationId: string, tool: string, args: unknown): Promise<{ text: string; isError: boolean }> {
@@ -274,7 +298,8 @@ export class ChannelService {
           if (repos.some((repo) => repo === undefined)) throw new ChannelToolError('只能为当前授权项目创建任务。')
           const task = tasks.createChannelTask({ title, details, repos: repos.filter((repo) => repo !== undefined), source: {
             channelId: channel.id, requestId: request.id, conversationId, platform: channel.platform,
-            tenant: request.tenant, asker: request.asker, place: request.place, messageId: request.messageId, text: request.text, createdAt: request.createdAt
+            tenant: request.tenant, asker: request.asker, place: request.place, messageId: request.messageId,
+            thread: this.store.threadById(request.threadId)?.replyThread ?? null, direct: request.direct, text: request.text, createdAt: request.createdAt
           } })
           return { id: task.id, title: task.title, status: task.status }
         }
@@ -596,8 +621,8 @@ export class ChannelService {
     this.enqueue(channel, requestId, 'post', { place: reply.place, thread: reply.thread, target: null, text: channelNotice(channel.platform, text), emoji: null })
   }
 
-  private enqueue(channel: StoredChannel, requestId: string | null, op: 'react' | 'post', payload: { place: string; thread: string | null; target: string | null; text: string | null; emoji: string | null }): void {
-    this.store.addOutbox({ id: randomUUID(), channelId: channel.id, requestId, op, payload }, this.now())
+  private enqueue(channel: StoredChannel, requestId: string | null, op: 'react' | 'post', payload: OutboxPayload, reportId: string | null = null): void {
+    this.store.addOutbox({ id: randomUUID(), channelId: channel.id, requestId, reportId, op, payload }, this.now())
     this.pump()
   }
 
@@ -622,6 +647,7 @@ export class ChannelService {
       const channel = this.store.channel(row.channelId)
       if (!channel) {
         this.store.outboxRetry(row.id, null)
+        if (row.reportId) this.options.reports?.posted(row.reportId)
         continue
       }
       const where = `${row.channelId}:${row.payload.place}`
@@ -631,7 +657,7 @@ export class ChannelService {
       if (this.posting.has(where) || this.states.get(row.channelId)?.state !== 'connected' || row.nextAt > now) continue
       if (now - (this.posted.get(where) ?? 0) < channelPlatform(channel.platform).minGapMs) continue
       this.posting.set(where, row.id)
-      this.link.send({ type: 'deliver', outboxId: row.id, channelId: row.channelId, op: row.op, ...row.payload })
+      this.link.send({ type: 'deliver', outboxId: row.id, channelId: row.channelId, op: row.op, ...row.payload, mention: row.payload.mention ?? null })
     }
   }
 
@@ -647,6 +673,7 @@ export class ChannelService {
     // A mark on the question is not worth trying again; an answer is, a few times, further apart each time.
     else if (row.op === 'react' || row.attempts + 1 >= OUTBOX_ATTEMPTS) this.store.outboxRetry(outboxId, null)
     else this.store.outboxRetry(outboxId, this.now() + (retryAfterMs ?? Math.min(60_000, 1000 * 2 ** (row.attempts + 1))))
+    if (row.reportId) this.options.reports?.posted(row.reportId)
     this.pump()
   }
 

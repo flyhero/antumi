@@ -4,7 +4,7 @@ import {
   CHANNEL_DEFAULTS, CHANNEL_PLATFORMS, ChannelInput, agentDescriptor, channelPlatform,
   type AgentKind, type Channel, type ChannelCredentialKey, type ChannelPlatform, type ChannelRequest
 } from '@antumi/protocol'
-import { setChannels, useChannelReadiness, useChannels, useChannelsSupported, useChannelTasksSupported } from '../channels'
+import { setChannels, useChannelReadiness, useChannels, useChannelsSupported, useChannelTaskReportsSupported, useChannelTasksSupported } from '../channels'
 import { askConfirm } from '../confirm-dialog'
 import { timeAgo } from '../conversation-state'
 import { perform, useCore } from '../core-store'
@@ -89,7 +89,8 @@ function ChannelRow({ channel, requestsOpen, onToggle, onRequests, onEdit, onRem
     t('AgentChannels.scopeProjects', { count: channel.projectPaths.length }),
     t('AgentChannels.scopeAskers', { count: channel.allowedUsers.length }),
     t('AgentChannels.scopeDaily', { count: channel.dailyPerUser }),
-    ...(channel.allowTaskCreation ? [t('AgentChannels.allowTaskCreation')] : [])
+    ...(channel.allowTaskCreation ? [t('AgentChannels.allowTaskCreation')] : []),
+    ...(channel.allowTaskCreation && channel.reportTasks ? [t('AgentChannels.reportTasksChip')] : [])
   ]
   return <div className="agent-channel-row">
     <span className="agent-channel-logo" aria-hidden="true"><ChannelPlatformIcon platform={channel.platform} /></span>
@@ -110,6 +111,8 @@ function ChannelRow({ channel, requestsOpen, onToggle, onRequests, onEdit, onRem
 type Draft = {
   credentials: Partial<Record<ChannelCredentialKey, string>>
   projectPaths: string[]; users: string; places: string; allowDirect: boolean; allowTaskCreation: boolean
+  // undefined until chosen: turning task creation on then ticks it.
+  reportTasks: boolean | undefined
   dailyPerUser: string; dailyTotal: string; maxConcurrent: string; turnTimeoutSec: string
 }
 
@@ -128,11 +131,13 @@ function ChannelDialog({ profileId, platform, channel, agent, hasProvider, onClo
   const all = useChannels()
   const [projects, setProjects] = useState<string[]>([])
   const taskCreationSupported = useChannelTasksSupported()
+  const reportsSupported = useChannelTaskReportsSupported()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [draft, setDraft] = useState<Draft>(() => ({
     credentials: {},
     projectPaths: channel?.projectPaths ?? [], users: (channel?.allowedUsers ?? []).join('\n'), places: (channel?.allowedPlaces ?? []).join('\n'), allowDirect: channel?.allowDirect ?? false, allowTaskCreation: channel?.allowTaskCreation ?? false,
+    reportTasks: channel?.reportTasks,
     dailyPerUser: String(channel?.dailyPerUser ?? CHANNEL_DEFAULTS.dailyPerUser), dailyTotal: String(channel?.dailyTotal ?? CHANNEL_DEFAULTS.dailyTotal),
     maxConcurrent: String(channel?.maxConcurrent ?? CHANNEL_DEFAULTS.maxConcurrent), turnTimeoutSec: String(channel?.turnTimeoutSec ?? CHANNEL_DEFAULTS.turnTimeoutSec)
   }))
@@ -150,6 +155,7 @@ function ChannelDialog({ profileId, platform, channel, agent, hasProvider, onClo
     const parsed = ChannelInput.safeParse({
       ...(channel ? { id: channel.id } : {}), profileId, platform, enabled: channel?.enabled ?? true, credentials,
       projectPaths: draft.projectPaths, allowedUsers: lines(draft.users), allowedPlaces: lines(draft.places), allowDirect: draft.allowDirect, allowTaskCreation: draft.allowTaskCreation,
+      ...(reportsSupported && draft.reportTasks !== undefined ? { reportTasks: draft.reportTasks } : {}),
       dailyPerUser: Number(draft.dailyPerUser), dailyTotal: Number(draft.dailyTotal), maxConcurrent: Number(draft.maxConcurrent), turnTimeoutSec: Number(draft.turnTimeoutSec)
     })
     if (!parsed.success) { setError(t('AgentChannels.invalid', { field: parsed.error.issues[0]?.path.join('.') ?? '' })); return }
@@ -206,8 +212,13 @@ function ChannelDialog({ profileId, platform, channel, agent, hasProvider, onClo
         {shown.length === 0 && <p className="squad-block-hint muted">{t('AgentChannels.noMatch')}</p>}
       </div>}
       {taskCreationSupported && <>
-        <label className="agent-profile-check"><input type="checkbox" checked={draft.allowTaskCreation} onChange={(event) => setDraft({ ...draft, allowTaskCreation: event.target.checked })} />{t('AgentChannels.allowTaskCreation')}</label>
+        <label className="agent-profile-check"><input type="checkbox" checked={draft.allowTaskCreation} onChange={(event) => setDraft({ ...draft, allowTaskCreation: event.target.checked, reportTasks: draft.reportTasks ?? (event.target.checked || undefined) })} />{t('AgentChannels.allowTaskCreation')}</label>
         <p className="squad-block-hint muted">{t('AgentChannels.taskCreationHint')}</p>
+        {/* Still there with collecting off: tasks collected before go on reporting until it is turned off. */}
+        {reportsSupported && (draft.allowTaskCreation || draft.reportTasks) && <>
+          <label className="agent-profile-check"><input type="checkbox" checked={draft.reportTasks ?? false} onChange={(event) => setDraft({ ...draft, reportTasks: event.target.checked })} />{t('AgentChannels.reportTasks')}</label>
+          <p className="squad-block-hint muted">{t('AgentChannels.reportTasksHint')}</p>
+        </>}
       </>}
     </div>
     <div className="agent-channel-step">

@@ -1,6 +1,6 @@
 # Lark 资料接入（设计）
 
-> 状态：设计，未实现。来自 [#11](https://github.com/flyhero/antumi/issues/11)。Meegle（飞书项目）作为任务来源另起一期，不在本文。B 节 2026-11-26 改为接飞书官方 MCP、读写都可（原先是只读、自己实现工具）。
+> 状态：设计，未实现。来自 [#11](https://github.com/flyhero/antumi/issues/11)。Meegle（飞书项目）作为任务来源另起一期，不在本文。B 节 2026-11-26 改为接飞书官方 MCP、读写都可（原先是只读、自己实现工具），2026-11-27 起完整设计移到 [CHANNEL-LOOP.md](CHANNEL-LOOP.md) 第三节。
 
 让智能体使用 Lark（含飞书）的文档、知识库和多维表格。分两种用法，安全模型完全不同：
 
@@ -39,133 +39,12 @@ Antumi 的技能库已经能装这两个仓库（`git clone` 后先扫 `skills/`
 
 ## B. 聊天平台上的智能体：以机器人身份用飞书 MCP
 
-### 原则
+完整设计（工具怎么到智能体手里、调用链、文档放哪和给谁开权限、风险说明、待验证）见 [CHANNEL-LOOP.md](CHANNEL-LOOP.md) 第三节。要点：
 
-- **机器人的权限由主人决定**：它在飞书开放平台开了哪些权限、哪些文档和知识库分享给了它、哪些人能 @ 它（接入的 `allowedUsers` / `allowedPlaces`），都是主人的选择。Antumi 不另设资料白名单，也不替主人判断它该读写哪些东西。
-- **开放哪些工具由主人勾选**，默认一个都不开；打开时把风险讲清楚（见「风险说明」）。
-- Antumi 只守三件事，都不是限制机器人的权限：
-  1. **凭据不交给智能体**：App Secret 和 tenant_access_token 只在网关里，调用时由网关附上。智能体能用机器人的权限，拿不到凭据本身，没法把它带走或贴出去。
-  2. **只用机器人的身份**：从不带主人或提问人的用户令牌。主人本机登录的 `lark-cli`、`meegle-cli` 是主人的身份，不是机器人的，聊天平台上的会话碰不到（它们本来就没有命令行，见 CHANNELS.md「外部会话」）。
-  3. **每次调用都记录**：谁问的、调了哪个工具、目标是哪份资料，记进提问记录，和项目读取一样。
-- 不做：用提问人身份（见「以后：提问人身份」）；把 `lark-cli` 交给聊天平台上的会话；Slack、钉钉（各自另做，机制相同）。
-
-### 为什么用 MCP，不用 lark-cli
-
-| | lark-cli | 飞书官方 MCP |
-|---|---|---|
-| 聊天平台上的会话能不能用 | 要给它开命令行，等于交出主人整台电脑 | 会话本来就只用 MCP 工具，转接进来即可 |
-| 只开放一部分 | 要逐条命令封装 | 官方 MCP 本身按名单开放工具（不给名单就一个都不列），直接做成勾选项 |
-| 身份不串 | 不写 `--as` 时，本机登录了用户就优先用用户身份 | 每个请求固定带机器人的 token |
-| 凭据 | 在主人本机 CLI 的配置里 | 网关附上，智能体看不到 |
-
-### 两个 MCP，分两期
-
-| | 一期：托管 MCP | 二期：`lark-openapi-mcp` |
-|---|---|---|
-| 是什么 | 飞书托管的远程 MCP：`https://mcp.feishu.cn/mcp`（Lark 对应 `mcp.larksuite.com`，待核实） | 官方开源的本地 MCP（npm `@larksuiteoapi/lark-mcp`），网关以子进程启动，stdio 通信 |
-| 身份 | 请求头 `X-Lark-MCP-TAT` 带应用 token | 启动参数 `--token-mode tenant_access_token`，不用 `auto`（`auto` 会在用户令牌和应用令牌之间切换） |
-| 开放哪些工具 | 请求头 `X-Lark-MCP-Allowed-Tools`，没有它一个工具都不列 | 启动参数 `-t`，按工具或预设（如 `preset.base.default`） |
-| 工具 | 云文档：读 `fetch-doc`、`list-docs`、`get-comments`、`fetch-file`、`get-user`；写 `create-doc`、`update-doc`、`add-comments`（整篇评论，不能 @ 人）。`search-doc`、`search-user` 只支持用户身份，机器人用不了 | 多维表格、知识库、消息、日历等开放平台接口；**不能直接编辑文档**（只能导入），所以文档仍走托管 MCP |
-| 状态 | 正式提供 | 官方标为 beta |
-
-lx 的需求最急的是「把方案写成飞书文档并返回链接」，所以先做托管 MCP。多维表格、知识库浏览放二期。搜索暂时没有机器人身份能用的工具：同事贴链接，或者到二期用知识库目录浏览；原设计里未公开的 Search v2 接口不再采用。
-
-### 整体流程
-
-```
-同事 @ 机器人 ─► 网关 ─► core 入站检查（已有）─► 锁死的智能体
-                                                    │ lark_* 工具（Antumi 的 channel MCP 列出主人勾选的那些）
-                                                    ▼
-                         core：开关、当前提问在跑、提问人和所在的群仍在授权范围、组织未变
-                                                    │ IPC mcp 请求
-                                                    ▼
-                         网关（飞书连接器）：取 tenant_access_token，附 X-Lark-MCP-TAT 和工具名单
-                                                    │ JSON-RPC tools/call
-                                                    ▼
-                                             mcp.feishu.cn
-                                                    │ 结果或错误
-                                                    ▼
-                         core：截断、记进 channel_tool_calls、作为资料交回 ─► 智能体回答 ─► 打码 ─► 飞书
-```
-
-### 协议（`protocol/src/channel.ts`、`channel-platforms.ts`）
-
-- `ChannelFields` 加 `platformTools: z.array(z.string().max(100)).max(50).optional()`：主人勾选开放的平台工具，用平台的原名（如 `create-doc`）。没有或为空就是不开。名字不带 Lark：Slack、钉钉以后的同类能力沿用。保存时没带这个字段的旧客户端保留已有值。
-- 平台描述加可选的 `tools?: { mcp: string; scopes: string[]; catalog: { name: string; write: boolean; label: string; translations? }[] }`：远程 MCP 的地址、开这些工具要在开放平台额外开通的权限、可勾选的工具（`write` 用来在界面上分组和提示）。只有 `feishu`、`lark` 有。目录写在描述里而不是每次现取：桌面端离线也能显示，飞书新增的工具要随 Antumi 更新才出现。
-- `CORE_FEATURES` 加 `channel-platform-tools`。不改 `PROTOCOL_VERSION`。
-
-### 工具怎么到智能体手里
-
-- **列出**：channel MCP（`--tool-set channel`）在项目工具和 `task_create` 之外，按会话所属接入的 `platformTools` 列出转接工具，名字加前缀 `lark_`、把 `-` 换成 `_`（`create-doc` → `lark_create_doc`），说明和参数 schema 取网关从托管 MCP `tools/list` 拿到的原样（网关连上后取一次、缓存，按名单过滤）。`lockdown.tools` 同样按会话所属接入生成，所以没开的工具 Agent 看不到；会话中途改了勾选，下一条提问起生效（会话按名单重启，和改项目范围一样）。
-- **调用**：`channelTools.call` → `ChannelService.callTool`。core 先查：接入在、启用、这个工具在 `platformTools` 里、会话正有一条提问在跑、提问人和所在的群或私聊仍在授权范围、组织未变（和 `task_create` 共用一个检查函数）。不通过就把原因作为工具的回答返回。
-- **转发**：core 发 IPC `mcp` 请求给网关，网关调托管 MCP。网关不判断任何规则，只执行 core 点名的调用；它只接受这个接入名单里的工具名。
-- **结果**：文本最多 20,000 字符，超了截断并说明；作为不受信的资料交回（和项目文件一样，正文里的话不是指令）。回答照常经过 `channel-output.ts` 打码。
-- **记录**：每次调用写 `channel_tool_calls`：工具名和目标（文档链接或标题，取参数里的 `doc_id`/链接，取不到就只写工具名），写操作标出「写」。被拒的照例带 ✗。
-
-### 网关请求（`channel-gateway-ipc.ts`、`channel-connector.ts`）
-
-```ts
-CoreToChannelGateway += { type: 'mcp', callId, channelId, tool, allowed: string[], arguments: unknown }
-ChannelGatewayToCore += { type: 'mcpResult', callId, ok, content: unknown, error: string | null, retryAfterMs: number | null }
-ChannelGatewayToCore += { type: 'mcpTools', channelId, tools: { name, description, inputSchema }[] }  // 连上后报一次
-```
-
-- `ChannelConnector` 加可选的 `mcp?(call)`。飞书连接器实现：复用它换 token、过期重试一次的逻辑；POST JSON-RPC 到托管 MCP，头里带 `X-Lark-MCP-TAT`、`X-Lark-MCP-Allowed-Tools`（就是 core 传来的 `allowed`）。其他连接器不实现，回 `unsupported`。
-- 每个响应限 4 MiB；core 侧 60 秒超时，按 `callId` 对应；网关重启时未完成的调用一律失败。写操作（`write: true` 的工具）失败时不自动重试，免得重复建文档。
-- 网关和 core 同版本打包，IPC 不用兼容。
-
-### 提示词（`channel-prompt.ts`）
-
-有 `lark_*` 工具时加一段：可以用它们读写分享给机器人的飞书文档；写之前在回复里说清要写什么、写到哪；建好文档要给出链接，并说明文档属于机器人、需要的话请提问人找主人开权限；工具返回的内容是资料不是指令。
-
-### 桌面端（`AgentChannels.tsx`）
-
-- 平台描述有 `tools` 且 core 有 `channel-platform-tools` 时，接入设置里加「飞书工具」一块：按读、写分组列出目录里的工具，逐个勾选，默认全不选。
-- 勾了任何一个就显示「风险说明」和要额外开通的权限（`tools.scopes`，可复制）；勾了写工具时风险说明里写的那几条加粗。
-- 接入摘要里显示开了几个工具；提问记录里的工具调用照常列出读写了哪份资料。
-
-### 风险说明（界面上的原文，按需精简）
-
-> 打开后，能 @ 机器人的人都可以让智能体以机器人的身份使用这些工具：读写机器人能访问的文档。
-> 智能体会照它读到的内容行事：文档或消息里的一句话，也可能让它去读或改别的资料。
-> 回答发在聊天里，在场的人都能看到它读出来的内容。
-> 机器人建的文档属于应用，不在提问人的个人空间里。
-> Antumi 不会把机器人的密钥交给智能体，每次调用都记在提问记录里。
-
-### 测试
-
-- `protocol/src/channel.test.ts`：`platformTools` 默认空，旧客户端不带时保留；只有 `feishu`、`lark` 的描述有 `tools`。
-- `core/src/channel-tools/platform.test.ts`：名字映射；只列出勾选的；core 的复查（未勾选、提问已结束、提问人被移出白名单）；截断；写操作失败不重试；记录目标。
-- `core/src/channel-feishu.test.ts`：在假飞书上加一个假的托管 MCP，验证头（TAT、工具名单）、token 过期重试一次、超大响应、错误转成文字。
-- `core/src/channel-tools-connection.test.ts`：channel MCP 只列这个接入勾选的工具。
-- 真实联调（手工，见「待验证」）。
-
-### 改动清单
-
-| 包 | 文件 |
-|---|---|
-| protocol | `channel.ts`（`platformTools`）、`channel-platforms.ts`（`tools`）、`rpc.ts`（`channel-platform-tools`） |
-| core | `channel-tools/platform.ts`（新）、`channel-tools/index.ts`、`channel-service.ts`（复查、IPC 往返）、`channel-gateway-ipc.ts`、`channel-gateway.ts`、`channel-connector.ts`、`channel-feishu.ts`、`mcp-channel-tools.ts`、`conversation-service.ts`（按接入取工具名单）、`channel-prompt.ts`、`skills-recommended.ts`（A） |
-| desktop | `AgentChannels.tsx`、i18n |
-| docs | 本文、CHANNELS.md、CHANGELOG |
-
-CHANGELOG（`### 新功能`）：
-
-```
-- 飞书和 Lark 接入可开放飞书工具：同事 @ 机器人时，它能以机器人身份读写分享给它的飞书文档，开放哪些由你勾选。
-```
-
-建议拆成：A（推荐技能）；工具名单按接入生成（不带新工具）；托管 MCP 转接与设置。
-
-## 待验证（动手前）
-
-用 2026-11-15 联调过的飞书应用实测，先只调读：
-
-1. 用应用 token 调托管 MCP：`tools/list` 带和不带 `X-Lark-MCP-Allowed-Tools` 各返回什么；记下每个工具的参数和返回格式，回填「两个 MCP」一节。
-2. `fetch-doc` 读一篇分享给应用的文档、一篇没分享的，看没权限时的错误形式；读一篇带表格、图片、嵌入多维表格的文档，看 Markdown 效果。
-3. `create-doc` 建一篇：建在哪里（能否指定文件夹或知识库节点）、所有者是谁、提问人能否打开；`update-doc` 追加内容；`add-comments`。
-4. 核实 Lark 的托管地址，以及 `X-Lark-MCP-TAT` 在 Lark 上是否同样可用。
-5. 二期前：`lark-openapi-mcp` 以 `tenant_access_token` 模式跑多维表格和知识库的预设，确认不会改用用户令牌。
+- 接飞书托管的远程 MCP（`https://mcp.feishu.cn/mcp`），请求头 `X-Lark-MCP-TAT` 带应用 token、`X-Lark-MCP-Allowed-Tools` 带主人勾选的工具；token 只在网关里，智能体拿不到。
+- 机器人能用的工具：读 `fetch-doc`、`list-docs`、`get-comments`、`fetch-file`、`get-user`，写 `create-doc`、`update-doc`、`add-comments`；`search-doc`、`search-user` 只支持用户身份。
+- 文档建在主人指定的知识库节点下，建好后以应用身份给提问人开编辑权限。
+- 不接 `lark-openapi-mcp`：仍是 beta、2025-08 后没再更新、不能编辑文档。
 
 ## 以后：提问人身份
 

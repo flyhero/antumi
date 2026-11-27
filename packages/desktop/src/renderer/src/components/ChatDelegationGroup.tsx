@@ -100,9 +100,9 @@ export function ChatDelegationGroup({ calls, fresh = false }: { calls: readonly 
     if (fresher.length) { particles.current?.dispatch(fresher); setFlash(true) }
   }, [ordered.map((call) => call.id).join()])
 
-  // All back while the chat is open: the caller flares once.
+  // All back while the chat is open: mark the return on the canvas.
   useEffect(() => {
-    if (over && !wasOver.current) { particles.current?.converge(); setFlash(true) }
+    if (over && !wasOver.current) particles.current?.converge()
     wasOver.current = over
   }, [over])
 
@@ -115,7 +115,7 @@ export function ChatDelegationGroup({ calls, fresh = false }: { calls: readonly 
   const first = ordered[0]
   return <section ref={root} className="chat-delegation-group" data-single={single || undefined} aria-label={t('AgentProfiles.groupLabel', { count: ordered.length })}>
     <canvas ref={canvas} className="chat-delegation-lines" aria-hidden="true" />
-    <div ref={caller} className="chat-delegation-caller" data-mood={mood} data-flash={flash || undefined} style={lift ? { marginTop: lift } : undefined}>
+    <div ref={caller} className="chat-delegation-caller" data-mood={mood} data-flash={(!over && flash) || undefined} style={lift ? { marginTop: lift } : undefined}>
       <div ref={core} className="chat-delegation-core" aria-hidden="true">
         <svg className="chat-delegation-rings" viewBox="0 0 84 84"><circle className="ticks" cx="42" cy="42" r="40" /><circle className="outer" cx="42" cy="42" r="35" /><circle className="inner" cx="42" cy="42" r="29.5" /></svg>
         <span className="chat-delegation-orb" />

@@ -69,8 +69,7 @@ time.chat-delegation-caller-meta { white-space: normal; max-width: 100%; text-wr
   transition: box-shadow 0.6s ease; animation: fanout-breathe 3.6s ease-in-out infinite; }
 .chat-delegation-orb::before { content: ''; position: absolute; inset: 3px; border-radius: 50%; background: conic-gradient(from 0deg, transparent 0 55%, rgb(255 255 255 / 40%) 70%, transparent 85%); mix-blend-mode: soft-light; animation: fanout-turn 6s linear infinite; }
 .chat-delegation-caller[data-flash] .chat-delegation-orb { box-shadow: 0 0 16px 4px color-mix(in srgb, var(--fanout-tone) 75%, transparent), 0 0 44px 14px color-mix(in srgb, var(--fanout-tone) 35%, transparent), inset 0 0 6px rgb(255 255 255 / 45%); }
-/* Broken rings round the orb: they turn while work runs, hold still while a member waits on you,
-   slow to a crawl once all is back, and open out for a moment when work goes out or returns. */
+/* The rings turn while work runs and open out when work goes out. */
 .chat-delegation-rings { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1); }
 .chat-delegation-rings circle { fill: none; stroke: var(--fanout-tone); stroke-linecap: round; transform-origin: 42px 42px; transition: stroke 0.6s; }
 .chat-delegation-rings .outer { stroke-width: 1.2; stroke-dasharray: 46 18 10 18 26 18; opacity: 0.55; animation: fanout-turn 6s linear infinite; }
@@ -78,8 +77,9 @@ time.chat-delegation-caller-meta { white-space: normal; max-width: 100%; text-wr
 .chat-delegation-rings .ticks { stroke-width: 3; stroke-dasharray: 1 13.4; opacity: 0.35; animation: fanout-turn 24s linear infinite; }
 .chat-delegation-caller[data-mood='awaiting'] .chat-delegation-rings circle { animation-play-state: paused; }
 .chat-delegation-caller[data-mood='awaiting'] .chat-delegation-rings .inner { animation: fanout-blink 1.8s ease-in-out infinite; }
-.chat-delegation-caller:is([data-mood='completed'], [data-mood='failed']) .chat-delegation-rings :is(.outer, .inner) { animation-duration: 22s; }
 .chat-delegation-caller[data-flash] .chat-delegation-rings { transform: scale(1.18); }
+.chat-delegation-caller:is([data-mood='completed'], [data-mood='failed']) :is(.chat-delegation-orb, .chat-delegation-rings, .chat-delegation-rings circle),
+.chat-delegation-caller:is([data-mood='completed'], [data-mood='failed']) .chat-delegation-orb::before { animation: none; transition: none; }
 @keyframes fanout-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.04); } }
 @keyframes fanout-turn { to { transform: rotate(360deg); } }
 @keyframes fanout-blink { 0%, 100% { opacity: 0.8; } 50% { opacity: 0.3; } }

@@ -106,7 +106,6 @@ export class IlinkApi {
         base_info
       }, token)
       checkCodes(raw)
-      if (Codes.parse(raw).ret !== 0) throw new IlinkError('protocol')
       return { type: 'send' }
     } catch (error) {
       if (command.type === 'poll' && error instanceof Error && error.name === 'TimeoutError') return { type: 'poll', value: { messages: [] } }

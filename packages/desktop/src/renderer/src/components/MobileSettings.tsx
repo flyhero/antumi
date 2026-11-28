@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { PairingQrCode } from './PairingQrCode'
 import { WechatRemoteSettings } from './WechatRemoteSettings'
 import {
@@ -13,19 +13,17 @@ import { CopyButton } from './CopyButton'
 import { Segmented, SettingsGroup, SettingsRow, Toggle } from './SettingsControls'
 import { BellIcon, DownloadIcon, GlobeIcon, PhoneIcon } from './icons'
 
-// 设置 → 手机 (docs/MOBILE.md): the gateway's switch and port, the ways a phone reaches this computer
-// (the same Wi‑Fi, Tailscale, the user's own server), pairing a phone by QR code and the code both
-// screens show, the paired devices, and the push address.
+// 设置 → 手机 (docs/MOBILE.md): connection methods, with device pairing shared by Antumi Mobile.
 
 export function useMobileSupported(): boolean {
   return useCore((s) => s.rpc?.features.some((feature) => feature === 'mobile' || feature === 'wechat-remote') ?? false)
 }
 
-function useMobileStatus(): [MobileStatus | null, (status: MobileStatus) => void] {
+function useMobileStatus(supported: boolean): [MobileStatus | null, (status: MobileStatus) => void] {
   const rpc = useCore((s) => s.rpc)
   const [status, setStatus] = useState<MobileStatus | null>(null)
   useEffect(() => {
-    if (!rpc) return
+    if (!rpc || !supported) return
     let live = true
     const off = rpc.on('mobile.changed', ({ status: next }) => { if (live) setStatus(next) })
     void perform((rpc) => rpc.call('mobile.status', {})).then((next) => { if (live && next) setStatus(next) })
@@ -33,7 +31,7 @@ function useMobileStatus(): [MobileStatus | null, (status: MobileStatus) => void
       live = false
       off()
     }
-  }, [rpc])
+  }, [rpc, supported])
   return [status, setStatus]
 }
 
@@ -44,23 +42,84 @@ function stateText(status: MobileStatus): string {
   return t('MobileSettings.off')
 }
 
+type ConnectionTab = {
+  id: 'wifi' | 'tailscale' | 'wireguard' | 'bridge' | 'wechat'
+  label: string
+  panel: ReactNode
+}
+
 export function MobileSettings() {
   const phones = useCore((s) => s.rpc?.features.includes('mobile') ?? false)
   const wechat = useCore((s) => s.rpc?.features.includes('wechat-remote') ?? false)
-  return <>{wechat && <WechatRemoteSettings />}{phones && <AntumiMobileSettings />}</>
-}
-
-function AntumiMobileSettings() {
-  const [status, setStatus] = useMobileStatus()
-  if (!status) return <p className="muted">{t('MobileSettings.loading')}</p>
+  const [status, setStatus] = useMobileStatus(phones)
+  const [selected, setSelected] = useState<ConnectionTab['id']>('wifi')
+  const id = useId()
   const apply = (next: MobileStatus | null) => next && setStatus(next)
+  const tabs: ConnectionTab[] = []
+  if (phones) {
+    const loading = <p className="muted mobile-empty">{t('MobileSettings.loading')}</p>
+    tabs.push(
+      { id: 'wifi', label: t('MobileSettings.wifiTab'), panel: status ? <WifiRow status={status} /> : loading },
+      { id: 'tailscale', label: t('MobileSettings.tailscale'), panel: status ? <TailscaleRow status={status} /> : loading }
+    )
+    if (status?.relay !== undefined) tabs.push({ id: 'wireguard', label: 'WireGuard', panel: <RelayRow relay={status.relay} onStatus={apply} /> })
+    if (status?.bridge !== undefined) tabs.push({ id: 'bridge', label: t('MobileSettings.bridgeTab'), panel: <BridgeRow bridge={status.bridge} onStatus={apply} /> })
+  }
+  if (wechat) tabs.push({ id: 'wechat', label: t('WechatRemote.title'), panel: <WechatRemoteSettings /> })
+  const active = tabs.find((tab) => tab.id === selected) ?? tabs[0]
+  if (!active) return <></>
+
+  const onTabsKey = (event: KeyboardEvent<HTMLDivElement>) => {
+    const index = tabs.indexOf(active)
+    let next: number
+    switch (event.key) {
+      case 'ArrowLeft': next = (index + tabs.length - 1) % tabs.length; break
+      case 'ArrowRight': next = (index + 1) % tabs.length; break
+      case 'Home': next = 0; break
+      case 'End': next = tabs.length - 1; break
+      default: return
+    }
+    const tab = tabs[next]
+    if (!tab) return
+    event.preventDefault()
+    setSelected(tab.id)
+    event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus()
+  }
+
   return (
     <>
-      <SettingsGroup>
+      <SettingsGroup title={t('MobileSettings.ways')} icon={<GlobeIcon />}>
+        <div className="mobile-connection-tabs" role="tablist" aria-label={t('MobileSettings.ways')} onKeyDown={onTabsKey}>
+          {tabs.map((tab) => (
+            <button key={tab.id} id={`${id}-tab-${tab.id}`} type="button" role="tab" aria-selected={tab === active}
+              aria-controls={`${id}-panel-${tab.id}`} tabIndex={tab === active ? 0 : -1} onClick={() => setSelected(tab.id)}>
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        {tabs.map((tab) => (
+          <div key={tab.id} id={`${id}-panel-${tab.id}`} role="tabpanel" aria-labelledby={`${id}-tab-${tab.id}`} hidden={tab !== active} tabIndex={0}>
+            {tab.panel}
+          </div>
+        ))}
+      </SettingsGroup>
+      {phones && status && (
+        <div className="mobile-app-settings" hidden={active.id === 'wechat'}>
+          <AntumiMobileSettings status={status} onStatus={apply} />
+        </div>
+      )}
+    </>
+  )
+}
+
+function AntumiMobileSettings({ status, onStatus }: { status: MobileStatus; onStatus: (status: MobileStatus | null) => void }) {
+  return (
+    <>
+      <SettingsGroup title={t('MobileSettings.app')} icon={<PhoneIcon />}>
         <SettingsRow
           label={t('MobileSettings.allow')}
           description={t('MobileSettings.allowDescription')}
-          control={(labelId) => <Toggle labelId={labelId} checked={status.enabled} onChange={(enabled) => void perform((rpc) => rpc.call('mobile.setEnabled', { enabled })).then(apply)} />}
+          control={(labelId) => <Toggle labelId={labelId} checked={status.enabled} onChange={(enabled) => void perform((rpc) => rpc.call('mobile.setEnabled', { enabled })).then(onStatus)} />}
         />
         {status.enabled && (
           <SettingsRow
@@ -69,15 +128,8 @@ function AntumiMobileSettings() {
             control={() => <span className={status.state === 'failed' ? 'mobile-state-failed' : 'muted'} role="status">{stateText(status)}</span>}
           />
         )}
-        <PortRow status={status} onStatus={apply} />
-      </SettingsGroup>
-      <SettingsGroup title={t('MobileSettings.ways')} icon={<GlobeIcon />}>
-        <p className="settings-row-description mobile-ways-intro">{t('MobileSettings.waysDescription')}</p>
-        <WifiRow status={status} />
-        <TailscaleRow status={status} />
-        {status.relay !== undefined && <RelayRow relay={status.relay} onStatus={apply} />}
-        {status.bridge !== undefined && <BridgeRow bridge={status.bridge} onStatus={apply} />}
-        {status.extraHosts && <ExtraHostsRow saved={status.extraHosts} onStatus={apply} />}
+        <PortRow status={status} onStatus={onStatus} />
+        {status.extraHosts && <ExtraHostsRow saved={status.extraHosts} onStatus={onStatus} />}
         <SettingsRow
           label={t('MobileSettings.guide')}
           description={t('MobileSettings.guideDescription')}
@@ -95,17 +147,17 @@ function AntumiMobileSettings() {
               </button>
             )}
           />
-          {status.pairing && <PairingPanel pairing={status.pairing} onStatus={apply} />}
+          {status.pairing && <PairingPanel pairing={status.pairing} onStatus={onStatus} />}
           {status.devices.length === 0 && !status.pairing && <p className="settings-row-description mobile-empty">{t('MobileSettings.noDevices')}</p>}
-          {status.devices.map((device) => <DeviceRow key={device.id} device={device} onStatus={apply} />)}
+          {status.devices.map((device) => <DeviceRow key={device.id} device={device} onStatus={onStatus} />)}
         </SettingsGroup>
       )}
       <SettingsGroup title={t('MobileSettings.push')} icon={<BellIcon />}>
-        <PushRow status={status} onStatus={apply} />
+        <PushRow status={status} onStatus={onStatus} />
       </SettingsGroup>
-      <SettingsGroup title={t('MobileSettings.app')} icon={<DownloadIcon />}>
+      <SettingsGroup title={t('MobileSettings.download')} icon={<DownloadIcon />}>
         <SettingsRow
-          label={t('MobileSettings.download')}
+          label={t('MobileSettings.app')}
           description={t('MobileSettings.downloadDescription')}
           control={() => <a className="button" href={`${PROJECT_GITHUB_URL}/releases`} target="_blank" rel="noreferrer">{t('MobileSettings.openReleases')}</a>}
         />

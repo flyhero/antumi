@@ -15,7 +15,12 @@ const CREDENTIAL = 'wechat-remote'
 const FRESH = 10 * 60_000
 const APPROVAL_LIFE = 5 * 60_000
 const CONTEXT_LIFE = 30 * 60_000
-const HELP = '直接发文字给绑定的对话。\n/status 查看状态\n/stop 打断本轮\n/approve <码> 同意本次操作\n/deny <码> 拒绝本次操作'
+const HELP = [
+  '直接发文字给绑定的对话。',
+  '发送 /status 查看状态。',
+  '发送 /stop 打断正在运行的轮次。',
+  '收到审批码时，只回复提醒中的一条命令，带上审批码。提问和其他审批请在桌面处理。'
+].join('\n')
 const FILE_TOOLS = new Map([['Read', '读取文件'], ['Edit', '编辑文件'], ['Write', '写入文件']])
 
 type Approval = Extract<ChatItem, { kind: 'approval' }>
@@ -445,7 +450,13 @@ export class WechatRemoteService {
     }
     const code = randomBytes(4).toString('hex')
     this.approvals.set(key, { code, item, at: item.at, summary })
-    this.post(`approval:${key}`, `待确认操作\n${summary}\n/approve ${code} 同意本次操作\n/deny ${code} 拒绝本次操作`, item.at + APPROVAL_LIFE, code)
+    const text = [
+      `待确认操作\n${summary}`,
+      `审批码有效 ${APPROVAL_LIFE / 60_000} 分钟。请只回复下面一条命令，带上审批码。完整操作可在桌面查看。`,
+      `同意本次操作\n/approve ${code}`,
+      `拒绝本次操作\n/deny ${code}`
+    ].join('\n\n')
+    this.post(`approval:${key}`, text, item.at + APPROVAL_LIFE, code)
   }
 
   private async answer(run: Running, conversation: Conversation, code: string, decision: 'allow' | 'deny', notice: (text: string) => void): Promise<void> {
@@ -473,6 +484,7 @@ export class WechatRemoteService {
     run.busy = true
     try {
       while (this.isCurrent(run) && run.binding.conversation && this.conversation(run.binding.conversation)) {
+        const contextUsed = run.context
         const context = this.context(run)
         const next = context ? this.store.nextReply(this.now()) : null
         if (!context || !next) return
@@ -489,10 +501,17 @@ export class WechatRemoteService {
         else if (result.type === 'error' && result.code === 'limited') {
           this.store.replyState(next.id, 'queued', this.now() + 30_000)
           return
+        } else if (result.type === 'error' && result.code === 'rejected') {
+          this.store.replyState(next.id, 'rejected')
+          if (run.context === contextUsed) {
+            this.contextLost(run)
+            this.setPhase('waiting')
+          }
         } else {
-          this.store.replyState(next.id, result.type === 'error' && result.code === 'rejected' ? 'rejected' : 'unknown')
-          this.contextLost(run)
-          this.setPhase('waiting')
+          // An uncertain send can still have reached WeChat. Keep the context for later messages.
+          this.store.replyState(next.id, 'unknown')
+          this.log(result.type === 'error' ? `delivery (${result.code})` : 'delivery response')
+          return
         }
       }
     } finally {

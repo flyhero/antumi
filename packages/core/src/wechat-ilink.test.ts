@@ -32,6 +32,8 @@ describe('iLink protocol', () => {
       .mockResolvedValueOnce(new Response(null, { status: 429 }))
       .mockResolvedValueOnce(Response.json({ errcode: -14 }))
       .mockResolvedValueOnce(Response.json({}))
+      .mockResolvedValueOnce(new Response(''))
+      .mockResolvedValueOnce(Response.json({ ret: 1 }))
     const api = new IlinkApi(fetch)
     const send = () => api.run({ type: 'send', account, context: 'context', id: 'stable', text: 'hello' })
     expect(await send()).toEqual({ type: 'send' })
@@ -41,7 +43,9 @@ describe('iLink protocol', () => {
     })
     expect(await send()).toEqual({ type: 'error', code: 'limited' })
     expect(await send()).toEqual({ type: 'error', code: 'auth' })
+    expect(await send()).toEqual({ type: 'send' })
     expect(await send()).toEqual({ type: 'error', code: 'protocol' })
+    expect(await send()).toEqual({ type: 'error', code: 'rejected' })
   })
 
   it('permits only Tencent iLink origins and handles idle long polls', async () => {

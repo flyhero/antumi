@@ -201,12 +201,19 @@ describe('WeChat remote control', () => {
 
   it('accepts only a current, one-use approval with no persistent grants', async () => {
     await pair()
-    let cursor = await publish([packet('8', '/status')], 'cursor-8')
+    const cursor = await publish([packet('8', '/help')], 'cursor-8')
+    await vi.waitFor(() => expect(sent().some((text) => text.includes('发送 /status 查看状态。') && text.includes('只回复提醒中的一条命令'))).toBe(true))
     pending = approval()
     service.observe(FIRST, [pending])
-    await vi.waitFor(() => expect(sent().some((text) => text.includes('/approve'))).toBe(true))
-    const code = sent().join(' ').match(/\/approve ([a-f0-9]{8})/)![1]
-    cursor = await publish([packet('9', `/approve ${code}`), packet('10', `/approve ${code}`)], 'cursor-10', cursor)
+    const instructions = await vi.waitFor(() => {
+      const text = sent().find((text) => text.startsWith('待确认操作'))
+      expect(text).toBeDefined()
+      return text!
+    })
+    const code = instructions.match(/\/approve ([a-f0-9]{8})/)![1]
+    expect(instructions).toContain('审批码有效 5 分钟')
+    expect(instructions.split('\n')).toEqual(expect.arrayContaining([`/approve ${code}`, `/deny ${code}`]))
+    await publish([packet('9', `/approve ${code}`), packet('10', `/approve ${code}`)], 'cursor-10', cursor)
     expect(actions.respond).toHaveBeenCalledExactlyOnceWith(FIRST, 'request', { decision: 'allow', choice: 'once' })
     expect(sent().join(' ')).not.toContain('private-token')
     pending = approval({ id: 'a:other', requestId: 'other', tool: 'Bash', title: 'private shell text' })
@@ -233,20 +240,22 @@ describe('WeChat remote control', () => {
     expect(actions.respond).not.toHaveBeenCalled()
   })
 
-  it('marks an ambiguous send unknown and resumes polling after a worker exit', async () => {
+  it('continues sending desktop notices after an ambiguous delivery without replaying it', async () => {
     await pair()
     failure = { type: 'error', code: 'network' }
     const index = await publish([packet('11', '/status')], 'cursor-11')
-    await vi.waitFor(() => expect(service.status().state).toBe('waiting'))
+    expect(service.status().state).toBe('ready')
     expect(sent()).toHaveLength(1)
-    const replay = packet('11', '/status')
-    await publish([replay], 'cursor-12', index)
-    expect(sent()).toHaveLength(1)
+
+    service.observe(FIRST, [turn('desktop-after-timeout')])
+    await vi.waitFor(() => expect(sent()).toEqual(['对话空闲，可以发送消息。', 'Antumi 中的对话已完成。']))
+
+    await publish([packet('11', '/status')], 'cursor-12', index)
     const last = calls.length
     closeWorker()
     const reopened = await next('poll', last)
     expect(reopened.command).toMatchObject({ cursor: 'cursor-12' })
-    expect(sent()).toHaveLength(1)
+    expect(sent()).toHaveLength(2)
   }, 5000)
 
   it('recovers the committed batch and skips control commands that were already acting', async () => {

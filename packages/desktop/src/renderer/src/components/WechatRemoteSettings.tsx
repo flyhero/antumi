@@ -4,7 +4,7 @@ import { askConfirm } from '../confirm-dialog'
 import { perform, useCore } from '../core-store'
 import { t } from '../i18n'
 import { PairingQrCode } from './PairingQrCode'
-import { SettingsGroup, SettingsRow, Toggle } from './SettingsControls'
+import { SettingsRow, Toggle } from './SettingsControls'
 
 const conversationTitle = (conversation: { title: string }) => conversation.title || t('WechatRemote.untitled')
 
@@ -53,10 +53,10 @@ export function WechatRemoteSettings() {
   const showPicker = confirm || (status?.paired && !pairing && !canPair)
   const canSelect = candidates.some((candidate) => candidate.id === selected)
   return (
-    <SettingsGroup title={t('WechatRemote.title')}>
+    <>
       <SettingsRow
         label={t('WechatRemote.connection')}
-        description={t('WechatRemote.description')}
+        description={t(status?.enabled ? 'WechatRemote.usage' : 'WechatRemote.description')}
         control={() => <span className="muted" role="status">{status ? stateText(status) : t('MobileSettings.loading')}</span>}
       />
       {!pairing && canPair && (
@@ -114,6 +114,6 @@ export function WechatRemoteSettings() {
           )}
         />
       )}
-    </SettingsGroup>
+    </>
   )
 }

@@ -5,6 +5,7 @@ vi.mock('expo-application', () => ({}))
 vi.mock('expo-device', () => ({}))
 vi.mock('expo-crypto', () => ({ randomUUID: () => crypto.randomUUID() }))
 vi.mock('./storage', () => ({ saveSettings: vi.fn() }))
+vi.mock('./push', () => ({ forgetPush: vi.fn(), onPushChanged: () => () => {}, stopPush: vi.fn(), syncPush: vi.fn() }))
 
 import { setDraft, submitDraft, restoreDelivery, useSession, rememberProvider } from './session'
 

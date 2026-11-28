@@ -1,11 +1,13 @@
+import { createDecipheriv, createECDH, hkdfSync, randomBytes } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { decodeChatLink, decodePairingCode, type Conversation } from '@antumi/protocol'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { base64Url, decodeChatLink, decodePairingCode, type Conversation, type MobilePushSubscription } from '@antumi/protocol'
 import type { CoreToGateway } from './gateway-ipc'
 import { MobileService, type GatewayLauncher } from './mobile-service'
 import { MobileStore } from './mobile-store'
+import type { Connection } from './rpc-server'
 import { TaskStore } from './task-store'
 
 const conversation = (chat: Conversation['chat'], extra: Partial<Conversation> = {}): Conversation => ({
@@ -13,11 +15,41 @@ const conversation = (chat: Conversation['chat'], extra: Partial<Conversation> =
   managedWorkspace: false, sessionId: 's1', createdAt: 1, updatedAt: 1, chat, ...extra
 })
 
+const phone = (deviceId: string): Connection => ({
+  attached: new Set(), watching: new Set(), browsing: new Set(), wiring: new Set(), usageKinds: new Set(),
+  notify() {}, onClose: () => () => {}, mobile: { deviceId, access: 'view' }
+})
+
+// The phone's side of a push endpoint: its keys, and reading what was pushed to them (RFC 8291).
+function pushReceiver(endpoint: string) {
+  const ecdh = createECDH('prime256v1')
+  ecdh.generateKeys()
+  const auth = randomBytes(16)
+  const subscription: MobilePushSubscription = { endpoint, p256dh: base64Url.encode(ecdh.getPublicKey()), auth: base64Url.encode(auth) }
+  const read = (body: Uint8Array): unknown => {
+    const data = Buffer.from(body)
+    const salt = data.subarray(0, 16)
+    const sender = data.subarray(21, 21 + data.readUInt8(20))
+    const info = Buffer.concat([Buffer.from('WebPush: info\0'), ecdh.getPublicKey(), sender])
+    const ikm = Buffer.from(hkdfSync('sha256', ecdh.computeSecret(sender), auth, info, 32))
+    const cek = Buffer.from(hkdfSync('sha256', ikm, salt, Buffer.from('Content-Encoding: aes128gcm\0'), 16))
+    const nonce = Buffer.from(hkdfSync('sha256', ikm, salt, Buffer.from('Content-Encoding: nonce\0'), 12))
+    const sealed = data.subarray(21 + sender.length)
+    const decipher = createDecipheriv('aes-128-gcm', cek, nonce)
+    decipher.setAuthTag(sealed.subarray(-16))
+    const plain = Buffer.concat([decipher.update(sealed.subarray(0, -16)), decipher.final()])
+    return JSON.parse(plain.subarray(0, plain.lastIndexOf(2)).toString('utf8'))
+  }
+  return { subscription, read }
+}
+
 describe('MobileService', () => {
   let dir: string
   let tasks: TaskStore
   let store: MobileStore
   let posts: { url: string; body: string; click: string | null }[]
+  let pushes: { endpoint: string; headers: Record<string, string>; body: Uint8Array }[]
+  let pushStatus: number
   let launches: number
   let sent: CoreToGateway[]
   let service: MobileService
@@ -27,6 +59,8 @@ describe('MobileService', () => {
     tasks = new TaskStore(path.join(dir, 'antumi.db'))
     store = new MobileStore(path.join(dir, 'antumi.db'))
     posts = []
+    pushes = []
+    pushStatus = 201
     launches = 0
     sent = []
     const launch: GatewayLauncher = (onMessage) => {
@@ -37,6 +71,7 @@ describe('MobileService', () => {
     service = new MobileService(store, {
       dir: path.join(dir, 'mobile'), connections: () => [], changed() {}, launch,
       addresses: async () => ['192.168.1.2'], post: async (url, body, click) => { posts.push({ url, body, click }) },
+      webPush: async (endpoint, headers, body) => { pushes.push({ endpoint, headers, body }); return pushStatus },
       relay: { obtain: async () => '/bin/wireproxy', launch: () => ({ stop() {} }), probe: async () => null, port: async () => 40000 }
     })
   })
@@ -128,6 +163,38 @@ describe('MobileService', () => {
     service.conversationChanged(conversation({ turn: 'idle' }), () => false)
     expect(posts).toHaveLength(1)
     expect(decodeChatLink(posts[0]!.click!)).toEqual({ computer, conversation: running.id })
+  })
+
+  it('pushes the title, encrypted, to a phone\'s own endpoint, until it is gone', async () => {
+    await service.start('ws://127.0.0.1:1/?token=t')
+    await service.setEnabled(true)
+    await new Promise((resolve) => setImmediate(resolve))
+    const computer = decodePairingCode((await service.beginPairing()).uri)!.key
+    store.add({ id: 'd1', name: 'Pixel', platform: 'android', publicKey: 'pk1', access: 'view', pairedAt: 1 })
+    await expect(service.pushKey(phone('d1'))).resolves.toEqual({ key: expect.stringMatching(/^B[A-Za-z0-9_-]{86}$/) })
+    expect(() => service.setPush({ ...phone('d1'), mobile: undefined }, null)).toThrow(/phone/)
+    const receiver = pushReceiver('https://ntfy.example/upAbc?up=1')
+    service.setPush(phone('d1'), receiver.subscription)
+    expect(service.status().devices).toMatchObject([{ id: 'd1', push: true }])
+    const running = conversation({ turn: 'running' })
+    service.conversationChanged(running, () => false)
+    service.conversationChanged(conversation({ turn: 'idle' }), () => false)
+    await vi.waitFor(() => expect(pushes).toHaveLength(1))
+    expect(posts).toEqual([])
+    expect(pushes[0]!.endpoint).toBe('https://ntfy.example/upAbc?up=1')
+    expect(pushes[0]!.headers).toMatchObject({ 'Content-Encoding': 'aes128gcm', Authorization: expect.stringMatching(/^vapid t=.+, k=B/) })
+    expect(receiver.read(pushes[0]!.body)).toEqual({ v: 1, c: computer, id: running.id, alert: 'finished', title: 'Fix the export' })
+    pushStatus = 410
+    service.conversationChanged(conversation({ turn: 'awaiting', request: { requestId: 'r9', kind: 'question', tool: null, title: 'Which?', decisions: [], open: 1 } }), () => false)
+    await vi.waitFor(() => expect(service.status().devices).toMatchObject([{ id: 'd1', push: false }]))
+    expect(store.settings().subscriptions).toEqual({})
+  })
+
+  it('forgets a revoked phone\'s endpoint', () => {
+    store.add({ id: 'd1', name: 'Pixel', platform: 'android', publicKey: 'pk1', access: 'view', pairedAt: 1 })
+    service.setPush(phone('d1'), pushReceiver('https://ntfy.example/upAbc').subscription)
+    service.revoke('d1')
+    expect(store.settings().subscriptions).toEqual({})
   })
 
   it('tells at start of what already waits', () => {

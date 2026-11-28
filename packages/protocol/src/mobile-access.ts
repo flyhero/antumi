@@ -22,6 +22,9 @@ export const MOBILE_METHODS: Partial<Record<RpcMethod, MobileAccess>> = {
   'usage.list': 'view',
   'projects.recent': 'view',
   'system.environment': 'view',
+  // A phone that only views is told of conversations too.
+  'mobile.pushKey': 'view',
+  'mobile.setPush': 'view',
   'conversations.respond': 'operate',
   'conversations.send': 'operate',
   'conversations.cancelQueued': 'operate',

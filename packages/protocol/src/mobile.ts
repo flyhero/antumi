@@ -24,7 +24,9 @@ export const MobileDevice = z.object({
   access: MobileAccess,
   pairedAt: z.number(),
   lastSeenAt: z.number().nullable(),
-  online: z.boolean()
+  online: z.boolean(),
+  // Whether the phone gave its own push endpoint. Absent from an older core.
+  push: z.boolean().optional()
 })
 export type MobileDevice = z.infer<typeof MobileDevice>
 
@@ -96,6 +98,19 @@ export type MobileStatus = z.infer<typeof MobileStatus>
 
 export const MobilePort = z.number().int().min(1024).max(65535)
 export const MobilePushUrl = z.string().trim().url().max(500).refine((url) => /^https?:\/\//i.test(url), 'http or https only')
+
+// A phone's push endpoint from its UnifiedPush distributor, with the Web Push keys (RFC 8291,
+// base64url) its pushes are encrypted to.
+export const MobilePushSubscription = z.object({
+  endpoint: MobilePushUrl,
+  p256dh: z.string().regex(/^[A-Za-z0-9_-]{80,100}$/),
+  auth: z.string().regex(/^[A-Za-z0-9_-]{16,32}$/)
+})
+export type MobilePushSubscription = z.infer<typeof MobilePushSubscription>
+
+// What an encrypted push carries, read by the phone's native code: which computer and
+// conversation, what happened (a ConversationAlert), and the conversation's title.
+export type MobilePushPayload = { v: 1; c: string; id: string; alert: string; title: string }
 
 // A host the phone joins with the computer's port: a name or an IPv4 address, or an IPv6 one with
 // at least two colons, so that `1.2.3.4:7820` or `host:7820` is not taken for one.

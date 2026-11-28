@@ -34,6 +34,7 @@ import { t } from './i18n'
 import { requestModelCatalog } from './model-catalog'
 import { reconcileDeliveries, type ChatDelivery } from './chat-deliveries'
 import { requestFailure as failure } from './request-failure'
+import { forgetPush, onPushChanged, stopPush, syncPush } from './push'
 import { dropCache, loadComputers, loadSettings, phoneKey, readCache, saveComputers, saveSettings, writeCache, type Computer, type Settings } from './storage'
 
 // The phone's one link to a computer at a time, and what it holds of it. After every connect it
@@ -237,6 +238,7 @@ export async function connect(computerKey: string): Promise<void> {
 
 function revoked(computerKey: string): void {
   dropCache(computerKey)
+  forgetPush(computerKey)
   useSession.setState({ status: 'revoked', conversations: {}, tasks: {}, chats: {}, providers: [], usage: null, drafts: {}, deliveries: {} })
 }
 
@@ -299,6 +301,23 @@ async function connected(link: MobileConnection, computer: Computer): Promise<vo
     retryLater(computer.key)
   })
   await refresh()
+  void syncPush(link, computer.key, true).catch(() => {})
+}
+
+// The distributor answered for a computer: tell it, if it is the one connected.
+onPushChanged((computerKey) => {
+  const link = connection
+  if (link && useSession.getState().current === computerKey) void syncPush(link, computerKey, false).catch(() => {})
+})
+
+// Pushes turned on in settings: register with the computer connected now; others on connecting.
+export async function pushTurnedOn(): Promise<void> {
+  const { current } = useSession.getState()
+  if (connection && current) await syncPush(connection, current, true)
+}
+
+export async function pushTurnedOff(): Promise<void> {
+  await stopPush(connection)
 }
 
 // Everything again, from scratch: the list, the tasks, and each chat being looked at.
@@ -674,10 +693,12 @@ export async function pair(text: string, onCode: (code: string) => void): Promis
 
 export async function forget(computerKey: string): Promise<void> {
   if (useSession.getState().current === computerKey) {
+    if (connection?.welcome.features.includes('mobile-push')) await connection.call('mobile.setPush', { subscription: null }).catch(() => {})
     disconnect()
     useSession.setState({ current: null, status: 'idle', welcome: null, conversations: {}, tasks: {}, chats: {}, providers: [], usage: null, drafts: {}, deliveries: {} })
   }
   dropCache(computerKey)
+  forgetPush(computerKey)
   await updateComputers((computers) => computers.filter((each) => each.key !== computerKey))
 }
 

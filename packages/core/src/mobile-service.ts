@@ -17,6 +17,8 @@ import {
   type MobileGatewayState,
   type MobilePairing,
   type MobilePlatform,
+  type MobilePushPayload,
+  type MobilePushSubscription,
   type MobileRelaySetup,
   type MobileStatus
 } from '@antumi/protocol'
@@ -28,6 +30,7 @@ import { MobileBridgeSettings } from './mobile-bridge'
 import { MobileRelay, type RelayDeps } from './mobile-relay'
 import type { MobileSettings, MobileStore } from './mobile-store'
 import { Rejection } from './rejection'
+import { encryptWebPush, generateVapidKey, vapidAuthorization, vapidKeyFromJwk, type VapidKey } from './web-push'
 import type { Connection } from './rpc-server'
 
 // The phone link's control side (docs/MOBILE.md): settings, the computer's key, pairing, paired
@@ -87,6 +90,8 @@ export type MobileServiceOptions = {
   addresses?: () => Promise<string[]>
   // click: what tapping the push opens on the phone, when phone access has a key.
   post?: (url: string, body: string, click: string | null) => Promise<void>
+  // An encrypted push to a phone's own endpoint; the push service's HTTP status.
+  webPush?: (endpoint: string, headers: Record<string, string>, body: Uint8Array) => Promise<number>
   relay?: Partial<RelayDeps>
 }
 
@@ -99,6 +104,7 @@ export class MobileService {
   private attempts = 0
   private restartTimer: NodeJS.Timeout | null = null
   private key: NoiseKeyPair | null = null
+  private vapid: VapidKey | null = null
   private pairing: OpenPairing | null = null
   private coreUrl: string | null = null
   private known: string[] = []
@@ -143,7 +149,7 @@ export class MobileService {
       error: this.error,
       addresses: this.hosts(),
       pairing,
-      devices: this.store.devices().map(({ publicKey: _key, ...device }) => ({ ...device, online: online.has(device.id) })),
+      devices: this.store.devices().map(({ publicKey: _key, ...device }) => ({ ...device, online: online.has(device.id), push: device.id in this.settings.subscriptions })),
       pushUrl: this.settings.pushUrl,
       extraHosts: this.settings.extraHosts,
       relay: this.relay.status(),
@@ -276,12 +282,33 @@ export class MobileService {
 
   revoke(deviceId: string): MobileStatus {
     if (!this.store.remove(deviceId)) throw new Rejection('mobile-device-unknown', `no device ${deviceId}`)
+    this.dropSubscription(deviceId)
     this.link?.send({ type: 'revoke', deviceId })
     this.sendDevices()
     for (const connection of this.options.connections()) {
       if (connection.mobile?.deviceId === deviceId) connection.close?.()
     }
     return this.notify()
+  }
+
+  // A phone's own pushes: the key its endpoint is registered with, then the endpoint itself.
+  async pushKey(connection: Connection): Promise<{ key: string }> {
+    if (!connection.mobile) throw new Rejection('mobile-only', 'only a phone registers for pushes')
+    return { key: (await this.loadVapid()).publicKey }
+  }
+
+  setPush(connection: Connection, subscription: MobilePushSubscription | null): void {
+    const deviceId = connection.mobile?.deviceId
+    if (!deviceId) throw new Rejection('mobile-only', 'only a phone registers for pushes')
+    if (subscription) this.save({ ...this.settings, subscriptions: { ...this.settings.subscriptions, [deviceId]: subscription } })
+    else this.dropSubscription(deviceId)
+    this.notify()
+  }
+
+  private dropSubscription(deviceId: string): void {
+    if (!(deviceId in this.settings.subscriptions)) return
+    const { [deviceId]: _gone, ...rest } = this.settings.subscriptions
+    this.save({ ...this.settings, subscriptions: rest })
   }
 
   // system.hello from the gateway, for one phone: from here on core holds the connection to what
@@ -320,7 +347,8 @@ export class MobileService {
 
   private push(conversation: Conversation, alert: ConversationAlert): void {
     const url = this.settings.pushUrl
-    if (!url) return
+    const phones = Object.entries(this.settings.subscriptions)
+    if (!url && !phones.length) return
     const key = `${conversation.id}:${alert}:${conversation.chat?.request?.requestId ?? ''}`
     const last = this.pushed.get(key)
     if (last !== undefined && this.now() - last < PUSH_GAP_MS) return
@@ -330,8 +358,53 @@ export class MobileService {
     // The tap target names the conversation by its random ID alone.
     const click = this.key ? encodeChatLink({ computer: base64Url.encode(this.key.publicKey), conversation: conversation.id }) : null
     const body = alert === 'waiting' ? '有会话在等你确认或回答' : alert === 'crashed' ? '有会话的 Agent 意外退出了' : alert === 'finishedAsking' ? '有会话本轮结束，并留了一个问题' : '有会话本轮结束了'
-    const post = this.options.post ?? defaultPost
-    void post(url, body, click).catch((error: unknown) => console.error('[antumi-core] phone push failed:', error instanceof Error ? error.message : error))
+    if (url) {
+      const post = this.options.post ?? defaultPost
+      void post(url, body, click).catch((error: unknown) => console.error('[antumi-core] phone push failed:', error instanceof Error ? error.message : error))
+    }
+    // A phone's own endpoint gets the title as well: only that phone can read it.
+    if (this.key && phones.length) {
+      const payload: MobilePushPayload = { v: 1, c: base64Url.encode(this.key.publicKey), id: conversation.id, alert, title: conversation.title.slice(0, 200) }
+      for (const [deviceId, subscription] of phones) void this.webPush(deviceId, subscription, payload)
+    }
+  }
+
+  private async webPush(deviceId: string, subscription: MobilePushSubscription, payload: MobilePushPayload): Promise<void> {
+    try {
+      const vapid = await this.loadVapid()
+      const body = encryptWebPush(new TextEncoder().encode(JSON.stringify(payload)), subscription.p256dh, subscription.auth)
+      const headers = { 'Content-Encoding': 'aes128gcm', 'Content-Type': 'application/octet-stream', TTL: '86400', Urgency: 'high', Authorization: vapidAuthorization(subscription.endpoint, vapid, this.now()) }
+      const status = await (this.options.webPush ?? defaultWebPush)(subscription.endpoint, headers, body)
+      // Gone for good: the phone unregistered, or its distributor dropped the endpoint.
+      if (status === 404 || status === 410) {
+        if (this.settings.subscriptions[deviceId]?.endpoint === subscription.endpoint) {
+          this.dropSubscription(deviceId)
+          this.notify()
+        }
+      } else if (status >= 400) {
+        console.error(`[antumi-core] phone push failed: HTTP ${status}`)
+      }
+    } catch (error) {
+      console.error('[antumi-core] phone push failed:', error instanceof Error ? error.message : error)
+    }
+  }
+
+  private async loadVapid(): Promise<VapidKey> {
+    if (this.vapid) return this.vapid
+    await mkdir(this.options.dir, { recursive: true, mode: 0o700 })
+    const file = path.join(this.options.dir, 'vapid.json')
+    try {
+      const key = vapidKeyFromJwk(JSON.parse(await readFile(file, 'utf8')))
+      if (key) return (this.vapid = key)
+    } catch {
+      // None yet: made below. Phones registered with a lost key register again when they connect.
+    }
+    const jwk = generateVapidKey()
+    await writeFile(file, JSON.stringify(jwk), { mode: 0o600 })
+    await chmod(file, 0o600)
+    this.vapid = vapidKeyFromJwk(jwk)
+    if (!this.vapid) throw new Error('could not make a VAPID key')
+    return this.vapid
   }
 
   private save(settings: MobileSettings): void {
@@ -486,6 +559,11 @@ async function defaultPost(url: string, body: string, click: string | null): Pro
   const headers: Record<string, string> = { Title: 'Antumi', Tags: 'antumi', ...(click ? { Click: click } : {}) }
   const response = await fetch(url, { method: 'POST', body, headers, signal: AbortSignal.timeout(10_000) })
   if (!response.ok) throw new Error(`HTTP ${response.status}`)
+}
+
+async function defaultWebPush(endpoint: string, headers: Record<string, string>, body: Uint8Array): Promise<number> {
+  const response = await fetch(endpoint, { method: 'POST', headers, body, signal: AbortSignal.timeout(10_000) })
+  return response.status
 }
 
 // This machine's private IPv4 addresses, Wi-Fi and Ethernet before the rest, then Tailscale's DNS

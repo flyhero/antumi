@@ -1,7 +1,9 @@
 # Made by expo prebuild / export, never committed.
 .expo/
-android/
-ios/
+/android/
+/ios/
+# A local module's Gradle output; its sources are committed.
+modules/*/android/build/
 dist/
 *.apk
 *.keystore

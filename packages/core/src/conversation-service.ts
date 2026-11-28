@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import { mkdir, realpath, rm, rmdir, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import { channelPlatform, branchSwitchMessage, withoutBranchSwitchNote, chatReferencesFor, canHaveHelper, helperAllowsMode, isHelper, agentDescriptor, agentSupportsReadOnly, modelPrice, providerEndpoint, type CostBaseline, checkEditAdditionalProjects, checkSwitchBranch, handoffMessage, isPlanApproval, parseHandoffMessage, MAX_TASK_REPOS, type AgentKind, type ChatCatalog, type ChatImage, type ChatItem, type ChatModel, type ChatOption, type ChatSettings, type CommitPushResult, type CommitResult, type PushResult, type Conversation, type ConversationMessage, type ConversationSearchHit, type ConversationStage, type FileDiff, type FolderChanges, type ProjectBranches, type ProjectHead, type ChatDecision, type KnowledgeBase, type TaskSource, type UnattendedMode, type ChatPermissionMode, startModes, unattendedPermission, isAntumiRequest , PROCESS_OWNER_ENV, processOwner, parseProcessOwner } from '@antumi/protocol'
+import { channelPlatform, branchSwitchMessage, withoutBranchSwitchNote, delegationWritingMessage, withoutDelegationWritingNote, chatReferencesFor, canHaveHelper, helperAllowsMode, isHelper, agentDescriptor, agentSupportsReadOnly, modelPrice, providerEndpoint, type CostBaseline, checkEditAdditionalProjects, checkSwitchBranch, handoffMessage, isPlanApproval, parseHandoffMessage, MAX_TASK_REPOS, type AgentKind, type ChatCatalog, type ChatImage, type ChatItem, type ChatModel, type ChatOption, type ChatSettings, type CommitPushResult, type CommitResult, type PushResult, type Conversation, type ConversationMessage, type ConversationSearchHit, type ConversationStage, type FileDiff, type FolderChanges, type ProjectBranches, type ProjectHead, type ChatDecision, type KnowledgeBase, type TaskSource, type UnattendedMode, type ChatPermissionMode, startModes, unattendedPermission, isAntumiRequest , PROCESS_OWNER_ENV, processOwner, parseProcessOwner } from '@antumi/protocol'
 import type { DaemonEvent, SessionInfo } from '@antumi/protocol/node'
 import { ALLOW_SITE_ALWAYS, canReuseConversation, DEFAULT_ACCOUNT, type ConversationChannel, type ConversationConfiguration, type TaskLaunchOptions } from '@antumi/protocol'
 import { channelPrompt } from './channel-prompt'
@@ -91,6 +91,8 @@ export type TaskChatLaunch = TaskLaunchOptions & {
   handoffProvider?: string | null
   references?: ChatReference[]
   images?: readonly string[]
+  // The user readies the chat themselves, to write to it (see ConversationService.setSquadGuard).
+  byUser?: boolean
   // The stage's first message. An agent going on from a handoff reads it there, in the turn the
   // handoff opens; otherwise it is sent once the agent is up.
   opening?: { text: string; imageIds: readonly string[] }
@@ -99,7 +101,7 @@ export type TaskChatLaunch = TaskLaunchOptions & {
 // What a stage's start takes beyond the agent: see TaskChatLaunch; moved says the agent works
 // somewhere else than its last stage did.
 // brief: a file written for the first stage to read before anything else, sent as a handoff is.
-type StageLaunch = { providerSwitch?: boolean; skipProjectSetup?: boolean; ref?: string; fresh?: boolean; moved?: boolean; rerouted?: boolean; planOnly?: boolean; backend?: string | null; account?: string | null; readable?: readonly string[]; fork?: ForkPoint; opening?: string; brief?: string; references?: ChatReference[]; images?: readonly ChatImage[] }
+type StageLaunch = { byUser?: boolean; providerSwitch?: boolean; skipProjectSetup?: boolean; ref?: string; fresh?: boolean; moved?: boolean; rerouted?: boolean; planOnly?: boolean; backend?: string | null; account?: string | null; readable?: readonly string[]; fork?: ForkPoint; opening?: string; brief?: string; references?: ChatReference[]; images?: readonly ChatImage[] }
 // The provider session another conversation's stage ran, taken over through the turn `at` names;
 // neither null means a session the agent can fork, else the fork starts afresh.
 // latest: the point is the last the agent's session holds, so the session forked whole is the same.
@@ -157,8 +159,11 @@ export class ConversationService {
   setDelegationAvailable(available: (id: string) => boolean): void { this.delegationAvailable = available }
   private callCleanup: ((id: string) => Promise<void>) | null = null
   setCallCleanup(cleanup: (id: string) => Promise<void>): void { this.callCleanup = cleanup }
-  private squadGuard: ((conversation: Conversation) => void) | null = null
-  setSquadGuard(guard: (conversation: Conversation) => void): void { this.squadGuard = guard }
+  // Refuses a start or a message the conversation may not take now. byUser: the user's own doing,
+  // which a delegated member editing the same directories does not hold off; it then answers with
+  // who edits where, for the note the message carries (AgentProfileService.guard).
+  private squadGuard: ((conversation: Conversation, byUser: boolean) => string[] | null | void) | null = null
+  setSquadGuard(guard: (conversation: Conversation, byUser: boolean) => string[] | null | void): void { this.squadGuard = guard }
 
   // Core's chat settings say; main hands them over before any stage starts.
   private promptSuggestions = false
@@ -847,6 +852,7 @@ export class ConversationService {
       moved,
       rerouted,
       planOnly: launch.planOnly,
+      byUser: launch.byUser,
       readable: launch.readable,
       opening: launch.opening?.text,
       references: launch.references,
@@ -978,15 +984,15 @@ export class ConversationService {
     return conversation
   }
 
-  // Readies the agent for a message: one already up stays as it is.
-  async continue(id: string, allowBypass?: boolean, readable?: readonly string[], skipProjectSetup = false): Promise<Conversation> {
+  // Readies the agent for a message: one already up stays as it is. byUser: see setSquadGuard.
+  async continue(id: string, allowBypass?: boolean, readable?: readonly string[], skipProjectSetup = false, byUser = false): Promise<Conversation> {
     this.writable(id)
     const current = this.free(id)
     if (this.launching.has(id)) throw new Rejection('conversation-running')
     if (current.sessionId && this.chats.activity(id) !== null) return current
     if (allowBypass !== undefined) this.store.setChatOptions(id, { allowBypass })
     if (current.sessionId) await this.stop(id)
-    return this.start(id, current.agent, '', false, { readable, skipProjectSetup })
+    return this.start(id, current.agent, '', false, { readable, skipProjectSetup, byUser })
   }
 
   async resumeDelegation(id: string): Promise<Conversation> {
@@ -1321,7 +1327,7 @@ export class ConversationService {
   }
 
   private async start(id: string, agent: AgentKind, note: string, handoff: boolean, launch: StageLaunch = {}): Promise<Conversation> {
-    this.squadGuard?.(this.get(id))
+    this.squadGuard?.(this.get(id), launch.byUser ?? false)
     if (this.providerSwitches.has(id) && !launch.providerSwitch) throw new Rejection('chat-busy')
     if (this.launching.has(id) || this.retiring.has(id)) throw new Rejection('conversation-running')
     // Its agent waits for the issue, which only beginInvestigation hands over.
@@ -2003,16 +2009,17 @@ export class ConversationService {
     }
   }
 
-  // A retry may resume in a new stage; its ref still names the original message.
-  async send(id: string, text: string, imageIds: readonly string[] = [], queue = false, steer = false, ref?: string, references?: ChatReference[]): Promise<void> {
+  // A retry may resume in a new stage; its ref still names the original message. byUser: the user
+  // sent it themselves, see setSquadGuard.
+  async send(id: string, text: string, imageIds: readonly string[] = [], queue = false, steer = false, ref?: string, references?: ChatReference[], byUser = false): Promise<void> {
     const conversation = this.writable(id)
     if (this.providerSwitches.has(id)) throw new Rejection('chat-busy')
     if (this.preparingOf(conversation)) throw new Rejection('conversation-preparing', 'the issue is still being fetched')
-    this.squadGuard?.(conversation)
+    const writing = this.squadGuard?.(conversation, byUser) ?? null
     if (adapterOf(conversation.agent).turns?.serialized) {
-      return this.serially(id, () => this.sendNow(id, text, imageIds, { queue, steer }, ref, references))
+      return this.serially(id, () => this.sendNow(id, text, imageIds, { queue, steer, writing }, ref, references))
     }
-    return this.sendNow(id, text, imageIds, { queue, steer }, ref, references)
+    return this.sendNow(id, text, imageIds, { queue, steer, writing }, ref, references)
   }
 
   // The user's message into the turn a conversation another one manages is running (a delegation's
@@ -2020,21 +2027,23 @@ export class ConversationService {
   async steer(id: string, text: string, imageIds: readonly string[] = [], ref?: string, references?: ChatReference[]): Promise<void> {
     const conversation = this.writable(id)
     if (this.providerSwitches.has(id)) throw new Rejection('chat-busy')
-    this.squadGuard?.(conversation)
+    this.squadGuard?.(conversation, false)
     return this.sendNow(id, text, imageIds, { strict: true }, ref, references)
   }
 
   // Whether such a message may still change which of the conversation's turns is its last.
   steerUnsettled(id: string): boolean { return this.chats.steerUnsettled(id) }
 
-  // strict: into the running turn or not at all.
-  private async sendNow(id: string, text: string, imageIds: readonly string[], how: { queue?: boolean; steer?: boolean; strict?: boolean }, ref?: string, references?: ChatReference[]): Promise<void> {
+  // strict: into the running turn or not at all. writing: the members editing the directories it
+  // shares, which the message tells its agent of.
+  private async sendNow(id: string, text: string, imageIds: readonly string[], how: { queue?: boolean; steer?: boolean; strict?: boolean; writing?: string[] | null }, ref?: string, references?: ChatReference[]): Promise<void> {
     this.gitSending.set(id, (this.gitSending.get(id) ?? 0) + 1)
     try {
       await this.gitGuard?.(this.get(id).projectPaths)
       if (ref && this.checkSentRef(id, ref, 0, true)) return
       const note = this.switchNote(id)
-      const message = note ? branchSwitchMessage(note, text) : text
+      const switched = note ? branchSwitchMessage(note, text) : text
+      const message = how.writing?.length ? delegationWritingMessage(how.writing, switched) : switched
       const images = await this.chatImages(imageIds)
       const placed = chatReferencesFor(text, message, references)
       if (how.strict) await this.chats.steerInto(id, message, images, ref, placed)
@@ -2626,7 +2635,7 @@ export class ConversationService {
     if (message.role === 'assistant' && message.complete) this.store.completePendingUsers(stage.id)
     if (message.role === 'user' && !conversation.titleLocked && conversation.title === '新会话') {
       // The user's own words name it, not Antumi's note of a branch switch before them.
-      const first = withoutBranchSwitchNote(text).split(/\r?\n/).map((line) => line.trim().replace(/\s+/g, ' ')).find(Boolean)
+      const first = withoutBranchSwitchNote(withoutDelegationWritingNote(text)).split(/\r?\n/).map((line) => line.trim().replace(/\s+/g, ' ')).find(Boolean)
       if (first) {
         this.changed(this.store.update(conversation.id, { title: [...first].slice(0, 40).join('') }))
         return

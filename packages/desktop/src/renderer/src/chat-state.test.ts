@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { branchSwitchMessage, ChatItem, handoffMessage, type ConversationStage } from '@antumi/protocol'
+import { branchSwitchMessage, ChatItem, delegationWritingMessage, handoffMessage, type ConversationStage } from '@antumi/protocol'
 import {
   appendText,
   chatBlocks,
@@ -110,6 +110,12 @@ describe('saidText', () => {
   it('drops the note of a branch switch, so the quotes after it still open the message', () => {
     const said = '<!-- quote 1 from item:s/r1 -->\n> 原话\n\n为什么？'
     expect(saidText(branchSwitchMessage(['app 现在在分支 main'], said))).toBe(said)
+  })
+
+  it('drops the note that a delegated member is editing, alone or before a branch switch\'s', () => {
+    const said = '<!-- quote 1 from item:s/r1 -->\n> 原话\n\n为什么？'
+    expect(saidText(delegationWritingMessage(['Developer 在 /work/app'], said))).toBe(said)
+    expect(saidText(delegationWritingMessage(['Developer 在 /work/app'], branchSwitchMessage(['app 现在在分支 main'], said)))).toBe(said)
   })
 })
 

@@ -575,7 +575,7 @@ export function createRpcHandlers(
     // Going on by hand in a task's chat is the user acting there, as in a free conversation.
     'tasks.resumeChat': ({ id, allowBypass }) => {
       const { conversationId } = service.get(id)
-      return conversationId ? userActed(conversationId, () => service.resumeChat(id, allowBypass)) : service.resumeChat(id, allowBypass)
+      return conversationId ? userActed(conversationId, () => service.resumeChat(id, allowBypass, true)) : service.resumeChat(id, allowBypass, true)
     },
     'tasks.submit': ({ id }) => userTask(id, () => service.submitChecked(id)),
     'tasks.handoff': ({ id, agent, note, allowBypass, permissionMode, model, effort, references, images, modelProvider }) => service.handoff(id, agent, note, allowBypass, { permissionMode, model, effort, references, images, modelProvider }),
@@ -619,7 +619,7 @@ export function createRpcHandlers(
     'todos.edit': ({ id, groupId, itemId, text }) => todosOf(id).edit(id, groupId, itemId, text),
     'todos.remove': ({ id, groupId, itemId }) => todosOf(id).remove(id, groupId, itemId),
     'conversations.setArchived': ({ id, archived }) => { notChannel(id); return conversations.setArchived(id, archived) },
-    'conversations.continue': ({ id, allowBypass, skipProjectSetup }) => { notChannel(id); return userActed(id, () => { profiles?.guardUser(id, true); squads?.guardUser(id, true); return conversations.continue(id, allowBypass, undefined, skipProjectSetup) }) },
+    'conversations.continue': ({ id, allowBypass, skipProjectSetup }) => { notChannel(id); return userActed(id, () => { profiles?.guardUser(id, true); squads?.guardUser(id, true); return conversations.continue(id, allowBypass, undefined, skipProjectSetup, true) }) },
     'conversations.handoff': ({ id, agent, note, stopRunning, allowBypass, permissionMode, model, effort, references, images, modelProvider }) => { sources.automatic?.takeover(id); return conversations.handoff(id, agent, note, stopRunning, allowBypass, { permissionMode, model, effort, references, images, modelProvider }) },
     'conversations.fork': ({ id, stageId, itemId }) => conversations.fork(id, stageId, itemId),
     // A mode the user picks is theirs to answer for: a run nobody watched stops answering for them.
@@ -635,7 +635,7 @@ export function createRpcHandlers(
         await conversations.steer(id, text, images, ref, references)
         return OK
       }
-      profiles?.guardUser(id, true); squads?.guardUser(id, true); await conversations.send(id, text, images, queue, steer, ref, references); return OK
+      profiles?.guardUser(id, true); squads?.guardUser(id, true); await conversations.send(id, text, images, queue, steer, ref, references, true); return OK
     }) },
     'conversations.moveQueued': ({ id, ref, direction }) => { notChannel(id); conversations.moveQueued(id, ref, direction); return OK },
     'conversations.cancelQueued': ({ id, ref }) => { notChannel(id); conversations.cancelQueued(id, ref); return OK },

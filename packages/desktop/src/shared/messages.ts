@@ -2372,6 +2372,7 @@ export const MESSAGES = {
     "en": "Ask helper…"
   },
   "ChatComposer.handOffToAddInstructionsOrPressEnter": {"zh": "交给 {value1} 接着做：写下要它做的事，也可以不写{send}", "en": "Hand off to {value1}: add instructions, or leave it empty{send}"},
+  "ChatComposer.memberEditing": {"zh": "成员正在修改文件，可以继续讨论；主 Agent 已被提醒先不改文件", "en": "A member is editing files. Keep talking; the main Agent is told to leave the files alone for now"},
   "ChatComposer.messageAgentEnterToSendShiftEnterFor": {"zh": "给 Agent 发消息{send}，Shift+Enter 换行{value1}{value2}", "en": "Message Agent{send}; Shift+Enter for a new line{value1}{value2}"},
   "ChatComposer.forCommands": {
     "zh": "，/ 选命令",
@@ -11668,6 +11669,7 @@ export const MESSAGES = {
     "zh": "它已经不在后台运行了",
     "en": "It is no longer running in the background"
   },
+  "labels.memberIsEditingHere": {"zh": "委派的成员正在修改这些目录里的文件，等它结束后再试", "en": "A delegated member is editing files in these folders. Try again once it is done"},
   "labels.redirectNotRunning": {"zh": "成员现在没有在工作，没有可打断的回合", "en": "The member is not at work now; there is no turn to interrupt"},
   "labels.redirectReadOnly": {"zh": "主会话现在只读，不能让会修改文件的委派接着做", "en": "The main conversation is read-only now, so a delegation that edits files cannot go on"},
   "labels.redirectParentGone": {"zh": "主会话已不在或已归档", "en": "The main conversation is gone or archived"},

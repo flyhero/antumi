@@ -6,7 +6,7 @@ import {
 } from 'lucide-react-native'
 import {
   CONTEXT_COMPACTED, agentResultCallIds, browserToolKind, commandExitCode, deliveredResults, diffCounts, formatTokens, isCommandTool, isPlanApproval, isPreviewTool, isSubagent,
-  isTerminalRunTool, parseHandoffMessage, parseQuotes, subagentBrief, terminalToolKind, toolDisplayStatus, toolRunStatus, withoutBranchSwitchNote,
+  isTerminalRunTool, parseHandoffMessage, parseQuotes, subagentBrief, terminalToolKind, toolDisplayStatus, toolRunStatus, withoutBranchSwitchNote, withoutDelegationWritingNote,
   type AgentKind, type ChatDecision, type ChatDiff, type ChatImage, type ChatItem, type ChatPermissionMode, type Conversation
 } from '@antumi/protocol'
 import { readableNotice, turnText, usageLimitText, workedFor } from '../chat-text'
@@ -59,7 +59,7 @@ export function UserMessage({ item, agent }: { item: Extract<ChatItem, { kind: '
   const theme = useTheme()
   if (agentResultCallIds(item).length > 0) return <DelegationResults item={item} />
   const handoff = parseHandoffMessage(item.text)
-  const said = handoff ? handoff.note || t('handoffNoNote', { agent: agentName(agent) }) : withoutBranchSwitchNote(item.text)
+  const said = handoff ? handoff.note || t('handoffNoNote', { agent: agentName(agent) }) : withoutBranchSwitchNote(withoutDelegationWritingNote(item.text))
   const { quotes, body } = parseQuotes(said)
   const label = handoff ? t('handoff') : item.steer ? t('steer') : null
   return (

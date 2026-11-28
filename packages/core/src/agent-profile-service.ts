@@ -301,17 +301,31 @@ export class AgentProfileService {
     return AgentProfile.parse({ id: randomUUID(), name: label, agent: target.agent, model: target.model ?? null, effort: target.effort ?? null,
       modelProvider: target.modelProvider !== undefined ? target.modelProvider : ready.modelProvider, capability, archivedAt: null, createdAt: at, updatedAt: at })
   }
-  guard(conversation: Conversation): void {
+  // What a conversation must pass to start or take a message. A member takes none once its call is
+  // over. Any other is held off while a member edits directories it shares, but only from what
+  // happens by itself (a result handed back, a scheduled run, a routine): two agents must not come
+  // to edit the same files with nobody deciding it. The user's own message goes, as it would from
+  // another conversation in the same project, and what comes back is who edits where, for a note
+  // that tells its agent to keep its hands off (delegationWritingMessage); null with no one editing.
+  guard(conversation: Conversation, byUser = false): string[] | null {
     if (this.closed) throw new Rejection('core-stopping')
     if (conversation.agentCallId) {
       const call = this.store.call(conversation.agentCallId)
       if (this.closed || !agentCallOpen(call)) throw new Rejection('agent-call-managed', '委派已经结束')
-    } else if (this.store.calls().some((call) => {
-      const owner = this.lookup(call.parentId)
-      return !call.readOnly && underway(call) && owner && overlapping(this.writableRoots(call, owner), conversationRoots(conversation))
-    })) {
-      throw new Rejection('agent-call-writing', '委派的开发工作完成后才能继续当前会话')
+      return null
     }
+    const writers = this.writersOver(conversation)
+    if (!writers.length) return null
+    if (!byUser) throw new Rejection('agent-call-writing', '委派的开发工作完成后才能继续当前会话')
+    return writers.map(({ call, roots }) => `${call.profile.name} 在 ${roots.join('、')}`)
+  }
+  // The members editing directories that lie in, or hold, one of the conversation's, with where each edits.
+  private writersOver(conversation: Conversation): { call: AgentCall; roots: string[] }[] {
+    return this.store.calls().flatMap((call) => {
+      const owner = !call.readOnly && underway(call) ? this.lookup(call.parentId) : null
+      const roots = owner ? this.writableRoots(call, owner) : []
+      return overlapping(roots, conversationRoots(conversation)) ? [{ call, roots }] : []
+    })
   }
   // The directories a developing member edits: the caller's own, or its worktree alone, none
   // until that is laid out.

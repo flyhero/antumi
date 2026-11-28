@@ -6,7 +6,7 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CredentialStore } from './credential-store'
 import { ModelProviderStore } from './model-providers'
-import { ModelProvider, type AgentKind, type AgentProfile, type AgentUsage } from '@antumi/protocol'
+import { delegationWritingMessage, ModelProvider, withoutDelegationWritingNote, type AgentKind, type AgentProfile, type AgentUsage } from '@antumi/protocol'
 import { AgentProfileService, delegatedMode, readyAgents, type ReadyAgent } from './agent-profile-service'
 import { AgentProfileStore } from './agent-profile-store'
 import { TaskStore } from './task-store'
@@ -65,7 +65,7 @@ describe('reusable agent roles and delegated work', () => {
     profiles = new AgentProfileService(store, chats, { profile: () => {}, call: () => delivery?.tick() }, undefined, undefined,
       { ready: () => ready, disabled: () => disabled, usage: () => usage })
     bindDelivery()
-    chats.setSquadGuard((conversation) => profiles.guard(conversation))
+    chats.setSquadGuard((conversation, byUser) => profiles.guard(conversation, byUser))
     chats.setCallCleanup((id) => profiles.cancelForParent(id))
     chats.setCapacity({ maxConcurrentAgents: 20, agentConcurrency: { claude: 6 } }, () => { profiles.tick(); delivery?.tick() })
     daemon.deliver = (event) => {
@@ -327,17 +327,52 @@ describe('reusable agent roles and delegated work', () => {
   it('keeps no delegation mode on a read-only profile', () => {
     expect(profiles.save({ name: 'Reader', agent: 'claude', capability: 'readOnly', delegationMode: 'bypass' }).delegationMode).toBeNull()
   })
-  it('runs one developer at a time, prevents parent edits and cancels without deleting files', async () => {
+  it('runs one developer at a time, holds off what would reach the caller by itself and cancels without deleting files', async () => {
     const developer = profiles.save({ name: 'Developer', agent: 'claude', capability: 'develop' })
     const first = await profiles.dispatch(parentId, developer.id, 'Implement part one')
     const second = await profiles.dispatch(parentId, developer.id, 'Implement part two')
     await waitFor(() => store.call(first.id).state === 'running')
     expect(store.call(second.id).state).toBe('queued')
+    // Nothing reaches the caller of itself while the member edits its directories.
     await expect(chats.send(parentId, 'Edit the same files')).rejects.toMatchObject({ reason: 'agent-call-writing' })
+    await chats.stop(parentId)
+    await expect(chats.continue(parentId)).rejects.toMatchObject({ reason: 'agent-call-writing' })
     await profiles.cancelForParent(parentId)
     expect(profiles.calls(parentId).map((call) => call.state)).toEqual(['cancelled', 'cancelled'])
     expect(chats.get(first.conversationId).sessionId).toBeNull()
     expect(profiles.calls(parentId).every((call) => call.delivered)).toBe(true)
+  })
+  it('lets the user go on talking to the caller while a member edits, telling its agent to keep its hands off', async () => {
+    const developer = profiles.save({ name: 'Developer', agent: 'claude', capability: 'develop' })
+    const first = await profiles.dispatch(parentId, developer.id, 'Implement part one')
+    const second = await profiles.dispatch(parentId, developer.id, 'Implement part two')
+    await waitFor(() => store.call(first.id).state === 'running')
+    // Stopped or not, the user readies the caller and writes to it.
+    await chats.stop(parentId)
+    const repo = chats.get(parentId).projectPaths[0]!
+    await chats.continue(parentId, undefined, undefined, false, true)
+    await chats.send(parentId, 'Why split it in two?', [], false, false, 'asked', undefined, true)
+    const session = chats.get(parentId).sessionId!
+    const told = sent(session).at(-1) ?? ''
+    expect(told).toBe(delegationWritingMessage([`Developer 在 ${repo}`], 'Why split it in two?'))
+    expect(withoutDelegationWritingNote(told)).toBe('Why split it in two?')
+    expect(chats.get(parentId).chat?.turn).toBe('running')
+    // Members still take turns, and a result waits for the caller's turn as it always did.
+    expect(store.call(second.id).state).toBe('queued')
+    complete(chats.get(first.conversationId).sessionId!, 'Part one built')
+    await waitFor(() => store.call(first.id).state === 'completed')
+    expect(store.call(first.id).delivered).toBe(false)
+    expect(store.call(second.id)).toMatchObject({ state: 'queued', waiting: 'parent' })
+    complete(session, 'Because the halves ship apart')
+    await waitFor(() => store.call(second.id).state === 'running')
+    // The first result still waits: the second member edits the caller's directories now.
+    expect(store.call(first.id).delivered).toBe(false)
+    complete(chats.get(second.conversationId).sessionId!, 'Part two built')
+    await waitFor(() => [first, second].every((call) => store.call(call.id).delivered))
+    const back = chats.messages(parentId).filter((message) => message.eventKey.includes('agent-result:'))
+    expect(back).toHaveLength(1)
+    expect(back[0]?.text).toContain('Part one built')
+    expect(back[0]?.text).not.toContain('委派的成员正在修改文件')
   })
   it('returns results that come back together in one message, for one turn of the caller', async () => {
     const tester = profiles.save({ name: 'Tester', agent: 'claude', capability: 'readOnly' })
@@ -411,6 +446,11 @@ describe('reusable agent roles and delegated work', () => {
     await waitFor(() => store.call(reader.id).state === 'running')
     expect(store.call(second.id).state).toBe('queued')
     await expect(chats.send(other.id, 'Edit while another writer runs')).rejects.toMatchObject({ reason: 'agent-call-writing' })
+    // The user's own message goes, as between any two conversations in one project, with the note.
+    await chats.continue(other.id, undefined, undefined, false, true)
+    await chats.send(other.id, 'What does the module export?', [], false, false, undefined, undefined, true)
+    expect(sent(chats.get(other.id).sessionId!).at(-1)).toBe(delegationWritingMessage([`Developer 在 ${chats.get(parentId).projectPaths[0]}`], 'What does the module export?'))
+    complete(chats.get(other.id).sessionId!, 'A parser')
     await profiles.cancelForParent(parentId)
     profiles.tick()
     await waitFor(() => store.call(second.id).state === 'running')

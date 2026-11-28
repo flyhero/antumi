@@ -370,6 +370,7 @@ export function createRpcHandlers(
     'agentCalls.cancel': ({ id, callId }) => profileService().cancel(id, callId),
     'agentCalls.resumeCheck': ({ id, callId }) => profileService().resumeCheck(id, callId),
     'agentCalls.resume': ({ id, callId, note }) => profileService().resume(id, callId, note),
+    'agentCalls.redirect': ({ id, callId, note }) => profileService().redirect(id, callId, note),
     'squadCalls.targets': ({ id }) => teamCalls().targets(id),
     'squadCalls.dispatch': ({ id, squadId, instruction, ref, images }) => teamCalls().dispatch(id, squadId, instruction, ref, images),
     'squadCalls.list': ({ id, read }) => teamCalls().list(id, read),

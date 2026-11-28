@@ -163,7 +163,8 @@ export function ChatDock({ conversation, state, pending, tools, finishedCalls, o
   // The column not in front keeps its composer, draft and all, behind a one-line way back to it.
   const pane = useConversationPane()
   const resting = pane !== null && !pane.active
-  // A member at work for another conversation takes a message into its turn and nothing else.
+  // A member at work for another conversation takes a message into its turn, or an interruption
+  // to go on from, and nothing else.
   const managed = managedInput(conversation, Boolean(state?.steerable), useCore((s) => s.rpc?.features) ?? [])
   return (
     <div className="chat-dock">

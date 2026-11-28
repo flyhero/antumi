@@ -781,6 +781,9 @@ export const MESSAGES = {
   "AgentProfiles.parent": {"zh": "返回主会话", "en": "Back to main conversation"},
   "ManagedComposer.messageToMember": {"zh": "给成员的话", "en": "Message to the member"},
   "ManagedComposer.steerPlaceholder": {"zh": "对正在工作的成员说一句，它会在这一轮里接住{keys}", "en": "Say something to the member at work; it takes it within this turn{keys}"},
+  "ManagedComposer.redirect": {"zh": "打断并纠偏", "en": "Interrupt and redirect"},
+  "ManagedComposer.redirectPlaceholder": {"zh": "写下要成员调整的地方，它会停下手里这一步，带着这句话接着做{keys}", "en": "Say what the member should change; it stops the step it is on and goes on with this{keys}"},
+  "ManagedComposer.redirectHint": {"zh": "会打断成员正在做的这一步，已改的文件保留", "en": "Interrupts the step the member is on; files it changed are kept"},
   "ManagedComposer.steerHint": {"zh": "只插进成员正在进行的这一轮，不会另开回合", "en": "Goes into the turn the member is running; it never starts another"},
   "ManagedComposer.notTaken": {"zh": "这一轮已经结束或现在插不进去，这句话没有发送", "en": "The turn has ended or takes no message right now; this was not sent"},
   "AgentProfiles.queued": {"zh": "排队中", "en": "Queued"},
@@ -11665,6 +11668,9 @@ export const MESSAGES = {
     "zh": "它已经不在后台运行了",
     "en": "It is no longer running in the background"
   },
+  "labels.redirectNotRunning": {"zh": "成员现在没有在工作，没有可打断的回合", "en": "The member is not at work now; there is no turn to interrupt"},
+  "labels.redirectReadOnly": {"zh": "主会话现在只读，不能让会修改文件的委派接着做", "en": "The main conversation is read-only now, so a delegation that edits files cannot go on"},
+  "labels.redirectParentGone": {"zh": "主会话已不在或已归档", "en": "The main conversation is gone or archived"},
   "labels.thisAgentCannotAcceptInstructionsDuringATurn": {
     "zh": "这个 Agent 不接受回合中的追加指令，先排队吧",
     "en": "This Agent cannot accept instructions during a turn. Queue the message instead"

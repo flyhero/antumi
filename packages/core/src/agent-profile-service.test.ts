@@ -1,6 +1,6 @@
 import { DelegationDeliveryService } from './delegation-delivery-service'
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -42,6 +42,11 @@ describe('reusable agent roles and delegated work', () => {
     daemon.emit(sessionId, { type: 'assistant', uuid: `a-${sessionId}-${daemon.writes.length}`, message: { id: `m-${sessionId}-${daemon.writes.length}`, content: [{ type: 'text', text }] }, parent_tool_use_id: null })
     daemon.emit(sessionId, { type: 'result', subtype: failed ? 'error_during_execution' : 'success', is_error: failed, result: text, terminal_reason: failed ? 'error' : 'completed', duration_ms: 5 })
   }
+  // What a session was sent, as text.
+  const sent = (sessionId: string) => daemon.written(sessionId).flatMap((frame) => {
+    const message = typeof frame === 'object' && frame !== null && Reflect.get(frame, 'type') === 'user' ? Reflect.get(frame, 'message') : null
+    return message ? [String(Reflect.get(message, 'content'))] : []
+  })
   // A command the agent runs on in the background after its turn, as a dev server does.
   const background = (sessionId: string, id: string, command: string) => {
     daemon.emit(sessionId, { type: 'assistant', uuid: `a-${id}`, message: { id: `m-${id}`, content: [{ type: 'tool_use', id, name: 'Bash', input: { command, run_in_background: true } }] }, parent_tool_use_id: null })
@@ -712,6 +717,31 @@ describe('reusable agent roles and delegated work', () => {
       expect(firstMessage(call.conversationId)).toContain('second run failed')
     })
 
+    it('goes on in the same worktree when the user interrupts it to set it right', async () => {
+      const call = await profiles.dispatch(parentId, developer.id, 'Rename the module', 'wt-redirect', 'worktree')
+      await waitFor(() => store.call(call.id).state === 'running')
+      const laid = store.call(call.id).worktree!
+      const before = chats.get(call.conversationId).sessionId!
+      writeFileSync(path.join(laid.dir, 'half.txt'), 'half done')
+      await profiles.redirect(parentId, call.id, 'Keep the old name exported as an alias')
+      await waitFor(() => store.call(call.id).state === 'running')
+      const child = chats.get(call.conversationId)
+      expect(child.sessionId).not.toBe(before)
+      expect(child.projectPaths).toEqual([laid.dir])
+      // Nothing was laid out again, and nothing read as an end.
+      expect(store.call(call.id).worktree).toEqual(laid)
+      expect(readFileSync(path.join(laid.dir, 'half.txt'), 'utf8')).toBe('half done')
+      const told = sent(child.sessionId!).at(-1) ?? ''
+      expect(told).toContain('用户补充：Keep the old name exported as an alias')
+      expect(told).toContain(`分支 \`${laid.branch}\``)
+      git(laid.dir, 'add', 'half.txt'); git(laid.dir, 'commit', '-q', '-m', 'half')
+      complete(child.sessionId!, 'Renamed, alias kept')
+      await waitFor(() => store.call(call.id).delivered)
+      expect(store.call(call.id)).toMatchObject({ state: 'completed', attempt: 1, redirects: 1, worktree: { outcome: { branch: laid.branch, commits: 1, changes: 0 } } })
+      // Once ended it is as any worktree call: not taken up again.
+      await expect(profiles.redirect(parentId, call.id, 'One more')).rejects.toMatchObject({ reason: 'agent-call-redirect-not-running' })
+    })
+
     it('stays queued while the repository is busy, and fails if the caller turned dirty meanwhile', async () => {
       let busy = true
       profiles.setGitLock(async (_dirs, run) => { if (busy) throw new (await import('./rejection')).Rejection('git-busy'); return run() })
@@ -726,11 +756,6 @@ describe('reusable agent roles and delegated work', () => {
     })
   })
   describe('going on with a call that stopped short', () => {
-    // What a session was sent, as text.
-    const sent = (sessionId: string) => daemon.written(sessionId).flatMap((frame) => {
-      const message = typeof frame === 'object' && frame !== null && Reflect.get(frame, 'type') === 'user' ? Reflect.get(frame, 'message') : null
-      return message ? [String(Reflect.get(message, 'content'))] : []
-    })
     const later = () => new Promise((resolve) => setTimeout(resolve, 5))
 
     it('goes on in its own conversation, telling it what changed since and the caller what came back', async () => {
@@ -800,6 +825,72 @@ describe('reusable agent roles and delegated work', () => {
       complete(chats.get(again.conversationId).sessionId!, 'reviewed')
       await waitFor(() => store.call(again.id).state === 'completed')
       expect(profiles.resumeCheck(parentId, first.id).redoneBy).toBe(again.id)
+    })
+  })
+  describe('the user interrupting a member to set it right', () => {
+    it('stops it and has it go on in its own conversation with what they said, handing nothing back in between', async () => {
+      const call = await profiles.dispatch(parentId, reviewer.id, 'Review the module')
+      await waitFor(() => store.call(call.id).state === 'running')
+      const before = chats.get(call.conversationId).sessionId!
+      const redirected = await profiles.redirect(parentId, call.id, '  别看 generated 目录  ')
+      expect(redirected).toMatchObject({ state: 'queued', attempt: 1, redirects: 1, delivered: false, result: null, error: null, endedAt: null,
+        resumedFrom: { state: 'cancelled', redirected: true, note: '别看 generated 目录', turnsSince: 0 } })
+      expect(chats.get(call.conversationId).sessionId).toBeNull()
+      await waitFor(() => store.call(call.id).state === 'running')
+      const child = chats.get(call.conversationId)
+      expect(child.sessionId).not.toBe(before)
+      const told = sent(child.sessionId!).at(-1) ?? ''
+      expect(told).toContain('用户打断了你正在做的这一步')
+      expect(told).toContain('用户补充：别看 generated 目录')
+      expect(told).toContain('Review the module')
+      expect(told).not.toContain('被取消')
+      // The caller heard nothing of it: no result came back, cancelled or otherwise.
+      expect(chats.messages(parentId).filter((message) => message.eventKey.includes('agent-result:'))).toEqual([])
+      expect(chats.get(parentId).sessionId).toBeNull()
+
+      complete(child.sessionId!, 'Reviewed, generated left out')
+      await waitFor(() => store.call(call.id).delivered)
+      expect(store.call(call.id)).toMatchObject({ state: 'completed', result: 'Reviewed, generated left out' })
+      await waitFor(() => chats.messages(parentId).some((message) => message.text.includes('Reviewed, generated left out')))
+      const back = chats.messages(parentId).filter((message) => message.eventKey.includes('agent-result:'))
+      expect(back).toHaveLength(1)
+      expect(back[0]?.text).toContain('用户打断并补充了说明')
+      expect(back[0]?.text).not.toContain('"state":"cancelled"')
+    })
+
+    it('does not count against the times a call may be taken up again', async () => {
+      const call = await profiles.dispatch(parentId, reviewer.id, 'Review the module')
+      await waitFor(() => store.call(call.id).state === 'running')
+      await profiles.redirect(parentId, call.id, 'Look at the tests first')
+      await waitFor(() => store.call(call.id).state === 'running')
+      await profiles.redirect(parentId, call.id, 'And the fixtures')
+      await waitFor(() => store.call(call.id).state === 'running')
+      complete(chats.get(call.conversationId).sessionId!, 'the run broke', true)
+      await waitFor(() => store.call(call.id).state === 'failed')
+      expect(store.call(call.id)).toMatchObject({ attempt: 2, redirects: 2 })
+      expect(profiles.resumeCheck(parentId, call.id).blocker).toBeNull()
+      // Three goes after a failure are still the limit, however often the user redirected it.
+      store.patchCall(call.id, { attempt: 4 })
+      expect(profiles.resumeCheck(parentId, call.id).blocker).toBeNull()
+      store.patchCall(call.id, { attempt: 5 })
+      expect(profiles.resumeCheck(parentId, call.id).blocker).toBe('limit')
+    })
+
+    it('refuses one that is not at work, another caller\'s, or one that would edit for a caller that may now only read', async () => {
+      const developer = profiles.save({ name: 'Developer', agent: 'claude', capability: 'develop' })
+      await chats.send(parentId, 'Working')
+      const queued = await profiles.dispatch(parentId, developer.id, 'Build later')
+      await expect(profiles.redirect(parentId, queued.id, 'Start with the tests')).rejects.toMatchObject({ reason: 'agent-call-redirect-not-running' })
+      expect(store.call(queued.id)).toMatchObject({ state: 'queued', attempt: 0 })
+      complete(chats.get(parentId).sessionId!, 'delegated')
+      await waitFor(() => store.call(queued.id).state === 'running')
+      const elsewhere = path.join(root, 'elsewhere'); mkdirSync(elsewhere)
+      const other = await chats.create('claude', [elsewhere], false, { permissionMode: 'ask' })
+      await expect(profiles.redirect(other.id, queued.id, 'Not yours')).rejects.toMatchObject({ reason: 'agent-call-forbidden' })
+      conversations.setWorkspaceReadOnly(parentId, true)
+      await expect(profiles.redirect(parentId, queued.id, 'Start with the tests')).rejects.toMatchObject({ reason: 'agent-call-redirect-read-only' })
+      expect(store.call(queued.id)).toMatchObject({ state: 'running', attempt: 0 })
+      expect(chats.get(queued.conversationId).sessionId).not.toBeNull()
     })
   })
   describe('the user speaking to a member at work', () => {

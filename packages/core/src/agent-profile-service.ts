@@ -2,7 +2,7 @@ import type { DelegationResultSource } from './delegation-delivery-service'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { adapterOf } from './agents'
-import { AGENT_CALL_NOT_STARTED, AGENT_KINDS, agentCallOpen, agentDescriptor, agentSupportsReadOnly, forChannels, allowsChannels, canDelegate, callerReadOnly, checkResumeAgentCall, type AgentCallResumeCheck, agentReadiness, AgentCall, AgentProfile, quotaVerdict, type AgentCallWorkspace, type AgentCallWorktree, type AgentKind, type AgentProfileFields, type AgentUsage, type ChatItem, type Conversation, type DelegationQuota, type DelegationTarget, type DirectAgentCall, type Environment, type ModelProvider } from '@antumi/protocol'
+import { AGENT_CALL_NOT_STARTED, AGENT_KINDS, agentCallOpen, agentDescriptor, agentSupportsReadOnly, forChannels, allowsChannels, canDelegate, callerReadOnly, checkRedirectAgentCall, checkResumeAgentCall, type AgentCallRedirectBlocker, type AgentCallResumeCheck, agentReadiness, AgentCall, AgentProfile, quotaVerdict, type AgentCallWorkspace, type AgentCallWorktree, type AgentKind, type AgentProfileFields, type AgentUsage, type ChatItem, type Conversation, type DelegationQuota, type DelegationTarget, type DirectAgentCall, type Environment, type ModelProvider } from '@antumi/protocol'
 import type { ConversationService } from './conversation-service'
 import { AgentProfileStore } from './agent-profile-store'
 import { committedHead, describeWorktreeOutcome, isGitCheckout, layOutDelegationWorktree, readWorktreeOutcome, worktreeMemberNote } from './delegation-worktree'
@@ -370,6 +370,29 @@ export class AgentProfileService {
     })
   }
 
+  // The user interrupts a member at work to set it right: its agent is stopped and the call goes
+  // straight back to the queue, to go on in its own conversation with what they said, as a call
+  // taken up again does. One step, never through cancelled, so nothing is handed back to the caller
+  // in between. A worktree member goes on too: its worktree is laid out and set up already.
+  async redirect(parentId: string, callId: string, note: string): Promise<AgentCall> {
+    return this.serially(async () => {
+      if (this.closed) throw new Rejection('core-stopping')
+      const call = this.store.call(callId)
+      if (call.parentId !== parentId) throw new Rejection('agent-call-forbidden')
+      const parent = this.lookup(parentId)
+      const blocker = checkRedirectAgentCall(call, parent && parent.archivedAt == null ? { readOnly: callerReadOnly(parent) } : null)
+        ?? (this.lookup(call.conversationId) ? null : 'not-running')
+      if (blocker) throw new Rejection(`agent-call-redirect-${blocker}`, REDIRECT_BLOCKED[blocker])
+      await this.stopChild(call)
+      const redirected = this.patch(call.id, {
+        state: 'queued', attempt: call.attempt + 1, redirects: (call.redirects ?? 0) + 1, result: null, error: null, delivered: false, waiting: null, endedAt: null,
+        resumedFrom: { state: 'cancelled', error: null, endedAt: Date.now(), turnsSince: 0, note: note.trim(), redirected: true }
+      })
+      this.tick()
+      return redirected
+    })
+  }
+
   async cancelForParent(id: string): Promise<void> {
     await this.serially(async () => {
       for (const call of this.store.calls(id)) {
@@ -651,14 +674,26 @@ const RESUME_BLOCKED: Record<NonNullable<AgentCallResumeCheck['blocker']>, strin
   gone: '这项委派的子会话已不在，请重新委派'
 }
 
+const REDIRECT_BLOCKED: Record<AgentCallRedirectBlocker, string> = {
+  'not-running': '成员现在没有在工作，没有可打断的回合',
+  'read-only': '主会话现在只读，不能让会修改文件的委派接着做',
+  'parent-gone': '主会话已不在或已归档'
+}
+
 // What a call taken up again is told: why it stopped, what may have changed since, what the user
 // added, and the task again in case its agent's session could not be kept.
 function resumePrompt(from: NonNullable<AgentCall['resumedFrom']>, task: string): string {
+  const again = '完成原任务后返回具体结果、证据和验证情况。原任务如下（备查；你还记得之前的进度就接着做，不必从头开始）：'
+  // Interrupted by the user to be set right: nothing failed, and their note is the point.
+  if (from.redirected) {
+    return ['用户打断了你正在做的这一步，要你按下面的补充调整后接着做。之前已经改动的文件都还在：先看清当前状态（比如 git 改动），被打断的那一步可能只做了一半；不要从头重做。',
+      '', `用户补充：${from.note ?? ''}`, '', again, '', task].join('\n')
+  }
   const why = from.state === 'cancelled' ? '被取消' : `中断（${from.error ?? '原因不明'}）`
   const since = from.turnsSince > 0
     ? `中断后主会话又进行了 ${from.turnsSince} 轮，项目文件可能已被修改。先检查当前状态（比如 git 改动），再从中断处继续，不要覆盖别人的改动。`
     : '请从中断处继续。'
-  return [`你之前的工作${why}了。${since}`, ...(from.note ? ['', `用户补充：${from.note}`] : []), '', '完成原任务后返回具体结果、证据和验证情况。原任务如下（备查；你还记得之前的进度就接着做，不必从头开始）：', '', task].join('\n')
+  return [`你之前的工作${why}了。${since}`, ...(from.note ? ['', `用户补充：${from.note}`] : []), '', again, '', task].join('\n')
 }
 
 // Where a worktree member worked and what it left, for the caller to merge.
@@ -676,7 +711,7 @@ function resumedNote(call: AgentCall) {
   return { resumed: {
     attempt: call.attempt + 1, instruction: call.instruction.slice(0, 500),
     stoppedAt: from.endedAt ? new Date(from.endedAt).toLocaleString('zh-CN', { hour12: false }) : null,
-    stoppedBecause: from.state === 'cancelled' ? '已取消' : from.error, turnsSince: from.turnsSince, note: from.note
+    stoppedBecause: from.redirected ? '用户打断并补充了说明' : from.state === 'cancelled' ? '已取消' : from.error, turnsSince: from.turnsSince, note: from.note
   } }
 }
 

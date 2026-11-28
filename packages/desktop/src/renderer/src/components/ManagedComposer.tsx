@@ -17,8 +17,9 @@ function refusal(error: unknown): string {
 }
 
 // The one thing the user says to a member at work for another conversation: a message into the
-// turn it runs. Either send key does it, as there is no other way for it to go. Refused (the turn
-// just ended, say), the words stay in the input with the reason under them.
+// turn it runs, or, where its agent takes none, an interruption it goes on from with what they
+// wrote. Either send key does it, as there is no other way for it to go. Refused (the turn just
+// ended, say), the words stay in the input with the reason under them.
 export function ManagedComposer({ conversation, way }: { conversation: Conversation; way: ManagedInput }) {
   const { id } = conversation
   const draftKey = `managed:${id}`
@@ -33,7 +34,9 @@ export function ManagedComposer({ conversation, way }: { conversation: Conversat
     setBusy(true)
     setFailed(null)
     try {
-      await rpc.call('conversations.send', { id, text: said, steer: true })
+      const { parentConversationId, agentCallId } = conversation
+      if (way === 'redirect' && parentConversationId && agentCallId) await rpc.call('agentCalls.redirect', { id: parentConversationId, callId: agentCallId, note: said })
+      else await rpc.call('conversations.send', { id, text: said, steer: true })
       setText('')
       saveComposerDraft(draftKey, EMPTY_DRAFT)
     } catch (error) {
@@ -47,7 +50,7 @@ export function ManagedComposer({ conversation, way }: { conversation: Conversat
       <textarea
         className="chat-input"
         aria-label={t('ManagedComposer.messageToMember')}
-        placeholder={t('ManagedComposer.steerPlaceholder', { keys: sendKey ? `（${sendKey}）` : '' })}
+        placeholder={t(way === 'redirect' ? 'ManagedComposer.redirectPlaceholder' : 'ManagedComposer.steerPlaceholder', { keys: sendKey ? `（${sendKey}）` : '' })}
         value={text}
         readOnly={busy}
         onChange={(event) => {
@@ -62,9 +65,9 @@ export function ManagedComposer({ conversation, way }: { conversation: Conversat
         }}
       />
       <div className="chat-options">
-        <span className="chat-options-note managed-composer-note" role="status" data-failed={failed ? true : undefined}>{failed ?? t('ManagedComposer.steerHint')}</span>
+        <span className="chat-options-note managed-composer-note" role="status" data-failed={failed ? true : undefined}>{failed ?? t(way === 'redirect' ? 'ManagedComposer.redirectHint' : 'ManagedComposer.steerHint')}</span>
         <span className="chat-dock-spacer" />
-        <button type="button" className="button ghost chat-steer-button" disabled={busy || !said} onClick={() => void send()}>{t('ChatComposer.insertNow')}</button>
+        <button type="button" className="button ghost chat-steer-button" disabled={busy || !said} onClick={() => void send()}>{t(way === 'redirect' ? 'ManagedComposer.redirect' : 'ChatComposer.insertNow')}</button>
       </div>
     </div>
   )

@@ -174,5 +174,6 @@ export const AgentCallResumeCheck = z.object({
 export type AgentCallResumeCheck = z.infer<typeof AgentCallResumeCheck>
 
 export const AGENT_CALL_TOOLS = {
-  list: 'antumi_agent_list', dispatch: 'antumi_agent_dispatch', status: 'antumi_agent_status', cancel: 'antumi_agent_cancel', resume: 'antumi_agent_resume'
+  list: 'antumi_agent_list', dispatch: 'antumi_agent_dispatch', status: 'antumi_agent_status', cancel: 'antumi_agent_cancel', resume: 'antumi_agent_resume',
+  steer: 'antumi_agent_steer'
 } as const

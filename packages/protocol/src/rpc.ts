@@ -175,7 +175,7 @@ export const CORE_FEATURES = ['provider-selection-v2', 'deferred-workspace', 'ch
 // discussion-formats: discussions.create takes a format other than the round table (Discussion.format, DiscussionPost.stage).
 // discussion-format-suggest: discussions.suggestFormat.
 // agent-call-resume: agentCalls.resume and agentCalls.resumeCheck, AgentCall.attempt and resumedFrom, the antumi_agent_resume tool.
-// managed-steer: conversations.send with steer alone goes into the running turn of a delegation's or a squad's member, and never starts one (AgentDescriptor.capabilities.managedSteer).
+// managed-steer: conversations.send with steer alone goes into the running turn of a delegation's or a squad's member, and never starts one (AgentDescriptor.capabilities.managedSteer); agentCalls.steer does the same for the caller's agent, through the antumi_agent_steer tool.
 // delegation-chat: conversations.send, conversations.continue and tasks.resumeChat go through while a delegated member edits directories the conversation shares, the message carrying a note for its agent (delegationWritingMessage); what core sends by itself is still refused with agent-call-writing.
 // agent-call-redirect: agentCalls.redirect interrupts a member at work and has it go on in its own conversation with the user's note, never ending the call (AgentCall.redirects, resumedFrom.redirected).
 // delegation-worktree: agentCalls.dispatch takes workspace; a developing member may work in a worktree of its own (AgentCall.workspace, AgentCall.worktree, ManagedWorktree.agentCall).
@@ -240,6 +240,9 @@ export const rpcMethods = {
   // the user adds; and, before that, what going on would mean. Needs agent-call-resume.
   'agentCalls.resumeCheck': { params: ConversationRef.extend({ callId: z.string().uuid() }), result: AgentCallResumeCheck },
   'agentCalls.resume': { params: ConversationRef.extend({ callId: z.string().uuid(), note: z.string().trim().max(4000).optional() }), result: AgentCall },
+  // The caller passing a word on to its member at work: into the turn the member runs, as the
+  // user's own message there goes, or refused with the reason. Needs managed-steer.
+  'agentCalls.steer': { params: ConversationRef.extend({ callId: z.string().uuid(), text: z.string().trim().min(1).max(4000) }), result: Ok },
   // Interrupts a member at work and puts its call back in the queue to go on, in the same
   // conversation, with the user's note: one step, so the caller is never told it was cancelled.
   // Needs agent-call-redirect.

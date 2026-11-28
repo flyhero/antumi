@@ -9,7 +9,10 @@ const argumentsFor = {
   dispatchInWorktree: dispatchArguments.extend({ workspace: AgentCallWorkspace.optional() }),
   status: z.object({}),
   cancel: z.object({ callId: z.string().uuid() }),
-  resume: z.object({ callId: z.string().uuid() })
+  resume: z.object({ callId: z.string().uuid() }),
+  steer: z.object({ callId: z.string().uuid(), text: z.string().trim().min(1).max(4000) }),
+  // On a core that takes a member up again in one step; an older one has no such step.
+  steerOrInterrupt: z.object({ callId: z.string().uuid(), text: z.string().trim().min(1).max(4000), interrupt: z.boolean().optional() })
 }
 // The quota as an agent reads it: the window's name, how much is used, and a local clock for its reset.
 function quotaSummary(quota: DelegationQuota) {
@@ -43,18 +46,29 @@ const descriptions = {
   workspace: 'workspace 默认 shared：成员直接在主会话的目录里改，同目录的开发委派排队。worktree：成员在从当前提交拉出的独立 worktree 和分支上做，几个这样的委派可以并行，主会话也不用等；适合跨很多目录、彼此不重叠的机械性改动。要求主会话只有一个可写项目、是 Git 仓库、没有未提交的改动（未跟踪文件也算）。成员结束时把工作提交到自己的分支，结果里带分支名和提交数，由你合并并在合并后重新验证。每个 worktree 都要跑项目的 setup（可能装依赖），小改动不值得。',
   status: '查看当前会话的委派记录、状态和结果。不要反复轮询，结果会自动投递；在这里已看到的完成结果不会再投递。',
   cancel: '取消当前会话的一项委派，停止其 Agent 和归属命令，保留工作记录和文件。',
-  resume: '让一项失败或被取消的委派在它原来的子会话里接着做，保留它之前的进度，结果像新委派一样自动送回，并标明是续跑。因中断、额度或报错失败的委派，优先续跑而不是重新委派；已完成、没启动成功或已续跑 3 次的不能续跑。不接受新的任务描述：任务有变化时重新委派。'
+  resume: '让一项失败或被取消的委派在它原来的子会话里接着做，保留它之前的进度，结果像新委派一样自动送回，并标明是续跑。因中断、额度或报错失败的委派，优先续跑而不是重新委派；已完成、没启动成功或已续跑 3 次的不能续跑。不接受新的任务描述：任务有变化时重新委派。',
+  steer: '把用户的一句纠偏或补充转达给正在工作的委派成员，比如用户说「让它别动某个目录」。这句话插进成员正在进行的这一轮，它在这一轮里接住，委派照常完成、结果照常送回。成员的 Agent 不支持插话、成员还没开始或这一轮已经结束时，不会发送，并返回原因。只转达纠偏和补充，不用它下达新任务：任务变了就取消后重新委派。',
+  interrupt: '被拒绝后确实需要立刻纠正时，带 interrupt: true 重试：打断成员正在做的这一步，让它在原来的子会话里带着这句话接着做，已改的文件保留，委派不会被取消，结果仍自动送回。打断会丢掉成员这一步做到一半的工作，所以只在插不进去时用。'
 }
 // The error the project's untrusted setup gives, as an agent is told of it: the user allows it in settings.
 const untrusted = (error: unknown) => error instanceof Error && 'reason' in error && error.reason === 'project-config-untrusted'
   ? `项目 ${error.message} 的 setup 命令还没确认，请用户到设置 → 项目确认后再派 worktree 委派` : null
-// features: what the core serves, read when the tools are made; a worktree member needs delegation-worktree.
+const reasonOf = (error: unknown) => error instanceof Error ? error.message : String(error)
+// features: what the core serves, read when the tools are made; a worktree member needs
+// delegation-worktree, a word passed on to a member managed-steer, and interrupting it agent-call-redirect.
 export function agentToolsOverCore(withCore: <T>(action: (rpc: RpcConnection) => Promise<T>) => Promise<T>, id: string, features: readonly string[] = []) {
   const worktrees = features.includes('delegation-worktree')
-  return (['list', 'dispatch', 'status', 'cancel', 'resume'] as const).map((kind) => ({
-    spec: { name: AGENT_CALL_TOOLS[kind], description: kind === 'dispatch' && worktrees ? `${descriptions.dispatch}${descriptions.workspace}` : descriptions[kind],
-      inputSchema: z.toJSONSchema(kind === 'dispatch' && worktrees ? argumentsFor.dispatchInWorktree : argumentsFor[kind]),
-      annotations: { readOnlyHint: kind === 'list' || kind === 'status', destructiveHint: false, idempotentHint: true, openWorldHint: false } },
+  const steers = features.includes('managed-steer')
+  const redirects = features.includes('agent-call-redirect')
+  const describe = (kind: keyof typeof AGENT_CALL_TOOLS) => kind === 'dispatch' && worktrees ? `${descriptions.dispatch}${descriptions.workspace}`
+    : kind === 'steer' && redirects ? `${descriptions.steer}${descriptions.interrupt}` : descriptions[kind]
+  const schema = (kind: keyof typeof AGENT_CALL_TOOLS) => kind === 'dispatch' && worktrees ? argumentsFor.dispatchInWorktree
+    : kind === 'steer' && redirects ? argumentsFor.steerOrInterrupt : argumentsFor[kind]
+  return ([...(['list', 'dispatch', 'status', 'cancel', 'resume'] as const), ...(steers ? ['steer' as const] : [])]).map((kind) => ({
+    spec: { name: AGENT_CALL_TOOLS[kind], description: describe(kind),
+      inputSchema: z.toJSONSchema(schema(kind)),
+      // Passing a word on twice says it twice.
+      annotations: { readOnlyHint: kind === 'list' || kind === 'status', destructiveHint: false, idempotentHint: kind !== 'steer', openWorldHint: false } },
     run: async (raw: Record<string, unknown>) => {
       try {
         let result: unknown
@@ -71,6 +85,18 @@ export function agentToolsOverCore(withCore: <T>(action: (rpc: RpcConnection) =>
         }
         else if (kind === 'status') result = await withCore((rpc) => rpc.call('agentCalls.list', { id, read: true }))
         else if (kind === 'cancel') result = await withCore((rpc) => rpc.call('agentCalls.cancel', { id, ...argumentsFor.cancel.parse(raw) }))
+        else if (kind === 'steer') {
+          const { callId, text, interrupt } = argumentsFor.steerOrInterrupt.parse(raw)
+          if (interrupt && !redirects) throw new Error('这个 core 不支持打断成员，请不传 interrupt')
+          if (interrupt) result = await withCore((rpc) => rpc.call('agentCalls.redirect', { id, callId, note: text }))
+          else {
+            // Refused, the reason goes back as core gives it, with the one way left where there is one.
+            await withCore((rpc) => rpc.call('agentCalls.steer', { id, callId, text })).catch((error: unknown) => {
+              throw new Error(`${reasonOf(error)}${redirects ? '\n这句话没有送到成员。确实需要立刻纠正时，可以带 interrupt: true 重试，打断它正在做的这一步并带着这句话接着做。' : ''}`)
+            })
+            result = { ok: true, detail: '已送进成员正在进行的这一轮；委派照常完成，结果会自动送回' }
+          }
+        }
         else result = await withCore((rpc) => rpc.call('agentCalls.resume', { id, ...argumentsFor.resume.parse(raw) }))
         return { content: [{ type: 'text' as const, text: JSON.stringify(result) }], isError: false }
       } catch (error) {

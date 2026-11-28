@@ -977,6 +977,27 @@ describe('reusable agent roles and delegated work', () => {
       expect(store.call(call.id)).toMatchObject({ state: 'completed', result: 'Reviewed the module and the migration' })
     })
 
+    it('takes the caller passing a word on to its own member at work, and to no other', async () => {
+      const developer = profiles.save({ name: 'Developer', agent: 'claude', capability: 'develop' })
+      await chats.send(parentId, 'Working')
+      const queued = await profiles.dispatch(parentId, developer.id, 'Build later')
+      // Not started yet: there is no turn to put it into.
+      await expect(profiles.steer(parentId, queued.id, 'Start with the tests')).rejects.toMatchObject({ reason: 'chat-no-steer' })
+      complete(chats.get(parentId).sessionId!, 'delegated')
+      await waitFor(() => store.call(queued.id).state === 'running')
+      const child = chats.get(queued.conversationId)
+      const elsewhere = path.join(root, 'elsewhere'); mkdirSync(elsewhere)
+      const other = await chats.create('claude', [elsewhere], false, { permissionMode: 'ask' })
+      await expect(profiles.steer(other.id, queued.id, 'Not yours')).rejects.toMatchObject({ reason: 'agent-call-forbidden' })
+      await profiles.steer(parentId, queued.id, 'Leave the generated files alone')
+      expect(sent(child.sessionId!).at(-1)).toBe('Leave the generated files alone')
+      expect(chats.chatPage(child.id).items.filter((item) => item.kind === 'user').at(-1)).toMatchObject({ text: 'Leave the generated files alone', steer: true })
+      complete(child.sessionId!, 'Built, generated files untouched')
+      await waitFor(() => store.call(queued.id).delivered)
+      expect(store.call(queued.id)).toMatchObject({ state: 'completed', result: 'Built, generated files untouched', attempt: 0 })
+      await expect(profiles.steer(parentId, queued.id, 'One more thing')).rejects.toMatchObject({ reason: 'agent-call-managed' })
+    })
+
     it('refuses a message for a call that was cancelled, writing nothing to its agent', async () => {
       const call = await profiles.dispatch(parentId, reviewer.id, 'Review the module')
       await waitFor(() => store.call(call.id).state === 'running')

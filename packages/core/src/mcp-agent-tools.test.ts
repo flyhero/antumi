@@ -76,4 +76,55 @@ describe('agent delegation MCP', () => {
     expect((await older.run({ agent: 'codex', capability: 'develop', instruction: 'Rename', ref: 'r-2', workspace: 'worktree' })).content[0]!.text).toContain('不支持 worktree 委派')
     expect(sent.filter((frame) => frame.method === 'agentCalls.dispatch')).toHaveLength(1)
   })
+  it('passes a word on to a member at work, and interrupts it only when asked to', async () => {
+    const id = '00000001-0000-4000-8000-000000000000'
+    const callId = '00000003-0000-4000-8000-000000000000'
+    const sent: { method: string; params: unknown }[] = []
+    const profile = { id: '00000002-0000-4000-8000-000000000000', name: 'Developer', agent: 'opencode', capability: 'develop', archivedAt: null, createdAt: 0, updatedAt: 0 }
+    const redirected = { id: callId, parentId: id, conversationId: '00000004-0000-4000-8000-000000000000', profile, instruction: 'Build it', permissionMode: 'ask', readOnly: false,
+      state: 'queued', result: null, error: null, delivered: false, attempt: 1, redirects: 1, createdAt: 0, updatedAt: 0 }
+    let refuse: string | null = null
+    const client = createRpcClient((text) => {
+      const frame = z.object({ id: z.number(), method: z.string(), params: z.unknown() }).parse(JSON.parse(text))
+      sent.push(frame)
+      const refused = frame.method === 'agentCalls.steer' && refuse
+      queueMicrotask(() => client.receive(JSON.stringify(refused
+        ? { jsonrpc: '2.0', id: frame.id, error: { code: -32000, message: refused, data: { reason: 'chat-no-steer' } } }
+        : { jsonrpc: '2.0', id: frame.id, result: frame.method === 'agentCalls.steer' ? { ok: true } : redirected })))
+    })
+    const features = ['agent-profiles', 'managed-steer', 'agent-call-redirect']
+    const rpc: RpcConnection = { ...client, features, close: () => {}, closed: new Promise(() => {}) }
+    const steer = (tools: ReturnType<typeof agentToolsOverCore>) => tools.find((tool) => tool.spec.name === 'antumi_agent_steer')
+    const able = steer(agentToolsOverCore(async (action) => action(rpc), id, features))!
+    expect(JSON.stringify(able.spec.inputSchema)).toContain('"interrupt"')
+    expect(able.spec.annotations).toMatchObject({ readOnlyHint: false, idempotentHint: false })
+
+    const taken = await able.run({ callId, text: '别动 generated 目录' })
+    expect(taken.isError).toBe(false)
+    expect(sent.at(-1)).toEqual(expect.objectContaining({ method: 'agentCalls.steer', params: { id, callId, text: '别动 generated 目录' } }))
+
+    // Refused, it says why and what is left; it does not interrupt by itself.
+    refuse = 'OpenCode 不能在这类会话里接收插话'
+    const refused = await able.run({ callId, text: '别动 generated 目录' })
+    expect(refused.isError).toBe(true)
+    expect(refused.content[0]!.text).toContain('OpenCode 不能在这类会话里接收插话')
+    expect(refused.content[0]!.text).toContain('interrupt: true')
+    expect(sent.some((frame) => frame.method === 'agentCalls.redirect')).toBe(false)
+
+    const interrupted = await able.run({ callId, text: '别动 generated 目录', interrupt: true })
+    expect(interrupted.isError).toBe(false)
+    expect(JSON.parse(interrupted.content[0]!.text)).toMatchObject({ id: callId, state: 'queued', attempt: 1, redirects: 1 })
+    expect(sent.at(-1)).toEqual(expect.objectContaining({ method: 'agentCalls.redirect', params: { id, callId, note: '别动 generated 目录' } }))
+    expect((await able.run({ callId, text: '   ' })).isError).toBe(true)
+
+    // A core that steers but has no one-step interruption offers none; an older one has no tool at all.
+    const steerOnly = steer(agentToolsOverCore(async (action) => action(rpc), id, ['agent-profiles', 'managed-steer']))!
+    expect(JSON.stringify(steerOnly.spec.inputSchema)).not.toContain('"interrupt"')
+    expect(steerOnly.spec.description).not.toContain('interrupt')
+    const before = sent.length
+    expect((await steerOnly.run({ callId, text: '别动', interrupt: true })).content[0]!.text).toContain('不支持打断成员')
+    expect(sent).toHaveLength(before)
+    expect((await steerOnly.run({ callId, text: '别动' })).content[0]!.text).not.toContain('interrupt')
+    expect(steer(agentToolsOverCore(async (action) => action(rpc), id, ['agent-profiles']))).toBeUndefined()
+  })
 })

@@ -11,7 +11,7 @@ import { Rejection } from './rejection'
 import { gitTopLevel } from './workspace'
 import type { WorktreeSetup } from './worktree-setup'
 
-type Chats = Pick<ConversationService, 'get' | 'listAll' | 'create' | 'continue' | 'resumeDelegation' | 'send' | 'stop' | 'interrupt' | 'chatPage' | 'messages' | 'capacityAvailable' | 'validateStartOptions' | 'turnOver' | 'agentIdle' | 'allowsBypass' | 'steerUnsettled'>
+type Chats = Pick<ConversationService, 'get' | 'listAll' | 'create' | 'continue' | 'resumeDelegation' | 'send' | 'stop' | 'interrupt' | 'chatPage' | 'messages' | 'capacityAvailable' | 'validateStartOptions' | 'turnOver' | 'agentIdle' | 'allowsBypass' | 'steerUnsettled' | 'steer'>
 // The message each go of a call is sent as: a call taken up again is sent anew, and its turn is the
 // one after that message, not one of an earlier go.
 const refOf = (call: Pick<AgentCall, 'id' | 'attempt'>) => call.attempt > 0 ? `agent-call:${call.id}#${call.attempt}` : `agent-call:${call.id}`
@@ -381,6 +381,19 @@ export class AgentProfileService {
       })
       this.tick()
       return resumed
+    })
+  }
+
+  // The caller passes a word on to a member at work, as the user told it to: into the turn the
+  // member runs, where the user's own message in its conversation goes, or not at all.
+  async steer(parentId: string, callId: string, text: string): Promise<void> {
+    await this.serially(async () => {
+      if (this.closed) throw new Rejection('core-stopping')
+      const call = this.store.call(callId)
+      if (call.parentId !== parentId) throw new Rejection('agent-call-forbidden')
+      if (!agentCallOpen(call)) throw new Rejection('agent-call-managed', '委派已经结束')
+      if (call.state === 'queued' || call.state === 'starting' || !this.lookup(call.conversationId)) throw new Rejection('chat-no-steer', '成员还在排队或启动，没有正在进行的回合，消息没有发送')
+      await this.chats.steer(call.conversationId, text)
     })
   }
 

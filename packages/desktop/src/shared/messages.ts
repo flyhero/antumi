@@ -538,6 +538,7 @@ export const MESSAGES = {
   "antumiTools.agentStatus": {"zh": "查看委派进度", "en": "Check delegations"},
   "antumiTools.agentCancel": {"zh": "取消委派", "en": "Cancel delegation"},
   "antumiTools.agentResume": {"zh": "继续委派", "en": "Resume delegation"},
+  "antumiTools.agentSteer": {"zh": "转达给委派成员", "en": "Pass on to delegated member"},
   "antumiTools.squadRoster": {"zh": "查看团队成员", "en": "View team roster"},
   "antumiTools.squadDispatch": {"zh": "分派团队工作", "en": "Assign team work"},
   "antumiTools.squadFinish": {"zh": "提交团队成果", "en": "Submit team result"},

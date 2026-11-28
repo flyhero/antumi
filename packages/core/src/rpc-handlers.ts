@@ -9,7 +9,7 @@ import { describeProjects } from './project-choices'
 import { EMPTY_BASELINE, type SmallModelStore } from './small-model-store'
 import { GitService } from './git-service'
 import type { GitFavoriteStore } from './git-favorite-store'
-import { SourceDeliveryInfo, agentDescriptor, CORE_FEATURES, PROTOCOL_VERSION, type ChatItem, type PullRequestLink } from '@antumi/protocol'
+import { SourceDeliveryInfo, agentDescriptor, CORE_FEATURES, PROTOCOL_VERSION, type ChatItem, type PullRequestLink, type RpcParsedParams } from '@antumi/protocol'
 import packageJson from '../package.json' with { type: 'json' }
 import type { AgentRunStore } from './agent-run-store'
 import type { ChatTurnStore } from './chat-turn-store'
@@ -39,6 +39,8 @@ import type { TerminalCommandStore } from './terminal-commands'
 import type { BookmarkStore } from './bookmarks'
 import type { BrowserHistoryStore } from './browser-history'
 import type { BrowserSiteStore } from './browser-sites'
+import type { ChatAnswer } from './chat-driver'
+import type { WechatRemoteService } from './wechat-remote'
 import type { MobileService } from './mobile-service'
 import type { ChannelService } from './channel-service'
 import type { ChatCommandStore } from './chat-commands'
@@ -132,7 +134,8 @@ export function createRpcHandlers(
   channels?: ChannelService,
   squadCalls?: SquadCallService,
   writeback?: SourceWriteback,
-  agentProxy?: AgentProxyService
+  agentProxy?: AgentProxyService,
+  wechat?: WechatRemoteService
 ): RpcHandlers {
   const writer = (): SourceWriteback => {
     if (!writeback) throw new Rejection('source-writeback-unavailable')
@@ -142,7 +145,11 @@ export function createRpcHandlers(
     if (!mobile) throw new Rejection('mobile-unavailable')
     return mobile
   }
-  const hello = () => ({ protocolVersion: PROTOCOL_VERSION, serverVersion: packageJson.version, home: { path: homedir(), windows: process.platform === 'win32' }, features: CORE_FEATURES.filter((feature) => (feature !== 'agent-proxy' || Boolean(agentProxy)) && (feature !== 'agent-profiles' || Boolean(profiles)) && (feature !== 'project-star' || Boolean(projectStar)) && (feature !== 'bookmarks' || Boolean(bookmarks)) && (feature !== 'browser-history' || Boolean(browserHistory)) && (feature !== 'browser-sites' || Boolean(browserSites)) && (feature !== 'pets' || Boolean(pets)) && (feature !== 'squads' || Boolean(squads)) && (feature !== 'squad-calls' || Boolean(squadCalls)) && (!['plugins', 'plugin-recommendations', 'plugin-packages', 'plugin-pages'].includes(feature) || Boolean(plugins)) && (!['skills-library', 'skills-search', 'skills-activation'].includes(feature) || Boolean(skills)) && (feature !== 'mcp-servers' || Boolean(mcpServers)) && (feature !== 'small-model-stats' || Boolean(smallModels)) && (!['model-providers', 'model-provider-models', 'cc-switch-import'].includes(feature) || Boolean(modelProviders)) && (feature !== 'agent-accounts' || Boolean(accounts)) && (feature !== 'pull-requests' || Boolean(pullRequests)) && (feature !== 'mobile' || Boolean(mobile)) && (!['channels', 'channel-readiness', 'channel-tasks', 'channel-task-reports', 'channel-task-cards', 'channel-platform-tools'].includes(feature) || Boolean(channels)) && (feature !== 'attachment-sweep' || Boolean(attachments.sweeper)) && (!['source-writeback', 'source-writeback-lanes', 'source-writeback-per-type'].includes(feature) || Boolean(writeback))) })
+  const wechatService = (): WechatRemoteService => {
+    if (!wechat) throw new Rejection('wechat-unavailable')
+    return wechat
+  }
+  const hello = () => ({ protocolVersion: PROTOCOL_VERSION, serverVersion: packageJson.version, home: { path: homedir(), windows: process.platform === 'win32' }, features: CORE_FEATURES.filter((feature) => (feature !== 'agent-proxy' || Boolean(agentProxy)) && (feature !== 'agent-profiles' || Boolean(profiles)) && (feature !== 'project-star' || Boolean(projectStar)) && (feature !== 'bookmarks' || Boolean(bookmarks)) && (feature !== 'browser-history' || Boolean(browserHistory)) && (feature !== 'browser-sites' || Boolean(browserSites)) && (feature !== 'pets' || Boolean(pets)) && (feature !== 'squads' || Boolean(squads)) && (feature !== 'squad-calls' || Boolean(squadCalls)) && (!['plugins', 'plugin-recommendations', 'plugin-packages', 'plugin-pages'].includes(feature) || Boolean(plugins)) && (!['skills-library', 'skills-search', 'skills-activation'].includes(feature) || Boolean(skills)) && (feature !== 'mcp-servers' || Boolean(mcpServers)) && (feature !== 'small-model-stats' || Boolean(smallModels)) && (!['model-providers', 'model-provider-models', 'cc-switch-import'].includes(feature) || Boolean(modelProviders)) && (feature !== 'agent-accounts' || Boolean(accounts)) && (feature !== 'pull-requests' || Boolean(pullRequests)) && (feature !== 'mobile' || Boolean(mobile)) && (feature !== 'wechat-remote' || Boolean(wechat)) && (!['channels', 'channel-readiness', 'channel-tasks', 'channel-task-reports', 'channel-task-cards', 'channel-platform-tools'].includes(feature) || Boolean(channels)) && (feature !== 'attachment-sweep' || Boolean(attachments.sweeper)) && (!['source-writeback', 'source-writeback-lanes', 'source-writeback-per-type'].includes(feature) || Boolean(writeback))) })
   const channelService = (): ChannelService => {
     if (!channels) throw new Rejection('channels-unavailable')
     return channels
@@ -276,6 +283,64 @@ export function createRpcHandlers(
     sources.automatic?.takeover(id)
     return result
   }
+  const sendUserMessage = ({ id, text, images, queue, steer, ref, references }: RpcParsedParams<'conversations.send'>, beforeSend?: () => void) => {
+    notChannel(id)
+    return userSent(id, async () => {
+      // A delegation's or a squad's member only takes a message into the turn it is running.
+      const { parentConversationId, squadRunId } = conversations.get(id)
+      if (steer && !queue && (parentConversationId || squadRunId)) {
+        profiles?.guardUser(id)
+        squads?.guardUser(id)
+        await conversations.steer(id, text, images, ref, references)
+      } else {
+        profiles?.guardUser(id, true)
+        squads?.guardUser(id, true)
+        await conversations.send(id, text, images, queue, steer, ref, references, true, beforeSend)
+      }
+      return OK
+    })
+  }
+  const interruptUserTurn = async (id: string, check?: () => void) => {
+    check?.()
+    const child = conversations.get(id)
+    if (child.agentCallId && child.parentConversationId) { await profiles?.cancel(child.parentConversationId, child.agentCallId); return OK }
+    await profiles?.cancelForParent(id)
+    check?.()
+    const run = squads?.roster(id)
+    if (run?.leaderConversationId === id && run.state === 'running') await squads?.control(run.id, 'stop')
+    else await conversations.interrupt(id)
+    return OK
+  }
+  const respondAsUser = async (id: string, requestId: string, answer: ChatAnswer) => {
+    notChannel(id)
+    squads?.guardUser(id)
+    conversations.userAnswers(id, requestId)
+    await conversations.respond(id, requestId, answer)
+    sources.automatic?.answered(id)
+    return OK
+  }
+  const continueAsUser = (id: string, allowBypass?: boolean, skipProjectSetup?: boolean, beforeStart?: () => void) => {
+    notChannel(id)
+    return userActed(id, () => {
+      profiles?.guardUser(id, true)
+      squads?.guardUser(id, true)
+      return conversations.continue(id, allowBypass, undefined, skipProjectSetup, true, beforeStart)
+    })
+  }
+  wechat?.setActions({
+    send: (id, text, ref, check) => sendUserMessage({ id, text, ref, queue: false, steer: false }, check),
+    interrupt: interruptUserTurn,
+    resume: (id, check) => {
+      const beforeStart = () => {
+        check()
+        if (conversations.allowsBypass(id) || conversations.get(id).chatOptions?.permissionMode === 'bypass' ||
+            !conversations.stages(id).length) throw new Rejection('wechat-resume-permission')
+      }
+      beforeStart()
+      return continueAsUser(id, undefined, true, beforeStart)
+    },
+    respond: respondAsUser
+  })
   const squadService = () => {
     if (!squads) throw new Rejection('squad-unavailable')
     return squads
@@ -444,6 +509,20 @@ export function createRpcHandlers(
       if (!ownsChannelTools(connection, conversationId)) throw new Rejection('channel-tools-only', 'only a channel conversation\'s own tools may list these')
       return channelService().toolSpecs(conversationId)
     },
+    'wechatRemote.status': (_, connection) => {
+      const status = wechatService().status()
+      connection.watchingWechat = true
+      return status
+    },
+    'wechatRemote.beginPairing': () => wechatService().beginPairing(),
+    'wechatRemote.cancelPairing': ({ id }) => wechatService().cancelPairing(id),
+    'wechatRemote.submitPin': ({ id, pin }) => wechatService().submitPin(id, pin),
+    'wechatRemote.confirmPairing': ({ id, conversationId }) => wechatService().confirmPairing(id, conversationId),
+    'wechatRemote.bindConversation': ({ conversationId, retainAllowed }) => wechatService().bindConversation(conversationId, retainAllowed),
+    'wechatRemote.setConversationAccess': ({ conversationId, allowed }) => wechatService().setConversationAccess(conversationId, allowed),
+    'wechatRemote.setNotification': ({ kind, enabled }) => wechatService().setNotification(kind, enabled),
+    'wechatRemote.setEnabled': ({ enabled }) => wechatService().setEnabled(enabled),
+    'wechatRemote.remove': () => wechatService().remove(),
     'mobile.status': () => mobileService().status(),
     'mobile.setEnabled': ({ enabled }) => mobileService().setEnabled(enabled),
     'mobile.setPort': ({ port }) => mobileService().setPort(port),
@@ -622,24 +701,14 @@ export function createRpcHandlers(
     'todos.edit': ({ id, groupId, itemId, text }) => todosOf(id).edit(id, groupId, itemId, text),
     'todos.remove': ({ id, groupId, itemId }) => todosOf(id).remove(id, groupId, itemId),
     'conversations.setArchived': ({ id, archived }) => { notChannel(id); return conversations.setArchived(id, archived) },
-    'conversations.continue': ({ id, allowBypass, skipProjectSetup }) => { notChannel(id); return userActed(id, () => { profiles?.guardUser(id, true); squads?.guardUser(id, true); return conversations.continue(id, allowBypass, undefined, skipProjectSetup, true) }) },
+    'conversations.continue': ({ id, allowBypass, skipProjectSetup }) => continueAsUser(id, allowBypass, skipProjectSetup),
     'conversations.handoff': ({ id, agent, note, stopRunning, allowBypass, permissionMode, model, effort, references, images, modelProvider }) => { sources.automatic?.takeover(id); return conversations.handoff(id, agent, note, stopRunning, allowBypass, { permissionMode, model, effort, references, images, modelProvider }) },
     'conversations.fork': ({ id, stageId, itemId }) => conversations.fork(id, stageId, itemId),
     // A mode the user picks is theirs to answer for: a run nobody watched stops answering for them.
     'conversations.setModelProvider': ({ id, modelProvider }) => { notChannel(id); profiles?.guardUser(id, true); squads?.guardUser(id, true); return conversations.setModelProvider(id, modelProvider) },
     'conversations.setAccount': ({ id, account }) => { notChannel(id); profiles?.guardUser(id, true); squads?.guardUser(id, true); return conversations.setAccount(id, account) },
     'conversations.setOption': async ({ id, option, value }) => { notChannel(id); profiles?.guardUser(id, true); squads?.guardUser(id, true); if (option === 'permissionMode') conversations.attend(id); await conversations.setOption(id, option, value); return OK },
-    'conversations.send': ({ id, text, images, queue, steer, ref, references }) => { notChannel(id); return userSent(id, async () => {
-      // A delegation's or a squad's member takes one thing from the user: a message into the turn
-      // it is running, which never starts a turn of its own.
-      const { parentConversationId, squadRunId } = conversations.get(id)
-      if (steer && !queue && (parentConversationId || squadRunId)) {
-        profiles?.guardUser(id); squads?.guardUser(id)
-        await conversations.steer(id, text, images, ref, references)
-        return OK
-      }
-      profiles?.guardUser(id, true); squads?.guardUser(id, true); await conversations.send(id, text, images, queue, steer, ref, references, true); return OK
-    }) },
+    'conversations.send': (params) => sendUserMessage(params),
     'conversations.moveQueued': ({ id, ref, direction }) => { notChannel(id); conversations.moveQueued(id, ref, direction); return OK },
     'conversations.cancelQueued': ({ id, ref }) => { notChannel(id); conversations.cancelQueued(id, ref); return OK },
     'conversations.sendQueued': ({ id, ref, now }) => { notChannel(id); return userSent(id, async () => { await conversations.sendQueued(id, ref, now); return OK }) },
@@ -650,17 +719,9 @@ export function createRpcHandlers(
     },
     'conversations.retryUsageLimit': async ({ id, stageId, itemId }) => { notChannel(id); await limits.retry(id, stageId, itemId); sources.automatic?.answered(id); return OK },
     'conversations.retryTurn': async ({ id, stageId, itemId }) => { notChannel(id); await conversations.retryTurn(id, stageId, itemId); sources.automatic?.answered(id); return OK },
-    'conversations.interrupt': async ({ id }) => {
-      const child = conversations.get(id)
-      if (child.agentCallId && child.parentConversationId) { await profiles?.cancel(child.parentConversationId, child.agentCallId); return OK }
-      await profiles?.cancelForParent(id)
-      const run = squads?.roster(id)
-      if (run?.leaderConversationId === id && run.state === 'running') await squads?.control(run.id, 'stop')
-      else await conversations.interrupt(id)
-      return OK
-    },
+    'conversations.interrupt': ({ id }) => interruptUserTurn(id),
     'conversations.stopBackground': async ({ id, itemId }) => { notChannel(id); await conversations.stopBackground(id, itemId); return OK },
-    'conversations.respond': async ({ id, requestId, ...answer }) => { notChannel(id); squads?.guardUser(id); conversations.userAnswers(id, requestId); await conversations.respond(id, requestId, answer); sources.automatic?.answered(id); return OK },
+    'conversations.respond': ({ id, requestId, ...answer }) => respondAsUser(id, requestId, answer),
     // Read after subscribing, so an item that changes in between reaches the client either way.
     'conversations.watchChat': ({ id, limit }, connection) => {
       connection.watching.add(id)

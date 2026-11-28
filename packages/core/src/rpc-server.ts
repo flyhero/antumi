@@ -28,6 +28,7 @@ export type Connection = {
   readonly browsing: Set<string>
   // Conversations whose wire log this client follows (debug.wireEntries).
   readonly wiring: Set<string>
+  watchingWechat?: boolean
   // The usage window kinds this client reads, as it last named them (usage.list).
   readonly usageKinds: Set<string>
   notify<N extends RpcNotificationName>(name: N, params: RpcNotificationParams<N>): void

@@ -1,12 +1,19 @@
 import { describe, expect, it } from 'vitest'
 import { MOBILE_METHODS, MOBILE_NOTIFICATIONS, mobileMayCall } from './mobile-access'
 import { decodeChatLink, decodePairingCode, encodeChatLink, encodePairingCode, MOBILE_PROTOCOL_VERSION, MobileBridgeAddress, MobileExtraHost } from './mobile'
-import { isRpcMethod, isRpcNotificationName } from './rpc'
+import { isRpcMethod, isRpcNotificationName, rpcSchemas, type RpcMethod } from './rpc'
 
 describe('the phone allowlist', () => {
   it('names only methods and notifications that exist', () => {
     for (const method of Object.keys(MOBILE_METHODS)) expect(isRpcMethod(method), method).toBe(true)
     for (const name of MOBILE_NOTIFICATIONS) expect(isRpcNotificationName(name), name).toBe(true)
+  })
+
+  it('keeps WeChat settings and pairing notifications off the phone gateway', () => {
+    const methods = Object.keys(rpcSchemas).filter((method): method is RpcMethod => isRpcMethod(method) && method.startsWith('wechatRemote.'))
+    expect(methods).toContain('wechatRemote.confirmPairing')
+    for (const method of methods) expect(mobileMayCall(method, 'operate')).toBe(false)
+    expect(MOBILE_NOTIFICATIONS.has('wechatRemote.changed')).toBe(false)
   })
 
   it('lets a viewing phone read and nothing more, and keeps settings and terminals off every phone', () => {

@@ -383,7 +383,6 @@ claude -p --verbose --output-format stream-json --input-format stream-json --inc
 |---|---|---|
 | lobehub | 只有主人能用本机工具（判断不了就拒绝）；Markdown 转换和分段；机器人挂在 agent 上（`agentBotProviders`） | 聊天里没有按人的限额 |
 | multica | 先去重后查身份；不存内容的丢弃记录；会话隔离键和回复目标分开 | 对聊天来源没有工具限制 |
-| codeg | — | 飞书不过滤发送人；群里谁都能批审批 |
 | OpenClaw | 默认要 @、群聊白名单；只把获准的人的话给模型 | 私聊默认共用一个会话；技能市场；CVE-2026-25253 |
 | Hermes | 默认拒绝；每人一个会话；去重落盘；投递记录 | `approvers: *`；靠路径黑名单当沙箱 |
 | Claude in Slack | 上下文只含提问人自己的消息 | — |

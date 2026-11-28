@@ -101,7 +101,7 @@ export type TaskChatLaunch = TaskLaunchOptions & {
 // What a stage's start takes beyond the agent: see TaskChatLaunch; moved says the agent works
 // somewhere else than its last stage did.
 // brief: a file written for the first stage to read before anything else, sent as a handoff is.
-type StageLaunch = { byUser?: boolean; providerSwitch?: boolean; skipProjectSetup?: boolean; ref?: string; fresh?: boolean; moved?: boolean; rerouted?: boolean; planOnly?: boolean; backend?: string | null; account?: string | null; readable?: readonly string[]; fork?: ForkPoint; opening?: string; brief?: string; references?: ChatReference[]; images?: readonly ChatImage[] }
+type StageLaunch = { byUser?: boolean; beforeStart?: () => void; providerSwitch?: boolean; skipProjectSetup?: boolean; ref?: string; fresh?: boolean; moved?: boolean; rerouted?: boolean; planOnly?: boolean; backend?: string | null; account?: string | null; readable?: readonly string[]; fork?: ForkPoint; opening?: string; brief?: string; references?: ChatReference[]; images?: readonly ChatImage[] }
 // The provider session another conversation's stage ran, taken over through the turn `at` names;
 // neither null means a session the agent can fork, else the fork starts afresh.
 // latest: the point is the last the agent's session holds, so the session forked whole is the same.
@@ -985,14 +985,14 @@ export class ConversationService {
   }
 
   // Readies the agent for a message: one already up stays as it is. byUser: see setSquadGuard.
-  async continue(id: string, allowBypass?: boolean, readable?: readonly string[], skipProjectSetup = false, byUser = false): Promise<Conversation> {
+  async continue(id: string, allowBypass?: boolean, readable?: readonly string[], skipProjectSetup = false, byUser = false, beforeStart?: () => void): Promise<Conversation> {
     this.writable(id)
     const current = this.free(id)
     if (this.launching.has(id)) throw new Rejection('conversation-running')
     if (current.sessionId && this.chats.activity(id) !== null) return current
     if (allowBypass !== undefined) this.store.setChatOptions(id, { allowBypass })
     if (current.sessionId) await this.stop(id)
-    return this.start(id, current.agent, '', false, { readable, skipProjectSetup, byUser })
+    return this.start(id, current.agent, '', false, { readable, skipProjectSetup, byUser, beforeStart })
   }
 
   async resumeDelegation(id: string): Promise<Conversation> {
@@ -1338,6 +1338,7 @@ export class ConversationService {
     this.launching.set(id, { agent, opening: null, finished })
     try {
       this.changed(this.get(id))
+      launch.beforeStart?.()
       await this.prepareWorkspace(id, agent, launch.skipProjectSetup ?? false)
       const current = this.get(id)
       await this.gitGuard?.(current.projectPaths)
@@ -1416,7 +1417,7 @@ export class ConversationService {
     const stage = this.store.startStage(id, agent, providerSessionId, this.store.maxSequence(id), stageId, launch.planOnly ?? false, route, account?.id ?? null, backend)
     if (saved) await this.importHooks?.before(id, agent, saved)
     const provider = decision.kind === 'provider' ? providerLaunch(decision.route, decision.apiKey) : undefined
-    return { ...await this.startChat(current, stage, saved !== null, handoffPath === null ? null : { path: handoffPath, note, references: launch.references, images: launch.images, ref: launch.ref }, launch.readable ?? [], null, provider, account), starting: false }
+    return { ...await this.startChat(current, stage, saved !== null, handoffPath === null ? null : { path: handoffPath, note, references: launch.references, images: launch.images, ref: launch.ref }, launch.readable ?? [], null, provider, account, launch.beforeStart), starting: false }
   }
 
   // The first stage of a fork: the source's session taken over through the fork point, where the
@@ -1460,7 +1461,8 @@ export class ConversationService {
     // The model provider the stage runs on, with its key; the stage's route says which.
     provider?: ProviderLaunch,
     // The agent account it runs on otherwise; the stage's account says which.
-    account?: AccountLaunch | null
+    account?: AccountLaunch | null,
+    beforeStart?: () => void
   ): Promise<Conversation> {
     const { id } = current
     const { agent } = stage
@@ -1547,7 +1549,10 @@ export class ConversationService {
         if (unsetEnv.length) throw new Rejection('daemon-outdated', '当前运行的 Antumi 后台版本过旧，无法安全隔离环境变量，请重启后台后重试')
       }
       // Locked down, it gets none of the daemon's own environment either (the user's keys and tokens).
-      const spawned = await agentCliAccess.use(agent, () => this.daemon.request(locked ? 'spawnPipeClean' : 'spawnPipe', { agent, command: command.command, args: command.args, cwd: current.workspacePath, env: { ...env, [PROCESS_OWNER_ENV]: processOwner({ kind: 'conversation', id }) }, ...(unsetEnv.length ? { unsetEnv } : {}) }))
+      const spawned = await agentCliAccess.use(agent, () => {
+        beforeStart?.()
+        return this.daemon.request(locked ? 'spawnPipeClean' : 'spawnPipe', { agent, command: command.command, args: command.args, cwd: current.workspacePath, env: { ...env, [PROCESS_OWNER_ENV]: processOwner({ kind: 'conversation', id }) }, ...(unsetEnv.length ? { unsetEnv } : {}) })
+      })
       sessionId = spawned.sessionId
       this.launches.set(sessionId, { ...launched, at: Date.now() })
       this.preparing.delete(stage.id)
@@ -2011,15 +2016,15 @@ export class ConversationService {
 
   // A retry may resume in a new stage; its ref still names the original message. byUser: the user
   // sent it themselves, see setSquadGuard.
-  async send(id: string, text: string, imageIds: readonly string[] = [], queue = false, steer = false, ref?: string, references?: ChatReference[], byUser = false): Promise<void> {
+  async send(id: string, text: string, imageIds: readonly string[] = [], queue = false, steer = false, ref?: string, references?: ChatReference[], byUser = false, beforeSend?: () => void): Promise<void> {
     const conversation = this.writable(id)
     if (this.providerSwitches.has(id)) throw new Rejection('chat-busy')
     if (this.preparingOf(conversation)) throw new Rejection('conversation-preparing', 'the issue is still being fetched')
     const writing = this.squadGuard?.(conversation, byUser) ?? null
     if (adapterOf(conversation.agent).turns?.serialized) {
-      return this.serially(id, () => this.sendNow(id, text, imageIds, { queue, steer, writing }, ref, references))
+      return this.serially(id, () => this.sendNow(id, text, imageIds, { queue, steer, writing, beforeSend }, ref, references))
     }
-    return this.sendNow(id, text, imageIds, { queue, steer, writing }, ref, references)
+    return this.sendNow(id, text, imageIds, { queue, steer, writing, beforeSend }, ref, references)
   }
 
   // The user's message into the turn a conversation another one manages is running (a delegation's
@@ -2036,7 +2041,7 @@ export class ConversationService {
 
   // strict: into the running turn or not at all. writing: the members editing the directories it
   // shares, which the message tells its agent of.
-  private async sendNow(id: string, text: string, imageIds: readonly string[], how: { queue?: boolean; steer?: boolean; strict?: boolean; writing?: string[] | null }, ref?: string, references?: ChatReference[]): Promise<void> {
+  private async sendNow(id: string, text: string, imageIds: readonly string[], how: { queue?: boolean; steer?: boolean; strict?: boolean; writing?: string[] | null; beforeSend?: () => void }, ref?: string, references?: ChatReference[]): Promise<void> {
     this.gitSending.set(id, (this.gitSending.get(id) ?? 0) + 1)
     try {
       await this.gitGuard?.(this.get(id).projectPaths)
@@ -2046,6 +2051,7 @@ export class ConversationService {
       const message = how.writing?.length ? delegationWritingMessage(how.writing, switched) : switched
       const images = await this.chatImages(imageIds)
       const placed = chatReferencesFor(text, message, references)
+      how.beforeSend?.()
       if (how.strict) await this.chats.steerInto(id, message, images, ref, placed)
       else await this.chats.send(id, message, images, how.queue, how.steer, ref, placed)
       if (note) this.store.setSwitchedBranches(id, {})
@@ -2359,6 +2365,15 @@ export class ConversationService {
     void this.respond(conversationId, requestId, answer).then(after).catch((error: unknown) => {
       this.wire?.record(conversationId, stageId, [{ dir: 'note', text: JSON.stringify({ event: 'unattended-answer-failed', requestId, error: error instanceof Error ? error.message : String(error) }) }])
     })
+  }
+
+  pendingRemoteRequest(id: string, stageId: string, requestId: string): Extract<ChatItem, { kind: 'approval' | 'question' }> | null {
+    const conversation = this.get(id)
+    const stage = this.store.activeStage(id)
+    if (!conversation.sessionId || stage?.id !== stageId) return null
+    const item = this.chats.items(this.chatStage(conversation, stage)).find((item) =>
+      (item.kind === 'approval' || item.kind === 'question') && item.requestId === requestId && item.resolution === null)
+    return item?.kind === 'approval' || item?.kind === 'question' ? item : null
   }
 
   async respond(id: string, requestId: string, answer: ChatAnswer): Promise<void> {

@@ -25,19 +25,17 @@
 | Superset 本地项目；官方文档现跳转 Paradev | 工作区使用 `⌘N`、`⌘1–9`，文件使用 `⌘P`，聊天输入使用 `⌘J`；支持修改或禁用快捷键 | 保留熟悉的工作台键位；数字键对应的对象必须稳定；不要直接照搬工作区模型 |
 | Multica 本地项目 | `⌘K` 搜索、`C` 创建事项；动作定义包含是否允许在输入区执行；处理 IME、长按和已消费事件 | 任务型动作适合局部单键；输入区、全局监听和自定义配置共用一套定义 |
 | Orca 本地项目 | 动作有作用域和终端冲突策略；低频动作可以没有默认键；旧键位有迁移记录 | 不必给每个功能分配默认键；终端透传和升级兼容是设计的一部分 |
-| codeg 本地项目 | 新建会话和终端标签共享 `Mod+T`，关闭文件和终端共享 `Mod+W`，明确登记互斥作用域 | 共享按键可以成立，但必须能解释此刻操作的对象 |
 | cmux 官方文档 | `⌘⇧P` 命令面板，工作区与内部标签分别导航，另有 Agent 收件入口和跳转未读入口 | 管理多个 Agent 需要独立的注意力导航；区分对象导航与窗格导航 |
 | VS Code 官方文档 | `⌘P` 文件、`⌘⇧P` 命令、`⌘1/2` 编辑器组；通过上下文条件控制生效范围 | 保留 Antumi 已有的文件与分屏习惯；把上下文规则作为基础能力 |
 | Linear 官方文档 | `C` 创建事项，`⌘K` 命令菜单，`/` 搜索；区分当前视图查找和跨对象搜索 | 学习任务入口和命令可发现性；聊天中的 `/` 已有用途，保持给斜杠命令 |
 
-本地调研快照：Antumi `fca4e0b`，Superset `ef5ecd085b`，Multica `b4ca5b4a2`，Orca `0b812bd698`，codeg `00d5feae`。源码工作区可能另有未提交修改，以上版本号仅用于定位基础版本。
+本地调研快照：Antumi `fca4e0b`，Superset `ef5ecd085b`，Multica `b4ca5b4a2`，Orca `0b812bd698`。源码工作区可能另有未提交修改，以上版本号仅用于定位基础版本。
 
 本地参考文件：
 
 - Superset：`apps/desktop/src/renderer/hotkeys/registry.ts`、`hooks/useHotkey/useHotkey.ts`。
 - Multica：`packages/core/shortcuts/definitions.ts`、`packages/views/layout/global-shortcuts.tsx`。
 - Orca：`src/shared/keybindings/definitions-core-1.ts`、`effective.ts`、`src/shared/window-shortcut-policy.ts`。
-- codeg：`src/lib/keyboard-shortcuts.ts`、`src/lib/terminal/shortcuts.ts`。
 
 官方来源：[Paradev 快捷键](https://docs.paradev.com/keyboard-shortcuts)、[cmux 快捷键](https://cmux.com/docs/keyboard-shortcuts)、[VS Code 默认快捷键](https://code.visualstudio.com/docs/reference/default-keybindings)、[VS Code 上下文条件](https://code.visualstudio.com/docs/configure/keybindings#_when-clause-contexts)、[Linear 创建事项](https://linear.app/docs/creating-issues)、[Linear 搜索](https://linear.app/docs/search)。
 

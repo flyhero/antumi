@@ -1,10 +1,8 @@
 import { createServer, type Server, type Socket } from 'node:net'
 
-// A SOCKS5 proxy on this machine's 127.0.0.1 whose connections are made from another machine: the
-// built-in browser's way out through a server (docs/REMOTE.md 内置浏览器), as orca's and codeg's
-// browsers go. Only CONNECT without authentication, which is all Chromium asks; the address is
-// handed on as the browser gave it, a name included, so the server resolves it and its `localhost`
-// is its own.
+// The built-in browser connects through the server using a local SOCKS5 proxy, as Orca does.
+// Chromium only needs CONNECT without authentication. The forwarded address keeps its original
+// hostname so the server resolves it, including `localhost`.
 
 export type SocksEntry = { port: number; close(): void }
 

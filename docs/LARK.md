@@ -83,7 +83,7 @@ Antumi 的技能库已经能装这两个仓库（`git clone` 后先扫 `skills/`
 | Lark 官方 OpenClaw 插件 `@larksuite/openclaw-lark` | 读资料一律用户身份，应用身份只用于发评论 | Lark 托管的 MCP（`mcp.feishu.cn` / `mcp.larksuite.com`）的 `fetch-doc`，返回 Markdown | 只有应用所有者能用，其他人得到 `permission_denied`；授权是设备码 + 群里的卡片，核对 `user_info`；token 存钥匙串，按用户加锁刷新；缺权限时自动发授权卡片 |
 | `larksuite/cli` | 每个命令声明支持的身份，`--as user\|bot`，有用户令牌优先用户 | 未公开的 `docs_ai/v1/documents/:token/fetch` | 为 Agent 设计了 `--no-wait` 先发链接、下一步再取 token 的登录 |
 
-本地的 multica、codeg、opensquilla 接了飞书或 Lark，都只收发消息，没有读资料。
+本地的 multica 和 opensquilla 接了飞书或 Lark，都只收发消息，没有读资料。
 
 ## 调研（2026-11-25）
 

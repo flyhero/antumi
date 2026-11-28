@@ -262,14 +262,14 @@ export class ChannelStore {
         id: stored.id, channelId: stored.channelId, asker: stored.asker, place: stored.place, direct: stored.direct, text: stored.text, images: stored.images.length, state: stored.state,
         refusal: stored.refusal, error: stored.error ?? null, errorReason: stored.errorReason ?? null, redacted: stored.redacted, conversationId: stored.conversationId, createdAt: stored.createdAt, startedAt: stored.startedAt, endedAt: stored.endedAt,
         totalTokens: stored.totalTokens, toolCalls: Number(row.toolCalls),
-        delivery: stored.wecom ? this.delivery(stored.id) : undefined
+        delivery: this.delivery(stored.id)
       })
     })
   }
 
   private delivery(id: string): ChannelRequest['delivery'] {
     const rows = this.db.prepare(`SELECT state, delivery_error FROM channel_outbox WHERE request_id = ?
-      AND json_extract(payload, '$.wecom.phase') IN ('final', 'extra', 'notice') ORDER BY rowid`).all(id)
+      AND op = 'post' AND COALESCE(json_extract(payload, '$.wecom.phase'), 'final') IN ('final', 'extra', 'notice') ORDER BY rowid`).all(id)
     if (!rows.length) return undefined
     const sent = rows.filter((row) => row.state === 'sent').length
     const total = rows.length
@@ -313,21 +313,37 @@ export class ChannelStore {
 
   // What is still to be posted, oldest first, whether or not its time has come: the order holds.
   pendingOutbox(): OutboxRow[] {
-    return this.db.prepare('SELECT * FROM channel_outbox WHERE state IN (\'pending\', \'sending\') ORDER BY created_at, rowid').all().flatMap((row) => {
-      let payload: OutboxPayload
-      try { payload = OutboxPayload.parse(JSON.parse(String(row.payload))) } catch { return [] }
-      const op = OutboxOp.safeParse(row.op)
-      if (!op.success) return []
-      return [{ id: String(row.id), channelId: String(row.channel_id), requestId: row.request_id == null ? null : String(row.request_id), reportId: row.report_id == null ? null : String(row.report_id), op: op.data, payload, attempts: Number(row.attempts), nextAt: Number(row.next_at), createdAt: Number(row.created_at) }]
+    return this.db.prepare("SELECT * FROM channel_outbox WHERE state IN ('pending', 'sending') ORDER BY created_at, rowid").all().flatMap((row) => {
+      const job = this.outboxRow(row)
+      return job ? [job] : []
     })
+  }
+
+  sendingOutbox(id: string): OutboxRow | null {
+    const row = this.db.prepare("SELECT * FROM channel_outbox WHERE id = ? AND state = 'sending'").get(id)
+    return row ? this.outboxRow(row) : null
+  }
+
+  private outboxRow(row: Record<string, unknown>): OutboxRow | null {
+    let payload: OutboxPayload
+    try { payload = OutboxPayload.parse(JSON.parse(String(row.payload))) } catch { return null }
+    const op = OutboxOp.safeParse(row.op)
+    if (!op.success) return null
+    return {
+      id: String(row.id), channelId: String(row.channel_id), requestId: row.request_id == null ? null : String(row.request_id),
+      reportId: row.report_id == null ? null : String(row.report_id), op: op.data, payload,
+      attempts: Number(row.attempts), nextAt: Number(row.next_at), createdAt: Number(row.created_at)
+    }
   }
 
   outboxSending(id: string): void {
     this.db.prepare("UPDATE channel_outbox SET state = 'sending' WHERE id = ?").run(id)
   }
 
-  abandonInflight(): void {
-    this.db.prepare("UPDATE channel_outbox SET state = 'unknown', delivery_error = 'wecom-unconfirmed' WHERE state = 'sending'").run()
+  abandonInflight(): string[] {
+    const rows = this.db.prepare(`UPDATE channel_outbox SET state = 'unknown', delivery_error = 'channel-delivery-unconfirmed'
+      WHERE state = 'sending' RETURNING report_id`).all()
+    return [...new Set(rows.flatMap((row) => typeof row.report_id === 'string' ? [row.report_id] : []))]
   }
 
   outboxTerminal(id: string, state: 'failed' | 'unknown', error: string): void {
@@ -355,7 +371,7 @@ export class ChannelStore {
     this.db.prepare('DELETE FROM channel_events WHERE received_at < ?').run(eventsBefore)
     const old = this.db.prepare('SELECT DISTINCT conversation_id AS id FROM channel_requests WHERE created_at < ? AND conversation_id IS NOT NULL').all(requestsBefore).map((row) => String(row.id))
     this.db.prepare('DELETE FROM channel_tool_calls WHERE request_id IN (SELECT id FROM channel_requests WHERE created_at < ?)').run(requestsBefore)
-    this.db.prepare('DELETE FROM channel_outbox WHERE state != \'pending\' AND created_at < ?').run(requestsBefore)
+    this.db.prepare('DELETE FROM channel_outbox WHERE state NOT IN (\'pending\', \'sending\') AND created_at < ?').run(requestsBefore)
     this.db.prepare('DELETE FROM channel_requests WHERE created_at < ?').run(requestsBefore)
     const emptied = old.filter((id) => !this.db.prepare('SELECT 1 FROM channel_requests WHERE conversation_id = ? LIMIT 1').get(id))
     for (const id of emptied) this.db.prepare('DELETE FROM channel_threads WHERE conversation_id = ?').run(id)

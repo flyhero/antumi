@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { WebSocket } from 'ws'
 import { z } from 'zod'
 import { ATTACHMENT_CHUNK_BYTES, MAX_ATTACHMENT_BYTES } from '@antumi/protocol'
-import type { ChannelConnector, ConnectorEmit, Delivered } from './channel-connector'
+import { deliveryFailed, httpRefused, type ChannelConnector, type ConnectorEmit, type Delivered } from './channel-connector'
 import type { ChannelDelivery, ChannelEventImage, GatewayChannel } from './channel-gateway-ipc'
 
 // DingTalk over Stream mode: the connection is opened from here, so nothing listens for DingTalk
@@ -258,9 +258,10 @@ export function dingtalkConnector(channel: GatewayChannel, emit: ConnectorEmit, 
     // In a group: whom core names, or else the asker on an answer's first piece. A direct chat needs none.
     const mention = !origin.group ? null : job.mention ?? (job.thread !== null && !mentioned.has(job.thread) ? origin.staffId : null)
     const body = { msgtype: 'markdown', markdown: { title, text: mention ? `${text}\n\n@${mention}` : text }, ...(mention ? { at: { atUserIds: [mention], isAtAll: false } } : {}) }
-    const { reply, retryAfterMs } = await post(origin.webhook, body, WebhookReply)
-    if (retryAfterMs !== null || (reply && WEBHOOK_LIMITED.has(reply.errcode))) return { ok: false, platformId: null, retryAfterMs: retryAfterMs ?? 3000, error: 'ratelimited' }
-    if (reply?.errcode !== 0) return null
+    const { status, reply, retryAfterMs } = await post(origin.webhook, body, WebhookReply)
+    if (retryAfterMs !== null || (reply && WEBHOOK_LIMITED.has(reply.errcode))) return deliveryFailed('retry', 'channel-delivery-rate-limited', retryAfterMs ?? 3000)
+    if (httpRefused(status) || (status < 500 && status !== 408 && reply && reply.errcode !== 0)) return null
+    if (reply?.errcode !== 0 || status >= 500 || status === 408) return deliveryFailed('unknown', 'channel-delivery-unconfirmed')
     if (mention && !job.mention && job.thread) remember(mentioned, job.thread, true)
     return { ok: true, platformId: null, retryAfterMs: null, error: null }
   }
@@ -269,16 +270,17 @@ export function dingtalkConnector(channel: GatewayChannel, emit: ConnectorEmit, 
     const group = origin?.group ?? job.thread !== null
     // A direct chat's asker, once the message that said who it was is forgotten, is the one core names.
     const staffId = origin?.staffId ?? job.mention ?? null
-    if (!group && !staffId) return { ok: false, platformId: null, retryAfterMs: null, error: 'asker no longer known' }
+    if (!group && !staffId) return deliveryFailed('permanent', 'channel-delivery-refused')
     const robotCode = origin?.robotCode ?? appId
     const msgParam = JSON.stringify({ title, text })
     const body = group
       ? { robotCode, openConversationId: job.place, msgKey: 'sampleMarkdown', msgParam }
       : { robotCode, userIds: [staffId ?? ''], msgKey: 'sampleMarkdown', msgParam }
     const { status, reply, retryAfterMs } = await post(`${api}/v1.0/robot/${group ? 'groupMessages/send' : 'oToMessages/batchSend'}`, body, ApiReply, { 'x-acs-dingtalk-access-token': await accessToken() })
-    if (retryAfterMs !== null) return { ok: false, platformId: null, retryAfterMs, error: 'ratelimited' }
+    if (retryAfterMs !== null) return deliveryFailed('retry', 'channel-delivery-rate-limited', retryAfterMs)
     if (status === 200 && reply?.processQueryKey) return { ok: true, platformId: reply.processQueryKey, retryAfterMs: null, error: null }
-    return { ok: false, platformId: null, retryAfterMs: null, error: reply?.message ?? reply?.code ?? `http ${status}` }
+    if (httpRefused(status) || (status < 500 && status !== 408 && reply?.code)) return deliveryFailed('permanent', 'channel-delivery-refused')
+    return deliveryFailed('unknown', 'channel-delivery-unconfirmed')
   }
 
   async function picture(ref: string): Promise<Buffer> {
@@ -304,15 +306,15 @@ export function dingtalkConnector(channel: GatewayChannel, emit: ConnectorEmit, 
       for (const acknowledge of waiting?.acknowledge ?? []) acknowledge()
     },
     async deliver(job: ChannelDelivery): Promise<Delivered> {
-      if (job.op !== 'post') return { ok: false, platformId: null, retryAfterMs: null, error: 'a robot cannot react' }
+      if (job.op !== 'post') return deliveryFailed('permanent', 'channel-delivery-refused')
       try {
         const text = job.text ?? ''
         // What a notification shows of it: its first words.
         const title = text.split('\n').map((line) => line.replace(/[#>*_`[\]]/g, '').trim()).find(Boolean)?.slice(0, 40) ?? '回答'
         const origin = (job.thread ? origins.get(job.thread) : undefined) ?? origins.get(job.place)
         return (origin ? await throughWebhook(job, origin, title, text) : null) ?? await throughApi(job, origin, title, text)
-      } catch (error) {
-        return { ok: false, platformId: null, retryAfterMs: null, error: error instanceof Error ? error.message : 'failed' }
+      } catch {
+        return deliveryFailed('unknown', 'channel-delivery-unconfirmed')
       }
     },
     async fetch(requestId, refs) {

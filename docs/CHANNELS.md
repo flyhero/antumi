@@ -93,7 +93,7 @@ Slack / 飞书  ⇄(出站长连接)⇄  channel-gateway（core 的子进程）
 
 - `channel-gateway-main.ts`：入口。IPC 断开就退出，每条消息先 `safeParse`。打包成 `channel-gateway.mjs`（`desktop/scripts/bundle-backend.mjs`）。
 - `channel-gateway-ipc.ts`：两个方向的消息，zod 判别联合，两边都解析。
-- `channel-gateway.ts`：`ChannelGateway` 按 core 给的全量名单开、换、关各个接入的连接，以及连接器登记表 `CONNECTORS`。
+- `channel-gateway.ts`：`ChannelGateway` 按 core 给的全量名单开、换、关各个接入的连接，以及连接器登记表 `CONNECTORS`。 凭据或连接选项变更时替换对应连接，已替换的连接不再上报事件，尚未下载完成的图片会立即报告失败。能归属到单个接入的启动和调用错误在网关内处理，其余未捕获异常由 core 退避重启网关。
 - `channel-connector.ts`：连接器接口。
 - `channel-slack.ts`：Slack 连接器。
 - `channel-feishu.ts`：飞书连接器；`channel-feishu-frame.ts` 是长连接帧的编解码。
@@ -129,6 +129,8 @@ ChannelGatewayToCore =
 - **钉钉也是直接说的**，照官方 Node SDK（`dingtalk-stream` 的 `DWClient`）的做法：`POST /v1.0/gateway/connections/open` 带 Client ID / Secret，只订阅机器人消息（`CALLBACK` `/v1.0/im/bot/messages/get`），拿到 `endpoint` 和 `ticket` 连 WebSocket。帧是 JSON：`SYSTEM` 的 `ping` 原样回，`disconnect` 就换一条连接；`CALLBACK` 是机器人消息，ACK 是回一条带它 `messageId` 的 `{code:200}`，同样等 core 回 `accepted` 才发（钉钉一分钟没收到会重推）。建连接被拒（4xx）报 `failed` 不再重试。
 - 钉钉的消息：`conversationType` 1 是 `direct`，2 且 `isInAtList` 的是 `mention`；没有 `senderStaffId` 的（外部联系人）连接器自己 ACK。`place` 是 `conversationId`，`messageId` 和去重键是 `msgId`，`thread` 永远是 null：机器人不能在话题里回答。`tenant` 是 `senderCorpId`；单聊不带时用机器人所在组织（企业内部机器人只和自己组织的人单聊），群里不带的是外部群，记成 `external`，于是对不上。机器人所在组织（`chatbotCorpId`）从第一条消息得知，连接器在交出这条消息之前先报一次 `state` 回填 `tenant`；钉钉不给组织名，界面只写「已连接」。
 - 钉钉的回答优先走消息里带的 `sessionWebhook`（主机必须是 `oapi.dingtalk.com` / `api.dingtalk.com`，离过期不到 10 秒就不用），Markdown 消息，群里第一段末尾 @ 提问人（`at.atUserIds`），后面几段不再 @。webhook 过期、不认或回了错，就用 `oauth2/accessToken` 换的 token 走机器人消息接口：群 `robot/groupMessages/send`，单聊 `robot/oToMessages/batchSend`，模板 `sampleMarkdown`；这两个接口不能 @ 人，也没有幂等键。webhook 回 `130101`（一分钟超过 20 条）等 3 秒再发。机器人不能给消息加表情，平台描述里 `reactions` 是 false，core 不发 👀。图片用消息里的 `downloadCode` 调 `robot/messageFiles/download` 换一个签名的下载地址再取，给 core 的 `ref` 是下载码的哈希（下载码有几百个字符）。
+
+所有平台共用发送队列。交给网关前记录发送中，平台确认后记为送达。限流等明确可重试的情况按退避重试。未收到确认、发送超时或网关退出时，记录结果未确认并让出发送位置，避免重复发送或阻塞同一聊天的后续消息。渠道请求记录和任务回传记录都能看到投递结果。
 
 ## 企业微信
 
@@ -314,12 +316,12 @@ claude -p --verbose --output-format stream-json --input-format stream-json --inc
 
 ## 扩展点
 
-三个方向各有一个接口，新增时只动自己那一块：
+三个方向各有一个接口。能用现有接口表达的行为，集中改对应的扩展点：
 
 | 要加的 | 改哪里 | 不用改的 |
 |---|---|---|
 | **新的外部智能体** | descriptor 设 `lockdown`；适配器实现 `launch.lockdown`；通过 `agents/lockdown.test.ts` | `ChannelService`、网关、桌面端、协议 |
-| **新的聊天平台** | `ChannelPlatform` 枚举加一项；`protocol/src/channel-platforms.ts` 加一条平台描述；网关加 `channel-<平台>.ts`；core 加一个输出格式器 | 入站流程、额度、队列、外部会话、工具 |
+| **新的聊天平台** | `ChannelPlatform` 枚举加一项；`protocol/src/channel-platforms.ts` 加一条平台描述；网关加 `channel-<平台>.ts`；core 加一个输出格式器 | 复用入站流程、额度、队列和受限会话；回复上下文的现有限制见下文 |
 | **新的工具**（三期的固定查询） | `core/src/channel-tools/` 下加一个文件并登记 | Agent 适配器（工具名经 `lockdown.tools` 传入） |
 
 - **平台描述**（`protocol/src/channel-platforms.ts`，纯数据，core 和桌面端共用，仿 `AgentDescriptor`）：
@@ -348,6 +350,12 @@ claude -p --verbose --output-format stream-json --input-format stream-json --inc
   IPC 消息里的 `place`、`thread`、`eventKey` 对 core 都是不透明字符串，各平台自己定义含义。
 - **输出格式器**（`core/src/channel-output.ts`）：打码、路径改写、分段是共用的；只有最后一步「Markdown → 平台格式」按平台登记（`FORMATTERS satisfies Record<ChannelPlatform, …>`）。
 - **工具登记表**（`core/src/channel-tools/index.ts` 的 `CHANNEL_TOOLS`）：每个工具用 `channelTool({ name, description, inputSchema, params, run(scope, args) })` 定义，`scope` 里只有接入的项目根和 core 按权限提供的任务收集回调。MCP 侧按登记表注册，`lockdown.tools` 也从它生成，所以加工具不用碰适配器。文件仍然只能读，创建任务由接入的开关单独授权。
+
+### 回复上下文的扩展限制
+
+企业微信用入站回调的 `req_id` 回复原消息。目前公共 IPC 和发送队列的载荷有 `wecom` 字段，请求表用 `channel_requests.wecom_reply` 保存它。各平台已共用发送超时和投递结果，回复上下文仍由这套企微专用字段传递。
+
+下次接入也需要回调标识或有时效的回复地址的平台时，将回复上下文改成可选的通用字段。由连接器生成、校验并解释平台专用内容，core 只按请求保存并转交。目标聊天、回复用途、授权与投递结果仍用公共字段处理。迁移需保留已有企微请求和待发消息的路由，并用模拟平台验证新增一种回复上下文不需要再给共享 IPC、队列或请求表增加平台专用字段。
 
 ## 从消息创建任务
 

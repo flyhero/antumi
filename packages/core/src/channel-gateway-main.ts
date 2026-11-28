@@ -1,3 +1,4 @@
+import { writeSync } from 'node:fs'
 import { ChannelGateway } from './channel-gateway'
 import { CoreToChannelGateway } from './channel-gateway-ipc'
 
@@ -8,6 +9,15 @@ import { CoreToChannelGateway } from './channel-gateway-ipc'
 const gateway = new ChannelGateway((message) => { process.send?.(message) })
 
 process.on('disconnect', () => process.exit(0))
+
+function fatal(origin: string): never {
+  // Core restarts the gateway. Keep raw SDK errors out of the parent log.
+  writeSync(2, `[channel-gateway] uncaught failure (${origin}); exiting\n`)
+  process.exit(1)
+}
+
+process.on('uncaughtException', (_error, origin) => fatal(origin))
+process.on('unhandledRejection', () => fatal('unhandledRejection'))
 
 process.on('message', (raw) => {
   const parsed = CoreToChannelGateway.safeParse(raw)

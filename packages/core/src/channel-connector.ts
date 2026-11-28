@@ -1,6 +1,16 @@
 import type { ChannelDelivery, ChannelGatewayToCore, CoreToChannelGateway, DeliveryFailure, GatewayChannel, PlatformAnswer, PlatformGrant, PlatformMcpCall } from './channel-gateway-ipc'
 
-export type Delivered = { ok: boolean; platformId: string | null; retryAfterMs: number | null; error: string | null; failure?: DeliveryFailure }
+export type Delivered =
+  | { ok: true; platformId: string | null; retryAfterMs: null; error: null }
+  | { ok: false; platformId: null; retryAfterMs: number | null; error: string; failure: DeliveryFailure }
+
+export function deliveryFailed(failure: DeliveryFailure, error: string, retryAfterMs: number | null = null): Delivered {
+  return { ok: false, platformId: null, retryAfterMs, error, failure }
+}
+
+export function httpRefused(status: number): boolean {
+  return status >= 400 && status < 500 && status !== 408 && status !== 429
+}
 
 // One channel's connection to its platform, inside the gateway (docs/CHANNELS.md, 扩展点). It
 // turns the platform's messages into events and posts what it is told to; it decides nothing.

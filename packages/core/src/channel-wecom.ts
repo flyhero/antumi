@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { WSClient, type SendMarkdownMsgBody } from '@wecom/aibot-node-sdk'
 import { ATTACHMENT_CHUNK_BYTES, MAX_CHANNEL_IMAGES, type ChannelState } from '@antumi/protocol'
 import { z } from 'zod'
-import type { ChannelConnector, ConnectorEmit, Delivered } from './channel-connector'
+import { deliveryFailed as failure, type ChannelConnector, type ConnectorEmit, type Delivered } from './channel-connector'
 import type { ChannelDelivery, ChannelEventImage, GatewayChannel } from './channel-gateway-ipc'
 import { fetchWecomPicture } from './channel-wecom-media'
 
@@ -25,10 +25,6 @@ const limitErrors = new Set([45009, 45033])
 const expiredStream = new Set([846605, 846608])
 const silent = () => {}
 const sent: Delivered = { ok: true, platformId: null, retryAfterMs: null, error: null }
-
-function failure(kind: NonNullable<Delivered['failure']>, error: string, retryAfterMs: number | null = null): Delivered {
-  return { ok: false, platformId: null, retryAfterMs, error, failure: kind }
-}
 
 export function wecomConnector(channel: GatewayChannel, emit: ConnectorEmit, options: { wsUrl?: string; now?: () => number } = {}): ChannelConnector {
   const { botId = '', secret = '' } = channel.credentials
@@ -181,7 +177,7 @@ export function wecomConnector(channel: GatewayChannel, emit: ConnectorEmit, opt
       const opened = streams.get(reply.reqId)
       if (reply.phase !== 'final' || opened === undefined || now() - opened >= STREAM_MS) return ordinary()
       const result = await stream(true)
-      if (result.failure !== 'retry') streams.delete(reply.reqId)
+      if (result.ok || result.failure !== 'retry') streams.delete(reply.reqId)
       return result.error === 'wecom-stream-expired' ? ordinary() : result
     },
     async fetch(requestId, refs) {

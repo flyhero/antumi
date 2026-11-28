@@ -105,6 +105,12 @@ export class ChannelTaskReports {
         this.again = false
         for (const report of this.store.reportsIn('pending')) {
           if (this.closed) return
+          // A restart can land after enqueueing a post but before saving the report's state.
+          if (this.store.reportPosts(report.id).length) {
+            this.settle(report, 'queued', null)
+            this.posted(report.id)
+            continue
+          }
           await this.deliver(report).catch((error: unknown) => {
             console.error(`[antumi-core] reporting task ${report.taskId} to its thread failed:`, error instanceof Error ? error.message : error)
             this.settle(report, 'failed', 'compose-failed')
@@ -121,7 +127,8 @@ export class ChannelTaskReports {
     const report = this.store.report(reportId)
     if (report?.state !== 'queued') return
     const posts = this.store.reportPosts(reportId)
-    if (posts.includes('failed')) this.settle(report, 'failed', 'platform-refused')
+    if (posts.includes('unknown')) this.settle(report, 'failed', 'delivery-unconfirmed')
+    else if (posts.includes('failed')) this.settle(report, 'failed', 'platform-refused')
     else if (posts.length > 0 && posts.every((state) => state === 'sent')) this.settle(report, 'sent', null)
   }
 

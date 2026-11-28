@@ -21,7 +21,7 @@ function fakeDingtalk() {
   const frames: Record<string, unknown>[] = []
   const sockets = new Set<WebSocket>()
   const png = Buffer.from(pngBytes(8, 8))
-  const state = { webhookLimited: 0, webhookFails: 0 }
+  const state = { webhookLimited: 0, webhookFails: 0, webhookUnconfirmed: false }
   const read = (request: IncomingMessage) => new Promise<string>((resolve) => {
     let body = ''
     request.on('data', (chunk) => { body += String(chunk) })
@@ -47,6 +47,7 @@ function fakeDingtalk() {
       }
       if (path === '/v1.0/oauth2/accessToken') return json({ accessToken: 'at-1', expireIn: 7200 })
       if (path.startsWith('/robot/send')) {
+        if (state.webhookUnconfirmed) return json({ unexpected: true })
         if (state.webhookLimited > 0) { state.webhookLimited -= 1; return json({ errcode: 130101, errmsg: 'send too fast' }) }
         if (state.webhookFails > 0) { state.webhookFails -= 1; return json({ errcode: 300001, errmsg: 'session expired' }) }
         return json({ errcode: 0, errmsg: 'ok' })
@@ -194,18 +195,26 @@ describe('the DingTalk connector', () => {
     await when(() => events().length === 1)
     expect(await connector.deliver(delivery({ text: '已完成', mention: 'staff9' }))).toMatchObject({ ok: true })
     expect(await connector.deliver(delivery({ place: 'cidDm==', thread: null, text: '已开始', mention: 'staff2' }))).toMatchObject({ ok: true })
-    expect(await connector.deliver(delivery({ place: 'cidDm==', thread: null, text: '没人' }))).toMatchObject({ ok: false, error: 'asker no longer known' })
+    expect(await connector.deliver(delivery({ place: 'cidDm==', thread: null, text: '没人' }))).toMatchObject({ ok: false, failure: 'permanent', error: 'channel-delivery-refused' })
     expect(posted().map(({ path, body }) => ({ path, body }))).toEqual([
       { path: '/robot/send?session=s1', body: { msgtype: 'markdown', markdown: { title: '已完成', text: '已完成\n\n@staff9' }, at: { atUserIds: ['staff9'], isAtAll: false } } },
       { path: '/v1.0/robot/oToMessages/batchSend', body: { robotCode: 'dingapp1', userIds: ['staff2'], msgKey: 'sampleMarkdown', msgParam: JSON.stringify({ title: '已开始', text: '已开始' }) } }
     ])
   })
 
+  it('does not fall back to the robot API if the webhook reply is unrecognizable', async () => {
+    dingtalk.send(message())
+    await when(() => events().length === 1)
+    dingtalk.state.webhookUnconfirmed = true
+    expect(await connector.deliver(delivery({}))).toMatchObject({ ok: false, failure: 'unknown' })
+    expect(dingtalk.calls.some((call) => call.path === '/v1.0/robot/groupMessages/send')).toBe(false)
+  })
+
   it('waits when the webhook says it is posted to too fast', async () => {
     dingtalk.send(message())
     await when(() => events().length === 1)
     dingtalk.state.webhookLimited = 1
-    expect(await connector.deliver(delivery({}))).toEqual({ ok: false, platformId: null, retryAfterMs: 3000, error: 'ratelimited' })
+    expect(await connector.deliver(delivery({}))).toEqual({ ok: false, platformId: null, retryAfterMs: 3000, error: 'channel-delivery-rate-limited', failure: 'retry' })
   })
 
   it('fetches a picture of a question it was handed by its download code, and nothing it was not', async () => {

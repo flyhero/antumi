@@ -1,7 +1,7 @@
 import { WebSocket } from 'ws'
 import { z } from 'zod'
 import { ATTACHMENT_CHUNK_BYTES, MAX_ATTACHMENT_BYTES } from '@antumi/protocol'
-import type { ChannelConnector, ConnectorEmit, Delivered } from './channel-connector'
+import { deliveryFailed, httpRefused, type ChannelConnector, type ConnectorEmit, type Delivered } from './channel-connector'
 import { FRAME_CONTROL, FRAME_DATA, decodeFrame, encodeFrame, frameHeader, type FeishuFrame } from './channel-feishu-frame'
 import type { ChannelAction, ChannelDelivery, ChannelEventImage, GatewayChannel, PlatformAnswer, PlatformGrant, PlatformMcpCall } from './channel-gateway-ipc'
 
@@ -461,11 +461,15 @@ export function feishuConnector(channel: GatewayChannel, emit: ConnectorEmit, op
               : job.thread
                 ? await call('POST', `/open-apis/im/v1/messages/${encodeURIComponent(job.thread)}/reply`, { msg_type: type, content, reply_in_thread: true, uuid: job.outboxId }, Sent)
                 : await call('POST', '/open-apis/im/v1/messages?receive_id_type=chat_id', { receive_id: job.place, msg_type: type, content, uuid: job.outboxId }, Sent)
-        if (answer.retryAfterMs !== null) return { ok: false, platformId: null, retryAfterMs: answer.retryAfterMs, error: 'ratelimited' }
+        if (answer.retryAfterMs !== null) return deliveryFailed('retry', 'channel-delivery-rate-limited', answer.retryAfterMs)
         if (answer.reply?.code === 0) return { ok: true, platformId: answer.reply.data?.message_id ?? (job.op === 'update' ? job.target : null), retryAfterMs: null, error: null }
-        return { ok: false, platformId: null, retryAfterMs: null, error: answer.error ?? (answer.reply ? `${answer.reply.code}: ${answer.reply.msg ?? ''}` : answer.status ? `http ${answer.status}` : 'no token') }
-      } catch (error) {
-        return { ok: false, platformId: null, retryAfterMs: null, error: error instanceof Error ? error.message : 'failed' }
+        if (answer.status === 0 && !answer.error) return deliveryFailed('retry', 'channel-delivery-no-token')
+        if (answer.error || (answer.status < 500 && answer.status !== 408 && answer.code !== null && answer.code !== 0) || httpRefused(answer.status)) {
+          return deliveryFailed('permanent', 'channel-delivery-refused')
+        }
+        return deliveryFailed('unknown', 'channel-delivery-unconfirmed')
+      } catch {
+        return deliveryFailed('unknown', 'channel-delivery-unconfirmed')
       }
     },
     async fetch(requestId, refs) {

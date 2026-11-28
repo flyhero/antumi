@@ -11,6 +11,7 @@ import { MarkdownEditor } from './MarkdownEditor'
 const REASONS = {
   'channel-removed': 'TaskChannelSource.reasonChannelRemoved', 'channel-off': 'TaskChannelSource.reasonChannelOff', 'reports-off': 'TaskChannelSource.reasonReportsOff',
   'tenant-changed': 'TaskChannelSource.reasonTenantChanged', 'task-gone': 'TaskChannelSource.reasonTaskGone', 'platform-refused': 'TaskChannelSource.reasonPlatformRefused',
+  'delivery-unconfirmed': 'TaskChannelSource.reasonDeliveryUnconfirmed',
   'compose-failed': 'TaskChannelSource.reasonComposeFailed', 'cards-off': 'TaskChannelSource.reasonCardsOff', 'nothing-to-post': 'TaskChannelSource.reasonNothingToPost'
 } as const satisfies Record<string, MessageKey>
 const known = (code: string): code is keyof typeof REASONS => code in REASONS

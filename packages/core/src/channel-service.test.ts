@@ -767,19 +767,50 @@ describe('ChannelService', () => {
   it('tries a failed post again, in order, and gives up after a few', async () => {
     await ask()
     const [mark] = sent('deliver')
-    fromGateway({ type: 'delivered', outboxId: mark!.outboxId, ok: false, platformId: null, retryAfterMs: null, error: 'missing_scope' })
+    fromGateway({ type: 'delivered', outboxId: mark!.outboxId, ok: false, platformId: null, retryAfterMs: null, error: 'missing_scope', failure: 'permanent' })
     await settle()
     const [, answer] = sent('deliver')
     expect(answer).toMatchObject({ op: 'post', text: 'echo: 登录在哪实现的？' })
     for (let attempt = 0; attempt < 5; attempt++) {
       const tries = sent('deliver').filter((message) => message.outboxId === answer!.outboxId)
       expect(tries).toHaveLength(attempt + 1)
-      fromGateway({ type: 'delivered', outboxId: answer!.outboxId, ok: false, platformId: null, retryAfterMs: 1000, error: 'ratelimited' })
+      fromGateway({ type: 'delivered', outboxId: answer!.outboxId, ok: false, platformId: null, retryAfterMs: 1000, error: 'ratelimited', failure: 'retry' })
       now += 2000
       await new Promise((resolve) => setTimeout(resolve, 600))
     }
     expect(store.outboxStates()).toEqual([{ op: 'react', state: 'failed', text: null }, { op: 'post', state: 'failed', text: 'echo: 登录在哪实现的？' }])
   }, 15_000)
+
+  it('marks a stalled non-WeCom post unknown, ignores a late receipt and unblocks the next post', async () => {
+    await ask()
+    const mark = sent('deliver')[0]!
+    expect(mark.op).toBe('react')
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      fromGateway({ type: 'delivered', outboxId: mark.outboxId, ok: true, platformId: null, retryAfterMs: null, error: null })
+      const answer = sent('deliver')[1]!
+      expect(answer.op).toBe('post')
+      await vi.advanceTimersByTimeAsync(75_000)
+      fromGateway({ type: 'delivered', outboxId: answer.outboxId, ok: true, platformId: 'late', retryAfterMs: null, error: null })
+      expect(channels.requests(channel.id, null, 1).items[0]?.delivery).toMatchObject({ state: 'unknown', error: 'channel-delivery-timeout' })
+    } finally {
+      vi.useRealTimers()
+    }
+    now += 2000
+    await ask()
+    expect(sent('deliver').filter((job) => job.outboxId === sent('deliver')[1]?.outboxId)).toHaveLength(1)
+    expect(sent('deliver').at(-1)?.op).toBe('react')
+  })
+
+  it('keeps non-WeCom in-flight posts unconfirmed across a gateway restart', async () => {
+    await ask()
+    const mark = sent('deliver')[0]!
+    fromGateway({ type: 'delivered', outboxId: mark.outboxId, ok: true, platformId: null, retryAfterMs: null, error: null })
+    expect(sent('deliver').at(-1)?.op).toBe('post')
+    gatewayExit()
+    expect(channels.requests(channel.id, null, 1).items[0]?.delivery).toMatchObject({ state: 'unknown', error: 'channel-delivery-unconfirmed' })
+    expect(store.pendingOutbox()).toEqual([])
+  })
 
   it('starts the gateway again when it dies, and tells it the channels again', async () => {
     gatewayExit()

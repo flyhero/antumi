@@ -51,7 +51,8 @@ const DIRECT_IDLE_MS = 4 * 60 * 60_000
 const IMAGE_WAIT_MS = 45_000
 const OUTBOX_TICK_MS = 500
 const OUTBOX_ATTEMPTS = 5
-const WECOM_SEND_TIMEOUT_MS = 15_000
+// A token refresh and retried Feishu request may take up to four 15-second calls.
+const OUTBOX_SEND_TIMEOUT_MS = 75_000
 const WECOM_OUTBOX_MAX_AGE_MS = 60 * 60_000
 const EVENTS_KEPT_MS = 7 * 24 * 60 * 60_000
 const REQUESTS_KEPT_MS = 90 * 24 * 60 * 60_000
@@ -177,7 +178,7 @@ export class ChannelService {
   private readonly starting = new Map<string, StoredRequest>()
   // One post at a time to each place, and when the last went there.
   private readonly posting = new Map<string, string>()
-  private readonly wecomPosting = new Map<string, NodeJS.Timeout>()
+  private readonly deliveryTimers = new Map<string, NodeJS.Timeout>()
   private readonly savingBots = new Set<string>()
   private readonly posted = new Map<string, number>()
   // Who was told they may not ask, and where, on which day: once is enough.
@@ -197,7 +198,7 @@ export class ChannelService {
   // Once core is up. A question left running by the last core has no agent answering it any more.
   start(): void {
     this.started = true
-    this.store.abandonInflight()
+    this.abandonPosts()
     for (const request of this.store.requestsIn('running')) this.fail(request, 'failed', SAY.restarted)
     this.purge()
     this.purgeTimer = setInterval(() => this.purge(), PURGE_EVERY_MS)
@@ -212,7 +213,7 @@ export class ChannelService {
     for (const timer of [this.restartTimer, this.outboxTimer, this.purgeTimer]) if (timer) clearTimeout(timer)
     for (const timer of this.timeouts.values()) clearTimeout(timer)
     this.giveUpAsking('stopped')
-    this.abandonWecomPosts()
+    this.abandonPosts()
     for (const { timer } of this.fetching.values()) clearTimeout(timer)
     this.fetching.clear()
     this.link?.stop()
@@ -606,7 +607,7 @@ export class ChannelService {
     if (wanted.length === 0) {
       this.link?.stop()
       this.link = null
-      this.abandonWecomPosts()
+      this.abandonPosts()
       this.posting.clear()
       this.states.clear()
       return
@@ -627,7 +628,7 @@ export class ChannelService {
       if (this.link !== link) return
       this.link = null
       this.giveUpAsking('gateway restarted')
-      this.abandonWecomPosts()
+      this.abandonPosts()
       this.posting.clear()
       for (const [id, live] of this.states) if (live.state !== 'failed') this.states.set(id, { state: 'connecting', error: null })
       this.notify()
@@ -989,10 +990,10 @@ export class ChannelService {
     this.enqueue(channel, requestId, 'post', { ...reply, target: null, text: channelNotice(channel.platform, text), emoji: null, wecom })
   }
 
-  private abandonWecomPosts(): void {
-    for (const timer of this.wecomPosting.values()) clearTimeout(timer)
-    this.wecomPosting.clear()
-    this.store.abandonInflight()
+  private abandonPosts(): void {
+    for (const timer of this.deliveryTimers.values()) clearTimeout(timer)
+    this.deliveryTimers.clear()
+    for (const reportId of this.store.abandonInflight()) this.options.reports?.posted(reportId)
   }
 
   private enqueue(channel: StoredChannel, requestId: string | null, op: OutboxOp, payload: OutboxPayload, reportId: string | null = null): void {
@@ -1025,7 +1026,7 @@ export class ChannelService {
       }
       const where = `${row.channelId}:${row.payload.place}`
       const wecom = row.payload.wecom
-      if (wecom && !this.wecomPosting.has(row.id)) {
+      if (wecom && !this.deliveryTimers.has(row.id)) {
         const expired = now - row.createdAt >= WECOM_OUTBOX_MAX_AGE_MS
         const allowed = wecom.phase === 'denial' ? channel.enabled && channel.tenant === wecom.tenant
           : this.wecomAllowed(channel, row.payload.place, wecom)
@@ -1051,21 +1052,19 @@ export class ChannelService {
         target = card.messageId
       }
       this.posting.set(where, row.id)
-      if (wecom) {
-        this.store.outboxSending(row.id)
-        const timer = setTimeout(() => this.delivered(row.id, false, null, null, 'unknown', 'wecom-unconfirmed'), WECOM_SEND_TIMEOUT_MS)
-        timer.unref()
-        this.wecomPosting.set(row.id, timer)
-      }
+      this.store.outboxSending(row.id)
+      const timer = setTimeout(() => this.delivered(row.id, false, null, null, 'unknown', 'channel-delivery-timeout'), OUTBOX_SEND_TIMEOUT_MS)
+      timer.unref()
+      this.deliveryTimers.set(row.id, timer)
       const { cardId: _cardId, ...payload } = row.payload
       this.link.send({ type: 'deliver', outboxId: row.id, channelId: row.channelId, op: row.op, ...payload, target, mention: payload.mention ?? null, recipient: payload.recipient ?? null })
     }
   }
 
   private delivered(outboxId: string, ok: boolean, platformId: string | null, retryAfterMs: number | null, failure?: DeliveryFailure, error?: string | null): void {
-    clearTimeout(this.wecomPosting.get(outboxId))
-    this.wecomPosting.delete(outboxId)
-    const row = this.store.pendingOutbox().find((each) => each.id === outboxId)
+    clearTimeout(this.deliveryTimers.get(outboxId))
+    this.deliveryTimers.delete(outboxId)
+    const row = this.store.sendingOutbox(outboxId)
     for (const [where, id] of this.posting) if (id === outboxId) {
       this.posting.delete(where)
       // A mark on a message is not a message: only a post (or a card) makes the next one wait.
@@ -1075,13 +1074,15 @@ export class ChannelService {
     if (ok) {
       this.store.outboxSent(outboxId, platformId)
       if (row.op === 'card' && row.payload.cardId) this.store.updateCard(row.payload.cardId, { messageId: platformId }, this.now())
-    } else if (row.payload.wecom && (failure !== 'retry' || row.attempts + 1 >= OUTBOX_ATTEMPTS)) {
-      const unknown = failure === 'unknown' || failure === undefined
-      this.store.outboxTerminal(row.id, unknown ? 'unknown' : 'failed', error ?? 'wecom-unconfirmed')
-    } else if (row.op === 'react' || row.attempts + 1 >= OUTBOX_ATTEMPTS) {
-      this.store.outboxRetry(outboxId, null)
     } else {
-      this.store.outboxRetry(outboxId, this.now() + (retryAfterMs ?? Math.min(60_000, 1000 * 2 ** (row.attempts + 1))))
+      const outcome = failure ?? 'unknown'
+      if (outcome === 'retry' && row.op !== 'react' && row.attempts + 1 < OUTBOX_ATTEMPTS) {
+        this.store.outboxRetry(outboxId, this.now() + (retryAfterMs ?? Math.min(60_000, 1000 * 2 ** (row.attempts + 1))))
+      } else {
+        const unknown = outcome === 'unknown'
+        this.store.outboxTerminal(outboxId, unknown ? 'unknown' : 'failed',
+          error ?? (unknown ? 'channel-delivery-unconfirmed' : 'channel-delivery-refused'))
+      }
     }
     if (row.reportId) this.options.reports?.posted(row.reportId)
     this.pump()

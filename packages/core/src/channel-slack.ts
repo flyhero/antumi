@@ -1,7 +1,7 @@
 import { WebSocket } from 'ws'
 import { z } from 'zod'
 import { ATTACHMENT_CHUNK_BYTES, MAX_ATTACHMENT_BYTES } from '@antumi/protocol'
-import type { ChannelConnector, ConnectorEmit, Delivered } from './channel-connector'
+import { deliveryFailed, httpRefused, type ChannelConnector, type ConnectorEmit, type Delivered } from './channel-connector'
 import type { ChannelDelivery, ChannelEventImage, GatewayChannel } from './channel-gateway-ipc'
 
 // Slack over Socket Mode: the connection is opened from here, so nothing listens for Slack and
@@ -82,14 +82,14 @@ export function slackConnector(channel: GatewayChannel, emit: ConnectorEmit, opt
   const state = (next: 'connecting' | 'connected' | 'failed', error: string | null = null) =>
     emit({ type: 'state', channelId: channel.id, state: next, error, ...(team ? { tenant: team.id, tenantName: team.name, botUserId } : {}) })
 
-  async function call<T extends z.ZodType>(method: string, token: string, body: Record<string, unknown>, shape: T): Promise<{ reply: z.infer<T> | null; retryAfterMs: number | null }> {
+  async function call<T extends z.ZodType>(method: string, token: string, body: Record<string, unknown>, shape: T): Promise<{ status: number; reply: z.infer<T> | null; retryAfterMs: number | null }> {
     const response = await fetch(`${api}/${method}`, {
       method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json; charset=utf-8' },
       body: JSON.stringify(body), signal: AbortSignal.timeout(CALL_TIMEOUT_MS)
     })
-    if (response.status === 429) return { reply: null, retryAfterMs: (Number(response.headers.get('retry-after')) || 1) * 1000 }
+    if (response.status === 429) return { status: response.status, reply: null, retryAfterMs: (Number(response.headers.get('retry-after')) || 1) * 1000 }
     const parsed = shape.safeParse(await response.json().catch(() => null))
-    return { reply: parsed.success ? parsed.data : null, retryAfterMs: null }
+    return { status: response.status, reply: parsed.success ? parsed.data : null, retryAfterMs: null }
   }
 
   function again(): void {
@@ -219,16 +219,19 @@ export function slackConnector(channel: GatewayChannel, emit: ConnectorEmit, opt
       if (waiting && waiting.socket.readyState === WebSocket.OPEN) waiting.socket.send(JSON.stringify({ envelope_id: waiting.envelopeId }))
     },
     async deliver(job: ChannelDelivery): Promise<Delivered> {
-      if (job.op === 'card' || job.op === 'update') return { ok: false, platformId: null, retryAfterMs: null, error: 'unsupported' }
+      if (job.op === 'card' || job.op === 'update') return deliveryFailed('permanent', 'channel-delivery-refused')
       try {
-        const { reply, retryAfterMs } = job.op === 'react'
+        const { reply, retryAfterMs, status } = job.op === 'react'
           ? await call('reactions.add', botToken, { channel: job.place, timestamp: job.target, name: job.emoji }, Posted)
           : await call('chat.postMessage', botToken, { channel: job.place, text: `${job.mention ? `<@${job.mention}> ` : ''}${job.text ?? ''}`, ...(job.thread ? { thread_ts: job.thread } : {}), mrkdwn: true, unfurl_links: false, unfurl_media: false }, Posted)
-        if (retryAfterMs !== null) return { ok: false, platformId: null, retryAfterMs, error: 'ratelimited' }
+        if (retryAfterMs !== null) return deliveryFailed('retry', 'channel-delivery-rate-limited', retryAfterMs)
         if (reply?.ok || reply?.error === 'already_reacted') return { ok: true, platformId: reply.ts ?? null, retryAfterMs: null, error: null }
-        return { ok: false, platformId: null, retryAfterMs: null, error: reply?.error ?? 'bad reply' }
-      } catch (error) {
-        return { ok: false, platformId: null, retryAfterMs: null, error: error instanceof Error ? error.message : 'failed' }
+        if ((status < 500 && status !== 408 && reply?.ok === false) || httpRefused(status)) {
+          return deliveryFailed('permanent', 'channel-delivery-refused')
+        }
+        return deliveryFailed('unknown', 'channel-delivery-unconfirmed')
+      } catch {
+        return deliveryFailed('unknown', 'channel-delivery-unconfirmed')
       }
     },
     async fetch(requestId, refs) {

@@ -299,7 +299,7 @@ describe('the Feishu connector', () => {
 
   it('waits as long as Feishu says when told to slow down', async () => {
     feishu.state.limited = 1
-    expect(await connector.deliver(delivery({}))).toEqual({ ok: false, platformId: null, retryAfterMs: 2000, error: 'ratelimited' })
+    expect(await connector.deliver(delivery({}))).toEqual({ ok: false, platformId: null, retryAfterMs: 2000, error: 'channel-delivery-rate-limited', failure: 'retry' })
   })
 
   it('takes a fresh token once when Feishu says the one it had is stale', async () => {

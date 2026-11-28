@@ -174,6 +174,20 @@ describe('channel task reports', () => {
     expect(reports.list(task.id)[0]?.state).toBe('queued')
   })
 
+  it('does not regenerate a pending report whose existing post went unconfirmed', async () => {
+    const task = tasks.create('确认结果', { channelSource: source() })
+    move(task, 'running')
+    const [report] = reports.list(task.id)
+    const id = '88888888-8888-4888-8888-888888888888'
+    store.addOutbox({ id, channelId: CHANNEL, requestId: null, reportId: report!.id, op: 'post',
+      payload: { place: 'oc_1', thread: 'om_1', target: null, text: '已开始', emoji: null } }, now)
+    store.outboxSending(id)
+    expect(store.abandonInflight()).toEqual([report!.id])
+    await reports.drain()
+    expect(reports.list(task.id)[0]).toMatchObject({ state: 'failed', reason: 'delivery-unconfirmed' })
+    expect(store.reportPosts(report!.id)).toEqual(['unknown'])
+  })
+
   it('is sent once every post of it is, failed once one is given up on, skipped when its channel goes', async () => {
     const task = tasks.create('加导出', { channelSource: source() })
     const running = move(task, 'running')

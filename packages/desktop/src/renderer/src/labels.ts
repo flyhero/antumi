@@ -384,6 +384,13 @@ export function agoText(ms: number, now = Date.now()): string {
 
 export function channelProblemText(error: string): string {
   switch (error) {
+    case 'channel-delivery-timeout': return t('AgentChannels.deliveryTimeout')
+    case 'channel-delivery-unconfirmed': return t('AgentChannels.deliveryUnconfirmed')
+    case 'channel-delivery-refused': return t('AgentChannels.deliveryRefused')
+    case 'channel-delivery-rate-limited': return t('AgentChannels.deliveryRateLimited')
+    case 'channel-delivery-offline': return t('AgentChannels.deliveryOffline')
+    case 'channel-delivery-no-token': return t('AgentChannels.deliveryNoToken')
+    case 'channel-connector-start-failed': return t('AgentChannels.connectorStartFailed')
     case 'wecom-invalid-credentials': return t('AgentChannels.wecom-invalid-credentials')
     case 'wecom-auth-timeout': return t('AgentChannels.wecom-auth-timeout')
     case 'wecom-connection-replaced': return t('AgentChannels.wecom-connection-replaced')

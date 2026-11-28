@@ -409,6 +409,7 @@
 /* 设置 → 手机. The QR code reads dark on light in either theme: scanners want that, so the tokens
    are taken in their light form here. */
 .mobile-inline-form { display: flex; gap: 8px; align-items: center; }
+.wechat-conversation-picker { max-width: min(16rem, 45vw); }
 .mobile-port { width: 88px; }
 .mobile-push { width: 240px; }
 .mobile-hosts { width: 240px; }

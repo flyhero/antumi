@@ -490,7 +490,18 @@ export const MIGRATIONS = [
   `ALTER TABLE channel_threads ADD COLUMN bystanders INTEGER NOT NULL DEFAULT 0;`,
   `ALTER TABLE channel_requests ADD COLUMN wecom_reply TEXT;
    ALTER TABLE channel_outbox ADD COLUMN delivery_error TEXT;
-   CREATE INDEX channel_outbox_request ON channel_outbox (request_id);`
+   CREATE INDEX channel_outbox_request ON channel_outbox (request_id);`,
+  `CREATE TABLE wechat_remote_binding (
+      singleton INTEGER PRIMARY KEY CHECK (singleton = 1), credential TEXT NOT NULL, version TEXT NOT NULL,
+      conversation TEXT, enabled INTEGER NOT NULL, since INTEGER NOT NULL, cursor TEXT NOT NULL, reauth INTEGER NOT NULL
+    );
+    CREATE TABLE wechat_remote_inbox (
+      id TEXT PRIMARY KEY, received INTEGER NOT NULL, text TEXT, state TEXT NOT NULL
+    );
+    CREATE TABLE wechat_remote_outbox (
+      id TEXT PRIMARY KEY, text TEXT NOT NULL, expires INTEGER NOT NULL, due INTEGER NOT NULL,
+      state TEXT NOT NULL, approval TEXT
+    );`
 ]
 
 

@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
-import QRCode from 'qrcode'
+import { useEffect, useState } from 'react'
+import { PairingQrCode } from './PairingQrCode'
+import { WechatRemoteSettings } from './WechatRemoteSettings'
 import {
   MOBILE_BRIDGE_DEFAULT_PORT, MOBILE_DEFAULT_PORT, MOBILE_EXTRA_HOSTS_MAX, MOBILE_RELAY_DEFAULT_PORT, MobileBridgeAddress, MobileExtraHost, PROJECT_GITHUB_URL,
   type MobileAccess, type MobileBridge, type MobileDevice, type MobilePairing, type MobileRelay, type MobileRelaySetup, type MobileStatus
@@ -17,7 +18,7 @@ import { BellIcon, DownloadIcon, GlobeIcon, PhoneIcon } from './icons'
 // screens show, the paired devices, and the push address.
 
 export function useMobileSupported(): boolean {
-  return useCore((s) => s.rpc?.features.includes('mobile') ?? false)
+  return useCore((s) => s.rpc?.features.some((feature) => feature === 'mobile' || feature === 'wechat-remote') ?? false)
 }
 
 function useMobileStatus(): [MobileStatus | null, (status: MobileStatus) => void] {
@@ -44,6 +45,12 @@ function stateText(status: MobileStatus): string {
 }
 
 export function MobileSettings() {
+  const phones = useCore((s) => s.rpc?.features.includes('mobile') ?? false)
+  const wechat = useCore((s) => s.rpc?.features.includes('wechat-remote') ?? false)
+  return <>{wechat && <WechatRemoteSettings />}{phones && <AntumiMobileSettings />}</>
+}
+
+function AntumiMobileSettings() {
   const [status, setStatus] = useMobileStatus()
   if (!status) return <p className="muted">{t('MobileSettings.loading')}</p>
   const apply = (next: MobileStatus | null) => next && setStatus(next)
@@ -262,12 +269,12 @@ function RelayPanel({ relay, onStatus }: { relay: MobileRelay | null; onStatus: 
         <p className="settings-row-description">{t('MobileSettings.relayStep3Description')}</p>
         <div className="mobile-relay-codes">
           <figure>
-            <QrCode text={WIREGUARD_INSTALL_URL} label={t('MobileSettings.relayInstallCode')} />
+            <PairingQrCode text={WIREGUARD_INSTALL_URL} label={t('MobileSettings.relayInstallCode')} />
             <figcaption className="settings-row-description">{t('MobileSettings.relayInstallCode')}</figcaption>
           </figure>
           <figure>
             {showConfig && setup
-              ? <QrCode text={setup.phoneConfig} label={t('MobileSettings.relayConfigCode')} />
+              ? <PairingQrCode text={setup.phoneConfig} label={t('MobileSettings.relayConfigCode')} />
               : <button type="button" className="button mobile-relay-reveal" onClick={() => setShowConfig(true)}>{t('MobileSettings.relayShowConfig')}</button>}
             <figcaption className="settings-row-description">{t('MobileSettings.relayConfigCode')}</figcaption>
           </figure>
@@ -406,26 +413,6 @@ function ExtraHostsRow({ saved, onStatus }: { saved: readonly string[]; onStatus
   )
 }
 
-function QrCode({ text, label = t('MobileSettings.qrLabel') }: { text: string; label?: string }) {
-  // One path of squares, drawn from the code's modules: no image, no innerHTML.
-  const { size, path } = useMemo(() => {
-    const { modules } = QRCode.create(text, { errorCorrectionLevel: 'M' })
-    let d = ''
-    for (let row = 0; row < modules.size; row++) {
-      for (let column = 0; column < modules.size; column++) {
-        if (modules.get(row, column)) d += `M${column} ${row}h1v1h-1z`
-      }
-    }
-    return { size: modules.size, path: d }
-  }, [text])
-  return (
-    <svg className="mobile-qr" viewBox={`-4 -4 ${size + 8} ${size + 8}`} role="img" aria-label={label} shapeRendering="crispEdges">
-      <rect x={-4} y={-4} width={size + 8} height={size + 8} className="mobile-qr-back" />
-      <path d={path} className="mobile-qr-modules" />
-    </svg>
-  )
-}
-
 function useNow(every: number): number {
   const [now, setNow] = useState(Date.now())
   useEffect(() => {
@@ -457,7 +444,7 @@ function PairingPanel({ pairing, onStatus }: { pairing: MobilePairing; onStatus:
   }
   return (
     <div className="mobile-pairing">
-      <QrCode text={pairing.uri} />
+      <PairingQrCode text={pairing.uri} />
       <div className="mobile-pairing-text">
         <p className="settings-row-label">{t('MobileSettings.scan')}</p>
         <p className="settings-row-description">{t('MobileSettings.scanHint', { minutes: Math.floor(left / 60), seconds: String(left % 60).padStart(2, '0') })}</p>

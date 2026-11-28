@@ -1,3 +1,5 @@
+import { WechatRemoteService } from './wechat-remote'
+import { WechatRemoteStore } from './wechat-remote-store'
 import { AgentProxyService, setActiveAgentProxy } from './agent-proxy'
 import { SourceFixService } from './source-fix-service'
 import { SourceFixStore } from './source-fix-store'
@@ -136,6 +138,7 @@ const mobileStore = new MobileStore(paths.database)
 const channelStore = new ChannelStore(paths.database)
 // Made once what it needs is (profiles, accounts); the conversation events below reach it from then on.
 let channels: ChannelService | undefined
+let wechat: WechatRemoteService | undefined
 let squadCalls: SquadCallService | undefined
 let delegationDelivery: DelegationDeliveryService | undefined
 let sourceFixes: SourceFixService | undefined
@@ -186,6 +189,13 @@ const conversations = new ConversationService(
     if (event.type === 'deleted' || (event.type === 'changed' && ownsIssue(event.conversation)) ||
       (event.type === 'chatItems' && event.items.some((item) => ['state', 'user', 'turn'].includes(item.kind)) && ownsIssue(conversationsStore.get(event.conversationId)))) sourceOwnersChanged()
     if (event.type === 'changed' || event.type === 'deleted' || event.type === 'chatItems') queueMicrotask(() => { sourceInvestigations?.changed(); void sourceFixes?.tick() })
+    if (event.type === 'changed' || event.type === 'deleted' || event.type === 'chatItems') queueMicrotask(() => {
+      try {
+        if (event.type === 'changed') wechat?.conversationChanged(event.conversation.id)
+        else if (event.type === 'deleted') wechat?.conversationChanged(event.id)
+        else wechat?.observe(event.conversationId, event.items)
+      } catch { console.error('[antumi-core] WeChat remote could not process a conversation event') }
+    })
     const watchers = (id: string) => [...(server?.connections ?? [])].filter((c) => c.watching.has(id))
     // One opened for a chat platform's asker is no client's to list: nobody is told of it but the
     // channel service, and whoever watches its chat.
@@ -1055,6 +1065,19 @@ sourceFixes = new SourceFixService(new SourceFixStore(paths.database), {
   changed: (id, fix) => { sourceInvestigations?.fixChanged(id, fix); writeback.taskMoved() }
 })
 
+const wechatStore = new WechatRemoteStore(paths.database)
+wechat = new WechatRemoteService(wechatStore, {
+  credentials,
+  get: (id) => conversations.get(id),
+  items: (id) => conversations.chatPage(id).items,
+  pendingApproval: (id, stage, request) => conversations.pendingApproval(id, stage, request),
+  replyOf: (id, ref) => conversations.replyOf(id, ref),
+  sentRef: (id, ref, since) => conversations.sentRef(id, ref, since),
+  changed: (status) => server?.connections.forEach((connection) => {
+    if (connection.watchingWechat) connection.notify('wechatRemote.changed', { status })
+  })
+})
+
 const token = randomBytes(32).toString('hex')
 server = await startRpcServer({
   port: Number(process.env.ANTUMI_PORT ?? 0),
@@ -1064,12 +1087,13 @@ server = await startRpcServer({
     uploads: new AttachmentUploads(attachments),
     sweeper: attachmentSweeper
   }, terminals, worktrees, browser, awake, terminalCommands, limits, runs, turns, chatSettings, environment, schedules, chatCommands, routines, discussions, wire, () => { server?.broadcast('git.changed', {}); profiles.tick() }, squads, todos, plugins, skills, mcpServers, smallModels, projectConfigs, modelProviders, sessionImports, accounts, cliMaintenance, analytics, automation, pets, new ProjectStar(sources), profiles, bookmarks, browserHistory, sourceUpdates,
-    { store: pullRequestStore, changed: (taskId, links) => server?.broadcast('pullRequests.changed', { taskId, links }), ready: (service) => { pullRequests.current = service } }, browserSites, mobile, channels, squadCalls, writeback, agentProxy)
+    { store: pullRequestStore, changed: (taskId, links) => server?.broadcast('pullRequests.changed', { taskId, links }), ready: (service) => { pullRequests.current = service } }, browserSites, mobile, channels, squadCalls, writeback, agentProxy, wechat)
 })
 await writeCoreEndpoint({ port: server.port, token, pid: process.pid, protocolVersion: PROTOCOL_VERSION, version: packageJson.version })
 mobile.seed(conversations.list(true, true, true))
 await mobile.start(coreUrl({ port: server.port, token }))
 channels.start()
+wechat.start()
 void channelReports.drain()
 daemon.start()
 await awake.start()
@@ -1135,6 +1159,7 @@ async function shutdown(): Promise<void> {
   daemon.stop()
   mobile.stop()
   channels?.stop()
+  wechat?.stop()
   await server?.close()
   await sourceFixes?.close()
   await sourceInvestigations?.stop()
@@ -1156,6 +1181,7 @@ async function shutdown(): Promise<void> {
   browserSites.close()
   mobileStore.close()
   channelStore.close()
+  wechatStore.close()
   process.exit(0)
 }
 process.on('SIGINT', () => void shutdown())

@@ -3,12 +3,12 @@
     "name": "Antumi",
     "slug": "antumi",
     "scheme": "antumi",
-    "version": "0.1.6",
+    "version": "0.1.7",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "android": {
       "package": "app.antumi.mobile",
-      "versionCode": 7,
+      "versionCode": 8,
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.USE_BIOMETRIC"

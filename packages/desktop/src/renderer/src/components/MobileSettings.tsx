@@ -480,7 +480,7 @@ function DeviceRow({ device, onStatus }: { device: MobileDevice; onStatus: (stat
     <SettingsRow
       // The dot only adds to the words, which still say it is online.
       label={<span className="mobile-device-name">{device.online ? <span className="mobile-device-online" aria-hidden="true" /> : null}{device.name}</span>}
-      description={`${platformName(device.platform)} · ${seen} · ${t('MobileSettings.pairedAgo', { ago: agoText(device.pairedAt) })}`}
+      description={`${platformName(device.platform)} · ${seen} · ${t('MobileSettings.pairedAgo', { ago: agoText(device.pairedAt) })}${device.push ? ` · ${t('MobileSettings.devicePush')}` : ''}`}
       control={(labelId) => (
         <div className="mobile-device-controls">
           <Segmented

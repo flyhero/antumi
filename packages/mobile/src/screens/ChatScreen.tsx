@@ -19,6 +19,7 @@ import { agentName, effortName, modeName, where } from '../labels'
 import { pop, push, useNavigation } from '../navigation'
 import { canHandOff, canOperate, cancelQueued, EMPTY_DRAFT, interrupt, loadOlder, releaseQueued, restoreDelivery, submitDraft, setDraft, setOption, unwatch, uploadImage, useSession, viewsOnly, watch } from '../session'
 import { withDeliveries } from '../chat-deliveries'
+import { showingConversation } from '../push'
 import { radius, space, type, useTheme } from '../theme'
 import { handOffable } from './HandoffScreen'
 
@@ -306,6 +307,10 @@ export function ChatScreen({ id }: { id: string }) {
     if (status === 'online') void watch(id)
     return () => unwatch(id)
   }, [id, status])
+  useEffect(() => {
+    showingConversation(id)
+    return () => showingConversation(null)
+  }, [id])
   const deliveries = useSession((s) => s.deliveries[id])
   const items = useMemo(() => withDeliveries(chat?.items ?? [], deliveries ?? []), [chat?.items, deliveries])
   const request = useMemo(() => openRequest(items), [items])
@@ -313,7 +318,8 @@ export function ChatScreen({ id }: { id: string }) {
   const working = conversation ? conversationWorking(conversation) && !request : false
   const rows = useMemo(() => rowsOf(items, working, request).reverse(), [items, working, request])
   if (!conversation) {
-    return <Screen title={t('appName')} onBack={() => pop()}><Muted>{t('noConversations')}</Muted></Screen>
+    // Opened from a push, the conversation arrives once the computer is reached.
+    return <Screen title={t('appName')} onBack={() => pop()}><Muted>{t(status === 'connecting' ? 'connecting' : 'noConversations')}</Muted></Screen>
   }
   // A delegated member's chat is driven by its caller: here it is only read and its requests answered.
   const caller = conversation.parentConversationId ?? null

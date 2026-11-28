@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { MOBILE_METHODS, MOBILE_NOTIFICATIONS, mobileMayCall } from './mobile-access'
-import { decodePairingCode, encodePairingCode, MOBILE_PROTOCOL_VERSION, MobileBridgeAddress, MobileExtraHost } from './mobile'
+import { decodeChatLink, decodePairingCode, encodeChatLink, encodePairingCode, MOBILE_PROTOCOL_VERSION, MobileBridgeAddress, MobileExtraHost } from './mobile'
 import { isRpcMethod, isRpcNotificationName } from './rpc'
 
 describe('the phone allowlist', () => {
@@ -32,6 +32,14 @@ describe('pairing codes', () => {
     expect(decodePairingCode('antumi://pair?p=%%%')).toBeNull()
     const bridged = { ...code, bridges: ['ws://8.8.8.8:7830/v1/phone/AAAAAAAAAAAAAAAAAAAAAA'] }
     expect(decodePairingCode(encodePairingCode(bridged))).toEqual(bridged)
+  })
+
+  it('round-trips a chat link, and refuses anything else', () => {
+    const link = { computer: 'Ab-_09', conversation: '11111111-1111-4111-8111-111111111111' }
+    expect(decodeChatLink(encodeChatLink(link))).toEqual(link)
+    expect(decodeChatLink('antumi://chat?c=Ab')).toBeNull()
+    expect(decodeChatLink('antumi://chat?c=Ab&id=%%')).toBeNull()
+    expect(decodeChatLink(encodePairingCode({ v: MOBILE_PROTOCOL_VERSION, name: 'S', key: 'k', pairing: 'p', psk: 'x', port: 1, hosts: [] }))).toBeNull()
   })
 
   it('takes a bridge as a host, with a port when not the default, and nothing more', () => {

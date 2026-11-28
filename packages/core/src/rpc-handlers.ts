@@ -460,6 +460,8 @@ export function createRpcHandlers(
     'mobile.confirmPairing': ({ pairingId, access }) => mobileService().confirmPairing(pairingId, access),
     'mobile.setAccess': ({ deviceId, access }) => mobileService().setAccess(deviceId, access),
     'mobile.revoke': ({ deviceId }) => mobileService().revoke(deviceId),
+    'mobile.pushKey': (_params, connection) => mobileService().pushKey(connection),
+    'mobile.setPush': ({ subscription }, connection) => { mobileService().setPush(connection, subscription); return OK },
     'files.resolve': ({ conversationId, roots, path }) => files.resolve(fileScope(conversationId, roots), path),
     'files.read': ({ conversationId, roots, path }) => files.read(fileScope(conversationId, roots), path),
     'visualizations.read': ({ conversationId, stageId, path }) => {

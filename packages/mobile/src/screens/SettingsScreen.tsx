@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { ActivityIndicator, Alert, Linking, StyleSheet, Switch, Text, View } from 'react-native'
 import * as LocalAuthentication from 'expo-local-authentication'
-import { Download, Fingerprint, Info, Laptop, LogOut, RefreshCw, Shield } from 'lucide-react-native'
+import { BatteryCharging, Bell, Download, Fingerprint, Info, Laptop, LogOut, RefreshCw, Shield } from 'lucide-react-native'
 import { ListGroup, ListRow, Muted, Screen } from '../components/ui'
 import { t } from '../i18n'
 import { pop, reset } from '../navigation'
-import { computerOf, forget, setLock, useSession } from '../session'
+import { computerOf, forget, pushTurnedOff, pushTurnedOn, setLock, useSession } from '../session'
+import { openAppSettings, pushAvailable, startPush, usePush, type PushState } from '../push'
 import { radius, type, useTheme } from '../theme'
 import { checkNow, currentVersion, useUpdate, type Update } from '../updates'
 
@@ -14,6 +15,46 @@ function RowIcon({ icon: Icon, tone = 'plain' }: { icon: typeof Info; tone?: 'pl
   const color = tone === 'danger' ? theme.danger : tone === 'accent' ? theme.accent : theme.text
   const background = tone === 'danger' ? theme.dangerSoft : tone === 'accent' ? theme.accentSoft : theme.raised
   return <View style={[styles.icon, { backgroundColor: background }]}><Icon size={18} color={color} strokeWidth={1.9} /></View>
+}
+
+function pushText(state: PushState, refused: string | null): string {
+  if (refused) return refused
+  switch (state.kind) {
+    case 'off': return t('pushOff')
+    case 'pending': return t('pushPending')
+    case 'on': return t('pushOn')
+    case 'unsupported': return t('pushUnsupported')
+    case 'failed': return state.reason === 'ACTION_REQUIRED' ? t('pushActionRequired') : t('pushFailed', { reason: state.reason })
+  }
+}
+
+// Push notifications through the phone's UnifiedPush app, for whichever computer is connected.
+function PushGroup() {
+  const theme = useTheme()
+  const state = usePush((s) => s.state)
+  const [refused, setRefused] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const turn = async (on: boolean) => {
+    setBusy(true)
+    setRefused(null)
+    try {
+      if (!on) return await pushTurnedOff()
+      const why = await startPush()
+      if (why === 'no-distributor') setRefused(t('pushNoDistributor'))
+      else if (why === 'denied') setRefused(t('pushDenied'))
+      else if (why === null) await pushTurnedOn()
+    } finally {
+      setBusy(false)
+    }
+  }
+  const on = state.kind !== 'off'
+  return (
+    <ListGroup title={t('notifications')}>
+      <ListRow leading={<RowIcon icon={Bell} />} title={t('pushTitle')} subtitle={pushText(state, refused)} subtitleLines={4} chevron={false}
+        trailing={<Switch value={on} disabled={busy} onValueChange={(value) => void turn(value)} trackColor={{ true: theme.accent, false: theme.sunken }} thumbColor="#FFFFFF" />} />
+      {on ? <ListRow leading={<RowIcon icon={BatteryCharging} />} title={t('pushBackground')} subtitle={t('pushBackgroundHint')} subtitleLines={4} onPress={openAppSettings} /> : null}
+    </ListGroup>
+  )
 }
 
 export function SettingsScreen({ app }: { app: boolean }) {
@@ -52,6 +93,7 @@ export function SettingsScreen({ app }: { app: boolean }) {
         <ListRow leading={<RowIcon icon={Fingerprint} />} title={t('lockOnOpen')} subtitle={lockable === false ? t('lockUnavailable') : null} subtitleLines={3} chevron={false}
           trailing={<Switch value={settings.lock} disabled={!lockable} onValueChange={(lock) => void setLock(lock)} trackColor={{ true: theme.accent, false: theme.sunken }} thumbColor="#FFFFFF" />} />
       </ListGroup>
+      {pushAvailable() ? <PushGroup /> : null}
       {computer ? (
         <ListGroup title={t('thisComputer')}>
           <ListRow leading={<RowIcon icon={Laptop} />} title={computer.name} subtitle={computer.hosts.join(' · ')} chevron={false} />

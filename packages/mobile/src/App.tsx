@@ -7,9 +7,9 @@ import { Fingerprint } from 'lucide-react-native'
 import * as LocalAuthentication from 'expo-local-authentication'
 import { Button } from './components/ui'
 import { t } from './i18n'
-import { decodePairingCode } from '@antumi/protocol'
+import { decodeChatLink, decodePairingCode } from '@antumi/protocol'
 import { pop, push, reset, useNavigation } from './navigation'
-import { boot, unlock, useSession } from './session'
+import { boot, openComputer, unlock, useSession } from './session'
 import { restoreStatusBar } from './status-bar'
 import { checkDaily } from './updates'
 import { useTheme } from './theme'
@@ -64,9 +64,13 @@ export function App() {
   const locked = useSession((s) => s.locked)
   const theme = useTheme()
   useEffect(() => {
-    // A pairing link tapped on the phone (antumi://pair?…) opens the app on it.
+    // A pairing link tapped on the phone (antumi://pair?…) opens the app on it; a push tapped
+    // (antumi://chat?…), on its conversation, when the computer it names is paired here.
     const opened = (url: string | null | undefined) => {
-      if (url && decodePairingCode(url)) push({ name: 'pair', link: url })
+      if (!url) return
+      if (decodePairingCode(url)) return push({ name: 'pair', link: url })
+      const chat = decodeChatLink(url)
+      if (chat && openComputer(chat.computer)) reset({ name: 'chat', id: chat.conversation })
     }
     void boot().then(async () => {
       if (useSession.getState().current) reset({ name: 'conversations' })

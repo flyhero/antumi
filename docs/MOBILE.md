@@ -6,7 +6,7 @@
 
 目前只有 Android 版，不上应用商店，在 GitHub Releases 提供 APK 下载；iOS 见「分发」。
 
-不需要服务器：手机和电脑在同一个局域网，或者都连着用户自己的 Tailscale / ZeroTier 时可用；有自己的服务器时也可以经它转发（见「经自己服务器上的 Antumi 中转」和「经自己的服务器中转」）。App 关着时的提醒走 ntfy 这类推送地址（见「通知」）。不装这类工具、在外面直接连回电脑，不在范围内。
+不需要服务器：手机和电脑在同一个局域网，或者都连着用户自己的 Tailscale / ZeroTier 时可用；有自己的服务器时也可以经它转发（见「经自己服务器上的 Antumi 中转」和「经自己的服务器中转」）。App 关着时的提醒经手机上的 UnifiedPush 应用（如 ntfy）推给 App，或者发到一个 ntfy 这类推送地址（见「通知」）。不装这类工具、在外面直接连回电脑，不在范围内。
 
 ## 信任模型
 
@@ -27,7 +27,7 @@
 | 改权限模式、模型和推理强度 | 删除会话、添加任意项目路径 |
 | 在最近项目里新建会话（可选 worktree、权限模式、模型和推理强度） | 结束 Agent 进程、停后台工具 |
 | 任务看板：在最近项目里新建任务、开始、接受或标记完成、取消 | 不经局域网、Tailscale 或中转服务器的远程连接；内置地址、对所有人开放的公共中转 |
-| ntfy 推送、打开时验证指纹或面容、检查更新 | |
+| App 自己的推送（UnifiedPush）和 ntfy 推送、打开时验证指纹或面容、检查更新 | |
 
 Agent、任务和会话仍在电脑上跑，手机断开不影响它们。电脑休眠或关机时手机只能显示离线。
 
@@ -176,6 +176,7 @@ Noise 的一条传输消息最多 65535 字节，而一个附件块是 512 KiB�
 | 发消息 | `conversations.send` `cancelQueued` `sendQueued` `retryTurn`、`attachments.begin` `append` `commit` | ✓ | |
 | 会话控制 | `conversations.interrupt`（结束本轮）、`continue`、`setOption`、`handoff`（只限独立会话）、`create`（只能用最近项目）、`projects.branches`（同样只限最近项目） | ✓ | |
 | 任务 | `tasks.create`（只能用最近项目）、`start`、`move`（只到完成）、`cancel` | ✓ | |
+| 推送 | `mobile.pushKey` `mobile.setPush`（只能由手机调用，登记它自己的推送地址） | ✓ | ✓ |
 | 通知 | `conversations.changed` `deleted` `chatItems` `chatDelta`、`tasks.changed` `deleted`、`usage.changed` | ✓ | ✓ |
 
 说明：
@@ -263,10 +264,22 @@ Noise 的一条传输消息最多 65535 字节，而一个附件块是 512 KiB�
 
 ## 通知
 
-- App 处于前台时，会话列表和聊天页实时更新。App 关着时收不到，除非设置了推送地址。
+- App 处于前台时，会话列表和聊天页实时更新。App 关着时靠推送：手机自己的推送（下面的「App 推送」），或电脑上填的推送地址。
 - 「该提醒什么」的规则抽成了 `protocol/src/conversation-alerts.ts` 的 `conversationAlert`（等你确认、本轮结束、本轮结束并留了问题、Agent 意外退出），桌面端的 `noticesBetween` 改为调用它，文案由各端自己写。例程、额度等提醒仍在桌面端。
 - 推送由 core 的 `MobileService` 判断，而不是原计划的网关：core 本来就一直在线、本来就收到每次会话变化，放在网关里还得多开一个订阅连接。core 启动时先把已经在等的请求补发一次，按「会话 + 提醒种类 + 请求 ID」去重，同一条 30 秒内不重复。
 - 推送地址填 ntfy 主题地址（设置 → 手机 → 推送），core 用 HTTP POST 发一句话（如「有会话在等你确认或回答」），不带会话标题、代码或对话内容：公共 ntfy 服务器看得到推送的内容。Bark 等其他服务只要接受同样的 POST 也能用，没有单独适配。
+- 推送地址的推送带 ntfy 的 `Click` 头，点开就是 `antumi://chat?c=<电脑公钥>&id=<会话 ID>`（`protocol/src/mobile.ts` 的 `encodeChatLink`）：App 连上这台电脑并打开那个会话；电脑没在这部手机上配对过就不处理。链接里只有电脑的公钥和随机的会话 ID，不带标题或内容。手机访问没打开过（电脑还没有密钥）时不带这个头。Bark 等不认 `Click` 的服务照旧只显示那句话。
+
+### App 推送（UnifiedPush）
+
+手机设置 → 通知 → 推送通知。推送由手机上的 UnifiedPush 分发应用（ntfy 最常见，F-Droid、应用商店和 GitHub 都有，不需要 Google 服务）收下，再交给 Antumi App 解密并显示，App 关着也能收到。通知标题是会话标题，正文按提醒种类由手机用自己的语言写，点开进入那个会话。
+
+- **登记**：手机用 connector 库（`org.unifiedpush.android:connector`，本地 Expo 模块 `packages/mobile/modules/antumi-push`）向分发应用登记，每台配对过的电脑一个 instance（电脑公钥），并带上这台电脑的 VAPID 公钥（`mobile.pushKey`，私钥在 `<home>/mobile/vapid.json`，0600）。分发应用给出推送地址，connector 生成 Web Push 密钥；手机经 `mobile.setPush` 把地址和公钥交给电脑，core 按设备存在 `mobile_settings` 里（`subscriptions`）。只在连上电脑或刚打开开关时登记，分发应用之后的回复只转交，失败不会反复重试。
+- **发送**：core 在发推送地址的同一时刻，把 `{ v, c: 电脑公钥, id: 会话 ID, alert, title }` 按 RFC 8291（aes128gcm）加密给每台登记过的手机，带 RFC 8292 的 VAPID 签名（`core/src/web-push.ts`，加密对照了 RFC 8291 附录的中间值）。推送服务回 404 或 410 时删掉这个地址；手机下次连上会重新交。ntfy 服务器只看得到密文。
+- **显示**：原生服务（`AntumiPushService`）只认解密成功、电脑公钥和 instance 一致的消息；App 在前台且正看着那个会话时不弹。点通知以新任务打开 `antumi://chat?…`（旧任务带着它最初的链接，进程没了以后会用那个链接重建）。
+- **撤销与停用**：电脑上撤销设备时删掉它的地址；手机取消配对时先告诉电脑再注销那个 instance；关掉开关时注销全部并告诉当前电脑，其他电脑的旧地址之后发不到手机（分发应用丢弃）。
+- **限制**：只有 Android。刚装的 ntfy 没打开过时处于系统的停止状态，收不到登记请求，要先打开一次。小米、华为、OPPO 等系统会拦下唤醒已关闭 App 的请求，Antumi 和 ntfy 都要允许自启动、不限制省电；设置里有一行直达 App 的系统详情页。两种推送都开着时同一件事会收到两条，用 App 推送时可以清空电脑上的推送地址。
+- **验证**：在 Android 模拟器（API 36）上用 ntfy 1.25.2（F-Droid 版）和 ntfy.sh：登记后电脑拿到地址；App 进程被杀掉后推送仍弹出通知、标题正文正确；冷启动点开进入对应会话；正看着的会话不弹，别的照弹。没在小米、华为等真机上验证过后台限制。
 
 ## 分阶段
 

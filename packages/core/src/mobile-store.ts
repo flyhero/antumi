@@ -1,6 +1,6 @@
 import { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
-import { MOBILE_DEFAULT_PORT, MOBILE_EXTRA_HOSTS_MAX, MobileAccess, MobileExtraHost, MobilePlatform, MobilePort, MobilePushUrl } from '@antumi/protocol'
+import { MOBILE_DEFAULT_PORT, MOBILE_EXTRA_HOSTS_MAX, MobileAccess, MobileExtraHost, MobilePlatform, MobilePort, MobilePushSubscription, MobilePushUrl } from '@antumi/protocol'
 
 // Paired phones and the phone link's settings. Rows live in `mobile_devices` and
 // `mobile_settings`, which TaskStore's migrations create.
@@ -19,11 +19,13 @@ export const MobileSettings = z.object({
   enabled: z.boolean().catch(false),
   port: MobilePort.catch(MOBILE_DEFAULT_PORT),
   pushUrl: MobilePushUrl.nullable().catch(null),
-  extraHosts: z.array(MobileExtraHost).max(MOBILE_EXTRA_HOSTS_MAX).catch([])
+  extraHosts: z.array(MobileExtraHost).max(MOBILE_EXTRA_HOSTS_MAX).catch([]),
+  // Each phone's own push endpoint, by device id, kept here rather than in a column of its own.
+  subscriptions: z.record(z.string(), MobilePushSubscription).catch({})
 })
 export type MobileSettings = z.infer<typeof MobileSettings>
 
-const DEFAULTS: MobileSettings = { enabled: false, port: MOBILE_DEFAULT_PORT, pushUrl: null, extraHosts: [] }
+const DEFAULTS: MobileSettings = { enabled: false, port: MOBILE_DEFAULT_PORT, pushUrl: null, extraHosts: [], subscriptions: {} }
 
 const DeviceRow = z.object({
   id: z.string(),

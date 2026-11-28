@@ -501,7 +501,16 @@ export const MIGRATIONS = [
     CREATE TABLE wechat_remote_outbox (
       id TEXT PRIMARY KEY, text TEXT NOT NULL, expires INTEGER NOT NULL, due INTEGER NOT NULL,
       state TEXT NOT NULL, approval TEXT
-    );`
+    );`,
+  `ALTER TABLE wechat_remote_binding ADD COLUMN allowed TEXT NOT NULL DEFAULT '[]';
+   UPDATE wechat_remote_binding SET allowed = json_array(conversation) WHERE conversation IS NOT NULL;`,
+  `ALTER TABLE wechat_remote_binding ADD COLUMN notifications TEXT NOT NULL DEFAULT '{}';
+   ALTER TABLE wechat_remote_outbox ADD COLUMN notification TEXT;
+   UPDATE wechat_remote_outbox SET notification = CASE
+     WHEN id GLOB 'request:*' OR id GLOB 'approval:*' OR id GLOB 'question:*' THEN 'requests'
+     WHEN id GLOB 'turn:*' AND id NOT GLOB 'turn:*:turn:wechat-*'
+       THEN CASE WHEN text LIKE '对话运行失败%' THEN 'failed' ELSE 'completed' END
+   END WHERE state = 'queued';`
 ]
 
 

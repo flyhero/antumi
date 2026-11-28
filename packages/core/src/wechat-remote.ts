@@ -2,7 +2,7 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { realpathSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, isAbsolute, relative, resolve, sep } from 'node:path'
-import { canBindWechatConversation, isAntumiRequest, isHostApproval, isPlanApproval, type ChatItem, type Conversation, type WechatRemoteStatus } from '@antumi/protocol'
+import { WECHAT_MAX_CONVERSATIONS, WechatRemoteNotifications, canBindWechatConversation, isAntumiRequest, isCommandTool, isTerminalRunTool, isHostApproval, isPlanApproval, type ChatItem, type Conversation, type WechatRemoteNotification, type WechatRemoteStatus } from '@antumi/protocol'
 import type { ChatAnswer } from './chat-driver'
 import { redact, withoutMachinePaths } from './channel-output'
 import type { CredentialStore } from './credential-store'
@@ -17,28 +17,52 @@ const APPROVAL_LIFE = 5 * 60_000
 const CONTEXT_LIFE = 30 * 60_000
 const HELP = [
   '直接发文字给绑定的对话。',
-  '发送 /status 查看状态。',
+  '发送 /status 查看当前动作和待确认请求。',
+  '发送 /sessions 查看已授权对话，用 /use <编号> 切换，发送 /resume 恢复当前已停止的对话。',
   '发送 /stop 打断正在运行的轮次。',
-  '收到审批码时，只回复提醒中的一条命令，带上审批码。提问和其他审批请在桌面处理。'
+  '收到问题或审批码时，只回复提醒中的一条命令，带上对应的编号或验证码。其他请求请在桌面处理。'
 ].join('\n')
 const FILE_TOOLS = new Map([['Read', '读取文件'], ['Edit', '编辑文件'], ['Write', '写入文件']])
 
+function statusLine(conversation: Conversation): string {
+  if (conversation.starting) return '对话正在启动。'
+  if (!conversation.sessionId) return '对话已停止。发送 /resume 恢复。'
+  if (conversation.chat?.turn === 'awaiting') return '对话等待确认。'
+  if (conversation.chat?.turn !== 'running' || conversation.chat.betweenTurns) return '对话空闲，可以发送消息。'
+  const action = conversation.chat.doing
+  if (!action?.tool) return '对话正在生成回复。'
+  const { tool, title } = action
+  if (isCommandTool(tool) || isTerminalRunTool(tool)) {
+    const test = /^(?:(?:pnpm|npm|yarn) (?:run )?test|bun test|cargo test|go test|pytest)(?:\s|$)/.test(title.trimStart())
+    return test ? '正在运行测试。' : '正在执行命令。'
+  }
+  const file = FILE_TOOLS.get(tool)
+  if (file) return `正在${file}。`
+  if (tool === 'fileChange' || tool === 'MultiEdit') return '正在修改文件。'
+  if (tool === 'Grep' || tool === 'Glob' || tool === 'search') return '正在搜索。'
+  return '正在使用工具。'
+}
+
 type Approval = Extract<ChatItem, { kind: 'approval' }>
+type Question = Extract<ChatItem, { kind: 'question' }>
+type RemoteRequest = Approval | Question
+type ReplyContext = { token: string; at: number }
 type Turn = Extract<ChatItem, { kind: 'turn' }>
 type Pairing = { id: string; qr: string | null; pin?: string; account?: IlinkAccount; timer: NodeJS.Timeout }
-type Running = { binding: WechatBinding; account: IlinkAccount; worker: IlinkWorker; context?: { token: string; at: number }; contextAfter: number; busy: boolean }
-type ApprovalCode = { code: string; item: Approval; at: number; summary: string }
+type Running = { binding: WechatBinding; account: IlinkAccount; worker: IlinkWorker; context?: ReplyContext; contextAfter: number; busy: boolean }
+type RequestCode = { code: string; item: RemoteRequest; fingerprint: string }
 
 export type WechatOwnerActions = {
   send(id: string, text: string, ref: string, check: () => void): Promise<unknown>
   interrupt(id: string, check: () => void): Promise<unknown>
+  resume(id: string, check: () => void): Promise<unknown>
   respond(id: string, requestId: string, answer: ChatAnswer): Promise<unknown>
 }
 type Options = {
   credentials: Pick<CredentialStore, 'get' | 'set' | 'delete' | 'instances'>
   get(id: string): Conversation
   items(id: string): ChatItem[]
-  pendingApproval(id: string, stageId: string, requestId: string): Approval | null
+  pendingRequest(id: string, stageId: string, requestId: string): RemoteRequest | null
   replyOf(id: string, ref: string): string
   sentRef(id: string, ref: string, since: number): boolean
   changed(status: WechatRemoteStatus): void
@@ -50,17 +74,16 @@ function inboxRef(bot: string, messageId: string): string {
   return 'wechat-' + createHash('sha256').update(JSON.stringify([bot, messageId.replace(/^0+(?=\d)/, '')])).digest('hex')
 }
 
-function safeFileSummary(item: Approval, conversation: Conversation): string | null {
-  const operation = FILE_TOOLS.get(item.tool)
-  if (!operation || !item.title || item.title.length > 300) return null
+function safeFilePath(file: string, conversation: Conversation): { shown: string; target: string } | null {
+  if (!file || file.length > 300) return null
   const roots = conversation.projectPaths.length ? conversation.projectPaths : [conversation.workspacePath]
   try {
-    const target = realpathSync(resolve(conversation.workspacePath, item.title))
+    const target = realpathSync(resolve(conversation.workspacePath, file))
     for (const root of roots) {
       const path = relative(realpathSync(root), target)
       if (!path || path === '..' || path.startsWith('..' + sep) || isAbsolute(path)) continue
       if (!/^[\p{L}\p{N}._ /\\-]+$/u.test(path) || redact(path).redacted) return null
-      return `${operation}\n${path}`
+      return { shown: path, target }
     }
   } catch { /* A destination we cannot confirm needs review on the desktop. */ }
   return null
@@ -84,7 +107,7 @@ export class WechatRemoteService {
   private failures = 0
   private closed = false
   private settings = Promise.resolve<unknown>(undefined)
-  private readonly approvals = new Map<string, ApprovalCode>()
+  private readonly requests = new Map<string, RequestCode>()
   private readonly now: () => number
   private readonly launch: LaunchIlink
 
@@ -101,7 +124,7 @@ export class WechatRemoteService {
     for (const id of this.options.credentials.instances(CREDENTIAL)) {
       if (id !== this.binding?.credential) void this.options.credentials.delete(CREDENTIAL, id).catch(() => this.log('credential-cleanup'))
     }
-    if (this.binding?.conversation && !this.conversation(this.binding.conversation)) this.conversationChanged(this.binding.conversation)
+    for (const id of this.binding?.allowed ?? []) if (!this.conversation(id)) this.conversationChanged(id, false)
     this.activate()
   }
 
@@ -114,7 +137,8 @@ export class WechatRemoteService {
   status(): WechatRemoteStatus {
     return {
       state: this.phase, error: this.error, paired: this.binding !== null, enabled: this.binding?.enabled ?? false,
-      conversationId: this.binding?.conversation ?? null,
+      conversationId: this.binding?.conversation ?? null, authorizedConversationIds: this.binding?.allowed ?? [],
+      notifications: this.binding?.notifications ?? WechatRemoteNotifications.parse({}),
       pairing: this.pairing ? { id: this.pairing.id, qr: this.pairing.qr } : null
     }
   }
@@ -164,7 +188,7 @@ export class WechatRemoteService {
       try {
         this.currentPairing(id)
         this.requireConversation(conversationId)
-        this.replace({ credential, version: randomUUID(), conversation: conversationId, enabled: true, since: this.now(), cursor: '', reauth: false })
+        this.replace({ credential, version: randomUUID(), conversation: conversationId, allowed: [conversationId], enabled: true, since: this.now(), cursor: '', reauth: false, notifications: this.binding?.notifications ?? WechatRemoteNotifications.parse({}) })
       } catch (error) {
         await this.options.credentials.delete(CREDENTIAL, credential)
         throw error
@@ -175,13 +199,62 @@ export class WechatRemoteService {
     })
   }
 
-  bindConversation(conversationId: string): Promise<WechatRemoteStatus> {
+  bindConversation(conversationId: string, retainAllowed = false): Promise<WechatRemoteStatus> {
     return this.configure(() => {
       this.requireConversation(conversationId)
-      if (!this.binding || this.pairing) throw new Rejection('wechat-pairing-required')
-      if (this.binding.conversation === conversationId) return
-      this.replace({ ...this.binding, conversation: conversationId, version: randomUUID(), since: this.now() })
+      const binding = this.requireBinding()
+      const allowed = retainAllowed ? this.addAccess(binding, conversationId) : [conversationId]
+      if (binding.conversation === conversationId) {
+        this.updateAccess(binding, allowed)
+        return
+      }
+      this.replace({ ...binding, allowed, conversation: conversationId, version: randomUUID(), since: this.now() })
       this.activate()
+    })
+  }
+
+  setConversationAccess(conversationId: string, allowed: boolean): Promise<WechatRemoteStatus> {
+    return this.configure(() => {
+      const binding = this.requireBinding()
+      if (allowed) {
+        this.requireConversation(conversationId)
+        this.updateAccess(binding, this.addAccess(binding, conversationId))
+      } else this.revokeAccess(binding, conversationId, true)
+    })
+  }
+
+  private addAccess(binding: WechatBinding, id: string): string[] {
+    if (binding.allowed.includes(id)) return binding.allowed
+    if (binding.allowed.length >= WECHAT_MAX_CONVERSATIONS) throw new Rejection('wechat-too-many-conversations')
+    return [...binding.allowed, id]
+  }
+
+  private updateAccess(binding: WechatBinding, allowed: string[]): void {
+    this.store.setAllowed(binding.version, allowed)
+    binding.allowed = allowed
+    this.options.changed(this.status())
+  }
+
+  private revokeAccess(binding: WechatBinding, id: string, activate: boolean): void {
+    const allowed = binding.allowed.filter((each) => each !== id && this.conversation(each))
+    if (binding.conversation && allowed.includes(binding.conversation)) return this.updateAccess(binding, allowed)
+    const conversation = allowed[0] ?? null
+    this.replace({ ...binding, allowed, conversation, enabled: Boolean(conversation) && binding.enabled, version: randomUUID(), since: this.now() })
+    if (activate) this.activate()
+  }
+
+  private requireBinding(): WechatBinding {
+    if (!this.binding || this.pairing) throw new Rejection('wechat-pairing-required')
+    return this.binding
+  }
+
+  setNotification(kind: WechatRemoteNotification, enabled: boolean): Promise<WechatRemoteStatus> {
+    return this.configure(() => {
+      const binding = this.requireBinding()
+      const notifications = { ...binding.notifications, [kind]: enabled }
+      this.store.setNotification(binding.version, notifications, kind)
+      binding.notifications = notifications
+      this.options.changed(this.status())
     })
   }
 
@@ -205,10 +278,10 @@ export class WechatRemoteService {
     })
   }
 
-  conversationChanged(id: string): void {
-    if (this.closed || this.binding?.conversation !== id || this.conversation(id)) return
-    this.replace({ ...this.binding, conversation: null, enabled: false, version: randomUUID(), since: this.now() })
-    if (!this.pairing) this.activate()
+  conversationChanged(id: string, activate = true): void {
+    const binding = this.binding
+    if (this.closed || !binding?.allowed.includes(id) || this.conversation(id)) return
+    this.revokeAccess(binding, id, activate)
   }
 
   observe(id: string, items: readonly ChatItem[]): void {
@@ -216,12 +289,9 @@ export class WechatRemoteService {
     if (!run || !this.isCurrent(run) || run.binding.conversation !== id || !this.conversation(id)) return
     for (const item of items) {
       if (item.kind === 'turn' && item.at >= run.binding.since && !item.resumed) this.turn(run, item)
-      if (item.kind === 'approval') {
-        if (item.resolution === null && item.at >= run.binding.since) this.approval(run, item)
-        else if (item.resolution !== null) this.expireApproval(this.approvalKey(item))
-      }
-      if (item.kind === 'question' && item.resolution === null && item.at >= run.binding.since) {
-        this.post(`question:${item.stageId}:${item.id}`, '对话有问题等待回答，请在 Antumi 中查看。')
+      if (item.kind === 'approval' || item.kind === 'question') {
+        if (item.resolution === null && item.at >= run.binding.since) this.request(run, item)
+        else if (item.resolution !== null) this.expireRequest(this.requestKey(item))
       }
     }
     this.task(this.deliver(run), 'delivery', () => this.isCurrent(run))
@@ -293,7 +363,7 @@ export class WechatRemoteService {
     this.setPhase('error', error)
   }
 
-  private activate(): void {
+  private activate(context?: ReplyContext): void {
     const binding = this.binding
     if (this.closed || this.pairing) return
     if (binding?.reauth) return this.setPhase('reauth')
@@ -303,13 +373,14 @@ export class WechatRemoteService {
     this.setPhase('connecting')
     let worker: IlinkWorker
     try { worker = this.openWorker() } catch { this.retryWorker(); return }
-    const run: Running = { binding, account: account.data, worker, contextAfter: this.now() - 1, busy: false }
+    const run: Running = { binding, account: account.data, worker, context, contextAfter: this.now() - 1, busy: false }
     this.running = run
+    if (this.context(run)) this.setPhase('ready')
     this.tick = setInterval(() => {
       if (!this.isCurrent(run)) return
       try {
         this.store.sweep(this.now())
-        for (const [key, approval] of this.approvals) if (approval.at + APPROVAL_LIFE <= this.now()) this.expireApproval(key)
+        for (const [key, request] of this.requests) if (request.item.at + APPROVAL_LIFE <= this.now()) this.expireRequest(key)
       } catch { this.log('storage') }
       if (this.phase === 'ready' && !this.context(run)) this.setPhase('waiting')
       this.task(this.deliver(run), 'delivery', () => this.isCurrent(run))
@@ -393,7 +464,14 @@ export class WechatRemoteService {
       if (!actions) throw new Rejection('wechat-unavailable')
       const conversation = this.requireConversation(id)
       const activity = conversation.chat?.turn ?? 'idle'
-      if (text === '/status') notice(!conversation.sessionId ? '对话已停止，请在 Antumi 中继续。' : activity === 'awaiting' ? '对话等待确认。' : activity === 'running' && !conversation.chat?.betweenTurns ? '对话正在运行。' : '对话空闲，可以发送消息。')
+      if (text === '/sessions') notice(this.sessionList(run))
+      else if (text.startsWith('/use ')) await this.switchSession(run, text.slice(5).trim(), input.id, notice)
+      else if (text === '/resume') await this.resumeSession(run, conversation, notice)
+      else if (text === '/status') {
+        notice(statusLine(conversation))
+        const pending = this.latestRequest(conversation)
+        if (pending) this.request(run, pending, input.id)
+      }
       else if (text === '/stop') {
         if (activity !== 'running' || conversation.chat?.betweenTurns) notice('当前没有运行中的轮次。')
         else {
@@ -406,9 +484,12 @@ export class WechatRemoteService {
         }
       } else if (text.startsWith('/')) {
         const match = /^\/(approve|deny) ([a-f0-9]{8})$/i.exec(text)
-        if (match) await this.answer(run, conversation, match[2]!.toLowerCase(), match[1]!.toLowerCase() === 'approve' ? 'allow' : 'deny', notice)
+        const response = /^\/answer ([a-f0-9]{8}) ([1-6](?:,[1-6]){0,5})$/i.exec(text)
+        if (match) await this.answerApproval(run, conversation, match[2]!.toLowerCase(), match[1]!.toLowerCase() === 'approve' ? 'allow' : 'deny', notice)
+        else if (response) await this.answerQuestion(run, conversation, response[1]!.toLowerCase(), response[2]!, notice)
+        else if (text === '/answer' || text.startsWith('/answer ')) notice('请发送 /answer 回答码 选项编号。多选用英文逗号分隔。')
         else notice(HELP)
-      } else if (!conversation.sessionId) notice('对话已停止，请在 Antumi 中继续。')
+      } else if (!conversation.sessionId) notice('对话已停止。发送 /resume 恢复。')
       else if (activity !== 'idle' && !conversation.chat?.betweenTurns || conversation.starting) notice('对话正在处理上一轮，请稍后再发。')
       else if (text.length > 6000) notice('消息过长，请分段发送。')
       else {
@@ -421,10 +502,62 @@ export class WechatRemoteService {
       }
     } catch (error) {
       if (error instanceof Rejection && error.reason === 'chat-busy') notice('对话正在处理上一轮，请稍后再发。')
+      else if (error instanceof Rejection && error.reason === 'wechat-resume-permission') notice('此对话需要在 Antumi 中恢复。')
       else notice('操作未完成，请在 Antumi 中查看状态。')
     } finally {
       if (this.isCurrent(run)) this.store.inputState(input.id, waiting ? 'waiting' : 'handled')
     }
+  }
+
+  private latestRequest(conversation: Conversation): RemoteRequest | null {
+    if (!conversation.sessionId || conversation.chat?.turn !== 'awaiting') return null
+    for (const item of this.options.items(conversation.id).toReversed()) {
+      if ((item.kind === 'approval' || item.kind === 'question') && item.resolution === null) {
+        const pending = this.options.pendingRequest(conversation.id, item.stageId, item.requestId)
+        if (pending) return pending
+      }
+    }
+    return null
+  }
+
+  private sessionList(run: Running): string {
+    const entries = run.binding.allowed.flatMap((id) => {
+      const conversation = this.conversation(id)
+      if (!conversation) return []
+      const title = this.clean(run, id, conversation.title).replace(/\s+/g, ' ').slice(0, 70) || '未命名对话'
+      const state = id === run.binding.conversation ? '当前' : conversation.sessionId ? '已启动' : '已停止'
+      return [`${title}（${state}）\n/use ${id}`]
+    })
+    return ['桌面已授权的对话。回复对应的 /use 命令切换。', ...entries].join('\n\n')
+  }
+
+  private async switchSession(run: Running, selection: string, inputId: string, notice: (text: string) => void): Promise<void> {
+    await this.configure(() => {
+      if (!this.isCurrent(run)) return
+      const id = run.binding.allowed.find((each) => each === selection.toLowerCase())
+      const conversation = id && this.conversation(id)
+      if (!id || !conversation) return notice('该对话未授权或不可用。发送 /sessions 查看列表。')
+      if (id === run.binding.conversation) return notice('已在该对话中。')
+      const context = run.context
+      const title = this.clean(run, id, conversation.title).replace(/\s+/g, ' ').slice(0, 70) || '未命名对话'
+      this.replace({ ...run.binding, conversation: id, version: randomUUID(), since: this.now() })
+      this.post(`switch:${inputId}`, `已切换到「${title}」。${conversation.sessionId ? '' : '发送 /resume 恢复。'}`)
+      this.activate(context)
+      const next = this.running
+      if (next) this.task(this.deliver(next), 'delivery', () => this.isCurrent(next))
+    })
+  }
+
+  private async resumeSession(run: Running, conversation: Conversation, notice: (text: string) => void): Promise<void> {
+    if (!this.isCurrent(run) || !this.controls) return
+    const current = this.requireConversation(conversation.id)
+    if (current.sessionId) return notice('对话已启动。')
+    if (current.chatOptions?.permissionMode === 'bypass') return notice('此对话需要在 Antumi 中恢复。')
+    await this.controls.resume(current.id, () => {
+      if (!this.isCurrent(run)) throw new Rejection('wechat-binding-unavailable')
+      this.requireConversation(current.id)
+    })
+    notice('对话已恢复，可以发送消息。')
   }
 
   private turn(run: Running, item: Turn): void {
@@ -434,49 +567,116 @@ export class WechatRemoteService {
     const ours = ref.startsWith('wechat-') && this.store.isWaiting(ref)
     const text = ours && item.state === 'completed' ? this.options.replyOf(id, ref) : ''
     const summary = item.state === 'failed' ? '对话运行失败，请在 Antumi 中查看。' : item.state === 'interrupted' ? '本轮已打断。' : ours ? '本轮已完成。' : 'Antumi 中的对话已完成。'
-    this.post(`turn:${item.stageId}:${item.id}`, text ? this.clean(run, id, text) : summary, undefined, null, ours ? ref : undefined)
+    const notification: WechatRemoteNotification | undefined = ours ? undefined : item.state === 'failed' ? 'failed' : 'completed'
+    this.post(`turn:${item.stageId}:${item.id}`, text ? this.clean(run, id, text) : summary, { ref: ours ? ref : undefined, notification })
   }
 
-  private approval(run: Running, item: Approval): void {
-    const conversation = run.binding.conversation && this.conversation(run.binding.conversation)
-    if (!conversation) return
-    const key = this.approvalKey(item)
-    if (this.approvals.has(key)) return
-    const summary = !isAntumiRequest(item.requestId) && !isHostApproval(item) && !isPlanApproval(item) && !item.runModes?.length &&
-      oneTimeChoice(item, 'allow') && oneTimeChoice(item, 'deny') ? safeFileSummary(item, conversation) : null
+  private request(run: Running, item: RemoteRequest, statusRef?: string): void {
+    const id = run.binding.conversation
+    const conversation = id && this.conversation(id)
+    if (!id || !conversation) return
+    const key = this.requestKey(item)
+    const notification: WechatRemoteNotification | undefined = statusRef ? undefined : 'requests'
+    const previous = this.requests.get(key)
+    if (notification && (!run.binding.notifications[notification] || previous)) return
+    const messageId = statusRef ? `status-request:${statusRef}:${key}` : `request:${key}`
+    const summary = item.kind === 'approval' ? this.approvalSummary(item, conversation) : this.questionSummary(run, id, item)
     if (!summary || item.at + APPROVAL_LIFE <= this.now()) {
-      this.post(`approval:${key}`, '对话有操作等待确认，请在 Antumi 中查看。')
+      const fallback = item.kind === 'approval' ? '对话有操作等待确认，请在 Antumi 中查看。' : '对话有问题等待回答，请在 Antumi 中查看。'
+      this.post(messageId, fallback, { notification })
       return
     }
-    const code = randomBytes(4).toString('hex')
-    this.approvals.set(key, { code, item, at: item.at, summary })
-    const text = [
-      `待确认操作\n${summary}`,
-      `审批码有效 ${APPROVAL_LIFE / 60_000} 分钟。请只回复下面一条命令，带上审批码。完整操作可在桌面查看。`,
-      `同意本次操作\n/approve ${code}`,
-      `拒绝本次操作\n/deny ${code}`
-    ].join('\n\n')
-    this.post(`approval:${key}`, text, item.at + APPROVAL_LIFE, code)
+    const unchanged = previous?.item.revision === item.revision && previous.fingerprint === summary.fingerprint
+    if (previous && !unchanged) this.expireRequest(key)
+    const code = unchanged ? previous.code : randomBytes(4).toString('hex')
+    this.requests.set(key, { code, item, fingerprint: summary.fingerprint })
+    const duration = `有效 ${APPROVAL_LIFE / 60_000} 分钟。请只发送命令行。完整内容可在桌面查看。`
+    const text = item.kind === 'approval'
+      ? [`待确认操作\n${summary.text}`, `审批码${duration}`, `同意本次操作\n/approve ${code}`, `拒绝本次操作\n/deny ${code}`].join('\n\n')
+      : [`Agent 有问题\n${summary.text}`, `回答码${duration}`, `回复时将选项编号替换到命令末尾。\n/answer ${code} 1`].join('\n\n')
+    this.post(messageId, text, { expires: item.at + APPROVAL_LIFE, approval: code, notification })
   }
 
-  private async answer(run: Running, conversation: Conversation, code: string, decision: 'allow' | 'deny', notice: (text: string) => void): Promise<void> {
-    const entry = [...this.approvals].find(([, approval]) => approval.code === code)
-    if (!entry || entry[1].at + APPROVAL_LIFE <= this.now()) return notice('审批码已失效，请在 Antumi 中查看。')
-    const [key, approval] = entry
-    this.expireApproval(key)
-    const pending = this.options.pendingApproval(conversation.id, approval.item.stageId, approval.item.requestId)
-    const choice = pending && oneTimeChoice(pending, decision)
-    if (!this.controls || !this.isCurrent(run) || !pending || pending.resolution !== null || pending.revision !== approval.item.revision ||
-        safeFileSummary(pending, conversation) !== approval.summary || !choice) return notice('审批码已失效，请在 Antumi 中查看。')
-    await this.controls.respond(conversation.id, pending.requestId, { decision, choice: choice.id })
+  private approvalSummary(item: Approval, conversation: Conversation): { text: string; fingerprint: string } | null {
+    if (isAntumiRequest(item.requestId) || isHostApproval(item) || isPlanApproval(item) || item.runModes?.length ||
+        !oneTimeChoice(item, 'allow') || !oneTimeChoice(item, 'deny')) return null
+    if (item.tool === 'fileChange') {
+      const tool = this.options.items(conversation.id).find((candidate) =>
+        candidate.kind === 'tool' && candidate.stageId === item.stageId && candidate.id === item.toolItemId && candidate.name === 'fileChange')
+      if (tool?.kind !== 'tool' || tool.diffs.length !== 1) return null
+      const diff = tool.diffs[0]
+      if (!diff || diff.change !== 'update' || !diff.patch) return null
+      const path = safeFilePath(diff.path, conversation)
+      if (!path) return null
+      return { text: `编辑文件\n${path.shown}`, fingerprint: createHash('sha256').update(JSON.stringify([path.target, tool.revision, diff.patch])).digest('hex') }
+    }
+    const operation = FILE_TOOLS.get(item.tool)
+    const path = operation && safeFilePath(item.title, conversation)
+    return path ? { text: `${operation}\n${path.shown}`, fingerprint: path.target } : null
+  }
+
+  private questionSummary(run: Running, id: string, item: Question): { text: string; fingerprint: string } | null {
+    const question = item.questions[0]
+    if (!question || item.questions.length !== 1 || question.options.length < 2 || question.options.length > 6 || isAntumiRequest(item.requestId)) return null
+    const description = this.clean(run, id, question.question).replace(/\s+/g, ' ').trim()
+    const labels = question.options.map((option) => this.clean(run, id, option.label).replace(/\s+/g, ' ').trim())
+    if (!description || description.length > 160 || labels.some((label) => !label || label.length > 45) || new Set(labels).size !== labels.length) return null
+    const lines = [description, ...labels.map((label, index) => `${index + 1}. ${label}`)]
+    if (question.multiSelect) lines.push('可以多选，用英文逗号隔开编号。')
+    const text = lines.join('\n')
+    return Array.from(text).length <= 320 ? { text, fingerprint: createHash('sha256').update(JSON.stringify(question)).digest('hex') } : null
+  }
+
+  private pending(conversationId: string, code: string): { key: string; request: RequestCode; item: RemoteRequest } | null {
+    const entry = [...this.requests].find(([, request]) => request.code === code)
+    if (!entry || entry[1].item.at + APPROVAL_LIFE <= this.now()) return null
+    const [key, request] = entry
+    const item = this.options.pendingRequest(conversationId, request.item.stageId, request.item.requestId)
+    if (!item || item.kind !== request.item.kind || item.resolution !== null || item.revision !== request.item.revision) return null
+    return { key, request, item }
+  }
+
+  private async answerApproval(run: Running, conversation: Conversation, code: string, decision: 'allow' | 'deny', notice: (text: string) => void): Promise<void> {
+    const pending = this.pending(conversation.id, code)
+    if (!this.controls || !this.isCurrent(run) || pending?.item.kind !== 'approval' ||
+        this.approvalSummary(pending.item, conversation)?.fingerprint !== pending.request.fingerprint) return notice('审批码已失效，请在 Antumi 中查看。')
+    const choice = oneTimeChoice(pending.item, decision)
+    if (!choice) return notice('此操作需要在 Antumi 中确认。')
+    this.expireRequest(pending.key)
+    await this.controls.respond(conversation.id, pending.item.requestId, { decision, choice: choice.id })
     notice(decision === 'allow' ? '已同意本次操作。' : '已拒绝本次操作。')
   }
 
-  private post(id: string, text: string, expires = this.now() + FRESH, approval: string | null = null, ref?: string): void {
+  private async answerQuestion(run: Running, conversation: Conversation, code: string, response: string, notice: (text: string) => void): Promise<void> {
+    const pending = this.pending(conversation.id, code)
+    if (!this.controls || !this.isCurrent(run) || pending?.item.kind !== 'question' ||
+        this.questionSummary(run, conversation.id, pending.item)?.fingerprint !== pending.request.fingerprint) return notice('回答码已失效，请在 Antumi 中查看。')
+    const question = pending.item.questions[0]
+    if (!question) return
+    const indices = response.split(',').map((value) => Number(value) - 1)
+    const answers = indices.flatMap((index) => question.options[index]?.label ?? [])
+    if (answers.length !== indices.length || new Set(answers).size !== answers.length || (!question.multiSelect && answers.length !== 1)) {
+      return notice('选项编号无效，请按问题提示重新回复。')
+    }
+    this.expireRequest(pending.key)
+    await this.controls.respond(conversation.id, pending.item.requestId, { decision: 'allow', answers: { [question.id]: answers } })
+    notice('已提交回答。')
+  }
+
+  private post(id: string, text: string, { expires = this.now() + FRESH, approval = null, ref, notification }: {
+    expires?: number; approval?: string | null; ref?: string; notification?: WechatRemoteNotification
+  } = {}): void {
+    if (notification && !this.binding?.notifications[notification]) return
     const points = Array.from(text)
     const parts = []
-    for (let offset = 0; offset < points.length; offset += 480) parts.push(points.slice(offset, offset + 480).join(''))
-    this.store.reply(id, parts, expires, this.now(), approval, ref)
+    for (let offset = 0; offset < points.length;) {
+      const limit = Math.min(points.length, offset + 480)
+      const lineEnd = limit < points.length ? points.lastIndexOf('\n', limit - 1) : -1
+      const end = lineEnd >= offset + 240 ? lineEnd + 1 : limit
+      parts.push(points.slice(offset, end).join(''))
+      offset = end
+    }
+    this.store.reply(id, parts, expires, this.now(), approval, ref, notification)
   }
 
   private async deliver(run: Running): Promise<void> {
@@ -488,7 +688,8 @@ export class WechatRemoteService {
         const context = this.context(run)
         const next = context ? this.store.nextReply(this.now()) : null
         if (!context || !next) return
-        if (next.approval && !this.approvalPending(run.binding.conversation, next.approval)) {
+        if ((next.notification && !run.binding.notifications[next.notification]) ||
+            (next.approval && !this.pending(run.binding.conversation, next.approval))) {
           this.store.replyState(next.id, 'rejected')
           continue
         }
@@ -534,19 +735,12 @@ export class WechatRemoteService {
     run.context = undefined
   }
 
-  private approvalPending(conversationId: string, code: string): boolean {
-    const approval = [...this.approvals.values()].find((value) => value.code === code)
-    if (!approval) return false
-    const pending = this.options.pendingApproval(conversationId, approval.item.stageId, approval.item.requestId)
-    return pending?.revision === approval.item.revision
-  }
+  private requestKey(item: RemoteRequest): string { return `${item.kind}:${item.stageId}:${item.requestId}` }
 
-  private approvalKey(item: Approval): string { return `${item.stageId}:${item.requestId}` }
-
-  private expireApproval(key: string): void {
-    const approval = this.approvals.get(key)
-    if (approval) this.store.cancelApproval(approval.code)
-    this.approvals.delete(key)
+  private expireRequest(key: string): void {
+    const request = this.requests.get(key)
+    if (request) this.store.cancelApproval(request.code)
+    this.requests.delete(key)
   }
 
   private currentPairing(id: string): Pairing {
@@ -580,6 +774,7 @@ export class WechatRemoteService {
   private replace(binding: WechatBinding | null): void {
     this.store.replace(binding)
     this.binding = binding
+    this.phase = 'off'
     this.disconnect()
   }
 
@@ -610,7 +805,7 @@ export class WechatRemoteService {
     const worker = this.worker
     this.worker = null
     this.running = null
-    this.approvals.clear()
+    this.requests.clear()
     worker?.stop()
   }
 

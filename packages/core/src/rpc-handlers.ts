@@ -319,9 +319,26 @@ export function createRpcHandlers(
     sources.automatic?.answered(id)
     return OK
   }
+  const continueAsUser = (id: string, allowBypass?: boolean, skipProjectSetup?: boolean, beforeStart?: () => void) => {
+    notChannel(id)
+    return userActed(id, () => {
+      profiles?.guardUser(id, true)
+      squads?.guardUser(id, true)
+      return conversations.continue(id, allowBypass, undefined, skipProjectSetup, true, beforeStart)
+    })
+  }
   wechat?.setActions({
     send: (id, text, ref, check) => sendUserMessage({ id, text, ref, queue: false, steer: false }, check),
     interrupt: interruptUserTurn,
+    resume: (id, check) => {
+      const beforeStart = () => {
+        check()
+        if (conversations.allowsBypass(id) || conversations.get(id).chatOptions?.permissionMode === 'bypass' ||
+            !conversations.stages(id).length) throw new Rejection('wechat-resume-permission')
+      }
+      beforeStart()
+      return continueAsUser(id, undefined, true, beforeStart)
+    },
     respond: respondAsUser
   })
   const squadService = () => {
@@ -501,7 +518,9 @@ export function createRpcHandlers(
     'wechatRemote.cancelPairing': ({ id }) => wechatService().cancelPairing(id),
     'wechatRemote.submitPin': ({ id, pin }) => wechatService().submitPin(id, pin),
     'wechatRemote.confirmPairing': ({ id, conversationId }) => wechatService().confirmPairing(id, conversationId),
-    'wechatRemote.bindConversation': ({ conversationId }) => wechatService().bindConversation(conversationId),
+    'wechatRemote.bindConversation': ({ conversationId, retainAllowed }) => wechatService().bindConversation(conversationId, retainAllowed),
+    'wechatRemote.setConversationAccess': ({ conversationId, allowed }) => wechatService().setConversationAccess(conversationId, allowed),
+    'wechatRemote.setNotification': ({ kind, enabled }) => wechatService().setNotification(kind, enabled),
     'wechatRemote.setEnabled': ({ enabled }) => wechatService().setEnabled(enabled),
     'wechatRemote.remove': () => wechatService().remove(),
     'mobile.status': () => mobileService().status(),
@@ -680,7 +699,7 @@ export function createRpcHandlers(
     'todos.edit': ({ id, groupId, itemId, text }) => todosOf(id).edit(id, groupId, itemId, text),
     'todos.remove': ({ id, groupId, itemId }) => todosOf(id).remove(id, groupId, itemId),
     'conversations.setArchived': ({ id, archived }) => { notChannel(id); return conversations.setArchived(id, archived) },
-    'conversations.continue': ({ id, allowBypass, skipProjectSetup }) => { notChannel(id); return userActed(id, () => { profiles?.guardUser(id, true); squads?.guardUser(id, true); return conversations.continue(id, allowBypass, undefined, skipProjectSetup, true) }) },
+    'conversations.continue': ({ id, allowBypass, skipProjectSetup }) => continueAsUser(id, allowBypass, skipProjectSetup),
     'conversations.handoff': ({ id, agent, note, stopRunning, allowBypass, permissionMode, model, effort, references, images, modelProvider }) => { sources.automatic?.takeover(id); return conversations.handoff(id, agent, note, stopRunning, allowBypass, { permissionMode, model, effort, references, images, modelProvider }) },
     'conversations.fork': ({ id, stageId, itemId }) => conversations.fork(id, stageId, itemId),
     // A mode the user picks is theirs to answer for: a run nobody watched stops answering for them.

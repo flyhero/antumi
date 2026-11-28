@@ -1,14 +1,18 @@
 import { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
+import { WechatRemoteNotification, WechatRemoteNotifications } from '@antumi/protocol'
 
 const BindingRow = z.object({
   credential: z.string(), version: z.string(), conversation: z.string().nullable(),
-  enabled: z.number().transform(Boolean), since: z.number(), cursor: z.string(), reauth: z.number().transform(Boolean)
+  enabled: z.number().transform(Boolean), since: z.number(), cursor: z.string(), reauth: z.number().transform(Boolean),
+  allowed: z.string().transform((value) => z.array(z.string().uuid()).parse(JSON.parse(value))),
+  notifications: z.string().transform((value) => WechatRemoteNotifications.parse(JSON.parse(value)))
 })
 export type WechatBinding = z.infer<typeof BindingRow>
 export type WechatInput = { id: string; text: string; received: number }
 const InboxRow = z.object({ id: z.string(), text: z.string().nullable(), received: z.number(), state: z.string() })
-const OutboxRow = z.object({ id: z.string(), text: z.string(), expires: z.number(), approval: z.string().nullable() })
+// The original approval column also holds the code for a question.
+const OutboxRow = z.object({ id: z.string(), text: z.string(), expires: z.number(), approval: z.string().nullable(), notification: WechatRemoteNotification.nullable() })
 
 export class WechatRemoteStore {
   private readonly db: DatabaseSync
@@ -26,8 +30,19 @@ export class WechatRemoteStore {
   replace(binding: WechatBinding | null): void {
     this.transaction(() => {
       this.db.exec('DELETE FROM wechat_remote_binding; DELETE FROM wechat_remote_inbox; DELETE FROM wechat_remote_outbox')
-      if (binding) this.db.prepare('INSERT INTO wechat_remote_binding VALUES (1, ?, ?, ?, ?, ?, ?, ?)').run(
-        binding.credential, binding.version, binding.conversation, Number(binding.enabled), binding.since, binding.cursor, Number(binding.reauth))
+      if (binding) this.db.prepare('INSERT INTO wechat_remote_binding (singleton, credential, version, conversation, enabled, since, cursor, reauth, allowed, notifications) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
+        binding.credential, binding.version, binding.conversation, Number(binding.enabled), binding.since, binding.cursor, Number(binding.reauth), JSON.stringify(binding.allowed), JSON.stringify(binding.notifications))
+    })
+  }
+
+  setAllowed(version: string, allowed: readonly string[]): void {
+    this.db.prepare('UPDATE wechat_remote_binding SET allowed = ? WHERE version = ?').run(JSON.stringify(allowed), version)
+  }
+
+  setNotification(version: string, notifications: WechatRemoteNotifications, kind: WechatRemoteNotification): void {
+    this.transaction(() => {
+      this.db.prepare('UPDATE wechat_remote_binding SET notifications = ? WHERE version = ?').run(JSON.stringify(notifications), version)
+      if (!notifications[kind]) this.db.prepare("UPDATE wechat_remote_outbox SET state = 'rejected', text = '' WHERE notification = ? AND state = 'queued'").run(kind)
     })
   }
 
@@ -53,10 +68,10 @@ export class WechatRemoteStore {
       .run(state, state, id)
   }
 
-  reply(id: string, parts: readonly string[], expires: number, due: number, approval: string | null, ref?: string): void {
+  reply(id: string, parts: readonly string[], expires: number, due: number, approval: string | null, ref?: string, notification?: WechatRemoteNotification): void {
     this.transaction(() => {
-      const insert = this.db.prepare("INSERT OR IGNORE INTO wechat_remote_outbox VALUES (?, ?, ?, ?, 'queued', ?)")
-      for (const [index, text] of parts.entries()) insert.run(`${id}:${index}`, text, expires, due, approval)
+      const insert = this.db.prepare("INSERT OR IGNORE INTO wechat_remote_outbox (id, text, expires, due, state, approval, notification) VALUES (?, ?, ?, ?, 'queued', ?, ?)")
+      for (const [index, text] of parts.entries()) insert.run(`${id}:${index}`, text, expires, due, approval, notification ?? null)
       if (ref) this.inputState(ref, 'handled')
     })
   }

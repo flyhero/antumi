@@ -1070,7 +1070,7 @@ wechat = new WechatRemoteService(wechatStore, {
   credentials,
   get: (id) => conversations.get(id),
   items: (id) => conversations.chatPage(id).items,
-  pendingApproval: (id, stage, request) => conversations.pendingApproval(id, stage, request),
+  pendingRequest: (id, stage, request) => conversations.pendingRemoteRequest(id, stage, request),
   replyOf: (id, ref) => conversations.replyOf(id, ref),
   sentRef: (id, ref, since) => conversations.sentRef(id, ref, since),
   changed: (status) => server?.connections.forEach((connection) => {

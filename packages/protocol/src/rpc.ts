@@ -1,4 +1,4 @@
-import { WechatRemoteStatus } from './wechat-remote'
+import { WechatRemoteNotification, WechatRemoteStatus } from './wechat-remote'
 import { AgentProxySettings, AgentProxyStatus, AgentProxyTestResult } from './agent-proxy'
 import { ProviderImportPreview, ProviderImportResult } from './provider-import'
 import { z } from 'zod'
@@ -797,7 +797,9 @@ export const rpcMethods = {
   'wechatRemote.cancelPairing': { params: z.object({ id: z.string().uuid() }), result: WechatRemoteStatus },
   'wechatRemote.submitPin': { params: z.object({ id: z.string().uuid(), pin: z.string().regex(/^\d{4,8}$/) }), result: WechatRemoteStatus },
   'wechatRemote.confirmPairing': { params: z.object({ id: z.string().uuid(), conversationId: z.string().uuid() }), result: WechatRemoteStatus },
-  'wechatRemote.bindConversation': { params: z.object({ conversationId: z.string().uuid() }), result: WechatRemoteStatus },
+  'wechatRemote.bindConversation': { params: z.object({ conversationId: z.string().uuid(), retainAllowed: z.boolean().optional() }), result: WechatRemoteStatus },
+  'wechatRemote.setConversationAccess': { params: z.object({ conversationId: z.string().uuid(), allowed: z.boolean() }), result: WechatRemoteStatus },
+  'wechatRemote.setNotification': { params: z.object({ kind: WechatRemoteNotification, enabled: z.boolean() }), result: WechatRemoteStatus },
   'wechatRemote.setEnabled': { params: z.object({ enabled: z.boolean() }), result: WechatRemoteStatus },
   'wechatRemote.remove': { params: z.object({}), result: WechatRemoteStatus },
   'mobile.status': { params: z.object({}), result: MobileStatus },

@@ -16,6 +16,7 @@ const OWNER = 'owner'
 const TEXT = 'source text'
 const confirmation = { type: 'scan', value: { status: 'confirmed', bot_token: 'private-token', ilink_bot_id: 'bot', ilink_user_id: OWNER, baseurl: 'https://ilinkai.weixin.qq.com' } } as const
 type Approval = Extract<ChatItem, { kind: 'approval' }>
+type Question = Extract<ChatItem, { kind: 'question' }>
 type Call = { command: IlinkCommand; answer(result: IlinkResult): void }
 
 describe('WeChat remote control', () => {
@@ -25,7 +26,8 @@ describe('WeChat remote control', () => {
   let credentials: CredentialStore
   let service: WechatRemoteService
   let conversations: Conversation[]
-  let pending: Approval | null
+  let pending: Approval | Question | null
+  let tool: Extract<ChatItem, { kind: 'tool' }> | null
   let calls: Call[]
   let failure: IlinkResult | null
   let closeWorker: () => void
@@ -40,8 +42,8 @@ describe('WeChat remote control', () => {
         if (!conversation) throw Error('conversation missing')
         return conversation
       },
-      items: () => pending ? [pending] : [],
-      pendingApproval: (id, stage, request) => id === FIRST && stage === pending?.stageId && request === pending?.requestId ? pending : null,
+      items: () => [tool, pending].filter((item) => item !== null),
+      pendingRequest: (id, stage, request) => id === FIRST && stage === pending?.stageId && request === pending?.requestId ? pending : null,
       replyOf: () => 'private-token final text',
       sentRef: () => false,
       changed: () => {},
@@ -79,11 +81,13 @@ describe('WeChat remote control', () => {
       managedWorkspace: false, sessionId: 'session', createdAt: 0, updatedAt: 0, chat: { turn: 'idle' }
     }))
     pending = null
+    tool = null
     calls = []
     failure = null
     actions = {
       send: vi.fn<WechatOwnerActions['send']>().mockImplementation(async (_id, _text, _ref, check) => check()),
       interrupt: vi.fn<WechatOwnerActions['interrupt']>(),
+      resume: vi.fn<WechatOwnerActions['resume']>(),
       respond: vi.fn<WechatOwnerActions['respond']>()
     }
     service = setup()
@@ -199,10 +203,141 @@ describe('WeChat remote control', () => {
     expect(credentials.instances('wechat-remote')).toEqual([])
   })
 
+  it('cancels queued desktop notifications when muted and still answers WeChat turns', async () => {
+    await pair()
+    const queued = turn('desktop-before-mute')
+    service.observe(FIRST, [queued])
+    expect(store.nextReply(now)?.notification).toBe('completed')
+
+    await service.setNotification('completed', false)
+    expect(store.nextReply(now)).toBeNull()
+    expect(store.binding()?.notifications).toEqual({ completed: false, failed: true, requests: true })
+    await service.setNotification('completed', true)
+    await service.setNotification('completed', false)
+    const since = await publish([packet('51', TEXT)], 'cursor-51')
+    expect(sent()).not.toContain('Antumi 中的对话已完成。')
+    const wechatRef = actions.send.mock.calls[0]![2]
+    service.observe(FIRST, [turn('desktop-after-mute'), turn('desktop-failure', 'failed'), turn(wechatRef)])
+    await vi.waitFor(() => expect(sent()).toEqual(['对话运行失败，请在 Antumi 中查看。', '[已隐藏] final text']))
+    await service.setNotification('failed', false)
+    await publish([packet('52', '/status')], 'cursor-52', since)
+    service.observe(FIRST, [turn('other-desktop-failure', 'failed')])
+    expect(sent().filter((text) => text === '对话运行失败，请在 Antumi 中查看。')).toHaveLength(1)
+  })
+
+  it('shows safe progress and an actionable request on demand even with request notices muted', async () => {
+    await pair()
+    const conversation = conversations[0]!
+    conversation.chat = { turn: 'running', doing: { tool: 'commandExecution', title: 'pnpm test --secret never-send' } }
+    let since = await publish([packet('61', '/status')], 'cursor-61')
+    await vi.waitFor(() => expect(sent()).toContain('正在运行测试。'))
+    expect(sent().join(' ')).not.toContain('never-send')
+
+    await service.setNotification('requests', false)
+    conversation.chat = { turn: 'awaiting' }
+    pending = approval()
+    service.observe(FIRST, [pending])
+    expect(store.nextReply(now)).toBeNull()
+    expect(sent().some((text) => text.includes('/approve'))).toBe(false)
+    since = await publish([packet('62', '/status')], 'cursor-62', since)
+    const instructions = await vi.waitFor(() => {
+      const text = sent().find((text) => text.includes('/approve'))
+      expect(text).toBeDefined()
+      return text!
+    })
+    expect(sent()).toContain('对话等待确认。')
+    const code = instructions.match(/\/deny ([a-f0-9]{8})/)![1]
+    await publish([packet('63', `/deny ${code}`)], 'cursor-63', since)
+    expect(actions.respond).toHaveBeenCalledExactlyOnceWith(FIRST, 'request', { decision: 'deny', choice: 'no' })
+  })
+
+  it('only lists, switches to and resumes conversations authorized on the desktop', async () => {
+    await pair()
+    const third = '33333333-3333-4333-8333-333333333333'
+    conversations.push({ ...conversations[0]!, id: third, title: 'Not authorized' })
+    conversations[1]!.sessionId = null
+    let since = await publish([packet('23', '/sessions'), packet('24', '/use ' + SECOND)], 'cursor-24')
+    await vi.waitFor(() => expect(sent().join(' ')).toContain('该对话未授权'))
+    expect(sent().join(' ')).not.toContain(SECOND)
+    await service.setConversationAccess(SECOND, true)
+    expect(store.binding()?.allowed).toEqual([FIRST, SECOND])
+
+    since = await publish([packet('25', '/sessions')], 'cursor-25', since)
+    await vi.waitFor(() => expect(sent().join(' ')).toContain('/use ' + SECOND))
+    expect(sent().join(' ')).not.toContain(third)
+    since = await publish([packet('26', '/use ' + SECOND)], 'cursor-26', since)
+    await vi.waitFor(() => expect(sent().some((text) => text.includes('已切换到'))).toBe(true))
+    expect(service.status()).toMatchObject({ conversationId: SECOND, authorizedConversationIds: [FIRST, SECOND] })
+
+    conversations[1]!.chatOptions = { permissionMode: 'bypass', model: null, effort: null }
+    since = await publish([packet('27', '/resume')], 'cursor-27', since)
+    expect(actions.resume).not.toHaveBeenCalled()
+    conversations[1]!.chatOptions.permissionMode = 'ask'
+    await publish([packet('28', '/resume')], 'cursor-28', since)
+    expect(actions.resume).toHaveBeenCalledExactlyOnceWith(SECOND, expect.any(Function))
+    await service.setConversationAccess(SECOND, false)
+    expect(service.status()).toMatchObject({ conversationId: FIRST, authorizedConversationIds: [FIRST] })
+  })
+
+  it('shows choice questions and sends each valid selection only once', async () => {
+    await pair()
+    const since = await publish([packet('31', '/status')], 'cursor-31')
+    pending = {
+      kind: 'question', id: 'q:pick', requestId: 'pick', stageId: STAGE, at: ++now, revision: 1, answers: null, resolution: null,
+      questions: [{ id: 'choice', header: '', question: 'Which checks should run?', multiSelect: true,
+        options: [{ label: 'Lint', description: null }, { label: 'Tests', description: null }] }]
+    }
+    service.observe(FIRST, [pending])
+    const body = await vi.waitFor(() => {
+      const text = sent().find((text) => text.includes('Which checks should run?'))
+      expect(text).toBeDefined()
+      return text!
+    })
+    expect(body).toContain('1. Lint\n2. Tests')
+    const code = body.match(/\/answer ([a-f0-9]{8}) 1/)![1]
+    await publish([packet('32', `/answer ${code} 4`), packet('33', `/answer ${code} 1,2`), packet('34', `/answer ${code} 2`)], 'cursor-34', since)
+    expect(actions.respond).toHaveBeenCalledExactlyOnceWith(FIRST, 'pick', { decision: 'allow', answers: { choice: ['Lint', 'Tests'] } })
+  })
+
+  it('only approves a Codex file change when its preview still matches', async () => {
+    await pair()
+    const since = await publish([packet('41', '/status')], 'cursor-41')
+    tool = {
+      kind: 'tool', id: 't:change', stageId: STAGE, at: ++now, revision: 1, name: 'fileChange',
+      title: 'Untrusted display title', input: null, output: null, status: 'running',
+      diffs: [{ path: join(folder, 'src.txt'), change: 'update', patch: 'patch preview' }]
+    }
+    pending = approval({ tool: 'fileChange', toolItemId: tool.id })
+    service.observe(FIRST, [pending])
+    const body = await vi.waitFor(() => {
+      const text = sent().find((text) => text.includes('/approve'))
+      expect(text).toBeDefined()
+      return text!
+    })
+    expect(body).toContain('编辑文件\nsrc.txt')
+    expect(body).not.toContain('patch preview')
+    const code = body.match(/\/approve ([a-f0-9]{8})/)![1]
+    tool = { ...tool, revision: 2, diffs: [{ ...tool.diffs[0]!, patch: 'different patch' }] }
+    const afterStale = await publish([packet('42', `/approve ${code}`)], 'cursor-42', since)
+    expect(actions.respond).not.toHaveBeenCalled()
+
+    const room = sent().length
+    pending = approval({ id: 'a:next-edit', requestId: 'next-edit', tool: 'fileChange', toolItemId: tool.id })
+    service.observe(FIRST, [pending])
+    const message = await vi.waitFor(() => {
+      const current = sent().slice(room).find((text) => text.includes('/deny'))
+      expect(current).toBeDefined()
+      return current!
+    })
+    const freshCode = message.match(/\/deny ([a-f0-9]{8})/)![1]
+    await publish([packet('43', `/deny ${freshCode}`)], 'cursor-43', afterStale)
+    expect(actions.respond).toHaveBeenCalledExactlyOnceWith(FIRST, 'next-edit', { decision: 'deny', choice: 'no' })
+  })
+
   it('accepts only a current, one-use approval with no persistent grants', async () => {
     await pair()
     const cursor = await publish([packet('8', '/help')], 'cursor-8')
-    await vi.waitFor(() => expect(sent().some((text) => text.includes('发送 /status 查看状态。') && text.includes('只回复提醒中的一条命令'))).toBe(true))
+    await vi.waitFor(() => expect(sent().some((text) => text.includes('发送 /status 查看当前动作和待确认请求。') && text.includes('只回复提醒中的一条命令'))).toBe(true))
     pending = approval()
     service.observe(FIRST, [pending])
     const instructions = await vi.waitFor(() => {

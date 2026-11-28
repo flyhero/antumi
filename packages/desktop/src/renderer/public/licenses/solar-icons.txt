@@ -1,0 +1,9 @@
+Solar Icons artwork by 480 Design
+https://solar-icons.dev/docs/v2#acknowledgements
+
+Licensed under Creative Commons Attribution 4.0 International (CC BY 4.0).
+https://creativecommons.org/licenses/by/4.0/
+
+Linear icons: Kanban, Settings, Chat Square Dots, and Question Circle.
+Source: @solar-icons/static 2.7.0 (https://solar-icons.dev/icons)
+Adapted to React components with inherited color and size. The SVG geometry is unchanged.

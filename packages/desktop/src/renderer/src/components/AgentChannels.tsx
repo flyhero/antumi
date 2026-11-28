@@ -9,7 +9,7 @@ import { askConfirm } from '../confirm-dialog'
 import { timeAgo } from '../conversation-state'
 import { perform, useCore } from '../core-store'
 import { t, useLocale } from '../i18n'
-import { agentLabel } from '../labels'
+import { agentLabel, channelProblemText } from '../labels'
 import { useOccludesBrowser } from '../browser-occlusion'
 import { CopyButton } from './CopyButton'
 import { ChannelRequestDetail } from './ChannelRequestDetail'
@@ -30,7 +30,7 @@ export function channelStateText(channel: Pick<Channel, 'state' | 'error' | 'ten
   if (!channel.enabled) return t('AgentChannels.stateDisabled')
   // DingTalk does not say its organisation's name.
   if (channel.state === 'connected') return channel.tenantName ? t('AgentChannels.stateConnected', { name: channel.tenantName }) : t('AgentChannels.stateConnectedUnnamed')
-  if (channel.state === 'failed') return t('AgentChannels.stateFailed', { error: channel.error ?? '' })
+  if (channel.state === 'failed') return t('AgentChannels.stateFailed', { error: channelProblemText(channel.error ?? '') })
   return t(channel.state === 'connecting' ? 'AgentChannels.stateConnecting' : 'AgentChannels.stateOff')
 }
 
@@ -169,8 +169,8 @@ function ChannelDialog({ profileId, platform, channel, agent, hasProvider, onClo
   const descriptor = channelPlatform(platform)
   const all = useChannels()
   const [projects, setProjects] = useState<string[]>([])
-  const taskCreationSupported = useChannelTasksSupported()
-  const reportsSupported = useChannelTaskReportsSupported()
+  const taskCreationSupported = useChannelTasksSupported() && descriptor.features.tasks !== false
+  const reportsSupported = useChannelTaskReportsSupported() && taskCreationSupported
   const cardsSupported = useChannelTaskCardsSupported() && descriptor.features.cards
   const toolCatalog = useChannelPlatformToolsSupported() ? descriptor.tools : undefined
   const followUpsSupported = useChannelFollowUpsSupported() && descriptor.features.followUps
@@ -258,7 +258,7 @@ function ChannelDialog({ profileId, platform, channel, agent, hasProvider, onClo
       <div className="agent-channel-grid">
         {descriptor.credentials.map(({ key, label, prefix }) => <div key={key} className="squad-field">
           <label htmlFor={`${formId}-${key}`}>{label}</label>
-          <input id={`${formId}-${key}`} className="input" type="password" autoComplete="off" spellCheck={false} placeholder={channel?.stored.includes(key) ? t('AgentChannels.tokenStored') : prefix ? `${prefix}…` : ''}
+          <input id={`${formId}-${key}`} className="input" type="password" autoComplete="off" spellCheck={false} disabled={key === 'botId' && !!channel} placeholder={channel?.stored.includes(key) ? t('AgentChannels.tokenStored') : prefix ? `${prefix}…` : ''}
             value={draft.credentials[key] ?? ''} onKeyDown={onEnter} onChange={(event) => setDraft({ ...draft, credentials: { ...draft.credentials, [key]: event.target.value } })} />
         </div>)}
       </div>
@@ -416,6 +416,9 @@ function ChannelRequests({ channel }: { channel: Channel }) {
             {request.images > 0 && <span>{t('AgentChannels.images', { count: request.images })}</span>}
             {request.endedAt !== null && request.startedAt !== null && <span>{t('AgentChannels.seconds', { count: Math.max(1, Math.round((request.endedAt - request.startedAt) / 1000)) })}</span>}
             {request.totalTokens !== null && <span>{t('AgentChannels.tokens', { count: request.totalTokens })}</span>}
+            {request.delivery && <span data-state={request.delivery.state === 'failed' ? 'failed' : undefined}>
+              {t(`AgentChannels.delivery.${request.delivery.state}`, { sent: request.delivery.sent, total: request.delivery.total })}
+            </span>}
             {request.redacted && <span data-state="failed">{t('AgentChannels.redacted')}</span>}
           </span>
         </button>

@@ -1,8 +1,8 @@
 # 聊天平台接入
 
-> Slack、飞书（含 Lark）和钉钉都已实现。飞书用真实的应用联调过，Lark 有用户用真实的应用在用，Slack 和钉钉还没有联调过。实现状态见文末。
+> Slack、飞书（含 Lark）、钉钉和企业微信都已实现。飞书用真实的应用联调过，Lark 有用户用真实的应用在用，Slack 和钉钉还没有联调过。实现状态见文末。
 
-给智能体接上聊天平台：同事在 Slack、飞书、Lark 或钉钉里 @ 它，它读指定的项目来答疑、查问题；接入开启「允许创建任务」后，也能按工作指令把明确需求收进任务。它不改代码，也碰不到这台电脑上别的东西。
+给智能体接上聊天平台：同事在 Slack、飞书、Lark、钉钉或企业微信里 @ 它，它读指定的项目来答疑、查问题；接入开启「允许创建任务」后，也能按工作指令把明确需求收进任务。它不改代码，也碰不到这台电脑上别的东西。
 
 不引入新的实体。智能体提供「是谁」（名称、工作指令、模型）；接入（代码里叫 channel）提供「在哪、谁能问、能看什么」。
 
@@ -45,7 +45,7 @@ Slack / 飞书  ⇄(出站长连接)⇄  channel-gateway（core 的子进程）
 
 ## 协议（`protocol/src/channel.ts`、`channel-platforms.ts`）
 
-功能标记 `channels`（没有 `ChannelService` 的 core 不宣布）。全部是新增，没有动 `PROTOCOL_VERSION`。这些方法都不在 `MOBILE_METHODS` 里。
+功能标记 `channels`（没有 `ChannelService` 的 core 不宣布）。新增企业微信时，`PROTOCOL_VERSION` 升到 20。桌面、core 和手机客户端需配套升级，daemon 协议不变。这些方法都不在 `MOBILE_METHODS` 里。
 
 - `ChannelFields`：用户填的部分。`profileId`、`platform`、`enabled`、`projectPaths`、`allowedUsers`、`allowedPlaces`（能 @ 它的群聊）、`allowDirect`、`dailyPerUser`（默认 20）、`dailyTotal`（200）、`maxConcurrent`（2）、`turnTimeoutSec`（300）。谁都不填就谁都问不了。
 - `Channel`：给客户端看的。多出 `id`、`stored`（存了哪几个凭据，永远不带值）、`tenant` / `tenantName` / `botUserId`（连上后平台说的）、`state`（`off` / `connecting` / `connected` / `failed`）、`error`。
@@ -98,6 +98,7 @@ Slack / 飞书  ⇄(出站长连接)⇄  channel-gateway（core 的子进程）
 - `channel-slack.ts`：Slack 连接器。
 - `channel-feishu.ts`：飞书连接器；`channel-feishu-frame.ts` 是长连接帧的编解码。
 - `channel-dingtalk.ts`：钉钉连接器。
+- `channel-wecom.ts`：企业微信连接器。
 
 ```ts
 CoreToChannelGateway =
@@ -128,6 +129,16 @@ ChannelGatewayToCore =
 - **钉钉也是直接说的**，照官方 Node SDK（`dingtalk-stream` 的 `DWClient`）的做法：`POST /v1.0/gateway/connections/open` 带 Client ID / Secret，只订阅机器人消息（`CALLBACK` `/v1.0/im/bot/messages/get`），拿到 `endpoint` 和 `ticket` 连 WebSocket。帧是 JSON：`SYSTEM` 的 `ping` 原样回，`disconnect` 就换一条连接；`CALLBACK` 是机器人消息，ACK 是回一条带它 `messageId` 的 `{code:200}`，同样等 core 回 `accepted` 才发（钉钉一分钟没收到会重推）。建连接被拒（4xx）报 `failed` 不再重试。
 - 钉钉的消息：`conversationType` 1 是 `direct`，2 且 `isInAtList` 的是 `mention`；没有 `senderStaffId` 的（外部联系人）连接器自己 ACK。`place` 是 `conversationId`，`messageId` 和去重键是 `msgId`，`thread` 永远是 null：机器人不能在话题里回答。`tenant` 是 `senderCorpId`；单聊不带时用机器人所在组织（企业内部机器人只和自己组织的人单聊），群里不带的是外部群，记成 `external`，于是对不上。机器人所在组织（`chatbotCorpId`）从第一条消息得知，连接器在交出这条消息之前先报一次 `state` 回填 `tenant`；钉钉不给组织名，界面只写「已连接」。
 - 钉钉的回答优先走消息里带的 `sessionWebhook`（主机必须是 `oapi.dingtalk.com` / `api.dingtalk.com`，离过期不到 10 秒就不用），Markdown 消息，群里第一段末尾 @ 提问人（`at.atUserIds`），后面几段不再 @。webhook 过期、不认或回了错，就用 `oauth2/accessToken` 换的 token 走机器人消息接口：群 `robot/groupMessages/send`，单聊 `robot/oToMessages/batchSend`，模板 `sampleMarkdown`；这两个接口不能 @ 人，也没有幂等键。webhook 回 `130101`（一分钟超过 20 条）等 3 秒再发。机器人不能给消息加表情，平台描述里 `reactions` 是 false，core 不发 👀。图片用消息里的 `downloadCode` 调 `robot/messageFiles/download` 换一个签名的下载地址再取，给 core 的 `ref` 是下载码的哈希（下载码有几百个字符）。
+
+## 企业微信
+
+在企业微信的「智能机器人」手动创建机器人，选「API 模式创建 → 使用长连接」。在 Antumi「智能体 → 聊天平台」选择「添加企业微信」，填 Bot ID 和 Secret，选项目，设置用户和群白名单。同事私聊或在群里 @ 一次，可从权限提示里取得机器人实际收到的用户 ID 和群 ID。用户 ID 按机器人隔离，同一个机器人同时只能保持一条长连接。更换机器人需重新添加接入，Secret 可以单独更新。
+
+群里每轮都需要 @。同一个人在同一个群里的提问共用会话，私聊单独保存。空闲四小时后开启新会话，之前排队的提问仍归原会话。企业微信接入只开放项目读取工具。支持文字和图片，文件与语音暂不处理。
+
+网关封装企业微信官方 SDK，通过出站 WebSocket 鉴权、接收消息和发送。普通消息按机器人作用域与用户及群白名单校验。每轮保存入站的回复地址，使用回调的 `req_id` 打开处理气泡并发回最终回答。断线重连时可继续已有的气泡。网关重启或气泡失效时，结果可作为同一聊天内的普通消息发送。发送回执不明确时不自动再发，避免同一条回答出现两次。请求记录显示最终回答的投递状态。
+
+图片仅在通过白名单和额度检查后下载。下载地址和解密密钥只存在网关内存，下载限制为 HTTPS 公网地址，实际连接绑定经过校验的地址。解密后仍经过 Antumi 附件校验。回复通过现有的输出脱敏，按 UTF-8 字节分段。连接、回执和恢复行为用本地模拟平台验证，真实企业微信租户联调单独记录。
 
 ## 入站处理（`core/src/channel-service.ts` 的 `ingest`）
 
@@ -427,6 +438,7 @@ claude -p --verbose --output-format stream-json --input-format stream-json --inc
 | 网关子进程 | 从源码 fork 起来，用假 token 连真的 Slack API，得到 `invalid_auth` 并显示在界面上 |
 | 桌面端「聊天平台」区块 | 在一次性的测试实例里用界面添加、保存、看到失败状态 |
 | 从 Slack 提问到回答 | 只对本地的假 Slack 验证过。**真实的 Slack 工作区没有联调过**：需要建一个应用、拿到两个 token |
+| 从企业微信提问到回答 | 已通过本地 WebSocket 及渠道服务测试，真实企业微信租户尚未联调 |
 | 从钉钉提问到回答 | 只对本地的假钉钉验证过，帧格式照官方 Node SDK（`dingtalk-stream` 2.1.6-beta.1）写的。**真实的钉钉应用没有联调过** |
 | 从 Lark 提问到回答 | 接口和帧与飞书相同，只换了域名。有用户用真实的 Lark 应用接入，提问和回答正常（2026-11-27 的用户反馈）；我们自己没有联调过 |
 | 从飞书提问到回答 | 用真实的飞书应用联调通过（2026-11-15）：应用建在飞书个人账号自己的组织里，从桌面端填凭据、连上长连接，到在飞书里提问收到回答。帧格式照官方 Node SDK 1.76.0 写的 |

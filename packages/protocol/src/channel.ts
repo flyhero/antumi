@@ -4,7 +4,7 @@ import { MAX_TASK_REPOS } from './task-limits'
 // An agent on a chat platform (docs/CHANNELS.md): colleagues ask it questions there, and it answers
 // from the projects it is given, locked down. What core and the desktop share about it, zod only.
 
-export const CHANNEL_PLATFORMS = ['slack', 'feishu', 'lark', 'dingtalk'] as const
+export const CHANNEL_PLATFORMS = ['slack', 'feishu', 'lark', 'dingtalk', 'wecom'] as const
 export const ChannelPlatform = z.enum(CHANNEL_PLATFORMS)
 export type ChannelPlatform = z.infer<typeof ChannelPlatform>
 
@@ -72,7 +72,7 @@ export const ChannelFields = z.object({
 export type ChannelFields = z.infer<typeof ChannelFields>
 
 // A credential's name on its platform's descriptor (channel-platforms.ts).
-export const ChannelCredentialKey = z.enum(['appToken', 'botToken', 'appId', 'appSecret'])
+export const ChannelCredentialKey = z.enum(['appToken', 'botToken', 'appId', 'appSecret', 'botId', 'secret'])
 export type ChannelCredentialKey = z.infer<typeof ChannelCredentialKey>
 
 // As clients see one: which credentials are stored, never their values.
@@ -119,6 +119,12 @@ export const ChannelRequest = z.object({
   errorReason: z.string().nullable().optional(),
   // Whether something that looked like a secret was taken out of its answer.
   redacted: z.boolean(),
+  delivery: z.object({
+    state: z.enum(['pending', 'sent', 'failed', 'unknown']),
+    sent: z.number().int().nonnegative(),
+    total: z.number().int().positive(),
+    error: z.string().nullable()
+  }).optional(),
   conversationId: z.string().uuid().nullable(),
   createdAt: z.number(),
   startedAt: z.number().nullable(),

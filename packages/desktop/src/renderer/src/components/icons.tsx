@@ -301,7 +301,7 @@ function DingtalkMark() {
   )
 }
 
-const CHANNEL_MARKS = { slack: SlackMark, feishu: FeishuMark, lark: FeishuMark, dingtalk: DingtalkMark } satisfies Record<ChannelPlatform, () => ReactElement>
+const CHANNEL_MARKS = { slack: SlackMark, feishu: FeishuMark, lark: FeishuMark, dingtalk: DingtalkMark, wecom: ChatIcon } satisfies Record<ChannelPlatform, () => ReactElement>
 
 // A chat platform an agent answers on, by its own logo.
 export function ChannelPlatformIcon({ platform }: { platform: ChannelPlatform }) {

@@ -4,9 +4,10 @@ import type { CoreToChannelGateway, GatewayChannel } from './channel-gateway-ipc
 import { dingtalkConnector } from './channel-dingtalk'
 import { feishuConnector, larkConnector } from './channel-feishu'
 import { slackConnector } from './channel-slack'
+import { wecomConnector } from './channel-wecom'
 
 // How each platform is reached. A platform is added by its connector here; a missing one fails typecheck.
-export const CONNECTORS = { slack: slackConnector, feishu: feishuConnector, lark: larkConnector, dingtalk: dingtalkConnector } satisfies Record<ChannelPlatform, ConnectorFactory>
+export const CONNECTORS = { slack: slackConnector, feishu: feishuConnector, lark: larkConnector, dingtalk: dingtalkConnector, wecom: wecomConnector } satisfies Record<ChannelPlatform, ConnectorFactory>
 
 // The platforms' connections, one per channel, as core names them. It holds no rule and nothing of
 // core's: what comes in goes to core as it is, and only what core says is posted.
@@ -41,8 +42,8 @@ export class ChannelGateway {
       case 'deliver': {
         const { type: _type, ...job } = message
         const connector = this.live.get(job.channelId)?.connector
-        const answer = connector ? connector.deliver(job) : Promise.resolve({ ok: false, platformId: null, retryAfterMs: null, error: 'not connected' })
-        return void answer.then((done) => this.emit({ type: 'delivered', outboxId: job.outboxId, ...done }))
+        const answer = connector ? connector.deliver(job) : Promise.resolve({ ok: false, platformId: null, retryAfterMs: null, error: 'not connected', failure: 'retry' as const })
+        return void answer.catch(() => ({ ok: false, platformId: null, retryAfterMs: null, error: 'delivery interrupted', failure: 'unknown' as const })).then((done) => this.emit({ type: 'delivered', outboxId: job.outboxId, ...done }))
       }
     }
   }

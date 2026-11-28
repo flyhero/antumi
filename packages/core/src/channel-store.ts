@@ -1,6 +1,7 @@
 import { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
 import { ChannelFields, ChannelPlatform, ChannelRequest, ChannelRequestState, ChannelTaskFeedback, ChannelTaskReport, TaskCards, type ChannelTaskReportState, type ChannelToolCall } from '@antumi/protocol'
+import { WecomPost, WecomReply } from './channel-gateway-ipc'
 import type { TaskWriteLink } from './task-store'
 
 // Agents on chat platforms: who may ask, each question and what came of it, and what is still to
@@ -24,6 +25,7 @@ export type StoredRequest = {
   state: ChannelRequestState; refusal: string | null; redacted: boolean; conversationId: string | null; day: string
   error?: string | null
   errorReason?: string | null
+  wecom?: WecomReply
   createdAt: number; startedAt: number | null; endedAt: number | null; totalTokens: number | null
 }
 
@@ -31,13 +33,13 @@ export type StoredRequest = {
 export const OutboxOp = z.enum(['react', 'post', 'card', 'update'])
 export type OutboxOp = z.infer<typeof OutboxOp>
 // reportId: the task report it carries, if it is one (channel_task_reports).
-export type OutboxRow = { id: string; channelId: string; requestId: string | null; reportId: string | null; op: OutboxOp; payload: OutboxPayload; attempts: number; nextAt: number }
+export type OutboxRow = { id: string; channelId: string; requestId: string | null; reportId: string | null; op: OutboxOp; payload: OutboxPayload; attempts: number; nextAt: number; createdAt: number }
 // mention: a platform user core names to be notified, never anything from an agent's words.
 // card: the platform's own card, core-drawn; cardId: the card row it posts or redraws.
 // recipient: a user whose direct chat with the bot it goes to, in place of a chat.
 const OutboxPayload = z.object({
   place: z.string(), thread: z.string().nullable(), target: z.string().nullable(), text: z.string().nullable(), emoji: z.string().nullable(),
-  mention: z.string().nullable().optional(), card: z.unknown().optional(), cardId: z.string().nullable().optional(), recipient: z.string().nullable().optional()
+  mention: z.string().nullable().optional(), card: z.unknown().optional(), cardId: z.string().nullable().optional(), recipient: z.string().nullable().optional(), wecom: WecomPost.optional()
 })
 
 export type CardKind = 'task' | 'review' | 'rework'
@@ -77,8 +79,13 @@ const strings = (raw: unknown): string[] => {
   }
 }
 
+function storedReply(raw: unknown): WecomReply | undefined {
+  if (typeof raw !== 'string') return undefined
+  try { return WecomReply.safeParse(JSON.parse(raw)).data } catch { return undefined }
+}
+
 const REQUEST_SELECT = `SELECT id, channel_id AS channelId, thread_id AS threadId, asker, tenant, place, direct, message_id AS messageId, text, images, notes,
-  state, refusal, error, error_reason AS errorReason, redacted, conversation_id AS conversationId, day, created_at AS createdAt, started_at AS startedAt, ended_at AS endedAt, total_tokens AS totalTokens FROM channel_requests`
+  state, refusal, error, error_reason AS errorReason, redacted, conversation_id AS conversationId, day, created_at AS createdAt, started_at AS startedAt, ended_at AS endedAt, total_tokens AS totalTokens, wecom_reply FROM channel_requests`
 
 function request(row: Record<string, unknown>): StoredRequest {
   return {
@@ -88,7 +95,8 @@ function request(row: Record<string, unknown>): StoredRequest {
     conversationId: row.conversationId == null ? null : String(row.conversationId), day: String(row.day), error: row.error == null ? null : String(row.error),
     errorReason: row.errorReason == null ? null : String(row.errorReason),
     createdAt: Number(row.createdAt), startedAt: row.startedAt == null ? null : Number(row.startedAt), endedAt: row.endedAt == null ? null : Number(row.endedAt),
-    totalTokens: row.totalTokens == null ? null : Number(row.totalTokens)
+    totalTokens: row.totalTokens == null ? null : Number(row.totalTokens),
+    wecom: storedReply(row.wecom_reply)
   }
 }
 
@@ -189,15 +197,24 @@ export class ChannelStore {
       .run(next.id, next.channelId, next.threadKey, next.asker, next.conversationId ?? '', next.replyPlace, next.replyThread, next.lastAt)
   }
 
+  setThreadConversation(id: string, conversationId: string): void {
+    this.db.prepare('UPDATE channel_threads SET conversation_id = ? WHERE id = ?').run(conversationId, id)
+  }
+
+  archiveThread(id: string): void {
+    this.db.prepare('UPDATE channel_threads SET thread_key = ? WHERE id = ?').run(`expired:${id}`, id)
+  }
+
   // Takes the question if the day still has room for it, counting and adding in one step so two at
   // once cannot both take the last place. What was turned away does not count.
-  reserve(row: StoredRequest, limits: { perUser: number; total: number }): 'ok' | 'user' | 'total' {
+  reserve(row: StoredRequest, limits: { perUser: number; total: number }, onAccepted: () => void = () => {}): 'ok' | 'user' | 'total' {
     this.db.exec('BEGIN IMMEDIATE')
     try {
       const count = (asker: string | null) => Number(this.db.prepare(`SELECT COUNT(*) AS n FROM channel_requests WHERE channel_id = ? AND day = ? AND state != 'refused' ${asker === null ? '' : 'AND asker = ?'}`)
         .get(...(asker === null ? [row.channelId, row.day] : [row.channelId, row.day, asker]))?.n ?? 0)
       const verdict = count(row.asker) >= limits.perUser ? 'user' : count(null) >= limits.total ? 'total' : 'ok'
       this.insertRequest(verdict === 'ok' ? row : { ...row, state: 'refused', refusal: 'quota' })
+      if (verdict === 'ok') onAccepted()
       this.db.exec('COMMIT')
       return verdict
     } catch (error) {
@@ -207,10 +224,10 @@ export class ChannelStore {
   }
 
   insertRequest(row: StoredRequest): void {
-    this.db.prepare(`INSERT INTO channel_requests (id, channel_id, thread_id, asker, tenant, place, direct, message_id, text, images, notes, state, refusal, redacted, conversation_id, day, created_at, started_at, ended_at, total_tokens)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+    this.db.prepare(`INSERT INTO channel_requests (id, channel_id, thread_id, asker, tenant, place, direct, message_id, text, images, notes, state, refusal, redacted, conversation_id, day, created_at, started_at, ended_at, total_tokens, wecom_reply)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
       row.id, row.channelId, row.threadId, row.asker, row.tenant, row.place, Number(row.direct), row.messageId, row.text, JSON.stringify(row.images), JSON.stringify(row.notes),
-      row.state, row.refusal, Number(row.redacted), row.conversationId, row.day, row.createdAt, row.startedAt, row.endedAt, row.totalTokens)
+      row.state, row.refusal, Number(row.redacted), row.conversationId, row.day, row.createdAt, row.startedAt, row.endedAt, row.totalTokens, row.wecom ? JSON.stringify(row.wecom) : null)
   }
 
   updateRequest(id: string, patch: Partial<Pick<StoredRequest, 'state' | 'refusal' | 'error' | 'errorReason' | 'redacted' | 'conversationId' | 'startedAt' | 'endedAt' | 'totalTokens' | 'images' | 'notes'>>): void {
@@ -244,9 +261,23 @@ export class ChannelStore {
       return ChannelRequest.parse({
         id: stored.id, channelId: stored.channelId, asker: stored.asker, place: stored.place, direct: stored.direct, text: stored.text, images: stored.images.length, state: stored.state,
         refusal: stored.refusal, error: stored.error ?? null, errorReason: stored.errorReason ?? null, redacted: stored.redacted, conversationId: stored.conversationId, createdAt: stored.createdAt, startedAt: stored.startedAt, endedAt: stored.endedAt,
-        totalTokens: stored.totalTokens, toolCalls: Number(row.toolCalls)
+        totalTokens: stored.totalTokens, toolCalls: Number(row.toolCalls),
+        delivery: stored.wecom ? this.delivery(stored.id) : undefined
       })
     })
+  }
+
+  private delivery(id: string): ChannelRequest['delivery'] {
+    const rows = this.db.prepare(`SELECT state, delivery_error FROM channel_outbox WHERE request_id = ?
+      AND json_extract(payload, '$.wecom.phase') IN ('final', 'extra', 'notice') ORDER BY rowid`).all(id)
+    if (!rows.length) return undefined
+    const sent = rows.filter((row) => row.state === 'sent').length
+    const total = rows.length
+    const unknown = rows.find((row) => row.state === 'unknown')
+    const failed = rows.find((row) => row.state === 'failed')
+    const state = unknown ? 'unknown' : failed ? 'failed' : sent === total ? 'sent' : 'pending'
+    const problem = unknown ?? failed
+    return { state, sent, total, error: problem?.delivery_error == null ? null : String(problem.delivery_error) }
   }
 
   addToolCall(requestId: string, call: ChannelToolCall): void {
@@ -263,6 +294,18 @@ export class ChannelStore {
     return this.db.prepare('SELECT DISTINCT conversation_id AS id FROM channel_threads WHERE channel_id = ? AND conversation_id != \'\'').all(channelId).map((row) => String(row.id))
   }
 
+  transaction<T>(work: () => T): T {
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      const result = work()
+      this.db.exec('COMMIT')
+      return result
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+  }
+
   addOutbox(row: { id: string; channelId: string; requestId: string | null; reportId?: string | null; op: OutboxOp; payload: OutboxPayload }, now: number): void {
     this.db.prepare('INSERT INTO channel_outbox (id, channel_id, request_id, report_id, op, payload, state, attempts, next_at, created_at) VALUES (?, ?, ?, ?, ?, ?, \'pending\', 0, ?, ?)')
       .run(row.id, row.channelId, row.requestId, row.reportId ?? null, row.op, JSON.stringify(row.payload), now, now)
@@ -270,13 +313,25 @@ export class ChannelStore {
 
   // What is still to be posted, oldest first, whether or not its time has come: the order holds.
   pendingOutbox(): OutboxRow[] {
-    return this.db.prepare('SELECT * FROM channel_outbox WHERE state = \'pending\' ORDER BY created_at, rowid').all().flatMap((row) => {
+    return this.db.prepare('SELECT * FROM channel_outbox WHERE state IN (\'pending\', \'sending\') ORDER BY created_at, rowid').all().flatMap((row) => {
       let payload: OutboxPayload
       try { payload = OutboxPayload.parse(JSON.parse(String(row.payload))) } catch { return [] }
       const op = OutboxOp.safeParse(row.op)
       if (!op.success) return []
-      return [{ id: String(row.id), channelId: String(row.channel_id), requestId: row.request_id == null ? null : String(row.request_id), reportId: row.report_id == null ? null : String(row.report_id), op: op.data, payload, attempts: Number(row.attempts), nextAt: Number(row.next_at) }]
+      return [{ id: String(row.id), channelId: String(row.channel_id), requestId: row.request_id == null ? null : String(row.request_id), reportId: row.report_id == null ? null : String(row.report_id), op: op.data, payload, attempts: Number(row.attempts), nextAt: Number(row.next_at), createdAt: Number(row.created_at) }]
     })
+  }
+
+  outboxSending(id: string): void {
+    this.db.prepare("UPDATE channel_outbox SET state = 'sending' WHERE id = ?").run(id)
+  }
+
+  abandonInflight(): void {
+    this.db.prepare("UPDATE channel_outbox SET state = 'unknown', delivery_error = 'wecom-unconfirmed' WHERE state = 'sending'").run()
+  }
+
+  outboxTerminal(id: string, state: 'failed' | 'unknown', error: string): void {
+    this.db.prepare('UPDATE channel_outbox SET state = ?, delivery_error = ? WHERE id = ?').run(state, error, id)
   }
 
   outboxSent(id: string, platformId: string | null): void {
@@ -286,7 +341,7 @@ export class ChannelStore {
   // Tried again at nextAt, or given up on.
   outboxRetry(id: string, nextAt: number | null): void {
     if (nextAt === null) this.db.prepare('UPDATE channel_outbox SET state = \'failed\', attempts = attempts + 1 WHERE id = ?').run(id)
-    else this.db.prepare('UPDATE channel_outbox SET attempts = attempts + 1, next_at = ? WHERE id = ?').run(nextAt, id)
+    else this.db.prepare('UPDATE channel_outbox SET state = \'pending\', attempts = attempts + 1, next_at = ? WHERE id = ?').run(nextAt, id)
   }
 
   outboxStates(): Array<{ op: string; state: string; text: string | null }> {

@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@antumi/protocol": "workspace:*",
+    "@wecom/aibot-node-sdk": "1.0.7",
     "semver": "7.8.5",
     "smol-toml": "^1.9.1",
     "undici": "7.29.1",

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { ChannelRequest, ChannelToolCall } from '@antumi/protocol'
 import { perform, useCore } from '../core-store'
 import { t } from '../i18n'
-import { reasonText } from '../labels'
+import { channelProblemText, reasonText } from '../labels'
 
 type Detail = { answer: string; reads: ChannelToolCall[] }
 
@@ -38,6 +38,10 @@ export function ChannelRequestDetailContent({ request, detail, error }: { reques
     <h5>{t('AgentChannels.question')}</h5>
     <pre>{request.text || t('AgentChannels.imagesOnly')}</pre>
     {request.error && <><h5>{t('AgentChannels.failure')}</h5>{explained ? <p className="agent-channel-failure">{explained}</p> : <pre>{request.error}</pre>}</>}
+    {request.delivery?.error && <>
+      <h5>{t('AgentChannels.deliveryIssue')}</h5>
+      <p className="agent-channel-failure">{channelProblemText(request.delivery.error)}</p>
+    </>}
     {error ? <p className="modal-error" role="alert">{error}</p> : <>
       <h5>{t('AgentChannels.answer')}</h5>
       {detail?.answer ? <pre>{detail.answer}</pre> : <p className="squad-block-hint muted">{detail ? emptyAnswer : '…'}</p>}

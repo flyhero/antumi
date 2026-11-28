@@ -158,17 +158,23 @@ export function toDingtalk(markdown: string): string {
 }
 
 // As the platform writes text: its escaping and its marks for bold, links and code.
-const FORMATTERS = { slack: toSlack, feishu: toFeishu, lark: toFeishu, dingtalk: toDingtalk } satisfies Record<ChannelPlatform, (markdown: string) => string>
+const FORMATTERS = { slack: toSlack, feishu: toFeishu, lark: toFeishu, dingtalk: toDingtalk, wecom: (text) => toFeishu(text)
+  .replace(/@(all|everyone)\b/gi, '@\u200b$1')
+  .replace(/<@/g, '<\u200b@') } satisfies Record<ChannelPlatform, (markdown: string) => string>
 
 // In pieces of at most limit, cut between paragraphs, else lines, else anywhere; a code block cut
 // in two is closed in one piece and opened again in the next.
-export function inPieces(text: string, limit: number): string[] {
+export function inPieces(text: string, limit: number, bytes = false): string[] {
+  const length = (value: string) => bytes ? Buffer.byteLength(value) : value.length
   const pieces: string[] = []
   let rest = text
   const room = Math.max(limit - 8, 1)
-  while (rest.length > limit) {
-    const window = rest.slice(0, room)
-    const cut = [window.lastIndexOf('\n\n'), window.lastIndexOf('\n')].find((at) => at > room / 2) ?? room
+  while (length(rest) > limit) {
+    let end = Math.min(room, rest.length)
+    while (bytes && length(rest.slice(0, end)) > room) end -= 1
+    if (end > 0 && /[\uD800-\uDBFF]/.test(rest[end - 1] ?? '')) end -= 1
+    const window = rest.slice(0, end)
+    const cut = [window.lastIndexOf('\n\n'), window.lastIndexOf('\n')].find((at) => at > end / 2) ?? Math.max(1, end)
     let piece = rest.slice(0, cut)
     rest = rest.slice(cut).replace(/^\n+/, '')
     if ((piece.match(/```/g) ?? []).length % 2 === 1) {
@@ -185,9 +191,9 @@ export const TOO_LONG = '\n\n（回答过长，已截断）'
 
 // An agent's answer as the messages to post for it.
 export function channelMessages(platform: ChannelPlatform, answer: string, context: { home: string; roots: readonly { name: string; root: string }[]; hide: readonly string[] }): { messages: string[]; redacted: boolean } {
-  const cut = answer.length > MAX_CHANNEL_ANSWER_CHARS ? answer.slice(0, MAX_CHANNEL_ANSWER_CHARS) + TOO_LONG : answer
+  const cut = answer.length > MAX_CHANNEL_ANSWER_CHARS ? answer.slice(0, MAX_CHANNEL_ANSWER_CHARS).replace(/[\uD800-\uDBFF]$/, '') + TOO_LONG : answer
   const safe = redact(withoutMachinePaths(cut, context.home, context.roots), context.hide)
-  return { messages: inPieces(FORMATTERS[platform](safe.text), channelPlatform(platform).textLimit), redacted: safe.redacted }
+  return { messages: inPieces(FORMATTERS[platform](safe.text), channelPlatform(platform).textLimit, channelPlatform(platform).textBytes), redacted: safe.redacted }
 }
 
 // A sentence of core's own (a refusal, a failure), which needs no more than escaping.

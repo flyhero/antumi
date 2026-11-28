@@ -14,6 +14,14 @@ const Ref = z.string().min(1).max(500)
 export const GatewayChannel = z.object({ id: z.string().uuid(), platform: ChannelPlatform, credentials: z.record(z.string(), z.string()), options: z.object({ followUps: z.boolean() }).optional() })
 export type GatewayChannel = z.infer<typeof GatewayChannel>
 
+export const WecomReply = z.object({ reqId: Ref, tenant: Ref, receivedAt: z.number(), user: Ref, direct: z.boolean(), projects: z.string().optional(), images: z.number().int().nonnegative().optional() })
+export type WecomReply = z.infer<typeof WecomReply>
+
+export const WecomPost = WecomReply.extend({ phase: z.enum(['progress', 'final', 'notice', 'extra', 'denial']) })
+export type WecomPost = z.infer<typeof WecomPost>
+export const DeliveryFailure = z.enum(['retry', 'permanent', 'unknown'])
+export type DeliveryFailure = z.infer<typeof DeliveryFailure>
+
 export const ChannelDelivery = z.object({
   outboxId: z.string().uuid(),
   channelId: z.string().uuid(),
@@ -30,7 +38,8 @@ export const ChannelDelivery = z.object({
   // The platform's own card, drawn by core.
   card: z.unknown().optional(),
   // A user whose direct chat with the bot it goes to, in place of the chat at place.
-  recipient: Ref.nullable().optional()
+  recipient: Ref.nullable().optional(),
+  wecom: WecomPost.optional()
 })
 export type ChannelDelivery = z.infer<typeof ChannelDelivery>
 
@@ -81,7 +90,7 @@ export const ChannelAction = z.object({
 })
 export type ChannelAction = z.infer<typeof ChannelAction>
 
-export const ChannelEventImage = z.object({ ref: Ref, name: z.string().max(300), mime: z.string().max(100), bytes: z.number().int().nonnegative() })
+export const ChannelEventImage = z.object({ ref: Ref, name: z.string().max(300), mime: z.string().max(100).nullable(), bytes: z.number().int().nonnegative().nullable() })
 export type ChannelEventImage = z.infer<typeof ChannelEventImage>
 
 // A message for the bot as its platform delivered it: a mention in a group chat, or a direct one.
@@ -102,7 +111,8 @@ export const ChannelEvent = z.object({
   text: z.string().max(40_000),
   images: z.array(ChannelEventImage).max(32),
   // Files that are not pictures, which are never fetched.
-  otherFiles: z.number().int().nonnegative()
+  otherFiles: z.number().int().nonnegative(),
+  wecom: WecomReply.optional()
 })
 export type ChannelEvent = z.infer<typeof ChannelEvent>
 
@@ -111,7 +121,7 @@ export const ChannelGatewayToCore = z.discriminatedUnion('type', [
   z.object({ type: z.literal('event') }).extend(ChannelEvent.shape),
   // A fetched picture in pieces, in order; done on the last, error instead where it could not be had.
   z.object({ type: z.literal('image'), requestId: z.string().uuid(), ref: Ref, data: z.string(), done: z.boolean(), error: z.string().nullable() }),
-  z.object({ type: z.literal('delivered'), outboxId: z.string().uuid(), ok: z.boolean(), platformId: z.string().nullable(), retryAfterMs: z.number().int().nonnegative().nullable(), error: z.string().nullable() }),
+  z.object({ type: z.literal('delivered'), outboxId: z.string().uuid(), ok: z.boolean(), platformId: z.string().nullable(), retryAfterMs: z.number().int().nonnegative().nullable(), error: z.string().nullable(), failure: DeliveryFailure.optional() }),
   z.object({ type: z.literal('action') }).extend(ChannelAction.shape),
   z.object({ type: z.literal('platformAnswer'), callId: z.string().uuid() }).extend(PlatformAnswer.shape)
 ])

@@ -108,7 +108,7 @@ describe('ChannelService', () => {
       if (change.type === 'deleted') channels.conversationEnded(change.id)
       if (change.type === 'chatItems') channels.conversationItems(change.conversationId, change.items)
     }, projects, attachments, null)
-    conversations.setChannelTools({ mcp: (id) => ({ command: 'node', args: ['mcp.mjs', '--conversation', id, '--tool-set', 'channel'] }), tools: () => CHANNEL_TOOL_NAMES })
+    conversations.setChannelTools({ mcp: (id) => ({ command: 'node', args: ['mcp.mjs', '--conversation', id, '--tool-set', 'channel'] }), tools: (id) => channels.toolNames(id) })
     daemon.deliver = (delivered) => {
       if (delivered.event === 'data') conversations.handleData(delivered)
       else if (delivered.event === 'exit') conversations.handleExit(delivered.sessionId, delivered.exitCode)
@@ -157,6 +157,110 @@ describe('ChannelService', () => {
     conversationStore.close()
     tasks.close()
     rmSync(root, { recursive: true, force: true })
+  })
+
+  const wecomInput = {
+    profileId: profile.id, platform: 'wecom', credentials: { botId: 'bot', secret: 'secret' },
+    allowedUsers: ['U1', 'U2'], allowedPlaces: ['C1'], allowDirect: true
+  } as const
+
+  async function attachWecom() {
+    const attached = await channels.save({ ...wecomInput, allowedUsers: [...wecomInput.allowedUsers], allowedPlaces: ['C1'], projectPaths: [repo] })
+    fromGateway({ type: 'state', channelId: attached.id, state: 'connected', error: null, tenant: 'wecom:bot', botUserId: 'bot' })
+    channel = attached
+    return attached
+  }
+
+  function askWecom(reqId: string, overrides: Partial<ChannelEvent> = {}) {
+    const user = overrides.user ?? 'U1'
+    return ask({ tenant: 'wecom:bot', wecom: { reqId, tenant: 'wecom:bot', receivedAt: now, user, direct: overrides.kind === 'direct' }, ...overrides })
+  }
+
+  it('rejects duplicate WeCom bindings and excludes task capabilities from the session', async () => {
+    await attachWecom()
+    await expect(channels.save({ profileId: profile.id, platform: 'wecom', credentials: wecomInput.credentials })).rejects.toMatchObject({ reason: 'channel-wecom-duplicate' })
+    await expect(channels.save({ id: channel.id, profileId: profile.id, platform: 'wecom', reportTasks: true })).rejects.toMatchObject({ reason: 'invalid-params' })
+    await askWecom('q')
+    const request = channels.requests(channel.id, null, 1).items[0]!
+    expect(request.conversationId).toBeTruthy()
+    const conversationId = request.conversationId!
+    expect(channels.toolNames(conversationId)).toEqual(['project_list', 'project_search', 'project_read'])
+    expect((await channels.toolSpecs(conversationId)).map(({ name }) => name)).toEqual(channels.toolNames(conversationId))
+    expect(await channels.callTool(conversationId, 'task_create', { title: 'No' })).toMatchObject({ isError: true })
+    expect(await channels.callTool(conversationId, 'lark_create_doc', {})).toMatchObject({ isError: true })
+    const sessionId = conversations.get(conversationId).sessionId!
+    expect(JSON.stringify(daemon.written(sessionId))).not.toContain('task_create')
+  })
+
+  it('keeps each WeCom reply on its own message and rolls an idle group session over', async () => {
+    await attachWecom()
+    const a = await askWecom('first')
+    now += 3000
+    await askWecom('next')
+    now += 3000
+    await askWecom('other-user', { user: 'U2' })
+    fromGateway({ type: 'event', ...a })
+    await vi.waitFor(() => expect(channels.requests(channel.id, null, 10).items.every((item) => item.state === 'answered')).toBe(true))
+    const [other, next, first] = channels.requests(channel.id, null, 10).items
+    expect(first?.conversationId).toBeTruthy()
+    expect(next?.conversationId).toBe(first?.conversationId)
+    expect(other?.conversationId).not.toBe(first?.conversationId)
+    for (let round = 0; round < 6; round++) {
+      const job = sent('deliver')[round]
+      expect(job).toBeDefined()
+      fromGateway({ type: 'delivered', outboxId: job!.outboxId, ok: true, platformId: null, retryAfterMs: null, error: null })
+      now += 2100
+      channels.tick()
+    }
+    expect(sent('deliver').filter((job) => job.wecom?.phase === 'final').map((job) => job.wecom?.reqId).sort()).toEqual(['first', 'next', 'other-user'])
+    expect(channels.requests(channel.id, null, 10).items.map((item) => item.delivery?.state)).toEqual(['sent', 'sent', 'sent'])
+    now += 4 * 3_600_000 + 1
+    await askWecom('later')
+    expect(channels.requests(channel.id, null, 1).items[0]?.conversationId).not.toBe(first?.conversationId)
+    expect(channels.requests(channel.id, null, 10).items).toHaveLength(4)
+  })
+
+  it('does not request WeCom images for an unauthorized user or run an empty prompt after a download fails', async () => {
+    await attachWecom()
+    const images = [{ ref: 'ref', name: 'image', mime: null, bytes: null }]
+    await askWecom('denied', { user: 'T-new', text: '', images })
+    expect(sent('fetch')).toHaveLength(0)
+    expect(store.outcomes(channel.id)).toContain('refused:acl')
+    await askWecom('missing-photo', { text: '', images })
+    const fetch = sent('fetch')[0]!
+    expect(fetch.images).toEqual(['ref'])
+    fromGateway({ type: 'image', requestId: fetch.requestId, ref: 'ref', data: '', done: true, error: 'expired' })
+    expect(daemon.spawns).toHaveLength(0)
+    expect(store.request(fetch.requestId)).toMatchObject({ state: 'failed' })
+  })
+
+  it('cancels a queued WeCom answer when the asker loses access', async () => {
+    await attachWecom()
+    await askWecom('question')
+    await vi.waitFor(() => expect(channels.requests(channel.id, null, 1).items[0]?.state).toBe('answered'))
+    const progress = sent('deliver')[0]!
+    await channels.save({ id: channel.id, profileId: profile.id, platform: 'wecom', projectPaths: [repo],
+      allowedUsers: ['U2'], allowedPlaces: ['C1'], allowDirect: true })
+    fromGateway({ type: 'delivered', outboxId: progress.outboxId, ok: true, platformId: null, retryAfterMs: null, error: null })
+    now += 2100
+    channels.tick()
+    expect(sent('deliver')).toHaveLength(1)
+    expect(channels.requests(channel.id, null, 1).items[0]?.delivery).toMatchObject({ state: 'failed', error: 'wecom-access-revoked' })
+  })
+
+  it('does not resend a WeCom answer that may have arrived before the gateway exited', async () => {
+    await attachWecom()
+    await askWecom('question')
+    const progress = sent('deliver')[0]!
+    fromGateway({ type: 'delivered', outboxId: progress.outboxId, ok: true, platformId: null, retryAfterMs: null, error: null })
+    now += 2100
+    channels.tick()
+    await vi.waitFor(() => expect(sent('deliver').at(-1)?.wecom?.phase).toBe('final'))
+    const final = sent('deliver').at(-1)!
+    gatewayExit()
+    fromGateway({ type: 'delivered', outboxId: final.outboxId, ok: true, platformId: null, retryAfterMs: null, error: null })
+    expect(channels.requests(channel.id, null, 1).items[0]?.delivery).toMatchObject({ state: 'unknown', sent: 0, total: 1 })
+    expect(store.pendingOutbox().some((row) => row.id === final.outboxId)).toBe(false)
   })
 
   it('keeps credentials to itself and hands them to the gateway alone', async () => {

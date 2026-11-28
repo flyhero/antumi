@@ -303,6 +303,7 @@ const REASON_TEXT: Record<string, string> = localized(() => ({
 // Reasons whose message says what went wrong in the agent's own words, kept after the summary.
 const REASON_WITH_DETAIL: Record<string, string> = localized(() => ({
   'channel-project-not-recent': t('labels.channelProjectNotRecent'),
+  'channel-wecom-duplicate': t('labels.channelWecomDuplicate'),
   'channel-credential-invalid': t('labels.channelCredentialInvalid'),
   'pull-request-cut-loose-open': t('PullRequest.cutLooseOpen'),
   'skills-none-found': t('labels.noUsableSkillsFoundSkillsNameSkillMd'),
@@ -379,4 +380,21 @@ export function agoText(ms: number, now = Date.now()): string {
   const date = new Date(ms)
   const day = t('SourceInboxView.monthAndDay', { value1: date.getMonth() + 1, value2: date.getDate() })
   return date.getFullYear() === new Date(now).getFullYear() ? day : t('SourceInboxView._1782', { value1: date.getFullYear(), day: day })
+}
+
+export function channelProblemText(error: string): string {
+  switch (error) {
+    case 'wecom-invalid-credentials': return t('AgentChannels.wecom-invalid-credentials')
+    case 'wecom-auth-timeout': return t('AgentChannels.wecom-auth-timeout')
+    case 'wecom-connection-replaced': return t('AgentChannels.wecom-connection-replaced')
+    case 'wecom-access-revoked': return t('AgentChannels.wecom-access-revoked')
+    case 'wecom-delivery-expired': return t('AgentChannels.wecom-delivery-expired')
+    case 'wecom-stream-expired': return t('AgentChannels.wecom-stream-expired')
+    case 'wecom-rate-limit': return t('AgentChannels.wecom-rate-limit')
+    case 'wecom-offline': return t('AgentChannels.wecom-offline')
+    case 'wecom-unconfirmed': return t('AgentChannels.wecom-unconfirmed')
+    case 'wecom-invalid-delivery': return t('AgentChannels.wecom-invalid-delivery')
+    case 'wecom-rejected': return t('AgentChannels.wecom-rejected')
+    default: return error
+  }
 }

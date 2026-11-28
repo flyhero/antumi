@@ -487,7 +487,10 @@ export const MIGRATIONS = [
   // A platform tool's call that may have changed something there (docs/CHANNEL-LOOP.md, 三).
   `ALTER TABLE channel_tool_calls ADD COLUMN write INTEGER NOT NULL DEFAULT 0;`,
   // Someone other than its asker spoke in a thread: from then on the bot answers there only when mentioned.
-  `ALTER TABLE channel_threads ADD COLUMN bystanders INTEGER NOT NULL DEFAULT 0;`
+  `ALTER TABLE channel_threads ADD COLUMN bystanders INTEGER NOT NULL DEFAULT 0;`,
+  `ALTER TABLE channel_requests ADD COLUMN wecom_reply TEXT;
+   ALTER TABLE channel_outbox ADD COLUMN delivery_error TEXT;
+   CREATE INDEX channel_outbox_request ON channel_outbox (request_id);`
 ]
 
 

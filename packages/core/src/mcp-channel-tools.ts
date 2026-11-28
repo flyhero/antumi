@@ -71,11 +71,12 @@ export async function serveChannelMcp(home: string | undefined, conversationId: 
       rpc.close()
     }
   }
+  const readOnly = OWN.filter((tool) => tool.readOnly)
   const handle = channelMcpHandler(
     (tool, args) => withCore({ text: 'Antumi core 没有运行', isError: true }, (rpc) => rpc.call('channelTools.call', { conversationId, tool, arguments: args })),
     onList,
     // A core from before the platform's tools lists none of them.
-    () => withCore(OWN, (rpc) => (rpc.features.includes('channel-platform-tools') ? rpc.call('channelTools.list', { conversationId }) : Promise.resolve(OWN)))
+    () => withCore(readOnly, (rpc) => (rpc.features.includes('channel-platform-tools') ? rpc.call('channelTools.list', { conversationId }) : Promise.resolve(readOnly)).catch(() => readOnly))
   )
   const lines = readline.createInterface({ input: process.stdin, crlfDelay: Number.POSITIVE_INFINITY })
   for await (const line of lines) {

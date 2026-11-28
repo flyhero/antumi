@@ -1,5 +1,5 @@
 import { fork, type ChildProcess } from 'node:child_process'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
 import { basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -27,7 +27,7 @@ import {
   type ChatItem,
   type Task
 } from '@antumi/protocol'
-import { ChannelGatewayToCore, type ChannelAction, type ChannelEvent, type CoreToChannelGateway, type PlatformAnswer, type PlatformGrant, type PlatformMcpCall } from './channel-gateway-ipc'
+import { ChannelGatewayToCore, type ChannelAction, type ChannelEvent, type CoreToChannelGateway, type PlatformAnswer, type PlatformGrant, type PlatformMcpCall, type DeliveryFailure, type WecomPost, type WecomReply } from './channel-gateway-ipc'
 import { channelMessages, channelNotice, redact, withoutMachinePaths } from './channel-output'
 import type { ChannelStore, ChannelThread, OutboxOp, OutboxPayload, StoredChannel, StoredRequest } from './channel-store'
 import type { CardOut, ChannelTaskCards } from './channel-task-cards'
@@ -51,6 +51,8 @@ const DIRECT_IDLE_MS = 4 * 60 * 60_000
 const IMAGE_WAIT_MS = 45_000
 const OUTBOX_TICK_MS = 500
 const OUTBOX_ATTEMPTS = 5
+const WECOM_SEND_TIMEOUT_MS = 15_000
+const WECOM_OUTBOX_MAX_AGE_MS = 60 * 60_000
 const EVENTS_KEPT_MS = 7 * 24 * 60 * 60_000
 const REQUESTS_KEPT_MS = 90 * 24 * 60 * 60_000
 const PURGE_EVERY_MS = 24 * 60 * 60_000
@@ -139,6 +141,16 @@ export type ChannelServiceOptions = {
   home?: string
 }
 
+type ReplyAddress = { place: string; thread: string | null; wecom?: WecomReply }
+
+function permitted(channel: StoredChannel, user: string, direct: boolean, place: string): boolean {
+  return channel.allowedUsers.includes(user) && (direct ? channel.allowDirect : channel.allowedPlaces.includes(place))
+}
+
+function projectScope(channel: StoredChannel): string {
+  return createHash('sha256').update(JSON.stringify([...channel.projectPaths].sort())).digest('hex')
+}
+
 const credentialProvider = (channel: Pick<StoredChannel, 'platform'>) => `channel-${channel.platform}`
 
 // The day a question counts against, on this computer's calendar.
@@ -162,9 +174,11 @@ export class ChannelService {
   private readonly fetching = new Map<string, { waiting: Set<string>; parts: Map<string, Buffer[]>; lost: number; saving: number; timer: NodeJS.Timeout }>()
   private readonly timeouts = new Map<string, NodeJS.Timeout>()
   // Starting, between leaving the queue and its message being sent.
-  private readonly starting = new Set<string>()
+  private readonly starting = new Map<string, StoredRequest>()
   // One post at a time to each place, and when the last went there.
   private readonly posting = new Map<string, string>()
+  private readonly wecomPosting = new Map<string, NodeJS.Timeout>()
+  private readonly savingBots = new Set<string>()
   private readonly posted = new Map<string, number>()
   // Who was told they may not ask, and where, on which day: once is enough.
   private readonly told = new Set<string>()
@@ -183,6 +197,7 @@ export class ChannelService {
   // Once core is up. A question left running by the last core has no agent answering it any more.
   start(): void {
     this.started = true
+    this.store.abandonInflight()
     for (const request of this.store.requestsIn('running')) this.fail(request, 'failed', SAY.restarted)
     this.purge()
     this.purgeTimer = setInterval(() => this.purge(), PURGE_EVERY_MS)
@@ -197,6 +212,7 @@ export class ChannelService {
     for (const timer of [this.restartTimer, this.outboxTimer, this.purgeTimer]) if (timer) clearTimeout(timer)
     for (const timer of this.timeouts.values()) clearTimeout(timer)
     this.giveUpAsking('stopped')
+    this.abandonWecomPosts()
     for (const { timer } of this.fetching.values()) clearTimeout(timer)
     this.fetching.clear()
     this.link?.stop()
@@ -245,6 +261,20 @@ export class ChannelService {
       if (prefix && !given.startsWith(prefix)) throw new Rejection('channel-credential-invalid', key)
       payload[key] = given
     }
+    const botId = fields.platform === 'wecom' ? payload.botId : undefined
+    if (fields.platform === 'wecom') {
+      if (!botId || !payload.secret || botId.length > 200 || (existing && kept.botId !== botId)) {
+        throw new Rejection('channel-credential-invalid', 'Bot ID / Secret')
+      }
+      if (fields.allowTaskCreation || fields.reportTasks || fields.taskCards || fields.ownerUsers?.length ||
+        fields.platformTools?.length || fields.docLocation || fields.docAccess || fields.followUps) {
+        throw new Rejection('invalid-params', 'WeCom supports project questions only')
+      }
+      if (this.savingBots.has(botId) || this.store.channels().some((other) => other.platform === 'wecom' && other.id !== id &&
+        this.options.credentials.get(credentialProvider(other), other.id)?.payload.botId === botId)) {
+        throw new Rejection('channel-wecom-duplicate', 'This WeCom bot is already connected')
+      }
+    }
     const now = this.now()
     // A new connection finds out afresh which workspace it is; an unchanged one keeps what it found.
     const reconnects = !existing || descriptor.credentials.some(({ key }) => payload[key] !== kept[key])
@@ -261,12 +291,17 @@ export class ChannelService {
       reportTasks: fields.reportTasks ?? existing?.reportTasks,
       dailyPerUser: fields.dailyPerUser ?? 20, dailyTotal: fields.dailyTotal ?? 200, maxConcurrent: fields.maxConcurrent ?? 2,
       turnTimeoutSec: fields.turnTimeoutSec ?? 300,
-      tenant: reconnects ? null : existing.tenant, tenantName: reconnects ? null : existing.tenantName, botUserId: reconnects ? null : existing.botUserId,
+      tenant: botId ? `wecom:${botId}` : reconnects ? null : existing.tenant, tenantName: reconnects ? null : existing.tenantName, botUserId: reconnects ? null : existing.botUserId,
       id: existing?.id ?? randomUUID(), profileId: fields.profileId, platform: fields.platform, createdAt: existing?.createdAt ?? now, updatedAt: now
     }
-    await this.options.credentials.set(credentialProvider(next), next.id, { kind: 'channel', payload, account: null, updatedAt: now })
-    this.store.saveChannel(next)
-    if (reconnects) this.states.delete(next.id)
+    if (botId) this.savingBots.add(botId)
+    try {
+      await this.options.credentials.set(credentialProvider(next), next.id, { kind: 'channel', payload, account: null, updatedAt: now })
+      this.store.saveChannel(next)
+    } finally {
+      if (botId) this.savingBots.delete(botId)
+    }
+    if (reconnects || !next.enabled) this.states.delete(next.id)
     if (existing && givenTools(next.platform, existing.platformTools).join() !== givenTools(next.platform, next.platformTools).join()) {
       this.listed.delete(next.id)
       for (const conversation of this.store.conversationsOf(next.id)) this.retooled.add(conversation)
@@ -326,7 +361,7 @@ export class ChannelService {
   // A card of a task, posted or drawn again where it was, after whatever else waits for its place.
   sendCard(out: CardOut): void {
     const channel = this.store.channel(out.channelId)
-    if (!channel) return
+    if (!channel || channelPlatform(channel.platform).features.tasks === false) return
     const { card } = out
     this.enqueue(channel, null, out.op, { place: card.place, thread: card.thread, target: null, text: null, emoji: null, card: out.content, cardId: card.id, recipient: card.recipient }, out.reportId)
   }
@@ -335,7 +370,7 @@ export class ChannelService {
   // machine, in the platform's own format. False where the channel is gone.
   async postReport(post: ReportPost): Promise<boolean> {
     const channel = this.store.channel(post.channelId)
-    if (!channel) return false
+    if (!channel || channelPlatform(channel.platform).features.tasks === false) return false
     const agent = post.task.agent ?? this.options.profile(channel.profileId)?.agent ?? 'claude'
     const email = await this.options.identity?.(agent).catch(() => null) ?? null
     const roots = post.task.repos.flatMap((repo) => [repo.worktreePath, repo.path]).flatMap((root) => (root ? [{ name: basename(root), root }] : []))
@@ -349,7 +384,9 @@ export class ChannelService {
   // The tools a conversation's agent is started with: the registry's and those its channel gives.
   toolNames(conversationId: string): string[] {
     const channel = this.channelOf(conversationId)
-    return [...CHANNEL_TOOL_NAMES, ...(channel ? givenTools(channel.platform, channel.platformTools).map(agentToolName) : [])]
+    const own = channel && channelPlatform(channel.platform).features.tasks !== false
+      ? CHANNEL_TOOL_NAMES : CHANNEL_TOOLS.filter((tool) => tool.readOnly !== false).map((tool) => tool.name)
+    return [...own, ...(channel ? givenTools(channel.platform, channel.platformTools).map(agentToolName) : [])]
   }
 
   // What its agent is told of the platform's tools, where its channel gives some.
@@ -361,8 +398,10 @@ export class ChannelService {
   // The tools as its MCP server lists them. The platform's are described as the platform last
   // described them; where it cannot be asked, they are left out rather than guessed.
   async toolSpecs(conversationId: string): Promise<ChannelToolSpec[]> {
-    const own = CHANNEL_TOOLS.map(({ name, description, inputSchema, readOnly }) => ({ name, description, inputSchema, readOnly: readOnly !== false }))
     const channel = this.channelOf(conversationId)
+    const own = CHANNEL_TOOLS
+      .filter((tool) => tool.readOnly !== false || (channel && channelPlatform(channel.platform).features.tasks !== false))
+      .map(({ name, description, inputSchema, readOnly }) => ({ name, description, inputSchema, readOnly: readOnly !== false }))
     const given = channel ? givenTools(channel.platform, channel.platformTools) : []
     if (!channel || given.length === 0) return own
     const key = given.join()
@@ -457,6 +496,13 @@ export class ChannelService {
     const channel = conversation.channel ? this.store.channel(conversation.channel.channelId) : null
     if (!channel) throw new Rejection('channel-not-found', 'this conversation answers no channel')
     const request = this.store.runningIn(conversationId)
+    if (channelPlatform(channel.platform).features.tasks === false) {
+      const refused = this.refusedNow(channel.id, conversationId, request)
+      if (refused || !request || request.wecom?.projects !== projectScope(channel) ||
+        !CHANNEL_TOOLS.some((entry) => entry.name === tool && entry.readOnly !== false)) {
+        return { text: refused ?? '主人没有开放这个工具。', isError: true }
+      }
+    }
     if (tool.startsWith(PLATFORM_PREFIX)) return this.callPlatform(conversationId, channel, request, tool, args)
     const tasks = this.options.tasks
     const result = await runChannelTool({
@@ -502,13 +548,20 @@ export class ChannelService {
   tick(): void {
     if (!this.started || this.stopping) return
     const running = this.store.requestsIn('running')
+    const runningIds = new Set(running.map((each) => each.id))
+    for (const each of this.starting.values()) if (!runningIds.has(each.id)) running.push(each)
     const busyThreads = new Set(running.map((each) => each.threadId))
     const perChannel = new Map<string, number>()
     for (const each of running) perChannel.set(each.channelId, (perChannel.get(each.channelId) ?? 0) + 1)
     for (const request of this.store.requestsIn('queued')) {
       if (this.fetching.has(request.id) || this.starting.has(request.id) || busyThreads.has(request.threadId)) continue
       const channel = this.store.channel(request.channelId)
-      if (!channel?.enabled) continue
+      if (!channel) continue
+      if (request.wecom && !this.wecomAllowed(channel, request.place, request.wecom)) {
+        this.store.updateRequest(request.id, { state: 'failed', error: '企微接入的授权已变更。', endedAt: this.now() })
+        continue
+      }
+      if (!channel.enabled) continue
       if ((perChannel.get(channel.id) ?? 0) >= channel.maxConcurrent) continue
       const profile = this.options.profile(channel.profileId)
       if (!profile || profile.archivedAt != null) {
@@ -519,8 +572,11 @@ export class ChannelService {
       if (!this.options.conversations.capacityAvailable(profile.agent)) continue
       busyThreads.add(request.threadId)
       perChannel.set(channel.id, (perChannel.get(channel.id) ?? 0) + 1)
-      this.starting.add(request.id)
-      void this.run(request, channel, profile).catch((error: unknown) => this.fail(this.store.request(request.id) ?? request, 'failed', SAY.failed, null, error)).finally(() => this.starting.delete(request.id))
+      this.starting.set(request.id, request)
+      void this.run(request, channel, profile).catch((error: unknown) => this.fail(this.store.request(request.id) ?? request, 'failed', SAY.failed, null, error)).finally(() => {
+        this.starting.delete(request.id)
+        this.tick()
+      })
     }
     this.pump()
   }
@@ -550,6 +606,9 @@ export class ChannelService {
     if (wanted.length === 0) {
       this.link?.stop()
       this.link = null
+      this.abandonWecomPosts()
+      this.posting.clear()
+      this.states.clear()
       return
     }
     if (!this.link) this.launch()
@@ -561,11 +620,14 @@ export class ChannelService {
 
   private launch(): void {
     const launcher = this.options.launch ?? forkChannelGateway
-    const link: ChannelGatewayLink = launcher((message) => this.onGateway(message), () => {
+    const link: ChannelGatewayLink = launcher((message) => {
+      if (this.link === link) this.onGateway(message)
+    }, () => {
       // A child replaced since: its exit is no news.
       if (this.link !== link) return
       this.link = null
       this.giveUpAsking('gateway restarted')
+      this.abandonWecomPosts()
       this.posting.clear()
       for (const [id, live] of this.states) if (live.state !== 'failed') this.states.set(id, { state: 'connecting', error: null })
       this.notify()
@@ -597,7 +659,7 @@ export class ChannelService {
       case 'image':
         return void this.imagePart(message.requestId, message.ref, message.data, message.done, message.error)
       case 'delivered':
-        return this.delivered(message.outboxId, message.ok, message.platformId, message.retryAfterMs)
+        return this.delivered(message.outboxId, message.ok, message.platformId, message.retryAfterMs, message.failure, message.error)
       case 'action': {
         const { type: _type, ...click } = message
         return void this.click(click)
@@ -617,11 +679,14 @@ export class ChannelService {
   // and whether the day has room. Only what passes all of that reaches an agent.
   private ingest(event: ChannelEvent): void {
     const { channelId, eventKey } = event
+    const channel = this.store.channel(channelId)
+    if (channel?.platform === 'wecom' && (!event.wecom || !channel.enabled ||
+      this.states.get(channelId)?.state !== 'connected' || event.tenant !== channel.tenant ||
+      event.wecom.tenant !== event.tenant || event.wecom.user !== event.user || event.wecom.direct !== (event.kind === 'direct'))) return
     const fresh = this.store.claimEvent(channelId, eventKey, this.now())
     this.link?.send({ type: 'accepted', channelId, eventKey })
     if (!fresh) return
     const outcome = (word: string) => this.store.eventOutcome(channelId, eventKey, word)
-    const channel = this.store.channel(channelId)
     if (!channel?.enabled) return outcome('dropped:off')
     if (event.ignorable || event.user === channel.botUserId) return outcome('dropped:ignorable')
     // Another workspace's people in a shared chat are not this one's colleagues.
@@ -631,27 +696,32 @@ export class ChannelService {
       if (refused) return outcome(refused)
     }
     const direct = event.kind === 'direct'
-    const reply = { place: event.place, thread: direct ? event.thread : event.thread ?? event.messageId }
-    const allowed = channel.allowedUsers.includes(event.user) && (direct ? channel.allowDirect : channel.allowedPlaces.includes(event.place))
+    const wecom: WecomReply | undefined = channel.platform === 'wecom' && event.wecom ? { ...event.wecom, projects: projectScope(channel) } : undefined
+    const reply: ReplyAddress = { place: event.place, thread: wecom ? null : direct ? event.thread : event.thread ?? event.messageId, wecom }
+    const allowed = permitted(channel, event.user, direct, event.place)
     if (!allowed) {
       const key = `${channelId}:${event.user}:${event.place}:${dayOf(this.now())}`
       if (!this.told.has(key)) {
         this.told.add(key)
-        this.post(channel, null, reply, SAY.noAccess(event.user, direct ? null : event.place))
+        this.post(channel, null, reply, SAY.noAccess(event.user, direct ? null : event.place), true)
       }
       return outcome('refused:acl')
     }
     const text = event.text.trim()
-    const images = event.images.filter((image) => IMAGE_MIME_TYPES.some((mime) => mime === image.mime) && image.bytes <= MAX_ATTACHMENT_BYTES).slice(0, MAX_CHANNEL_IMAGES)
+    const images = event.images.filter((image) =>
+      (wecom && image.mime === null || IMAGE_MIME_TYPES.some((mime) => mime === image.mime)) &&
+      (image.bytes === null ? !!wecom : image.bytes <= MAX_ATTACHMENT_BYTES)).slice(0, MAX_CHANNEL_IMAGES)
     if (!text && images.length === 0) {
       this.post(channel, null, reply, event.otherFiles ? SAY.otherFiles : SAY.empty)
       return outcome('dropped:empty')
     }
     const now = this.now()
-    const threadKey = direct ? event.place : `${event.place}:${reply.thread}`
+    const threadKey = wecom && channelPlatform(channel.platform).groupSession ? JSON.stringify([wecom.tenant, direct, event.place, wecom.projects])
+      : direct ? event.place : `${event.place}:${reply.thread}`
     const known = this.store.thread(channelId, threadKey, event.user)
     // Each asker in a thread has a conversation of their own: what one was told is not another's to draw out.
-    const thread: ChannelThread = known
+    const expired = known && wecom && now - known.lastAt > DIRECT_IDLE_MS ? known : null
+    const thread: ChannelThread = known && !expired
       ? { ...known, conversationId: direct && now - known.lastAt > DIRECT_IDLE_MS ? null : known.conversationId, replyPlace: reply.place, replyThread: reply.thread, lastAt: now }
       : { id: randomUUID(), channelId, threadKey, asker: event.user, conversationId: null, replyPlace: reply.place, replyThread: reply.thread, lastAt: now }
     const notes = [
@@ -659,16 +729,22 @@ export class ChannelService {
       ...(event.images.length > images.length ? [`只看了 ${images.length} 张图片，其余的太大、太多或不是支持的格式。`] : [])
     ]
     const request: StoredRequest = {
-      id: randomUUID(), channelId, threadId: thread.id, asker: event.user, tenant: event.tenant, place: event.place, direct, messageId: event.messageId, text, images: [], notes,
+      id: randomUUID(), channelId, threadId: thread.id, asker: event.user, tenant: event.tenant, place: event.place, direct, messageId: event.messageId, text, images: [], notes, wecom,
       state: 'queued', refusal: null, redacted: false, conversationId: null, day: dayOf(now), createdAt: now, startedAt: null, endedAt: null, totalTokens: null
     }
-    const verdict = this.store.reserve(request, { perUser: channel.dailyPerUser, total: channel.dailyTotal })
+    if (wecom) wecom.images = images.length
+    const verdict = this.store.reserve(request, { perUser: channel.dailyPerUser, total: channel.dailyTotal }, () => {
+      if (expired) this.store.archiveThread(expired.id)
+      this.store.saveThread(thread)
+    })
     if (verdict !== 'ok') {
       this.post(channel, request.id, reply, verdict === 'user' ? SAY.quotaUser : SAY.quotaTotal)
       return outcome('refused:quota')
     }
-    this.store.saveThread(thread)
     outcome('accepted')
+    if (wecom) this.enqueue(channel, request.id, 'post', {
+      ...reply, target: null, text: '正在处理…', emoji: null, wecom: { ...wecom, phase: 'progress' }
+    })
     if (channelPlatform(channel.platform).features.reactions) this.enqueue(channel, request.id, 'react', { place: event.place, thread: null, target: event.messageId, text: null, emoji: 'eyes' })
     if (images.length) {
       const timer = setTimeout(() => this.imagesDone(request.id), IMAGE_WAIT_MS)
@@ -743,12 +819,18 @@ export class ChannelService {
     this.fetching.delete(requestId)
     const request = this.store.request(requestId)
     const lost = fetch.lost + fetch.waiting.size + fetch.saving
-    if (request && lost > 0) this.store.updateRequest(requestId, { notes: [...request.notes, `有 ${lost} 张图片没读到。`] })
+    if (request && !request.wecom && lost > 0) this.store.updateRequest(requestId, { notes: [...request.notes, `有 ${lost} 张图片没读到。`] })
     this.tick()
   }
 
   private async run(queued: StoredRequest, channel: StoredChannel, profile: AgentProfile): Promise<void> {
     const { conversations } = this.options
+    if (queued.wecom && !queued.text && !queued.images.length) {
+      this.fail(queued, 'failed', '没能读取图片，请重新发送。')
+      return
+    }
+    const missingImages = (queued.wecom?.images ?? 0) - queued.images.length
+    if (missingImages > 0) this.store.updateRequest(queued.id, { notes: [...queued.notes, `有 ${missingImages} 张图片没读到。`] })
     const thread = this.store.threadById(queued.threadId)
     if (!thread) throw new Error('thread gone')
     let conversationId = thread.conversationId
@@ -765,7 +847,18 @@ export class ChannelService {
         channel: { channelId: channel.id, platform: channel.platform, asker: queued.asker, place: queued.place }
       })
       conversationId = created.id
-      this.store.saveThread({ ...thread, conversationId })
+      if (queued.wecom && !this.store.request(queued.id)) {
+        await conversations.delete(conversationId).catch(() => {})
+        return
+      }
+      this.store.setThreadConversation(thread.id, conversationId)
+    }
+    if (queued.wecom) {
+      const current = this.store.channel(channel.id)
+      if (!current || !this.wecomAllowed(current, queued.place, queued.wecom)) {
+        this.fail(queued, 'failed', SAY.failed)
+        return
+      }
     }
     this.store.updateRequest(queued.id, { state: 'running', conversationId, startedAt: this.now() })
     const timer = setTimeout(() => this.timedOut(queued.id), channel.turnTimeoutSec * 1000)
@@ -774,13 +867,26 @@ export class ChannelService {
     // Started with other tools than its channel now gives: started again, with them.
     if (this.retooled.delete(conversationId)) await conversations.stop(conversationId).catch(() => {})
     await conversations.continue(conversationId)
-    const request = this.store.request(queued.id) ?? queued
+    const stored = this.store.request(queued.id)
+    if (queued.wecom) {
+      const current = this.store.channel(channel.id)
+      if (!stored || stored.state !== 'running') return
+      if (!current || !this.wecomAllowed(current, queued.place, queued.wecom)) {
+        this.fail(stored, 'failed', SAY.failed)
+        return
+      }
+    }
+    const request = stored ?? queued
     const text = request.text || '请看图片。'
     try {
       await conversations.send(conversationId, text, request.images, false, false, request.id)
     } catch (error) {
       // A model that takes no pictures still gets the words.
       if (request.images.length === 0) throw error
+      if (request.wecom && !request.text) {
+        this.fail(request, 'failed', '当前模型无法处理这张图片，请补充文字说明。', null, error)
+        return
+      }
       this.store.updateRequest(request.id, { notes: [...request.notes, '这个模型看不了图片，只回答了文字部分。'] })
       await conversations.send(conversationId, text, [], false, false, request.id)
     }
@@ -811,10 +917,30 @@ export class ChannelService {
     const email = await this.options.identity?.(this.options.profile(channel.profileId)?.agent ?? 'claude').catch(() => null) ?? null
     const current = this.store.request(request.id)
     if (current?.state !== 'running') return
+    if (current.wecom) {
+      const latest = this.store.channel(channel.id)
+      if (!latest || !this.wecomAllowed(latest, current.place, current.wecom)) {
+        this.fail(current, 'failed', SAY.failed)
+        return
+      }
+    }
     const roots = projectsOf({ roots: channel.projectPaths }).map(({ name, root }) => ({ name, root }))
-    const { messages, redacted } = channelMessages(channel.platform, [text, ...current.notes].join('\n\n'), { home: this.home, roots, hide: email ? [email] : [] })
-    this.store.updateRequest(request.id, { state: 'answered', endedAt: this.now(), totalTokens, redacted })
-    for (const message of redacted ? [...messages, SAY.redactedNote] : messages) this.enqueue(channel, request.id, 'post', { place: thread.replyPlace, thread: thread.replyThread, target: null, text: message, emoji: null })
+    const secret = current.wecom ? this.options.credentials.get(credentialProvider(channel), channel.id)?.payload.secret : null
+    const hide = [email, secret].filter((value): value is string => !!value)
+    const { messages, redacted } = channelMessages(channel.platform, [text, ...current.notes].join('\n\n'), { home: this.home, roots, hide })
+    const pieces = redacted ? [...messages, SAY.redactedNote] : messages.length ? messages : [SAY.noAnswer]
+    const addressed = this.replyTo(request, thread)
+    this.store.transaction(() => {
+      this.store.updateRequest(request.id, { state: 'answered', endedAt: this.now(), totalTokens, redacted })
+      for (const [index, message] of pieces.entries()) {
+        const wecom = addressed.wecom
+        this.store.addOutbox({ id: randomUUID(), channelId: channel.id, requestId: request.id, op: 'post', payload: {
+          ...addressed, target: null, text: message, emoji: null,
+          wecom: wecom ? { ...wecom, phase: index === 0 ? 'final' : 'extra' } : undefined
+        } }, this.now())
+      }
+    })
+    this.pump()
     // A task it collected gets its card now, after the answer in the same place.
     this.options.reports?.answered(request.id)
     this.tick()
@@ -829,9 +955,9 @@ export class ChannelService {
     this.store.updateRequest(request.id, { state, refusal: say === SAY.restarted ? 'restarted' : null, error: detail ? redact(detail).text.slice(0, 4000) : say, errorReason, endedAt: this.now(), ...(totalTokens === null ? {} : { totalTokens }) })
     const channel = this.store.channel(request.channelId)
     const thread = this.store.threadById(request.threadId)
-    if (channel && thread) this.post(channel, request.id, { place: thread.replyPlace, thread: thread.replyThread }, say)
+    if (channel && thread) this.post(channel, request.id, this.replyTo(request, thread), say, false, true)
     this.options.reports?.answered(request.id)
-    this.tick()
+    queueMicrotask(() => this.tick())
   }
 
   private timedOut(requestId: string): void {
@@ -847,8 +973,26 @@ export class ChannelService {
   }
 
   // A sentence of core's own, in the thread it answers.
-  private post(channel: StoredChannel, requestId: string | null, reply: { place: string; thread: string | null }, text: string): void {
-    this.enqueue(channel, requestId, 'post', { place: reply.place, thread: reply.thread, target: null, text: channelNotice(channel.platform, text), emoji: null })
+  private replyTo(request: StoredRequest, thread: ChannelThread): ReplyAddress {
+    return request.wecom ? { place: request.place, thread: null, wecom: request.wecom }
+      : { place: thread.replyPlace, thread: thread.replyThread }
+  }
+
+  private wecomAllowed(channel: StoredChannel, place: string, reply: WecomReply): boolean {
+    return channel.enabled && channel.tenant === reply.tenant && reply.projects === projectScope(channel) &&
+      permitted(channel, reply.user, reply.direct, place)
+  }
+
+  private post(channel: StoredChannel, requestId: string | null, reply: ReplyAddress, text: string, denial = false, finish = false): void {
+    const wecom: WecomPost | undefined = reply.wecom
+      ? { ...reply.wecom, phase: denial ? 'denial' : finish ? 'final' : 'notice' } : undefined
+    this.enqueue(channel, requestId, 'post', { ...reply, target: null, text: channelNotice(channel.platform, text), emoji: null, wecom })
+  }
+
+  private abandonWecomPosts(): void {
+    for (const timer of this.wecomPosting.values()) clearTimeout(timer)
+    this.wecomPosting.clear()
+    this.store.abandonInflight()
   }
 
   private enqueue(channel: StoredChannel, requestId: string | null, op: OutboxOp, payload: OutboxPayload, reportId: string | null = null): void {
@@ -870,7 +1014,6 @@ export class ChannelService {
       this.outboxTimer = setInterval(() => this.pump(), OUTBOX_TICK_MS)
       this.outboxTimer.unref()
     }
-    if (!this.link) return
     const now = this.now()
     const held = new Set<string>()
     for (const row of pending) {
@@ -881,10 +1024,20 @@ export class ChannelService {
         continue
       }
       const where = `${row.channelId}:${row.payload.place}`
+      const wecom = row.payload.wecom
+      if (wecom && !this.wecomPosting.has(row.id)) {
+        const expired = now - row.createdAt >= WECOM_OUTBOX_MAX_AGE_MS
+        const allowed = wecom.phase === 'denial' ? channel.enabled && channel.tenant === wecom.tenant
+          : this.wecomAllowed(channel, row.payload.place, wecom)
+        if (expired || !allowed) {
+          this.store.outboxTerminal(row.id, 'failed', expired ? 'wecom-delivery-expired' : 'wecom-access-revoked')
+          continue
+        }
+      }
       // Whatever waits ahead of it for the same place goes first.
       if (held.has(where)) continue
       held.add(where)
-      if (this.posting.has(where) || this.states.get(row.channelId)?.state !== 'connected' || row.nextAt > now) continue
+      if (!this.link || this.posting.has(where) || this.states.get(row.channelId)?.state !== 'connected' || row.nextAt > now) continue
       if (now - (this.posted.get(where) ?? 0) < channelPlatform(channel.platform).minGapMs) continue
       // A card is drawn again on the message it was posted as, known once that post went.
       let target = row.payload.target
@@ -898,12 +1051,20 @@ export class ChannelService {
         target = card.messageId
       }
       this.posting.set(where, row.id)
+      if (wecom) {
+        this.store.outboxSending(row.id)
+        const timer = setTimeout(() => this.delivered(row.id, false, null, null, 'unknown', 'wecom-unconfirmed'), WECOM_SEND_TIMEOUT_MS)
+        timer.unref()
+        this.wecomPosting.set(row.id, timer)
+      }
       const { cardId: _cardId, ...payload } = row.payload
       this.link.send({ type: 'deliver', outboxId: row.id, channelId: row.channelId, op: row.op, ...payload, target, mention: payload.mention ?? null, recipient: payload.recipient ?? null })
     }
   }
 
-  private delivered(outboxId: string, ok: boolean, platformId: string | null, retryAfterMs: number | null): void {
+  private delivered(outboxId: string, ok: boolean, platformId: string | null, retryAfterMs: number | null, failure?: DeliveryFailure, error?: string | null): void {
+    clearTimeout(this.wecomPosting.get(outboxId))
+    this.wecomPosting.delete(outboxId)
     const row = this.store.pendingOutbox().find((each) => each.id === outboxId)
     for (const [where, id] of this.posting) if (id === outboxId) {
       this.posting.delete(where)
@@ -911,11 +1072,17 @@ export class ChannelService {
       if (row && row.op !== 'react') this.posted.set(where, this.now())
     }
     if (!row) return
-    if (ok) this.store.outboxSent(outboxId, platformId)
-    if (ok && row.op === 'card' && row.payload.cardId) this.store.updateCard(row.payload.cardId, { messageId: platformId }, this.now())
-    // A mark on the question is not worth trying again; an answer is, a few times, further apart each time.
-    else if (row.op === 'react' || row.attempts + 1 >= OUTBOX_ATTEMPTS) this.store.outboxRetry(outboxId, null)
-    else this.store.outboxRetry(outboxId, this.now() + (retryAfterMs ?? Math.min(60_000, 1000 * 2 ** (row.attempts + 1))))
+    if (ok) {
+      this.store.outboxSent(outboxId, platformId)
+      if (row.op === 'card' && row.payload.cardId) this.store.updateCard(row.payload.cardId, { messageId: platformId }, this.now())
+    } else if (row.payload.wecom && (failure !== 'retry' || row.attempts + 1 >= OUTBOX_ATTEMPTS)) {
+      const unknown = failure === 'unknown' || failure === undefined
+      this.store.outboxTerminal(row.id, unknown ? 'unknown' : 'failed', error ?? 'wecom-unconfirmed')
+    } else if (row.op === 'react' || row.attempts + 1 >= OUTBOX_ATTEMPTS) {
+      this.store.outboxRetry(outboxId, null)
+    } else {
+      this.store.outboxRetry(outboxId, this.now() + (retryAfterMs ?? Math.min(60_000, 1000 * 2 ** (row.attempts + 1))))
+    }
     if (row.reportId) this.options.reports?.posted(row.reportId)
     this.pump()
   }

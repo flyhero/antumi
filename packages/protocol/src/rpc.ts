@@ -58,7 +58,7 @@ import { MOBILE_EXTRA_HOSTS_MAX, MobileAccess, MobileBridgeAddress, MobileExtraH
 import { Channel, ChannelInput, ChannelReadiness, ChannelRequest, ChannelTaskFeedback, ChannelTaskReport, ChannelToolCall, ChannelToolSpec } from './channel'
 
 // Bump only for breaking changes; additive optional fields keep the version.
-export const PROTOCOL_VERSION = 19
+export const PROTOCOL_VERSION = 20
 
 const TaskRef = z.object({ id: z.string().min(1) })
 const TaskTitle = z.string().trim().min(1).max(200)

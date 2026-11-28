@@ -17,9 +17,11 @@ export type ChannelPlatformDescriptor = {
   // One message's longest text, and the least time between two posts in one place.
   textLimit: number
   minGapMs: number
+  textBytes?: boolean
+  groupSession?: boolean
   // cards: buttons on a message, their clicks reported back (docs/CHANNEL-LOOP.md). followUps: a
   // message in a thread can be told from one outside it, so a thread can go on without a mention.
-  features: { reactions: boolean; cards: boolean; followUps: boolean }
+  features: { reactions: boolean; cards: boolean; followUps: boolean; tasks?: false }
   // What the app must also be granted to go on without a mention: every message of its groups.
   followUpScopes?: readonly string[]
   // The platform's hosted MCP its tools are reached through, those that may be given, and the scope
@@ -126,6 +128,16 @@ export const CHANNEL_PLATFORM_DESCRIPTORS = {
     minGapMs: 3100,
     // A robot has no way to react to a message, and a group has no threads; interactive cards are not wired yet.
     features: { reactions: false, cards: false, followUps: false }
+  },
+  wecom: {
+    label: '企业微信',
+    credentials: [{ key: 'botId', label: 'Bot ID' }, { key: 'secret', label: 'Secret' }],
+    console: 'https://work.weixin.qq.com/wework_admin/frame#apps',
+    textLimit: 4000,
+    textBytes: true,
+    minGapMs: 2100,
+    groupSession: true,
+    features: { reactions: false, cards: false, followUps: false, tasks: false }
   }
 } satisfies Record<ChannelPlatform, ChannelPlatformDescriptor>
 

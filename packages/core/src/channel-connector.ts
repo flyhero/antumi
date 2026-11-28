@@ -1,6 +1,6 @@
-import type { ChannelDelivery, ChannelGatewayToCore, CoreToChannelGateway, GatewayChannel, PlatformAnswer, PlatformGrant, PlatformMcpCall } from './channel-gateway-ipc'
+import type { ChannelDelivery, ChannelGatewayToCore, CoreToChannelGateway, DeliveryFailure, GatewayChannel, PlatformAnswer, PlatformGrant, PlatformMcpCall } from './channel-gateway-ipc'
 
-export type Delivered = { ok: boolean; platformId: string | null; retryAfterMs: number | null; error: string | null }
+export type Delivered = { ok: boolean; platformId: string | null; retryAfterMs: number | null; error: string | null; failure?: DeliveryFailure }
 
 // One channel's connection to its platform, inside the gateway (docs/CHANNELS.md, 扩展点). It
 // turns the platform's messages into events and posts what it is told to; it decides nothing.

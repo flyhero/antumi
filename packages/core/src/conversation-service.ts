@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import { mkdir, realpath, rm, rmdir, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import { branchSwitchMessage, withoutBranchSwitchNote, chatReferencesFor, canHaveHelper, helperAllowsMode, isHelper, agentDescriptor, agentSupportsReadOnly, modelPrice, providerEndpoint, type CostBaseline, checkEditAdditionalProjects, checkSwitchBranch, handoffMessage, isPlanApproval, parseHandoffMessage, MAX_TASK_REPOS, type AgentKind, type ChatCatalog, type ChatImage, type ChatItem, type ChatModel, type ChatOption, type ChatSettings, type CommitPushResult, type CommitResult, type PushResult, type Conversation, type ConversationMessage, type ConversationSearchHit, type ConversationStage, type FileDiff, type FolderChanges, type ProjectBranches, type ProjectHead, type ChatDecision, type KnowledgeBase, type TaskSource, type UnattendedMode, type ChatPermissionMode, startModes, unattendedPermission, isAntumiRequest , PROCESS_OWNER_ENV, processOwner, parseProcessOwner } from '@antumi/protocol'
+import { channelPlatform, branchSwitchMessage, withoutBranchSwitchNote, chatReferencesFor, canHaveHelper, helperAllowsMode, isHelper, agentDescriptor, agentSupportsReadOnly, modelPrice, providerEndpoint, type CostBaseline, checkEditAdditionalProjects, checkSwitchBranch, handoffMessage, isPlanApproval, parseHandoffMessage, MAX_TASK_REPOS, type AgentKind, type ChatCatalog, type ChatImage, type ChatItem, type ChatModel, type ChatOption, type ChatSettings, type CommitPushResult, type CommitResult, type PushResult, type Conversation, type ConversationMessage, type ConversationSearchHit, type ConversationStage, type FileDiff, type FolderChanges, type ProjectBranches, type ProjectHead, type ChatDecision, type KnowledgeBase, type TaskSource, type UnattendedMode, type ChatPermissionMode, startModes, unattendedPermission, isAntumiRequest , PROCESS_OWNER_ENV, processOwner, parseProcessOwner } from '@antumi/protocol'
 import type { DaemonEvent, SessionInfo } from '@antumi/protocol/node'
 import { ALLOW_SITE_ALWAYS, canReuseConversation, DEFAULT_ACCOUNT, type ConversationChannel, type ConversationConfiguration, type TaskLaunchOptions } from '@antumi/protocol'
 import { channelPrompt } from './channel-prompt'
@@ -1481,7 +1481,7 @@ export class ConversationService {
     const agentStage = this.agentStage(id, stage)
     const agentLaunch: AgentLaunch = locked ? {
       ...(stage.backend ? { backend: stage.backend } : {}),
-      instructions: channelPrompt(current.profile, locked.instructions?.(id)),
+      instructions: channelPrompt(current.profile, locked.instructions?.(id), !current.channel || channelPlatform(current.channel.platform).features.tasks !== false),
       providerSessionId: stage.providerSessionId,
       resume,
       handoffPath: null,
@@ -1655,7 +1655,7 @@ export class ConversationService {
       options: {
         ...(stage.backend ? { backend: stage.backend } : {}),
         ...(conversation.channel ? { lockdown: true } : {}),
-        instructions: conversation.channel ? channelPrompt(conversation.profile, this.channelTools?.instructions?.(conversation.id)) : this.roleInstructions(conversation),
+        instructions: conversation.channel ? channelPrompt(conversation.profile, this.channelTools?.instructions?.(conversation.id), channelPlatform(conversation.channel.platform).features.tasks !== false) : this.roleInstructions(conversation),
         cwd: conversation.workspacePath,
         ...(mcp ? { mcp: launch ? launch.mcp(mcp, this.agentStage(conversation.id, stage)) : mcp } : {}),
         extraDirs: conversation.projectPaths.slice(1),

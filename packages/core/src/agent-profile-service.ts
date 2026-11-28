@@ -11,7 +11,7 @@ import { Rejection } from './rejection'
 import { gitTopLevel } from './workspace'
 import type { WorktreeSetup } from './worktree-setup'
 
-type Chats = Pick<ConversationService, 'get' | 'listAll' | 'create' | 'continue' | 'resumeDelegation' | 'send' | 'stop' | 'interrupt' | 'chatPage' | 'messages' | 'capacityAvailable' | 'validateStartOptions' | 'turnOver' | 'agentIdle' | 'allowsBypass'>
+type Chats = Pick<ConversationService, 'get' | 'listAll' | 'create' | 'continue' | 'resumeDelegation' | 'send' | 'stop' | 'interrupt' | 'chatPage' | 'messages' | 'capacityAvailable' | 'validateStartOptions' | 'turnOver' | 'agentIdle' | 'allowsBypass' | 'steerUnsettled'>
 // The message each go of a call is sent as: a call taken up again is sent anew, and its turn is the
 // one after that message, not one of an earlier go.
 const refOf = (call: Pick<AgentCall, 'id' | 'attempt'>) => call.attempt > 0 ? `agent-call:${call.id}#${call.attempt}` : `agent-call:${call.id}`
@@ -438,6 +438,8 @@ export class AgentProfileService {
       // Answered, it is back at work until its turn ends.
       if (call.state === 'awaiting') this.patch(call.id, { state: 'running' })
       if (this.working(child)) continue
+      // The user's message into its turn may yet run on as one more turn: that one's end is the call's.
+      if (this.chats.steerUnsettled(child.id)) continue
       const items = this.chats.chatPage(child.id).items
       const at = items.findIndex((item) => item.id === `u:${refOf(call)}`)
       const sent = at >= 0

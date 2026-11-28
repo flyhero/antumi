@@ -32,7 +32,7 @@ export const codex: AgentDescriptor = {
   readOnlyMode: 'readOnly',
   // skills: it reads only .agents/skills under the working folder and ~/.agents/skills, neither of
   // which Antumi writes; whether skills.config or skills/list can add a folder is unverified.
-  capabilities: { unattended: true, bypass: true, autoMode: false, pathMentions: false, optionsWhileBusy: true, skills: false, userMcp: true, modelProviders: ['openai-responses'], accounts: true, lockdown: { images: true } },
+  capabilities: { unattended: true, bypass: true, autoMode: false, pathMentions: false, optionsWhileBusy: true, skills: false, userMcp: true, modelProviders: ['openai-responses'], accounts: true, lockdown: { images: true }, managedSteer: true },
   environment: {
     role: '聊天界面以 `codex app-server` 运行它；没装也可以使用其他 Agent。',
     install: 'npm install -g @openai/codex',

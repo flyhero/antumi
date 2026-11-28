@@ -19,6 +19,11 @@ const STDERR_TAIL_CHARS = 8 * 1024
 // Ended stages kept rebuilt in memory, most recently read last.
 const HISTORY_CACHE = 20
 const SILENCE_NOTICE_MS = 5 * 60_000
+// How a message sent into a turn for it alone (steerInto) is waited on. settleMs: how long a turn
+// that took one is held as maybe not the last, once it ends: Claude says nothing of a message it
+// read too late and runs it as a turn of its own right after. answerMs: how long an agent that
+// answers each one (Codex, Pi) is given to; past it the message counts as lost. Tests shorten both.
+export const STEER_TIMING = { settleMs: 3000, answerMs: 30_000 }
 
 // ended: the stage is over in the store (its agent is gone), not merely not taken over yet.
 export type ChatStage = { conversationId: string; stageId: string; agent: AgentKind; options: ChatStageOptions; ended?: boolean }
@@ -83,6 +88,14 @@ type Live = ChatStage & {
   watch: TurnWatch | null
   silence: { ref: string; timer: ReturnType<typeof setTimeout>; noticed: boolean } | null
   pendingReceipts: Set<string>
+  // Messages sent into a turn for it alone that the agent has neither taken nor refused yet, by
+  // ref, with when each went.
+  steers: Map<string, number>
+  // The turn under way took one; until, once it has ended, it is held as maybe not the last.
+  steered: boolean
+  steerSettleUntil: number
+  // Whether such a message was still unsettled, as last told to the sink.
+  steering: boolean
 }
 
 // Where the raw traffic goes, for the user to debug with; it records nothing while switched off.
@@ -170,6 +183,7 @@ export class ChatHost {
       if (record.dir === 'out' && record.ref) pendingReceipts.add(record.ref)
       else if (record.dir === 'receipt' || record.dir === 'undelivered') pendingReceipts.delete(record.ref)
     }
+    const steers = new Map(records.flatMap((record) => record.dir === 'out' && record.strict && record.ref ? [[record.ref, record.at] as const] : []))
     const live: Live = {
       ...stage,
       sessionId,
@@ -191,7 +205,11 @@ export class ChatHost {
       freshStderr: records.length === 0,
       watch: null,
       silence: null,
-      pendingReceipts
+      pendingReceipts,
+      steers,
+      steered: false,
+      steerSettleUntil: 0,
+      steering: false
     }
     this.lives.set(sessionId, live)
     this.history.delete(stage.stageId)
@@ -416,6 +434,53 @@ export class ChatHost {
     const sent = this.dispatch(live, outgoing, ref, images, references)
     this.flush(live)
     await sent
+  }
+
+  // A message for the turn now running and for nothing else, as a conversation another one manages
+  // takes the user's (a delegation's member, a squad's): what ends that turn is read as the work's
+  // result, so the message must not start a turn of its own. With no turn under way, or an agent
+  // that takes none into it, it is refused; it never waits in the queue. Checked and written in one
+  // go, so the turn cannot end in between.
+  async steerInto(conversationId: string, text: string, images: readonly ChatImage[] = [], ref: string = randomUUID(), references?: ChatReference[]): Promise<void> {
+    const live = this.running(conversationId)
+    const { label, capabilities } = agentDescriptor(live.agent)
+    if (!capabilities.managedSteer) throw new Rejection('chat-no-steer', `${label} 不能在这类会话里接收插话`)
+    this.assertDelivery(live, ref)
+    if (live.driver.items.delivery(ref) === 'submitted' || live.driver.items.get(`u:${ref}`)) return
+    const files = this.files(images)
+    if (!inTurn(live.driver) || !live.driver.canSteer()) throw new Rejection('chat-no-steer', '这一轮已经结束或现在不能插话，消息没有发送')
+    const sent = this.dispatch(live, live.driver.steer(text, files), ref, images, references, true)
+    this.flush(live)
+    await sent
+  }
+
+  // Whether a message sent into a turn for it alone may still change which turn is the last: the
+  // agent has not said whether it took it, or the turn it went into has only just ended. Whoever
+  // reads the turn's end as the work's end waits while this holds; the sink hears of activity when
+  // it stops holding.
+  steerUnsettled(conversationId: string): boolean {
+    const live = this.liveOf(conversationId)
+    return live !== undefined && this.steerState(live)
+  }
+
+  private steerState(live: Live): boolean {
+    const now = this.now()
+    for (const [ref, at] of live.steers) {
+      if (live.driver.items.get(`u:${ref}`)) { live.steers.delete(ref); live.steered = true }
+      // Refused by the agent, never written, or never answered.
+      else if (live.driver.items.get(`steer-refused:${ref}`) || live.driver.items.get(`send-failed:${ref}`) || now - at >= STEER_TIMING.answerMs) live.steers.delete(ref)
+    }
+    if (live.steered && !inTurn(live.driver)) {
+      live.steered = false
+      live.steerSettleUntil = now + STEER_TIMING.settleMs
+      this.flushAfter(live, STEER_TIMING.settleMs)
+    }
+    return live.steers.size > 0 || now < live.steerSettleUntil
+  }
+
+  private flushAfter(live: Live, ms: number): void {
+    const timer = setTimeout(() => { if (this.lives.get(live.sessionId) === live) this.flush(live) }, ms + 5)
+    timer.unref()
   }
 
   moveQueued(conversationId: string, ref: string, direction: 'up' | 'down'): void {
@@ -711,13 +776,17 @@ export class ChatHost {
   }
 
   // Logged and applied before it is written, so a crash in between cannot send it twice.
-  private dispatch(live: Live, message: ChatOutgoing, ref?: string, images: readonly ChatImage[] = [], references?: ChatReference[]): Promise<unknown> {
+  private dispatch(live: Live, message: ChatOutgoing, ref?: string, images: readonly ChatImage[] = [], references?: ChatReference[], strict = false): Promise<unknown> {
     // A disconnected daemon must not leave a logged message that deduplication treats as sent.
     this.daemon.assertConnected?.()
     const queue = this.queued(live)
     const queued = ref ? queue.find((entry) => entry.ref === ref) : undefined
     if (ref && !inTurn(live.driver)) this.sink.prompt?.(live, ref)
-    this.record(live, { dir: 'out', at: this.now(), frame: message.logged, ...(ref ? { ref } : {}), ...(images.length ? { images: [...images] } : {}), ...(references?.length ? { references } : {}) })
+    this.record(live, { dir: 'out', at: this.now(), frame: message.logged, ...(ref ? { ref } : {}), ...(images.length ? { images: [...images] } : {}), ...(references?.length ? { references } : {}), ...(strict ? { strict } : {}) })
+    if (strict && ref) {
+      live.steers.set(ref, this.now())
+      this.flushAfter(live, STEER_TIMING.answerMs)
+    }
     const turns = adapterOf(live.agent).turns
     const timeout = turns?.firstFrameTimeoutMs
     const signal = timeout ? live.driver.turnSignal?.(message.logged, 'out') : null
@@ -791,7 +860,9 @@ export class ChatHost {
     const requests = [...(activity === 'awaiting' ? openRequests(live.driver).map((item) => item.requestId) : []), ...asksOf(live.driver).map((item) => item.requestId)].join(' ')
     const doing = activity === 'running' ? JSON.stringify(doingOf(live.driver)) : ''
     const between = betweenTurns(live.driver)
-    if (activity !== live.activity || suggestion !== live.suggestion || requests !== live.requests || doing !== live.doing || between !== live.betweenTurns) {
+    const steering = this.steerState(live)
+    if (activity !== live.activity || suggestion !== live.suggestion || requests !== live.requests || doing !== live.doing || between !== live.betweenTurns || steering !== live.steering) {
+      live.steering = steering
       live.activity = activity
       live.suggestion = suggestion
       live.requests = requests

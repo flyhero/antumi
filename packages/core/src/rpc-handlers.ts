@@ -625,7 +625,17 @@ export function createRpcHandlers(
     'conversations.setModelProvider': ({ id, modelProvider }) => { notChannel(id); profiles?.guardUser(id, true); squads?.guardUser(id, true); return conversations.setModelProvider(id, modelProvider) },
     'conversations.setAccount': ({ id, account }) => { notChannel(id); profiles?.guardUser(id, true); squads?.guardUser(id, true); return conversations.setAccount(id, account) },
     'conversations.setOption': async ({ id, option, value }) => { notChannel(id); profiles?.guardUser(id, true); squads?.guardUser(id, true); if (option === 'permissionMode') conversations.attend(id); await conversations.setOption(id, option, value); return OK },
-    'conversations.send': ({ id, text, images, queue, steer, ref, references }) => { notChannel(id); return userSent(id, async () => { profiles?.guardUser(id, true); squads?.guardUser(id, true); await conversations.send(id, text, images, queue, steer, ref, references); return OK }) },
+    'conversations.send': ({ id, text, images, queue, steer, ref, references }) => { notChannel(id); return userSent(id, async () => {
+      // A delegation's or a squad's member takes one thing from the user: a message into the turn
+      // it is running, which never starts a turn of its own.
+      const { parentConversationId, squadRunId } = conversations.get(id)
+      if (steer && !queue && (parentConversationId || squadRunId)) {
+        profiles?.guardUser(id); squads?.guardUser(id)
+        await conversations.steer(id, text, images, ref, references)
+        return OK
+      }
+      profiles?.guardUser(id, true); squads?.guardUser(id, true); await conversations.send(id, text, images, queue, steer, ref, references); return OK
+    }) },
     'conversations.moveQueued': ({ id, ref, direction }) => { notChannel(id); conversations.moveQueued(id, ref, direction); return OK },
     'conversations.cancelQueued': ({ id, ref }) => { notChannel(id); conversations.cancelQueued(id, ref); return OK },
     'conversations.sendQueued': ({ id, ref, now }) => { notChannel(id); return userSent(id, async () => { await conversations.sendQueued(id, ref, now); return OK }) },

@@ -15,6 +15,7 @@ import { ConversationService } from './conversation-service'
 import { ProjectRegistry } from './project-registry'
 import { AttachmentStore } from './attachment-store'
 import { fakeChatDaemon } from './fake-chat-agent'
+import { STEER_TIMING } from './chat-host'
 import { antigravity } from './agents/antigravity/antigravity-adapter'
 
 describe('reusable agent roles and delegated work', () => {
@@ -799,6 +800,59 @@ describe('reusable agent roles and delegated work', () => {
       complete(chats.get(again.conversationId).sessionId!, 'reviewed')
       await waitFor(() => store.call(again.id).state === 'completed')
       expect(profiles.resumeCheck(parentId, first.id).redoneBy).toBe(again.id)
+    })
+  })
+  describe('the user speaking to a member at work', () => {
+    const timing = { ...STEER_TIMING }
+    beforeEach(() => { STEER_TIMING.settleMs = 150 })
+    afterEach(() => { Object.assign(STEER_TIMING, timing) })
+    const turns = (id: string) => chats.chatPage(id).items.filter((item) => item.kind === 'turn')
+
+    it('puts a message into the turn the member runs, and the call ends on that same turn', async () => {
+      const call = await profiles.dispatch(parentId, reviewer.id, 'Review the module')
+      await waitFor(() => store.call(call.id).state === 'running')
+      const child = chats.get(call.conversationId)
+      // Anything but a message into the turn is still the caller's to manage.
+      expect(() => profiles.guardUser(child.id, true)).toThrow(expect.objectContaining({ reason: 'agent-call-managed' }))
+      expect(() => profiles.guardUser(child.id)).not.toThrow()
+      await chats.steer(child.id, 'Leave the generated files out of it', [], 'steer-1')
+      expect(chats.chatPage(child.id).items.find((item) => item.id === 'u:steer-1')).toMatchObject({ kind: 'user', steer: true })
+      expect(store.call(call.id).state).toBe('running')
+      complete(child.sessionId!, 'Reviewed, generated files left out')
+      await waitFor(() => store.call(call.id).delivered)
+      expect(store.call(call.id)).toMatchObject({ state: 'completed', result: 'Reviewed, generated files left out' })
+      expect(turns(child.id)).toHaveLength(1)
+      // The work is over: nothing more goes in.
+      await expect(chats.steer(child.id, 'One more thing')).rejects.toMatchObject({ reason: 'agent-call-managed' })
+    })
+
+    it('waits for the turn an agent runs for a message that came too late, and ends the call on that one', async () => {
+      const call = await profiles.dispatch(parentId, reviewer.id, 'Review the module')
+      await waitFor(() => store.call(call.id).state === 'running')
+      const child = chats.get(call.conversationId)
+      await chats.steer(child.id, 'Check the migration too')
+      complete(child.sessionId!, 'Reviewed the module')
+      const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+      // The turn is over, and for a moment nothing says whether another follows.
+      await pause(40)
+      expect(store.call(call.id).state).toBe('running')
+      // Claude read it after its turn ended and starts a turn of its own for it.
+      daemon.emit(child.sessionId!, { type: 'system', subtype: 'init', session_id: 'late' })
+      await pause(STEER_TIMING.settleMs + 100)
+      expect(store.call(call.id).state).toBe('running')
+      expect(chats.get(child.id).sessionId).toBe(child.sessionId)
+      complete(child.sessionId!, 'Reviewed the module and the migration')
+      await waitFor(() => store.call(call.id).delivered)
+      expect(store.call(call.id)).toMatchObject({ state: 'completed', result: 'Reviewed the module and the migration' })
+    })
+
+    it('refuses a message for a call that was cancelled, writing nothing to its agent', async () => {
+      const call = await profiles.dispatch(parentId, reviewer.id, 'Review the module')
+      await waitFor(() => store.call(call.id).state === 'running')
+      const child = chats.get(call.conversationId)
+      await profiles.cancel(parentId, call.id)
+      await expect(chats.steer(child.id, 'Too late')).rejects.toMatchObject({ reason: 'agent-call-managed' })
+      expect(daemon.written(child.sessionId!).filter((frame) => JSON.stringify(frame).includes('Too late'))).toEqual([])
     })
   })
 })

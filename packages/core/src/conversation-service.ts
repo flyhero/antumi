@@ -2010,19 +2010,35 @@ export class ConversationService {
     if (this.preparingOf(conversation)) throw new Rejection('conversation-preparing', 'the issue is still being fetched')
     this.squadGuard?.(conversation)
     if (adapterOf(conversation.agent).turns?.serialized) {
-      return this.serially(id, () => this.sendNow(id, text, imageIds, queue, steer, ref, references))
+      return this.serially(id, () => this.sendNow(id, text, imageIds, { queue, steer }, ref, references))
     }
-    return this.sendNow(id, text, imageIds, queue, steer, ref, references)
+    return this.sendNow(id, text, imageIds, { queue, steer }, ref, references)
   }
 
-  private async sendNow(id: string, text: string, imageIds: readonly string[], queue: boolean, steer: boolean, ref?: string, references?: ChatReference[]): Promise<void> {
+  // The user's message into the turn a conversation another one manages is running (a delegation's
+  // member, a squad's): for that turn alone, refused where it would start one (ChatHost.steerInto).
+  async steer(id: string, text: string, imageIds: readonly string[] = [], ref?: string, references?: ChatReference[]): Promise<void> {
+    const conversation = this.writable(id)
+    if (this.providerSwitches.has(id)) throw new Rejection('chat-busy')
+    this.squadGuard?.(conversation)
+    return this.sendNow(id, text, imageIds, { strict: true }, ref, references)
+  }
+
+  // Whether such a message may still change which of the conversation's turns is its last.
+  steerUnsettled(id: string): boolean { return this.chats.steerUnsettled(id) }
+
+  // strict: into the running turn or not at all.
+  private async sendNow(id: string, text: string, imageIds: readonly string[], how: { queue?: boolean; steer?: boolean; strict?: boolean }, ref?: string, references?: ChatReference[]): Promise<void> {
     this.gitSending.set(id, (this.gitSending.get(id) ?? 0) + 1)
     try {
       await this.gitGuard?.(this.get(id).projectPaths)
       if (ref && this.checkSentRef(id, ref, 0, true)) return
       const note = this.switchNote(id)
       const message = note ? branchSwitchMessage(note, text) : text
-      await this.chats.send(id, message, await this.chatImages(imageIds), queue, steer, ref, chatReferencesFor(text, message, references))
+      const images = await this.chatImages(imageIds)
+      const placed = chatReferencesFor(text, message, references)
+      if (how.strict) await this.chats.steerInto(id, message, images, ref, placed)
+      else await this.chats.send(id, message, images, how.queue, how.steer, ref, placed)
       if (note) this.store.setSwitchedBranches(id, {})
     } finally { const pending = (this.gitSending.get(id) ?? 1) - 1; if (pending) this.gitSending.set(id, pending); else this.gitSending.delete(id) }
   }
@@ -2426,7 +2442,7 @@ export class ConversationService {
       if (ready.sessionId && !this.chats.idle(id)) throw new Rejection('chat-busy', `${agent} is already working on another turn`)
       if (ready.sessionId) await this.stop(id)
       await this.start(id, agent, '', false)
-      await this.sendNow(id, user.text, user.images.map((image) => image.id), false, false, undelivered ? ref : randomUUID(), user.references)
+      await this.sendNow(id, user.text, user.images.map((image) => image.id), {}, undelivered ? ref : randomUUID(), user.references)
       this.chats.updateNotice(this.chatStage(conversation, stage), {
         dir: 'note',
         at: Date.now(),

@@ -10,6 +10,8 @@ import { toolLabel } from '../chat-tools'
 import { useChatSurface } from './chat-surface'
 import { ArchivedBar } from './ArchivedBar'
 import { ChatComposer } from './ChatComposer'
+import { ManagedComposer } from './ManagedComposer'
+import { managedInput } from '../managed-input'
 import { archiveConversation } from './ConversationActions'
 import { ChatMessageList, type SentMessage } from './ChatMessageList'
 import { ChatPinnedCommands } from './ChatPinnedCommands'
@@ -161,6 +163,8 @@ export function ChatDock({ conversation, state, pending, tools, finishedCalls, o
   // The column not in front keeps its composer, draft and all, behind a one-line way back to it.
   const pane = useConversationPane()
   const resting = pane !== null && !pane.active
+  // A member at work for another conversation takes a message into its turn and nothing else.
+  const managed = managedInput(conversation, Boolean(state?.steerable), useCore((s) => s.rpc?.features) ?? [])
   return (
     <div className="chat-dock">
       {!compact && <div className="chat-dock-header">
@@ -179,9 +183,10 @@ export function ChatDock({ conversation, state, pending, tools, finishedCalls, o
       {waiting && answerable.length > 0 && <PendingRequests conversation={conversation} pending={answerable} tools={tools} modes={(state?.permissionModes ?? []).filter((mode) => !isHelper(conversation) || helperAllowsMode(mode))} />}
       {archived && <ArchivedBar what={t('BrowserPanel.conversation')} onRestore={() => archiveConversation(conversation.id, false)} />}
       {/* The composer stays mounted while a request or the archive takes its place, so a draft is not lost. */}
-      <div className="chat-dock-composer" hidden={waiting || archived || resting || Boolean(conversation.parentConversationId)}>
+      <div className="chat-dock-composer" hidden={waiting || archived || resting || Boolean(conversation.parentConversationId) || managed !== null}>
         <ChatComposer compact={compact} conversation={conversation} state={state} onSendNow={onSendNow} />
       </div>
+      {managed && !waiting && !archived && !resting && <ManagedComposer conversation={conversation} way={managed} />}
       {conversation.parentConversationId && !waiting && <p className="muted"><button type="button" className="link-button" onClick={() => selectConversation(conversation.parentConversationId ?? null)}>{t('AgentProfiles.parent')}</button></p>}
       {resting && !waiting && !archived && <PaneReply conversationId={conversation.id} pane={pane} />}
     </div>

@@ -10,6 +10,7 @@ import { AttachmentStore } from './attachment-store'
 import { ConversationService } from './conversation-service'
 import { ConversationStore } from './conversation-store'
 import { fakeChatDaemon } from './fake-chat-agent'
+import { STEER_TIMING } from './chat-host'
 import { ProjectRegistry } from './project-registry'
 import { SquadService } from './squad-service'
 import { SquadStore } from './squad-store'
@@ -231,6 +232,25 @@ describe('squad execution', () => {
     expect(chats.get(runningFirst.conversationId!).sessionId).toBeNull()
     await squads.reconcile()
     expect(chats.messages(leaderId()).filter((message) => message.role === 'user' && message.text.includes('成员工作结果'))).toHaveLength(1)
+  })
+
+  it('takes the user\'s message into a member\'s running turn, and nothing else from them', async () => {
+    const timing = { ...STEER_TIMING }
+    STEER_TIMING.settleMs = 50
+    try {
+      await start(); const work = await dispatch(id(2)); await releaseLeader()
+      const running = current().works.find((each) => each.id === work.id)!
+      const member = running.conversationId!
+      expect(() => squads.guardUser(member, true)).toThrow(expect.objectContaining({ reason: 'squad-managed' }))
+      expect(() => squads.guardUser(member)).not.toThrow()
+      await chats.steer(member, 'Keep the public API as it is', [], 'steer-1')
+      expect(chats.chatPage(member).items.find((item) => item.id === 'u:steer-1')).toMatchObject({ kind: 'user', steer: true })
+      complete(workSession(running), 'implemented, public API unchanged')
+      await waitFor(() => current().works.find((each) => each.id === work.id)?.state === 'completed')
+      expect(current().works.find((each) => each.id === work.id)?.result).toBe('implemented, public API unchanged')
+      expect(chats.chatPage(member).items.filter((item) => item.kind === 'turn')).toHaveLength(1)
+      await expect(chats.steer(member, 'One more thing')).rejects.toMatchObject({ reason: 'squad-managed' })
+    } finally { Object.assign(STEER_TIMING, timing) }
   })
 
   it('releases the coordinator slot and advances with a capacity of one', async () => {

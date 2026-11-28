@@ -5,7 +5,7 @@ import { AntumiRequests } from '../../antumi-requests'
 import { describeBrowserTool, showBrowserInput } from '../../browser-tools'
 import { addedPatch, editPatch } from '../../chat-diff'
 import { withoutCost } from '../../model-metering'
-import { messageText, type ChatAnswer, type ChatDriver, type ChatImageFile, type ChatOutgoing, type ChatRecord, type ChatStageOptions, type StageMessage } from '../../chat-driver'
+import { messageText, steerRefusedText, type ChatAnswer, type ChatDriver, type ChatImageFile, type ChatOutgoing, type ChatRecord, type ChatStageOptions, type StageMessage } from '../../chat-driver'
 import { ChatItems, clip } from '../../chat-items'
 import { ChatQueue } from '../../chat-queue'
 import { StageState } from '../../chat-stage-state'
@@ -80,7 +80,7 @@ type Turn = {
   models: Map<string, Metered>
   calls: number
 }
-type Steer = { text: string; images: ChatImage[]; ref: string | undefined }
+type Steer = { text: string; images: ChatImage[]; ref: string | undefined; strict: boolean }
 
 // Pi's tools as the chat labels them: a command, a file read, edited or written, a search.
 function toolName(name: string): string {
@@ -191,7 +191,7 @@ export class PiRpc implements ChatDriver {
     if (record.dir === 'receipt' || record.dir === 'undelivered') this.items.rememberDelivery(record.ref, record.dir === 'receipt' ? 'submitted' : 'undelivered', record.at)
     if (record.dir === 'out' && record.ref && record.references) this.items.rememberReferences(record.ref, record.references)
     if (record.dir === 'in') this.receive(record.frame, record.at)
-    else if (record.dir === 'out') this.sent(record.frame, record.at, record.ref, record.images ?? [])
+    else if (record.dir === 'out') this.sent(record.frame, record.at, record.ref, record.images ?? [], record.strict === true)
     else if (record.dir === 'queue') this.queue.apply(record)
     else if (record.dir === 'note') this.items.notice(record.level, record.text, record.at, {
       ...(record.id !== undefined ? { id: record.id } : {}),
@@ -366,7 +366,7 @@ export class PiRpc implements ChatDriver {
     }
   }
 
-  private sent(raw: unknown, at: number, ref: string | undefined, images: readonly ChatImage[]): void {
+  private sent(raw: unknown, at: number, ref: string | undefined, images: readonly ChatImage[], strict = false): void {
     const parsed = Command.safeParse(raw)
     if (!parsed.success) return
     const frame = parsed.data
@@ -380,7 +380,7 @@ export class PiRpc implements ChatDriver {
     const mode = this.options.lockdown ? null : modeCommand(frame)
     if (mode) { this.mode = mode; return }
     const message = frame.message ?? ''
-    if (frame.streamingBehavior === 'steer') { this.steering.set(frame.id, { text: message, images: [...images], ref }); return }
+    if (frame.streamingBehavior === 'steer') { this.steering.set(frame.id, { text: message, images: [...images], ref, strict }); return }
     const eventRef = ref ?? `pi:${this.turns + 1}`
     this.turns++
     this.queue.sent(ref)
@@ -555,11 +555,16 @@ export class PiRpc implements ChatDriver {
   }
 
   // Pi's answer to a message sent into the turn: taken, it shows as the user's; refused, it waits
-  // for the turn's end, saying why. One that came as the run ended starts the next.
+  // for the turn's end, saying why; one meant for that turn alone is dropped instead. One that
+  // came as the run ended starts the next.
   private steered(id: string, error: string | null, at: number, started = false): void {
     const message = this.steering.get(id)
     if (!message) return
     this.steering.delete(id)
+    if (error && message.strict && message.ref) {
+      this.items.notice('warning', steerRefusedText(message.text, error), at, { id: `steer-refused:${message.ref}` })
+      return
+    }
     if (error) {
       if (message.ref) this.queue.add(message.text, message.ref, message.images)
       this.items.notice('info', `没能插进正在进行的这一轮（${error}），已排到回合结束后发送`, at)

@@ -30,7 +30,7 @@ export const claude: AgentDescriptor = {
   readOnlyMode: 'ask',
   // Its classifier decides what needs asking; edits alone where the model lacks it.
   unattendedModes: ['auto', 'acceptEdits'],
-  capabilities: { unattended: true, bypass: true, autoMode: true, pathMentions: true, optionsWhileBusy: true, skills: true, userMcp: true, modelProviders: ['anthropic'], accounts: true, lockdown: { images: true } },
+  capabilities: { unattended: true, bypass: true, autoMode: true, pathMentions: true, optionsWhileBusy: true, skills: true, userMcp: true, modelProviders: ['anthropic'], accounts: true, lockdown: { images: true }, managedSteer: true },
   environment: {
     role: '聊天界面以 `claude -p` 运行它；没装也可以只用 Codex。',
     install: 'npm install -g @anthropic-ai/claude-code',

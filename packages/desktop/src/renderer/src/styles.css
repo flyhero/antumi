@@ -9145,6 +9145,9 @@ div.inspector-empty > p { margin: 0 0 8px; }
 .chat-draft-branch[data-blocked] svg,
 .chat-draft-branch[data-blocked] .chat-draft-branch-arrow { color: var(--warning); }
 .chat-options-note { font-size: 12px; }
+/* Under a member's input: what sending does, or why the last one did not go. */
+.managed-composer-note { padding-left: 6px; color: var(--text-3); }
+.managed-composer-note[data-failed] { color: var(--warning); }
 /* Models the agent could not list: in the warning colour, as something to fix rather than a default. */
 .models-unavailable { color: var(--warning); }
 

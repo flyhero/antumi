@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { decodePairingCode, type Conversation } from '@antumi/protocol'
+import { decodeChatLink, decodePairingCode, type Conversation } from '@antumi/protocol'
 import type { CoreToGateway } from './gateway-ipc'
 import { MobileService, type GatewayLauncher } from './mobile-service'
 import { MobileStore } from './mobile-store'
@@ -17,7 +17,7 @@ describe('MobileService', () => {
   let dir: string
   let tasks: TaskStore
   let store: MobileStore
-  let posts: { url: string; body: string }[]
+  let posts: { url: string; body: string; click: string | null }[]
   let launches: number
   let sent: CoreToGateway[]
   let service: MobileService
@@ -36,7 +36,7 @@ describe('MobileService', () => {
     }
     service = new MobileService(store, {
       dir: path.join(dir, 'mobile'), connections: () => [], changed() {}, launch,
-      addresses: async () => ['192.168.1.2'], post: async (url, body) => { posts.push({ url, body }) },
+      addresses: async () => ['192.168.1.2'], post: async (url, body, click) => { posts.push({ url, body, click }) },
       relay: { obtain: async () => '/bin/wireproxy', launch: () => ({ stop() {} }), probe: async () => null, port: async () => 40000 }
     })
   })
@@ -113,8 +113,21 @@ describe('MobileService', () => {
     service.conversationChanged(waiting, () => false)
     service.conversationChanged(idle, () => false)
     service.conversationChanged(waiting, () => false)
-    expect(posts).toEqual([{ url: 'https://ntfy.sh/antumi-test', body: '有会话在等你确认或回答' }])
+    expect(posts).toEqual([{ url: 'https://ntfy.sh/antumi-test', body: '有会话在等你确认或回答', click: null }])
     expect(posts[0]!.body).not.toContain('rm -rf')
+  })
+
+  it('opens the conversation on this computer when the push is tapped', async () => {
+    await service.start('ws://127.0.0.1:1/?token=t')
+    await service.setEnabled(true)
+    await new Promise((resolve) => setImmediate(resolve))
+    const computer = decodePairingCode((await service.beginPairing()).uri)!.key
+    service.setPushUrl('https://ntfy.sh/antumi-test')
+    const running = conversation({ turn: 'running' })
+    service.conversationChanged(running, () => false)
+    service.conversationChanged(conversation({ turn: 'idle' }), () => false)
+    expect(posts).toHaveLength(1)
+    expect(decodeChatLink(posts[0]!.click!)).toEqual({ computer, conversation: running.id })
   })
 
   it('tells at start of what already waits', () => {

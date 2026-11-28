@@ -156,6 +156,14 @@ export async function boot(): Promise<void> {
   if (first) await connect(first.key)
 }
 
+// Connects to a paired computer unless already on it; false when it is not paired here.
+export function openComputer(computerKey: string): boolean {
+  const { computers, current, status } = useSession.getState()
+  if (!computers.some((computer) => computer.key === computerKey)) return false
+  if (computerKey !== current || status === 'offline' || status === 'idle') void connect(computerKey)
+  return true
+}
+
 export function unlock(): void {
   useSession.setState({ locked: false })
 }

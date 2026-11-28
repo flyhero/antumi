@@ -313,7 +313,8 @@ export function ChatScreen({ id }: { id: string }) {
   const working = conversation ? conversationWorking(conversation) && !request : false
   const rows = useMemo(() => rowsOf(items, working, request).reverse(), [items, working, request])
   if (!conversation) {
-    return <Screen title={t('appName')} onBack={() => pop()}><Muted>{t('noConversations')}</Muted></Screen>
+    // Opened from a push, the conversation arrives once the computer is reached.
+    return <Screen title={t('appName')} onBack={() => pop()}><Muted>{t(status === 'connecting' ? 'connecting' : 'noConversations')}</Muted></Screen>
   }
   // A delegated member's chat is driven by its caller: here it is only read and its requests answered.
   const caller = conversation.parentConversationId ?? null

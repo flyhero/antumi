@@ -174,6 +174,33 @@ export function decodePairingCode(text: string): MobilePairingCode | null {
   }
 }
 
+// A push's tap target: the conversation, and which paired computer it is on (its public key).
+export type MobileChatLink = { computer: string; conversation: string }
+
+const CHAT_PREFIX = 'antumi://chat?'
+
+export function encodeChatLink(link: MobileChatLink): string {
+  return `${CHAT_PREFIX}c=${encodeURIComponent(link.computer)}&id=${encodeURIComponent(link.conversation)}`
+}
+
+// Parsed by hand: React Native's URLSearchParams has lacked get().
+export function decodeChatLink(text: string): MobileChatLink | null {
+  const trimmed = text.trim()
+  if (!trimmed.startsWith(CHAT_PREFIX)) return null
+  const params = new Map<string, string>()
+  try {
+    for (const pair of trimmed.slice(CHAT_PREFIX.length).split('&')) {
+      const at = pair.indexOf('=')
+      if (at > 0) params.set(pair.slice(0, at), decodeURIComponent(pair.slice(at + 1)))
+    }
+  } catch {
+    return null
+  }
+  const computer = params.get('c')
+  const conversation = params.get('id')
+  return computer && conversation ? { computer, conversation } : null
+}
+
 // What a phone said of itself in the handshake's last message; shown, never trusted.
 export const MobileHello = z.object({
   name: z.string().trim().min(1).max(100).catch('Phone'),

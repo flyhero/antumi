@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 import {
   MOBILE_PROTOCOL_VERSION,
   base64Url,
+  encodeChatLink,
   conversationAlert,
   conversationWaiting,
   encodePairingCode,
@@ -84,7 +85,8 @@ export type MobileServiceOptions = {
   computerName?: string
   // Interfaces' private addresses, and Tailscale's name for this computer if it has one.
   addresses?: () => Promise<string[]>
-  post?: (url: string, body: string) => Promise<void>
+  // click: what tapping the push opens on the phone, when phone access has a key.
+  post?: (url: string, body: string, click: string | null) => Promise<void>
   relay?: Partial<RelayDeps>
 }
 
@@ -325,9 +327,11 @@ export class MobileService {
     this.pushed.set(key, this.now())
     if (this.pushed.size > 500) this.pushed.delete(this.pushed.keys().next().value!)
     // Only that something happened: an ntfy topic may be read by its server, so no titles or text.
+    // The tap target names the conversation by its random ID alone.
+    const click = this.key ? encodeChatLink({ computer: base64Url.encode(this.key.publicKey), conversation: conversation.id }) : null
     const body = alert === 'waiting' ? '有会话在等你确认或回答' : alert === 'crashed' ? '有会话的 Agent 意外退出了' : alert === 'finishedAsking' ? '有会话本轮结束，并留了一个问题' : '有会话本轮结束了'
     const post = this.options.post ?? defaultPost
-    void post(url, body).catch((error: unknown) => console.error('[antumi-core] phone push failed:', error instanceof Error ? error.message : error))
+    void post(url, body, click).catch((error: unknown) => console.error('[antumi-core] phone push failed:', error instanceof Error ? error.message : error))
   }
 
   private save(settings: MobileSettings): void {
@@ -477,8 +481,10 @@ export class MobileService {
   }
 }
 
-async function defaultPost(url: string, body: string): Promise<void> {
-  const response = await fetch(url, { method: 'POST', body, headers: { Title: 'Antumi', Tags: 'antumi' }, signal: AbortSignal.timeout(10_000) })
+async function defaultPost(url: string, body: string, click: string | null): Promise<void> {
+  // ntfy opens Click on a tap; services without it ignore the header.
+  const headers: Record<string, string> = { Title: 'Antumi', Tags: 'antumi', ...(click ? { Click: click } : {}) }
+  const response = await fetch(url, { method: 'POST', body, headers, signal: AbortSignal.timeout(10_000) })
   if (!response.ok) throw new Error(`HTTP ${response.status}`)
 }
 

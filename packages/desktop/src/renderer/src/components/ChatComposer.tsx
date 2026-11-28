@@ -289,6 +289,10 @@ export function ChatComposer({ conversation, state, onSendNow, compact = false }
   const delivering = useChatDeliveries((messages) => messages[id]?.some((message) => message.phase === 'sending') ?? false)
   const quotes = useQuotes(id)
   const queueOrderSupported = useCore((state) => state.rpc?.features.includes('chat-queue-order') ?? false)
+  // A member editing this conversation's directories: an older core refuses any message meanwhile;
+  // a newer one takes the user's, telling the agent to keep its hands off the files.
+  const memberEditing = Boolean(conversation.delegation?.writing)
+  const delegationChat = useCore((state) => state.rpc?.features.includes('delegation-chat') ?? false)
   const imagesSupported = useChatImagesSupported()
   const deliveryRefsSupported = useCore((state) => !state.rpc || state.rpc.features.includes('deferred-conversation-start'))
   const optionsSupported = useChatOptionsSupported()
@@ -342,7 +346,7 @@ export function ChatComposer({ conversation, state, onSendNow, compact = false }
     images: imagesSupported, mentions: mentionsSupported, pastes: pastedTextSupported, readOnly: inputReadOnly
   })
   const initialHint = initialMessage ? initialMessage.phase === 'failed' ? t('ChatComposer.retryTheFirstMessageAboveFirst') : initialMessage.phase === 'sending' ? t('ChatComposer.sendingFirstMessage') : t('ChatComposer.starting', { value1: agentLabel(conversation.agent) }) : null
-  const canTake = (idle || queueable || stopped) && !busy && !delivering && !starting && !switchingPermission && !surface.sendBlocker && !conversation.delegation?.writing && attached.uploading === 0 && files.pasting === 0
+  const canTake = (idle || queueable || stopped) && !busy && !delivering && !starting && !switchingPermission && !surface.sendBlocker && (delegationChat || !memberEditing) && attached.uploading === 0 && files.pasting === 0
   const canSend = canTake && (text.trim() !== '' || attached.images.length > 0 || quotes.length > 0)
   // What the agent guesses comes next, as Claude Code shows it: grey in the empty input, Tab or →
   // takes it, typing anything else puts it away for good.
@@ -544,7 +548,7 @@ export function ChatComposer({ conversation, state, onSendNow, compact = false }
         autoFocus={compact}
         placeholder={compact ? t('ChatComposer.askHelper') :
           handingOff ? t('ChatComposer.handOffToAddInstructionsOrPressEnter', { value1: agentLabel(handingOff), send: sendHint })
-          : surface.sendBlocker ?? initialHint ?? (switchingPermission ? t('ChatComposer.switchingPermission') : null) ?? suggestion ?? (idle || stopped ? t('ChatComposer.messageAgentEnterToSendShiftEnterFor', { send: sendHint, value1: commandEntries.length > 0 ? t('ChatComposer.forCommands') : '', value2: mentionsSupported ? t('ChatComposer.toReferenceFiles') : '' })
+          : surface.sendBlocker ?? initialHint ?? (switchingPermission ? t('ChatComposer.switchingPermission') : null) ?? suggestion ?? (memberEditing && delegationChat ? t('ChatComposer.memberEditing') : null) ?? (idle || stopped ? t('ChatComposer.messageAgentEnterToSendShiftEnterFor', { send: sendHint, value1: commandEntries.length > 0 ? t('ChatComposer.forCommands') : '', value2: mentionsSupported ? t('ChatComposer.toReferenceFiles') : '' })
             : workingPlaceholder({ awaiting: turn === 'awaiting', queueable, steerable }, { send: currentShortcutLabel('send-message', shortcuts), steer: steerKey, interrupt: currentShortcutLabel('interrupt-turn', shortcuts) }))
         }
         setValue={(next) => {

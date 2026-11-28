@@ -180,7 +180,7 @@ const zh = {
     profileList: '查看智能体配置', profileCreate: '创建智能体', profileUpdate: '修改智能体', squadList: '查看团队配置', squadCreate: '创建团队', squadUpdate: '修改团队',
     scheduleList: '查看预约', scheduleCreate: '创建预约', scheduleUpdate: '修改预约', routineList: '查看例程', routineCreate: '创建例程', routineUpdate: '修改例程',
     skillList: '查看技能', skillSearch: '搜索技能', skillInstall: '安装技能', skillSetActivation: '设置技能启用范围', commandList: '查看聊天命令', commandCreate: '创建聊天命令',
-    commandUpdate: '修改聊天命令', agentList: '查看可委派智能体', agentDispatch: '委派智能体', agentStatus: '查看委派进度', agentCancel: '取消委派', agentResume: '继续委派',
+    commandUpdate: '修改聊天命令', agentList: '查看可委派智能体', agentDispatch: '委派智能体', agentStatus: '查看委派进度', agentCancel: '取消委派', agentResume: '继续委派', agentSteer: '转达给委派成员',
     squadRoster: '查看团队成员', squadDispatch: '分派团队工作', squadFinish: '提交团队成果', pullRequestStatus: '查看 PR 状态', pullRequestCreate: '创建 PR'
   },
   runReadFiles: '读取 {count} 个文件',
@@ -448,7 +448,7 @@ const en: Strings = {
     profileList: 'List agent profiles', profileCreate: 'Create agent', profileUpdate: 'Update agent', squadList: 'List teams', squadCreate: 'Create team', squadUpdate: 'Update team',
     scheduleList: 'List schedules', scheduleCreate: 'Create schedule', scheduleUpdate: 'Update schedule', routineList: 'List routines', routineCreate: 'Create routine', routineUpdate: 'Update routine',
     skillList: 'List skills', skillSearch: 'Search skills', skillInstall: 'Install skills', skillSetActivation: 'Set skill activation', commandList: 'List chat commands', commandCreate: 'Create chat command',
-    commandUpdate: 'Update chat command', agentList: 'List callable agents', agentDispatch: 'Delegate to agent', agentStatus: 'Check delegations', agentCancel: 'Cancel delegation', agentResume: 'Resume delegation',
+    commandUpdate: 'Update chat command', agentList: 'List callable agents', agentDispatch: 'Delegate to agent', agentStatus: 'Check delegations', agentCancel: 'Cancel delegation', agentResume: 'Resume delegation', agentSteer: 'Pass on to delegated member',
     squadRoster: 'View team roster', squadDispatch: 'Assign team work', squadFinish: 'Submit team result', pullRequestStatus: 'Check PR status', pullRequestCreate: 'Create PR'
   },
   runReadFiles: 'Read {count} files',

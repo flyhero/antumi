@@ -627,7 +627,7 @@ const profiles = new AgentProfileService(new AgentProfileStore(paths.database), 
   usage: () => standingUsage.list()
 })
 service.setSquads(squads)
-conversations.setSquadGuard((conversation) => { squads.guardMember(conversation); profiles.guard(conversation) })
+conversations.setSquadGuard((conversation, byUser) => { squads.guardMember(conversation); return profiles.guard(conversation, byUser) })
 squads.setProfiles((id) => profiles.get(id))
 conversations.setCallCleanup((id) => profiles.cancelForParent(id))
 service.setDelegationBusy((id) => profiles.busy(id) || Boolean(squadCalls?.summary(id).open))

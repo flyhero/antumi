@@ -600,7 +600,8 @@ export class TaskService {
   // Readies a chat task's agent before a message goes to it: planning goes on read-only, work goes on
   // in the worktrees (laid out again, so one the user removed comes back), on the same session. A
   // finished task goes back to running, as continuing it does.
-  async resumeChat(id: string, allowBypass?: boolean): Promise<Task> {
+  // byUser: the user going on in the chat themselves (ConversationService.setSquadGuard).
+  async resumeChat(id: string, allowBypass?: boolean, byUser = false): Promise<Task> {
     const task = this.get(id)
     // Before its squad runs, the leader plans as any task's agent does.
     if (task.squadId && task.status !== 'pending') return this.requireSquads().resume(id, allowBypass)
@@ -612,7 +613,7 @@ export class TaskService {
     if (!task.agent) {
       throw new Rejection('invalid-task')
     }
-    return this.goOnChatting(task, dependencies, task.agent, allowBypass)
+    return this.goOnChatting(task, dependencies, task.agent, allowBypass, undefined, {}, byUser)
   }
 
   // Gives a chat task to another agent, which goes on at once from a handoff of what was said.
@@ -639,7 +640,7 @@ export class TaskService {
   }
 
   // The agent is the task's from here on once it has started.
-  private async goOnChatting(task: Task, dependencies: readonly Task[], agent: AgentKind, allowBypass?: boolean, handoffNote?: string, { modelProvider: handoffProvider, ...choice }: HandoffChoice = {}): Promise<Task> {
+  private async goOnChatting(task: Task, dependencies: readonly Task[], agent: AgentKind, allowBypass?: boolean, handoffNote?: string, { modelProvider: handoffProvider, ...choice }: HandoffChoice = {}, byUser = false): Promise<Task> {
     const chats = this.requireChats()
     if (!chats.capacityAvailable(agent, task.conversationId)) throw new Rejection('agent-capacity')
     return this.launchChat(task, async () => {
@@ -649,7 +650,7 @@ export class TaskService {
         const workspace = await prepareRefineWorkspace(task, dependencies, this.worktreesRoot, { refresh: false })
         await chats.startForTask({ id: task.id, title: task.title, agent }, {
           cwd: workspace.cwd, extraDirs: workspace.dirs.filter((dir) => dir !== workspace.cwd && !workspace.references.has(dir)), referenceDirs: [...workspace.references], planOnly: true, session: 'resume',
-          readable: images.readable, allowBypass, handoffNote, handoffProvider, ...choice
+          readable: images.readable, allowBypass, handoffNote, handoffProvider, byUser, ...choice
         })
         return kept()
       }
@@ -657,7 +658,7 @@ export class TaskService {
       const workspace = await prepareWorkspace(await this.withSlug(task), dependencies, this.worktreesRoot, Date.now(), this.workspaceStarts(task.id))
       this.store.update(task.id, { repos: workspace.repos })
       const conversation = await chats.startForTask({ id: task.id, title: task.title, agent }, {
-        cwd: workspace.cwd, extraDirs: workspace.extraDirs, referenceDirs: workspace.referenceDirs, planOnly: false, session: 'resume', readable: images.readable, allowBypass, handoffNote, handoffProvider, ...choice
+        cwd: workspace.cwd, extraDirs: workspace.extraDirs, referenceDirs: workspace.referenceDirs, planOnly: false, session: 'resume', readable: images.readable, allowBypass, handoffNote, handoffProvider, byUser, ...choice
       })
       // A worktree the user removed comes back without what setup put there; a failure shows in its tab.
       await this.setUp(conversation.id, workspace, setups)

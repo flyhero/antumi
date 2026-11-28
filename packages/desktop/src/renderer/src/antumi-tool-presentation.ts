@@ -4,7 +4,7 @@ import { t, type MessageKey } from './i18n'
 type ToolName = typeof MANAGEMENT_TOOLS[keyof typeof MANAGEMENT_TOOLS]
   | typeof AGENT_CALL_TOOLS[keyof typeof AGENT_CALL_TOOLS] | typeof SQUAD_TOOL_NAMES[keyof typeof SQUAD_TOOL_NAMES]
   | typeof PULL_REQUEST_TOOLS[keyof typeof PULL_REQUEST_TOOLS]
-type Definition = { label: MessageKey; icon: 'agent' | 'list' | 'edit' | 'search'; subject: 'name' | 'title' | 'id' | 'query' | 'url' | 'delegation' | 'member' | 'schedule' | 'summary' | null }
+type Definition = { label: MessageKey; icon: 'agent' | 'list' | 'edit' | 'search'; subject: 'name' | 'title' | 'id' | 'query' | 'url' | 'text' | 'delegation' | 'member' | 'schedule' | 'summary' | null }
 
 const definitions = {
   [MANAGEMENT_TOOLS.profileList]: { label: 'antumiTools.profileList', icon: 'agent', subject: null },
@@ -31,6 +31,7 @@ const definitions = {
   [AGENT_CALL_TOOLS.status]: { label: 'antumiTools.agentStatus', icon: 'agent', subject: null },
   [AGENT_CALL_TOOLS.cancel]: { label: 'antumiTools.agentCancel', icon: 'agent', subject: 'delegation' },
   [AGENT_CALL_TOOLS.resume]: { label: 'antumiTools.agentResume', icon: 'agent', subject: 'delegation' },
+  [AGENT_CALL_TOOLS.steer]: { label: 'antumiTools.agentSteer', icon: 'agent', subject: 'text' },
   [SQUAD_TOOL_NAMES.roster]: { label: 'antumiTools.squadRoster', icon: 'agent', subject: null },
   [SQUAD_TOOL_NAMES.dispatch]: { label: 'antumiTools.squadDispatch', icon: 'agent', subject: 'member' },
   [SQUAD_TOOL_NAMES.finish]: { label: 'antumiTools.squadFinish', icon: 'agent', subject: 'summary' },

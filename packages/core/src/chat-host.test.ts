@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ChatReference, ChatItem } from '@antumi/protocol'
 import type { StageMessage } from './chat-driver'
 import type { UsageReport } from './usage-source'
-import { ChatHost, type ChatSink, type ChatStage } from './chat-host'
+import { ChatHost, STEER_TIMING, type ChatSink, type ChatStage } from './chat-host'
 import { AttachmentStore } from './attachment-store'
 import { ChatLog } from './chat-log'
 import { fakeChatDaemon } from './fake-chat-agent'
@@ -579,6 +579,85 @@ describe('ChatHost', () => {
     expect(stateOf(host)).toMatchObject({ queue: [], steerable: true })
     expect(host.items(STAGE).filter((item) => item.kind === 'user')).toMatchObject([{ text: 'first' }, { text: 'third', steer: true }])
     expect(host.activity(STAGE.conversationId)).toBe('running')
+  })
+
+  describe('a message for the running turn alone', () => {
+    const timing = { ...STEER_TIMING }
+    beforeEach(() => { STEER_TIMING.settleMs = 40; STEER_TIMING.answerMs = 80 })
+    afterEach(() => { Object.assign(STEER_TIMING, timing) })
+
+    it('goes into the turn under way, which stays the same one', async () => {
+      const { host, sessionId } = await started()
+      daemon.reply = () => {}
+      await host.send(STAGE.conversationId, 'first')
+      await host.steerInto(STAGE.conversationId, 'not that file', [], 'steer-1')
+      expect(userFrames(sessionId)).toHaveLength(2)
+      expect(host.items(STAGE).filter((item) => item.kind === 'user')).toMatchObject([{ text: 'first' }, { id: 'u:steer-1', text: 'not that file', steer: true }])
+      expect(host.activity(STAGE.conversationId)).toBe('running')
+      expect(stateOf(host)).toMatchObject({ queue: [] })
+      finish(sessionId, 'completed')
+      expect(host.items(STAGE).filter((item) => item.kind === 'turn')).toHaveLength(1)
+      // Sent again under the same ref, it is the same message.
+      await host.steerInto(STAGE.conversationId, 'not that file', [], 'steer-1')
+      expect(userFrames(sessionId)).toHaveLength(2)
+    })
+
+    it('is refused with no turn under way, starting none and queuing nothing', async () => {
+      const { host, sessionId } = await started()
+      await expect(host.steerInto(STAGE.conversationId, 'too early')).rejects.toMatchObject({ reason: 'chat-no-steer' })
+      await host.send(STAGE.conversationId, 'first')
+      await flushMicrotasks()
+      expect(host.activity(STAGE.conversationId)).toBe('idle')
+      await expect(host.steerInto(STAGE.conversationId, 'too late')).rejects.toMatchObject({ reason: 'chat-no-steer' })
+      expect(userFrames(sessionId)).toHaveLength(1)
+      expect(host.items(STAGE).filter((item) => item.kind === 'user')).toHaveLength(1)
+      expect(stateOf(host)).toMatchObject({ queue: [] })
+    })
+
+    it('is refused between turns, where the agent would start a turn for it', async () => {
+      const { host, sessionId } = await started()
+      daemon.reply = () => {}
+      await host.send(STAGE.conversationId, 'start the dev server')
+      daemon.emit(sessionId, { type: 'assistant', uuid: 'a-bg', message: { id: 'm-bg', content: [{ type: 'tool_use', id: 'bg', name: 'Bash', input: { command: 'pnpm dev', run_in_background: true } }] }, parent_tool_use_id: null })
+      daemon.emit(sessionId, { type: 'system', subtype: 'task_started', task_id: 'task-bg', tool_use_id: 'bg', task_type: 'local_bash', is_backgrounded: true })
+      finish(sessionId, 'completed')
+      expect(host.activity(STAGE.conversationId)).toBe('running')
+      expect(host.betweenTurns(STAGE.conversationId)).toBe(true)
+      await expect(host.steerInto(STAGE.conversationId, 'one more thing')).rejects.toMatchObject({ reason: 'chat-no-steer' })
+      expect(userFrames(sessionId)).toHaveLength(1)
+    })
+
+    it('is refused by an agent that may run it after the turn', async () => {
+      const host = new ChatHost(daemon, root, attachments, recordingSink().sink)
+      const { sessionId } = await daemon.request('spawnPipe', { command: 'zcode', args: [], cwd: '/work/repo', env: {} })
+      await host.open({ ...STAGE, agent: 'zcode' }, sessionId, 0, false)
+      await expect(host.steerInto(STAGE.conversationId, 'not that file')).rejects.toMatchObject({ reason: 'chat-no-steer', message: expect.stringContaining('ZCode') })
+    })
+
+    it('holds the turn it went into as maybe not the last for a moment after it ends, and says when that is over', async () => {
+      const recorded = recordingSink()
+      const { host, sessionId } = await started(recorded.sink)
+      daemon.reply = () => {}
+      await host.send(STAGE.conversationId, 'first')
+      expect(host.steerUnsettled(STAGE.conversationId)).toBe(false)
+      await host.steerInto(STAGE.conversationId, 'not that file')
+      // Still running: the turn itself is what is waited on.
+      expect(host.steerUnsettled(STAGE.conversationId)).toBe(false)
+      finish(sessionId, 'completed')
+      expect(host.steerUnsettled(STAGE.conversationId)).toBe(true)
+      const told = recorded.activity()
+      await expect.poll(() => host.steerUnsettled(STAGE.conversationId), { timeout: 1000 }).toBe(false)
+      expect(recorded.activity()).toBeGreaterThan(told)
+    })
+
+    it('does not hold a turn that took none', async () => {
+      const { host, sessionId } = await started()
+      daemon.reply = () => {}
+      await host.send(STAGE.conversationId, 'first')
+      await host.send(STAGE.conversationId, 'into the turn, as any chat takes it', [], false, true)
+      finish(sessionId, 'completed')
+      expect(host.steerUnsettled(STAGE.conversationId)).toBe(false)
+    })
   })
 
   it('keeps a queued message across a restart and sends it when the turn ends', async () => {

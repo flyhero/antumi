@@ -192,6 +192,19 @@ describe('CodexAppServer steering', () => {
     expect(driver.queuedToSend()).toMatchObject({ text: 'too late', ref: 'm2' })
   })
 
+  it('drops a message meant for that turn alone when the turn would not take it', () => {
+    const { driver, answer } = running()
+    const { wire } = driver.steer('too late')
+    driver.apply({ dir: 'out', at: 1, frame: wire, ref: 'm2', strict: true })
+    answer({ id: 'antumi-steer-1', error: { code: -32600, message: 'no active turn to steer' } })
+    expect(driver.items.get('u:m2')).toBeUndefined()
+    expect(driver.items.get('steer-refused:m2')).toMatchObject({ kind: 'notice', text: expect.stringContaining('too late') })
+    answer({ method: 'turn/completed', params: { threadId: 'thread-1', turn: { id: 'turn-1', status: 'completed' } } })
+    // Nothing waits to start a turn of its own.
+    expect(driver.queuedToSend()).toBeNull()
+    expect(ofKind(driver.items.list(), 'state')[0]?.queue).toEqual([])
+  })
+
   it('takes nothing into a review, nor before the turn has begun', () => {
     const { driver } = running('review/start')
     expect(driver.canSteer()).toBe(false)

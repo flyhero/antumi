@@ -33,6 +33,8 @@ export const zcode: AgentDescriptor = {
   readOnlyMode: 'readOnly',
   unattendedModes: ['auto', 'acceptEdits'],
   // skills: it loads skills from its own settings file, which Antumi leaves alone.
+  // managedSteer: a message it could not work into the turn it runs once the turn is over, which
+  // may be after a delegation handed its result back.
   capabilities: { unattended: true, bypass: true, autoMode: true, pathMentions: false, optionsWhileBusy: true, skills: false, userMcp: true, modelProviders: ['anthropic', 'openai-chat', 'openai-responses'], accounts: false },
   environment: {
     role: '聊天界面以 `zcode app-server` 运行它；没装也可以使用其他 Agent。',

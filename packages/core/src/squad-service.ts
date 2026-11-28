@@ -8,7 +8,7 @@ import { squadLeaderPrompt, squadMemberPrompt, squadPlanBrief } from './squad-pr
 import { SquadStore } from './squad-store'
 
 type Events = { squad: (squad: Squad) => void; run: (run: SquadRun) => void }
-type Chats = Pick<ConversationService, 'get' | 'create' | 'continue' | 'send' | 'stop' | 'interrupt' | 'delete' | 'chatPage' | 'messages' | 'planForTransfer' | 'validateStartOptions' | 'capacityAvailable'>
+type Chats = Pick<ConversationService, 'get' | 'create' | 'continue' | 'send' | 'stop' | 'interrupt' | 'delete' | 'chatPage' | 'messages' | 'planForTransfer' | 'validateStartOptions' | 'capacityAvailable' | 'steerUnsettled'>
 const failure = (error: unknown) => error instanceof Rejection ? error.reason : error instanceof Error ? error.message : String(error)
 const refOf = (work: SquadWork) => `squad:${work.id}`
 
@@ -360,6 +360,8 @@ export class SquadService {
       }
       const items = this.chats.chatPage(work.conversationId).items
       if (conversation.chat?.turn === 'running') continue
+      // The user's message into its turn may yet run on as one more turn: that one's end is the work's.
+      if (this.chats.steerUnsettled(work.conversationId)) continue
       const sent = items.some((item) => item.id === `u:${refOf(work)}`)
       if (!sent && conversation.sessionId) {
         const context = await this.tasks.squadContext(run.taskId)

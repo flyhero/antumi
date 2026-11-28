@@ -63,6 +63,11 @@ export type AgentDescriptor = {
     // platform's, docs/CHANNELS.md). images: whether it still takes pictures then, as it does where
     // they reach the model in the message rather than through a file it reads. Unset, it cannot.
     lockdown?: { images: boolean }
+    // A conversation another one manages (a delegation's member, a squad's) may take the user's
+    // message into its running turn: the agent takes it there or says it did not, and one that came
+    // too late is refused or runs at once, where whoever waits on the turn can see it. Unset: it
+    // takes none into a turn, or may run one later with nothing said, after the work was handed back.
+    managedSteer?: boolean
   }
   // Accounts it signs in to with an API key instead of in a terminal, each for one edition of its
   // service (capabilities.accounts). only: the accounts added to the user's own are all of this

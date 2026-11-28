@@ -12,7 +12,7 @@ const LogLine = z.discriminatedUnion('dir', [
   z.object({ dir: z.literal('undelivered'), at: z.number(), ref: z.string() }),
   // end: the output offset just past this frame's line, so a restart knows where to pick up.
   z.object({ dir: z.literal('in'), at: z.number(), frame: z.unknown(), end: z.number().optional() }),
-  z.object({ dir: z.literal('out'), at: z.number(), frame: z.unknown(), ref: z.string().optional(), images: Images, references: z.array(ChatReference).optional() }),
+  z.object({ dir: z.literal('out'), at: z.number(), frame: z.unknown(), ref: z.string().optional(), images: Images, references: z.array(ChatReference).optional(), strict: z.boolean().optional() }),
   z.object({
     dir: z.literal('note'),
     at: z.number(),

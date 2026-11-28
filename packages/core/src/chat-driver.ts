@@ -11,7 +11,9 @@ export type ChatRecord =
   | { dir: 'undelivered'; at: number; ref: string }
   | { dir: 'in'; at: number; frame: unknown }
   // ref names the item an outgoing user message becomes, images what it showed the agent.
-  | { dir: 'out'; at: number; frame: unknown; ref?: string; images?: ChatImage[]; references?: ChatReference[] }
+  // strict: a message for the running turn alone (ChatHost.steerInto): an agent that refuses it
+  // drops it, saying so in a notice named `steer-refused:<ref>`, rather than keep it for the next turn.
+  | { dir: 'out'; at: number; frame: unknown; ref?: string; images?: ChatImage[]; references?: ChatReference[]; strict?: boolean }
   | {
       dir: 'note'
       at: number
@@ -47,6 +49,13 @@ export function messageText(text: string, images: readonly ChatImage[]): string 
   if (images.length === 0) return text
   const note = `（附了 ${images.length} 张图片）`
   return text ? `${text}\n\n${note}` : note
+}
+
+// What the chat says of a message meant for the running turn alone that the agent refused: it went
+// nowhere, so the words are kept here for the user to send again.
+export function steerRefusedText(text: string, why: string): string {
+  const said = text.length > 300 ? `${text.slice(0, 300)}…` : text
+  return `没能插进正在进行的这一轮（${why}），这句话没有发送：${said}`
 }
 
 // An image going with a message, as the store holds it: an agent takes the path, or the bytes.

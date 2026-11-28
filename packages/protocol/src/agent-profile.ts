@@ -117,8 +117,14 @@ export const AgentCall = z.object({
   endedAt: z.number().nullable().default(null),
   resumedFrom: z.object({
     state: z.enum(['failed', 'cancelled']), error: z.string().nullable(), endedAt: z.number().nullable(),
-    turnsSince: z.number().int().nonnegative(), note: z.string().nullable()
+    turnsSince: z.number().int().nonnegative(), note: z.string().nullable(),
+    // The user interrupted it at work to add the note (feature agent-call-redirect); it never ended.
+    // Recorded as cancelled, which is how a core without the feature reads it.
+    redirected: z.boolean().optional()
   }).nullable().default(null),
+  // How many of its attempts were the user redirecting it, which do not count against
+  // MAX_AGENT_CALL_RESUMES. Older cores leave it out, and count them.
+  redirects: z.number().int().nonnegative().optional(),
   createdAt: z.number(), updatedAt: z.number()
 })
 export type AgentCall = z.infer<typeof AgentCall>
@@ -137,11 +143,23 @@ export type AgentCallResumeBlocker = 'open' | 'completed' | 'not-started' | 'lim
 // at work, or done, has nothing to go on with; one whose conversation never started has nowhere to.
 // A call that edits goes on only while the caller may still edit: going on never widens what the
 // user allowed. `caller`: null when the conversation that sent it is gone or archived.
-export function checkResumeAgentCall(call: Pick<AgentCall, 'state' | 'error' | 'attempt' | 'readOnly'>, caller: { readOnly: boolean } | null): AgentCallResumeBlocker | null {
+export function checkResumeAgentCall(call: Pick<AgentCall, 'state' | 'error' | 'attempt' | 'readOnly' | 'redirects'>, caller: { readOnly: boolean } | null): AgentCallResumeBlocker | null {
   if (agentCallOpen(call)) return 'open'
   if (call.state === 'completed') return 'completed'
   if (call.error === AGENT_CALL_NOT_STARTED) return 'not-started'
-  if (call.attempt >= MAX_AGENT_CALL_RESUMES) return 'limit'
+  if (call.attempt - (call.redirects ?? 0) >= MAX_AGENT_CALL_RESUMES) return 'limit'
+  if (!caller) return 'parent-gone'
+  return !call.readOnly && caller.readOnly ? 'read-only' : null
+}
+
+export type AgentCallRedirectBlocker = 'not-running' | 'read-only' | 'parent-gone'
+
+// Whether the user may interrupt a member at work and have it go on, in its own conversation, with
+// what they add: only one whose agent is up (a queued one has nothing to interrupt, an ended one
+// goes on through checkResumeAgentCall), and, as with going on, one that edits only while the
+// caller may still edit.
+export function checkRedirectAgentCall(call: Pick<AgentCall, 'state' | 'readOnly'>, caller: { readOnly: boolean } | null): AgentCallRedirectBlocker | null {
+  if (call.state !== 'running' && call.state !== 'awaiting') return 'not-running'
   if (!caller) return 'parent-gone'
   return !call.readOnly && caller.readOnly ? 'read-only' : null
 }
@@ -156,5 +174,6 @@ export const AgentCallResumeCheck = z.object({
 export type AgentCallResumeCheck = z.infer<typeof AgentCallResumeCheck>
 
 export const AGENT_CALL_TOOLS = {
-  list: 'antumi_agent_list', dispatch: 'antumi_agent_dispatch', status: 'antumi_agent_status', cancel: 'antumi_agent_cancel', resume: 'antumi_agent_resume'
+  list: 'antumi_agent_list', dispatch: 'antumi_agent_dispatch', status: 'antumi_agent_status', cancel: 'antumi_agent_cancel', resume: 'antumi_agent_resume',
+  steer: 'antumi_agent_steer'
 } as const

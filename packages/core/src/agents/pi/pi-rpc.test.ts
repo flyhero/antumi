@@ -368,4 +368,16 @@ describe('Pi over RPC', () => {
     expect(items(driver, 'user').map((item) => [item.id, item.steer ?? false])).toEqual([['u:pi:1', false], ['u:m2', false]])
     expect(driver.activeTurnRef()).toBe('m2')
   })
+
+  it('drops a message meant for that turn alone when Pi refuses it', () => {
+    const driver = opened()
+    send(driver, 'first')
+    const { logged } = driver.steer('also this')
+    driver.apply({ dir: 'out', at: 4, frame: logged, ref: 'm2', strict: true })
+    receive(driver, { id: Sent.parse(logged).id, type: 'response', command: 'prompt', success: false, error: 'agent is not streaming' }, 5)
+    expect(driver.items.get('u:m2')).toBeUndefined()
+    expect(driver.items.get('steer-refused:m2')).toMatchObject({ kind: 'notice', text: expect.stringContaining('also this') })
+    reply(driver, 'done')
+    expect(driver.queuedToSend()).toBeNull()
+  })
 })

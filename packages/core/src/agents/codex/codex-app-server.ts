@@ -6,7 +6,7 @@ import { choiceDecisions, codexAnswerAllows, codexChoiceOf, codexChoices, type C
 import { describeBrowserTool, showBrowserInput } from '../../browser-tools'
 import { keepImageBlocks, markKeptImages, stripImageBytes } from '../../image-frames'
 import { AntumiRequests } from '../../antumi-requests'
-import { messageText, type ChatAnswer, type ChatDriver, type ChatImageFile, type ChatOutgoing, type ChatPreferences, type ChatRecord, type ChatStageOptions, type StageMessage } from '../../chat-driver'
+import { messageText, steerRefusedText, type ChatAnswer, type ChatDriver, type ChatImageFile, type ChatOutgoing, type ChatPreferences, type ChatRecord, type ChatStageOptions, type StageMessage } from '../../chat-driver'
 import { ChatItems, clip, type UsageLimitHit } from '../../chat-items'
 import { ChatQueue } from '../../chat-queue'
 import { StageState } from '../../chat-stage-state'
@@ -480,7 +480,7 @@ export class CodexAppServer implements ChatDriver {
   private readonly endedTurns = new Set<string>()
   // Messages sent into the running turn, by request, until Codex takes or refuses them: one taken
   // shows as sent then; one refused waits in the queue for the turn to end instead.
-  private readonly steering = new Map<string, { text: string; images: ChatImage[]; ref: string }>()
+  private readonly steering = new Map<string, { text: string; images: ChatImage[]; ref: string; strict: boolean }>()
   // Questions asked in passing and not yet answered, by request id, oldest first.
   private readonly asks = new Map<string, string>()
   private steers = 0
@@ -559,7 +559,7 @@ export class CodexAppServer implements ChatDriver {
       }
       case 'out': {
         const frame = Frame.safeParse(record.frame)
-        if (frame.success) this.sent(frame.data, record.at, record.ref, record.images ?? [])
+        if (frame.success) this.sent(frame.data, record.at, record.ref, record.images ?? [], record.strict === true)
         break
       }
       case 'note':
@@ -1539,7 +1539,7 @@ export class CodexAppServer implements ChatDriver {
     this.asks.set(requestId, itemId)
   }
 
-  private sent(frame: Frame, at: number, ref: string | undefined, images: readonly ChatImage[]): void {
+  private sent(frame: Frame, at: number, ref: string | undefined, images: readonly ChatImage[], strict = false): void {
     // Whatever the user says next answers, or passes over, what was asked in passing.
     if (frame.method === 'turn/start' || frame.method === 'turn/steer') {
       for (const requestId of [...this.asks.keys()]) this.closeAsk(requestId, null, at)
@@ -1569,7 +1569,7 @@ export class CodexAppServer implements ChatDriver {
       if (TURN_METHODS.has(frame.method)) this.startTurn(frame, at, ref, images)
       if (frame.method === 'turn/steer') {
         this.steers++
-        this.steering.set(String(frame.id), { text: inputText(frame.params), images: [...images], ref: ref ?? `steer-${this.steers}` })
+        this.steering.set(String(frame.id), { text: inputText(frame.params), images: [...images], ref: ref ?? `steer-${this.steers}`, strict })
       }
       return
     }
@@ -1612,14 +1612,19 @@ export class CodexAppServer implements ChatDriver {
   }
 
   // Codex's answer to a message sent into the turn: taken, it shows as the user's; refused (the
-  // turn ended, or takes none), it waits for the turn's end, saying why.
+  // turn ended, or takes none), it waits for the turn's end, saying why. One meant for that turn
+  // alone is dropped instead.
   private steered(requestId: string, error: string | null, at: number): void {
     const message = this.steering.get(requestId)
     if (!message) return
     this.steering.delete(requestId)
     if (error) {
-      this.queue.add(message.text, message.ref, message.images)
       const why = /no active turn/i.test(error) ? '这一轮刚好结束了' : error
+      if (message.strict) {
+        this.items.notice('warning', steerRefusedText(message.text, why), at, { id: `steer-refused:${message.ref}` })
+        return
+      }
+      this.queue.add(message.text, message.ref, message.images)
       this.items.notice('info', `没能插进正在进行的这一轮（${why}），已排到回合结束后发送`, at)
       return
     }
